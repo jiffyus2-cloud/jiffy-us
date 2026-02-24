@@ -5,11 +5,12 @@ import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calen
 import ProductDetailsModal from './ProductDetailsModal';
 import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
+import { Header } from './navigation/Header';
 
-// Import product images
 import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
 import calendarImage from '../../assets/e10b8bcd9dce4c4659f29f62c8704217f6ab8e6a.png';
+import React from 'react';
 
 const heroImages = [
   {
@@ -95,8 +96,9 @@ export default function LandingPage() {
 
   return (
     <div className="w-full">
+      <Header />
       {/* Hero Carousel Section */}
-      <section className="relative h-screen w-full overflow-hidden">
+      <section className="relative h-[calc(100vh-80px)] w-full overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentSlide}
@@ -430,7 +432,7 @@ export default function LandingPage() {
           </div>
 
           <div className={DESIGN.footer.bottom}>
-            <p>&copy; 2024 Photo Creator. All rights reserved.</p>
+            <p>&copy; 2026 Photo Creator. All rights reserved.</p>
           </div>
         </div>
       </footer>

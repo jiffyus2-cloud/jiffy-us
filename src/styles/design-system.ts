@@ -76,7 +76,7 @@ export const DESIGN = {
     interactive: 'cursor-pointer',
     content: 'absolute bottom-0 left-0 right-0 p-8 text-white',
     overlay: 'absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-70',
-    border: 'border-2 rounded-lg transition-all text-left overflow-hidden',
+    border: 'border-2 rounded-lg transition-all text-left overflow-hidden flex flex-col',
     selected: 'border-black bg-black text-white',
     unselected: 'border-gray-300 bg-white hover:border-black hover:shadow-lg',
   },
