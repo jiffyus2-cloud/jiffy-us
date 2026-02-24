@@ -1,20 +1,22 @@
-import albumImage from '@/assets/c5681b257e0dede5d7d87776730ada678398ff51.png';
-import calendarImage from '@/assets/ec28dc812bed68927d47becc060a8091e563d836.png';
-import mugImage from '@/assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png';
+import albumImage from '../../assets/c5681b257e0dede5d7d87776730ada678398ff51.png';
+import calendarImage from '../../assets/ec28dc812bed68927d47becc060a8091e563d836.png';
+import mugImage from '../../assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png';
+import { DESIGN } from '../../styles/design-system';
 
 export type ProductType = 'album' | 'calendar' | 'mug';
 
 interface ProductSelectionProps {
   selectedProduct: ProductType | null;
   onSelectProduct: (product: ProductType) => void;
+  onContinue?: () => void;
 }
 
-export default function ProductSelection({ selectedProduct, onSelectProduct }: ProductSelectionProps) {
+export default function ProductSelection({ selectedProduct, onSelectProduct, onContinue }: ProductSelectionProps) {
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
       <div className="text-center mb-12">
-        <h2 className="text-4xl mb-4">Choose Your Product</h2>
-        <p className="text-gray-600 text-lg">
+        <h2 className="text-4xl mb-4 font-medium">Choose Your Product</h2>
+        <p className={DESIGN.text.body}>
           Select the type of product you want to create
         </p>
       </div>
@@ -23,23 +25,21 @@ export default function ProductSelection({ selectedProduct, onSelectProduct }: P
         {/* Photo Album Option */}
         <button
           onClick={() => onSelectProduct('album')}
-          className={`group relative rounded-lg border-2 transition-all text-left overflow-hidden ${
-            selectedProduct === 'album'
-              ? 'border-black bg-black text-white'
-              : 'border-gray-300 bg-white hover:border-black hover:shadow-lg'
+          className={`${DESIGN.card.border} ${
+            selectedProduct === 'album' ? DESIGN.card.selected : DESIGN.card.unselected
           }`}
         >
           {/* Album Image */}
-          <div className="w-full h-64">
+          <div className="w-full h-64 overflow-hidden">
             <img 
               src={albumImage} 
               alt="Photo Albums" 
-              className="w-full h-full object-fill"
+              className="w-full h-full object-cover object-center"
             />
           </div>
 
           <div className="p-8">
-            <h3 className="text-2xl mb-3">Photo Album</h3>
+            <h3 className={DESIGN.text.h4}>Photo Album</h3>
             <p className={`text-base mb-6 ${
               selectedProduct === 'album' ? 'text-gray-200' : 'text-gray-600'
             }`}>
@@ -78,23 +78,21 @@ export default function ProductSelection({ selectedProduct, onSelectProduct }: P
         {/* Photo Calendar Option */}
         <button
           onClick={() => onSelectProduct('calendar')}
-          className={`group relative rounded-lg border-2 transition-all text-left overflow-hidden ${
-            selectedProduct === 'calendar'
-              ? 'border-black bg-black text-white'
-              : 'border-gray-300 bg-white hover:border-black hover:shadow-lg'
+          className={`${DESIGN.card.border} ${
+            selectedProduct === 'calendar' ? DESIGN.card.selected : DESIGN.card.unselected
           }`}
         >
           {/* Calendar Image */}
-          <div className="w-full h-64">
+          <div className="w-full h-64 overflow-hidden">
             <img 
               src={calendarImage} 
               alt="Photo Calendars" 
-              className="w-full h-full object-fill"
+              className="w-full h-full object-cover object-center"
             />
           </div>
 
           <div className="p-8">
-            <h3 className="text-2xl mb-3">Photo Calendar</h3>
+            <h3 className={DESIGN.text.h4}>Photo Calendar</h3>
             <p className={`text-base mb-6 ${
               selectedProduct === 'calendar' ? 'text-gray-200' : 'text-gray-600'
             }`}>
@@ -133,23 +131,21 @@ export default function ProductSelection({ selectedProduct, onSelectProduct }: P
         {/* Mug Option */}
         <button
           onClick={() => onSelectProduct('mug')}
-          className={`group relative rounded-lg border-2 transition-all text-left overflow-hidden ${
-            selectedProduct === 'mug'
-              ? 'border-black bg-black text-white'
-              : 'border-gray-300 bg-white hover:border-black hover:shadow-lg'
+          className={`${DESIGN.card.border} ${
+            selectedProduct === 'mug' ? DESIGN.card.selected : DESIGN.card.unselected
           }`}
         >
           {/* Mug Image */}
-          <div className="w-full h-64">
+          <div className="w-full h-64 overflow-hidden">
             <img 
               src={mugImage} 
               alt="Photo Mugs" 
-              className="w-full h-full object-fill"
+              className="w-full h-full object-cover object-center"
             />
           </div>
 
           <div className="p-8">
-            <h3 className="text-2xl mb-3">Photo Mug</h3>
+            <h3 className={DESIGN.text.h4}>Photo Mug</h3>
             <p className={`text-base mb-6 ${
               selectedProduct === 'mug' ? 'text-gray-200' : 'text-gray-600'
             }`}>
@@ -183,6 +179,17 @@ export default function ProductSelection({ selectedProduct, onSelectProduct }: P
               <div className="w-3 h-3 bg-black rounded-full" />
             </div>
           )}
+        </button>
+      </div>
+
+      {/* Continue Button */}
+      <div className="max-w-6xl mx-auto mt-12">
+        <button
+          onClick={onContinue}
+          disabled={!selectedProduct}
+          className={`${DESIGN.button.base} ${DESIGN.button.primary} w-full text-lg disabled:bg-gray-300 disabled:cursor-not-allowed`}
+        >
+          Continue to Style Selection
         </button>
       </div>
     </div>

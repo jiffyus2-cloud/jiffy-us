@@ -16,12 +16,22 @@ interface MugOrganizerProps {
   customization: MugCustomizationOptions;
   items: MugItem[];
   onItemsChange: (items: MugItem[]) => void;
+  onComplete?: () => void;
 }
 
-export default function MugOrganizer({ mug, customization, items, onItemsChange }: MugOrganizerProps) {
+export default function MugOrganizer({ mug, customization, items, onItemsChange, onComplete }: MugOrganizerProps) {
   const [editingText, setEditingText] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'edit' | 'mockup'>('edit');
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<Record<string, number>>({});
+
+  // Ensure items is always an array
+  const safeItems = items || [];
+  
+  // Ensure mug has default values
+  const safeMug = mug || { name: 'Product', type: 'mug' as const };
+  
+  // Ensure onItemsChange is a function
+  const safeOnItemsChange = typeof onItemsChange === 'function' ? onItemsChange : () => {};
 
   const addNewItem = () => {
     const newItem: MugItem = {
@@ -31,38 +41,51 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange 
       fontSize: 20,
       fontFamily: 'Arial',
     };
-    onItemsChange([...items, newItem]);
+    safeOnItemsChange([...safeItems, newItem]);
   };
 
   const addPhotoToItem = (id: string, photo: string) => {
-    onItemsChange(items.map(item => 
-      item.id === id ? { ...item, photos: [...item.photos, photo] } : item
+    safeOnItemsChange(safeItems.map(item => 
+      item.id === id ? { ...item, photos: [...(item.photos || []), photo] } : item
     ));
   };
 
   const removePhotoFromItem = (id: string, photoIndex: number) => {
-    onItemsChange(items.map(item => 
-      item.id === id ? { ...item, photos: item.photos.filter((_, i) => i !== photoIndex) } : item
+    safeOnItemsChange(safeItems.map(item => 
+      item.id === id ? { ...item, photos: (item.photos || []).filter((_, i) => i !== photoIndex) } : item
     ));
   };
 
   const updateItemText = (id: string, updates: Partial<MugItem>) => {
-    onItemsChange(items.map(item => 
+    safeOnItemsChange(safeItems.map(item => 
       item.id === id ? { ...item, ...updates } : item
     ));
   };
 
   const removeItem = (id: string) => {
-    onItemsChange(items.filter(item => item.id !== id));
+    safeOnItemsChange(safeItems.filter(item => item.id !== id));
   };
 
   const handlePhotoUpload = (id: string, files: FileList) => {
-    Array.from(files).forEach(file => {
+    const filesArray = Array.from(files);
+    const loadedPhotos: string[] = [];
+    let loadedCount = 0;
+    
+    filesArray.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
         if (result) {
-          addPhotoToItem(id, result);
+          loadedPhotos.push(result);
+          loadedCount++;
+          
+          // When all files are loaded, update the state once
+          if (loadedCount === filesArray.length) {
+            // Find the item and add all photos at once
+            safeOnItemsChange(safeItems.map(item => 
+              item.id === id ? { ...item, photos: [...(item.photos || []), ...loadedPhotos] } : item
+            ));
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -77,16 +100,16 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange 
     setCurrentPhotoIndex({ ...currentPhotoIndex, [itemId]: index });
   };
 
-  const currentItem = items.find(item => item.id === editingText);
+  const currentItem = safeItems.find(item => item.id === editingText);
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
       <div className="mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl mb-2">Create Your {mug.name}s</h2>
+            <h2 className="text-2xl md:text-3xl mb-2">Create Your {safeMug.name}s</h2>
             <p className="text-sm md:text-base text-gray-600">
-              {items.length} {mug.type === 'mug' ? 'mug' : 'thermos'}{items.length !== 1 ? 's' : ''} created
+              {safeItems.length} {safeMug.type === 'mug' ? 'mug' : 'thermos'}{safeItems.length !== 1 ? 's' : ''} created
             </p>
           </div>
           <div className="flex items-center justify-between gap-2 md:gap-3">
@@ -127,21 +150,21 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange 
         </div>
       </div>
 
-      {items.length === 0 && (
+      {safeItems.length === 0 && (
         <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-600 mb-4">No {mug.type === 'mug' ? 'mugs' : 'thermos bottles'} created yet</p>
+          <p className="text-gray-600 mb-4">No {safeMug.type === 'mug' ? 'mugs' : 'thermos bottles'} created yet</p>
           <button
             onClick={addNewItem}
             className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             <Plus className="w-5 h-5" />
-            Create Your First {mug.type === 'mug' ? 'Mug' : 'Thermos'}
+            Create Your First {safeMug.type === 'mug' ? 'Mug' : 'Thermos'}
           </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {items.map((item) => (
+        {safeItems.map((item) => (
           <div key={item.id} className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
             {viewMode === 'edit' ? (
               // Edit Mode
@@ -279,7 +302,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange 
                 <div className="aspect-[3/4] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center p-8">
                   {/* Mug/Thermos Mockup */}
                   <div className="relative w-full h-full">
-                    {mug.type === 'mug' ? (
+                    {safeMug.type === 'mug' ? (
                       // Mug mockup
                       <div className="w-full h-full relative">
                         {/* Mug shape */}
@@ -466,6 +489,18 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange 
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Continue to Checkout Button */}
+      {safeItems.length > 0 && onComplete && (
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={onComplete}
+            className="px-8 py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
+          >
+            Continue to Checkout
+          </button>
         </div>
       )}
     </div>

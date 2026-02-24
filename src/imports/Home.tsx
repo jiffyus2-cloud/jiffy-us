@@ -1,8 +1,8 @@
-import imgSimulatorScreenshot4329Fd80Dbb744AbAc5DA84Fe1D28B0E1 from "figma:asset/5ef3d2b378801989e2668d1bb2ba44a781d0e210.png";
-import imgSimulatorScreenshot877E679259B140938E3AAccd946B327B1 from "figma:asset/eddf3ea495293e65f2dc60076ae6203db4dc1e15.png";
-import imgSimulatorScreenshot47A62Fde400E473490A6E3D54964B7861 from "figma:asset/28ca0a8ebdbbf79157a34f80acdee0826ad1f505.png";
-import imgSimulatorScreenshot681D468474894E08A301F83C78Df80Cc1 from "figma:asset/16f42cc8398a44c05392f909e88b9262c3ab5067.png";
-import imgSimulatorScreenshotEf01954A0Cb34B129454Ad3Fe23Ffef51 from "figma:asset/926a104c374871caf4fcad0882de38be9da36b8a.png";
+import imgSimulatorScreenshot4329Fd80Dbb744AbAc5DA84Fe1D28B0E1 from "../assets/5ef3d2b378801989e2668d1bb2ba44a781d0e210.png";
+import imgSimulatorScreenshot877E679259B140938E3AAccd946B327B1 from "../assets/eddf3ea495293e65f2dc60076ae6203db4dc1e15.png";
+import imgSimulatorScreenshot47A62Fde400E473490A6E3D54964B7861 from "../assets/28ca0a8ebdbbf79157a34f80acdee0826ad1f505.png";
+import imgSimulatorScreenshot681D468474894E08A301F83C78Df80Cc1 from "../assets/16f42cc8398a44c05392f909e88b9262c3ab5067.png";
+import imgSimulatorScreenshotEf01954A0Cb34B129454Ad3Fe23Ffef51 from "../assets/926a104c374871caf4fcad0882de38be9da36b8a.png";
 
 export default function Home() {
   return (

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Upload, X, Settings } from 'lucide-react';
 import type { Album } from './AlbumSelection';
 
-interface CustomizationOptions {
+export interface CustomizationOptions {
   coverType: 'Tela' | 'Papel';
   size: 'Cuadrado 20x20 cm' | 'Cuadrado 30x30 cm' | 'Horizontal 21x28 cm' | 'Vertical 28x21 cm';
   coverColor: string;
@@ -306,195 +306,197 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
       {/* Cover Editor Modal */}
       {showCoverEditor && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-white rounded-lg p-6 md:p-8 max-w-6xl w-full my-8 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-medium">Customize Cover Content</h3>
-              <button
-                onClick={() => setShowCoverEditor(false)}
-                className="text-gray-500 hover:text-black transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Form Section */}
-              <div className="space-y-6">
-                <h4 className="text-lg font-medium mb-4">Cover Details</h4>
-
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Title</label>
-                  <input
-                    type="text"
-                    value={coverContent.title}
-                    onChange={(e) => setCoverContent({ ...coverContent, title: e.target.value })}
-                    placeholder="Enter album title..."
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                {/* Subtitle */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Subtitle</label>
-                  <input
-                    type="text"
-                    value={coverContent.subtitle}
-                    onChange={(e) => setCoverContent({ ...coverContent, subtitle: e.target.value })}
-                    placeholder="Enter subtitle (e.g., year, location)..."
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                {/* Spine Text */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Spine Text</label>
-                  <input
-                    type="text"
-                    value={coverContent.spineText}
-                    onChange={(e) => setCoverContent({ ...coverContent, spineText: e.target.value })}
-                    placeholder="Text for the spine..."
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">This text will appear on the spine of the album</p>
-                </div>
-
-                {/* Cover Photo */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Cover Photo</label>
-                  {coverContent.coverPhoto ? (
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
-                      <img
-                        src={coverContent.coverPhoto}
-                        alt="Cover preview"
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() => setCoverContent({ ...coverContent, coverPhoto: '' })}
-                        className="absolute top-2 right-2 bg-black text-white rounded-full p-2 hover:bg-gray-800"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/*';
-                        input.onchange = (e: any) => {
-                          const file = e.target?.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const result = event.target?.result as string;
-                              if (result) {
-                                setCoverContent({ ...coverContent, coverPhoto: result });
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        };
-                        input.click();
-                      }}
-                      className="w-full aspect-video border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-                    >
-                      <Upload className="w-8 h-8 text-gray-400" />
-                      <span className="text-sm text-gray-600">Upload Cover Photo</span>
-                    </button>
-                  )}
-                </div>
-
+        <div className="fixed inset-0 bg-black bg-opacity-30 z-50 overflow-y-auto backdrop-blur-sm">
+          <div className="min-h-screen flex items-start md:items-center justify-center p-4 py-8">
+            <div className="bg-white rounded-lg p-6 md:p-8 max-w-6xl w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-medium">Customize Cover Content</h3>
                 <button
                   onClick={() => setShowCoverEditor(false)}
-                  className="w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                  className="text-gray-500 hover:text-black transition-colors"
                 >
-                  Apply Changes
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              {/* Preview Section */}
-              <div className="space-y-6">
-                <h4 className="text-lg font-medium mb-4">Live Preview</h4>
-                
-                {/* Front Cover Preview */}
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Front Cover</p>
-                  <div 
-                    className="aspect-[3/4] rounded-lg shadow-xl overflow-hidden relative border border-gray-200"
-                    style={{ backgroundColor: coverColor }}
-                  >
-                    {/* Cover Photo */}
-                    {coverContent.coverPhoto && (
-                      <div className="absolute inset-0">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Form Section */}
+                <div className="space-y-6">
+                  <h4 className="text-lg font-medium mb-4">Cover Details</h4>
+
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Title</label>
+                    <input
+                      type="text"
+                      value={coverContent.title}
+                      onChange={(e) => setCoverContent({ ...coverContent, title: e.target.value })}
+                      placeholder="Enter album title..."
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
+                    />
+                  </div>
+
+                  {/* Subtitle */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Subtitle</label>
+                    <input
+                      type="text"
+                      value={coverContent.subtitle}
+                      onChange={(e) => setCoverContent({ ...coverContent, subtitle: e.target.value })}
+                      placeholder="Enter subtitle (e.g., year, location)..."
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
+                    />
+                  </div>
+
+                  {/* Spine Text */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Spine Text</label>
+                    <input
+                      type="text"
+                      value={coverContent.spineText}
+                      onChange={(e) => setCoverContent({ ...coverContent, spineText: e.target.value })}
+                      placeholder="Text for the spine..."
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">This text will appear on the spine of the album</p>
+                  </div>
+
+                  {/* Cover Photo */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Cover Photo</label>
+                    {coverContent.coverPhoto ? (
+                      <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
                         <img
                           src={coverContent.coverPhoto}
-                          alt="Cover"
-                          className="w-full h-full object-cover opacity-60"
+                          alt="Cover preview"
+                          className="w-full h-full object-cover"
                         />
+                        <button
+                          onClick={() => setCoverContent({ ...coverContent, coverPhoto: '' })}
+                          className="absolute top-2 right-2 bg-black text-white rounded-full p-2 hover:bg-gray-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e: any) => {
+                            const file = e.target?.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const result = event.target?.result as string;
+                                if (result) {
+                                  setCoverContent({ ...coverContent, coverPhoto: result });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full aspect-video border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                      >
+                        <Upload className="w-8 h-8 text-gray-400" />
+                        <span className="text-sm text-gray-600">Upload Cover Photo</span>
+                      </button>
                     )}
-                    
-                    {/* Text Content */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
-                      {coverContent.title && (
-                        <h2 
-                          className="text-3xl font-bold mb-2 drop-shadow-lg"
-                          style={{ 
-                            color: typographyColor,
-                            textShadow: coverColor === '#000000' && typographyColor === '#000000' 
-                              ? '0 0 10px rgba(255,255,255,0.5)' 
-                              : '0 2px 4px rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          {coverContent.title}
-                        </h2>
+                  </div>
+
+                  <button
+                    onClick={() => setShowCoverEditor(false)}
+                    className="w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    Apply Changes
+                  </button>
+                </div>
+
+                {/* Preview Section */}
+                <div className="space-y-6">
+                  <h4 className="text-lg font-medium mb-4">Live Preview</h4>
+                  
+                  {/* Front Cover Preview */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Front Cover</p>
+                    <div 
+                      className="aspect-[3/4] rounded-lg shadow-xl overflow-hidden relative border border-gray-200"
+                      style={{ backgroundColor: coverColor }}
+                    >
+                      {/* Cover Photo */}
+                      {coverContent.coverPhoto && (
+                        <div className="absolute inset-0">
+                          <img
+                            src={coverContent.coverPhoto}
+                            alt="Cover"
+                            className="w-full h-full object-cover opacity-60"
+                          />
+                        </div>
                       )}
-                      {coverContent.subtitle && (
-                        <p 
-                          className="text-lg drop-shadow-lg"
-                          style={{ 
-                            color: typographyColor,
-                            textShadow: coverColor === '#000000' && typographyColor === '#000000' 
-                              ? '0 0 10px rgba(255,255,255,0.5)' 
-                              : '0 2px 4px rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          {coverContent.subtitle}
-                        </p>
-                      )}
+                      
+                      {/* Text Content */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+                        {coverContent.title && (
+                          <h2 
+                            className="text-3xl font-bold mb-2 drop-shadow-lg"
+                            style={{ 
+                              color: typographyColor,
+                              textShadow: coverColor === '#000000' && typographyColor === '#000000' 
+                                ? '0 0 10px rgba(255,255,255,0.5)' 
+                                : '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            {coverContent.title}
+                          </h2>
+                        )}
+                        {coverContent.subtitle && (
+                          <p 
+                            className="text-lg drop-shadow-lg"
+                            style={{ 
+                              color: typographyColor,
+                              textShadow: coverColor === '#000000' && typographyColor === '#000000' 
+                                ? '0 0 10px rgba(255,255,255,0.5)' 
+                                : '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            {coverContent.subtitle}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Spine Preview */}
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Spine</p>
-                  <div 
-                    className="h-20 rounded-lg shadow-lg flex items-center justify-center px-4 border border-gray-200"
-                    style={{ backgroundColor: coverColor }}
-                  >
-                    <p 
-                      className="text-sm font-medium"
-                      style={{ 
-                        color: typographyColor,
-                        textShadow: coverColor === '#000000' && typographyColor === '#000000' 
-                          ? '0 0 10px rgba(255,255,255,0.5)' 
-                          : 'none'
-                      }}
+                  {/* Spine Preview */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Spine</p>
+                    <div 
+                      className="h-20 rounded-lg shadow-lg flex items-center justify-center px-4 border border-gray-200"
+                      style={{ backgroundColor: coverColor }}
                     >
-                      {coverContent.spineText || 'Spine Text'}
+                      <p 
+                        className="text-sm font-medium"
+                        style={{ 
+                          color: typographyColor,
+                          textShadow: coverColor === '#000000' && typographyColor === '#000000' 
+                            ? '0 0 10px rgba(255,255,255,0.5)' 
+                            : 'none'
+                        }}
+                      >
+                        {coverContent.spineText || 'Spine Text'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 3D View Hint */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-800">
+                      <span className="font-medium">Preview Note:</span> This is a simplified preview. 
+                      The final album will have a professional finish matching your selected cover type ({coverType}).
                     </p>
                   </div>
-                </div>
-
-                {/* 3D View Hint */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
-                    <span className="font-medium">Preview Note:</span> This is a simplified preview. 
-                    The final album will have a professional finish matching your selected cover type ({coverType}).
-                  </p>
                 </div>
               </div>
             </div>

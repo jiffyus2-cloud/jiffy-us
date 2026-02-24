@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { Upload, X, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import type { Calendar } from './CalendarStyleSelection';
+import type { CalendarCustomizationOptions } from './CalendarCustomization';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
-  year: number;
-  photos: string[];
-  onPhotosChange: (photos: string[]) => void;
+  customization: CalendarCustomizationOptions;
+  onComplete: (photos: string[]) => void;
 }
 
 const MONTHS = [
@@ -14,16 +14,10 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function CalendarOrganizer({ calendar, year, photos, onPhotosChange }: CalendarOrganizerProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export default function CalendarOrganizer({ calendar, customization, onComplete }: CalendarOrganizerProps) {
   const [currentMonth, setCurrentMonth] = useState(0);
-
-  // Initialize with 12 empty slots if needed
-  useEffect(() => {
-    if (photos.length === 0) {
-      onPhotosChange(Array(12).fill(''));
-    }
-  }, [photos.length, onPhotosChange]);
+  const [photos, setPhotos] = useState<string[]>(Array(12).fill(''));
+  const year = new Date().getFullYear();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, monthIndex: number) => {
     const file = event.target.files?.[0];
@@ -35,7 +29,7 @@ export default function CalendarOrganizer({ calendar, year, photos, onPhotosChan
       if (result) {
         const newPhotos = [...photos];
         newPhotos[monthIndex] = result;
-        onPhotosChange(newPhotos);
+        setPhotos(newPhotos);
       }
     };
     reader.readAsDataURL(file);
@@ -44,7 +38,7 @@ export default function CalendarOrganizer({ calendar, year, photos, onPhotosChan
   const removePhoto = (monthIndex: number) => {
     const newPhotos = [...photos];
     newPhotos[monthIndex] = '';
-    onPhotosChange(newPhotos);
+    setPhotos(newPhotos);
   };
 
   // Generate calendar grid for a given month
@@ -151,7 +145,7 @@ export default function CalendarOrganizer({ calendar, year, photos, onPhotosChan
                             if (result) {
                               const newPhotos = [...photos];
                               newPhotos[currentMonth] = result;
-                              onPhotosChange(newPhotos);
+                              setPhotos(newPhotos);
                             }
                           };
                           reader.readAsDataURL(file);
@@ -240,6 +234,18 @@ export default function CalendarOrganizer({ calendar, year, photos, onPhotosChan
           </div>
         </div>
       </div>
+
+      {/* Continue to Checkout Button */}
+      {totalPhotos > 0 && (
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={() => onComplete(photos)}
+            className="px-8 py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
+          >
+            Continue to Checkout
+          </button>
+        </div>
+      )}
     </div>
   );
 }

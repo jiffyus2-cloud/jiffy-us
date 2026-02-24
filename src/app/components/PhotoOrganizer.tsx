@@ -1,17 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, X, ChevronLeft, ChevronRight, Image as ImageIcon, Sparkles, Grid3x3, Edit3, Layers, Shuffle, Trash2, Type, ArrowLeft, ArrowRight } from 'lucide-react';
 import type { Album } from './AlbumSelection';
+import type { CustomizationOptions } from './AlbumCustomization';
 
 interface PhotoOrganizerProps {
   album: Album;
+  customization: CustomizationOptions;
   photos: string[][];
   onPhotosChange: (photos: string[][]) => void;
   textBoxSlots: Record<number, Record<number, TextBox>>;
   onTextBoxSlotsChange: (slots: Record<number, Record<number, TextBox>>) => void;
+  onComplete?: () => void;
 }
 
 type OrganizerMode = 'manual' | 'ai' | null;
 type LayoutType = 'orthogonal' | 'fluid';
+type LayoutVariant = 'bleed' | 'margin' | 'horizontal-centered' | 'horizontal' | 'vertical' | '2x2' | '3x2' | '3x3';
 
 interface AIConfig {
   maxPhotosPerPage: number;
@@ -28,7 +32,7 @@ interface TextBox {
 
 type PageItem = string | TextBox; // Can be photo URL or text box
 
-export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxSlots, onTextBoxSlotsChange }: PhotoOrganizerProps) {
+export default function PhotoOrganizer({ album, customization, photos, onPhotosChange, textBoxSlots, onTextBoxSlotsChange, onComplete }: PhotoOrganizerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchFileInputRef = useRef<HTMLInputElement>(null);
   const [pageTexts, setPageTexts] = useState<Record<number, { content: string; fontSize: number; fontFamily: string; }>>({});
@@ -43,8 +47,70 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
   const [tempManualPages, setTempManualPages] = useState(20);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageLayouts, setPageLayouts] = useState<Record<number, number>>({});
+  const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, LayoutVariant>>({});
   const [isEditMode, setIsEditMode] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  // Determine album format based on customization size
+  const getAlbumFormat = (): 'square' | 'horizontal' | 'vertical' => {
+    const size = customization.size;
+    if (size.includes('20x20') || size.includes('30x30')) return 'square';
+    if (size.includes('21x28')) return 'horizontal';
+    if (size.includes('28x21')) return 'vertical';
+    return 'square'; // default
+  };
+
+  // Get available layout options based on album format
+  const getAvailableLayouts = (): number[] => {
+    const format = getAlbumFormat();
+    if (format === 'square') return [1, 2, 3, 4, 9];
+    if (format === 'horizontal') return [1, 2, 3, 4, 6];
+    if (format === 'vertical') return [1, 2, 3, 6];
+    return [1, 2, 3, 4];
+  };
+
+  // Get available variants for a specific layout count
+  const getLayoutVariants = (layoutCount: number): { variant: LayoutVariant; label: string }[] => {
+    const format = getAlbumFormat();
+    
+    if (layoutCount === 1) {
+      if (format === 'vertical') {
+        return [
+          { variant: 'bleed', label: 'Full Bleed' },
+          { variant: 'margin', label: 'With Margin' },
+          { variant: 'horizontal-centered', label: 'Horizontal Centered' },
+        ];
+      } else {
+        return [
+          { variant: 'bleed', label: 'Full Bleed' },
+          { variant: 'margin', label: 'With Margin' },
+        ];
+      }
+    } else if (layoutCount === 2) {
+      if (format === 'vertical') {
+        return [{ variant: 'vertical', label: 'Vertical Stack' }];
+      } else {
+        return [
+          { variant: 'horizontal', label: 'Side by Side' },
+          { variant: 'vertical', label: 'Vertical Stack' },
+        ];
+      }
+    } else if (layoutCount === 3) {
+      if (format === 'vertical') {
+        return [{ variant: 'vertical', label: 'Vertical Stack' }];
+      } else {
+        return [{ variant: 'horizontal', label: 'Horizontal Row' }];
+      }
+    } else if (layoutCount === 4) {
+      return [{ variant: '2x2', label: '2x2 Grid' }];
+    } else if (layoutCount === 6) {
+      return [{ variant: '3x2', label: '3x2 Grid' }];
+    } else if (layoutCount === 9) {
+      return [{ variant: '3x3', label: '3x3 Grid' }];
+    }
+    
+    return [{ variant: 'horizontal', label: 'Default' }];
+  };
 
   // Check if user is returning with existing photos
   const hasExistingPhotos = photos.flat().length > 0;
@@ -82,6 +148,7 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     
     // Detect layouts from existing photos AND text boxes
     const detectedLayouts: Record<number, number> = {};
+    const detectedVariants: Record<number, LayoutVariant> = {};
     photos.forEach((page, index) => {
       let maxSlot = (page && page.length > 0) ? page.length - 1 : -1; // Last photo slot (0-indexed)
       
@@ -97,6 +164,10 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
       // Set layout based on highest occupied slot (photo or text box)
       if (maxSlot >= 0) {
         detectedLayouts[index] = maxSlot + 1; // +1 because slots are 0-indexed
+        const availableVariants = getLayoutVariants(maxSlot + 1);
+        if (availableVariants.length > 0) {
+          detectedVariants[index] = availableVariants[0].variant;
+        }
       }
     });
     
@@ -104,6 +175,7 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     setMode('manual');
     setManualPages(actualTotalPages); // Use actual length instead of counting non-empty pages
     setPageLayouts(detectedLayouts);
+    setPageLayoutVariants(detectedVariants);
     setIsEditMode(true); // Start in edit mode when returning
     setInitialized(true);
   }
@@ -341,59 +413,6 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
             </div>
           </div>
 
-          {/* Layout Type */}
-          <div>
-            <h3 className="text-xl mb-4">Predominant Layout Type</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Choose the style of photo arrangement
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Orthogonal Layout */}
-              <button
-                onClick={() => setTempLayoutType('orthogonal')}
-                className={`p-6 rounded-lg border-2 transition-all text-left ${
-                  tempLayoutType === 'orthogonal'
-                    ? 'border-black bg-black text-white'
-                    : 'border-gray-300 bg-white hover:border-gray-400'
-                }`}
-              >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-lg mb-4 ${
-                  tempLayoutType === 'orthogonal' ? 'bg-white text-black' : 'bg-gray-100'
-                }`}>
-                  <Layers className="w-6 h-6" />
-                </div>
-                <h4 className="text-lg mb-2">Orthogonal</h4>
-                <p className={`text-sm ${
-                  tempLayoutType === 'orthogonal' ? 'text-gray-200' : 'text-gray-600'
-                }`}>
-                  Clean grid-based layouts with aligned photos. Perfect for a structured, organized look.
-                </p>
-              </button>
-
-              {/* Fluid Layout */}
-              <button
-                onClick={() => setTempLayoutType('fluid')}
-                className={`p-6 rounded-lg border-2 transition-all text-left ${
-                  tempLayoutType === 'fluid'
-                    ? 'border-black bg-black text-white'
-                    : 'border-gray-300 bg-white hover:border-gray-400'
-                }`}
-              >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-lg mb-4 ${
-                  tempLayoutType === 'fluid' ? 'bg-white text-black' : 'bg-gray-100'
-                }`}>
-                  <Shuffle className="w-6 h-6" />
-                </div>
-                <h4 className="text-lg mb-2">Fluid</h4>
-                <p className={`text-sm ${
-                  tempLayoutType === 'fluid' ? 'text-gray-200' : 'text-gray-600'
-                }`}>
-                  Dynamic layouts with diagonal cuts and asymmetric structures for a creative, modern feel.
-                </p>
-              </button>
-            </div>
-          </div>
-
           {/* Continue Button */}
           <button
             onClick={() => setAiConfig({ maxPhotosPerPage: tempMaxPhotos, layoutType: tempLayoutType, pages: tempPages })}
@@ -435,6 +454,7 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     const distributePhotosAcrossPages = (allPhotos: string[]) => {
       const newPhotos: string[][] = [];
       const newLayouts: Record<number, number> = {};
+      const newVariants: Record<number, LayoutVariant> = {};
       
       const { maxPhotosPerPage, layoutType, pages } = aiConfig;
       
@@ -468,6 +488,10 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
           if (pagePhotos.length > 0) {
             newPhotos[page] = pagePhotos;
             newLayouts[page] = pagePhotos.length;
+            const availableVariants = getLayoutVariants(pagePhotos.length);
+            if (availableVariants.length > 0) {
+              newVariants[page] = availableVariants[0].variant;
+            }
           }
         }
       } else {
@@ -497,12 +521,17 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
           if (pagePhotos.length > 0) {
             newPhotos[page] = pagePhotos;
             newLayouts[page] = pagePhotos.length;
+            const availableVariants = getLayoutVariants(pagePhotos.length);
+            if (availableVariants.length > 0) {
+              newVariants[page] = availableVariants[0].variant;
+            }
             layoutIndex++;
           }
         }
       }
       
       setPageLayouts(newLayouts);
+      setPageLayoutVariants(newVariants);
       onPhotosChange(newPhotos);
       setIsEditMode(true);
     };
@@ -571,16 +600,28 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     const currentLayout = getCurrentLayout();
     const newPhotos = [...photos];
     
-    Array.from(files).forEach((file) => {
+    // Initialize page if it doesn't exist
+    if (!newPhotos[currentPage]) {
+      newPhotos[currentPage] = [];
+    }
+    
+    const filesArray = Array.from(files);
+    const loadedPhotos: string[] = [];
+    let loadedCount = 0;
+    
+    filesArray.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
         if (result) {
-          if (!newPhotos[currentPage]) {
-            newPhotos[currentPage] = [];
-          }
-          if (newPhotos[currentPage].length < currentLayout) {
-            newPhotos[currentPage] = [...newPhotos[currentPage], result];
+          loadedPhotos.push(result);
+          loadedCount++;
+          
+          // When all files are loaded, update the state once
+          if (loadedCount === filesArray.length) {
+            // Only add photos up to the current layout limit
+            const photosToAdd = loadedPhotos.slice(0, currentLayout - newPhotos[currentPage].length);
+            newPhotos[currentPage] = [...newPhotos[currentPage], ...photosToAdd];
             onPhotosChange(newPhotos);
           }
         }
@@ -595,6 +636,15 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
       [currentPage]: layout,
     });
     
+    // Always set default variant for the new layout when layout changes
+    const availableVariants = getLayoutVariants(layout);
+    if (availableVariants.length > 0) {
+      setPageLayoutVariants({
+        ...pageLayoutVariants,
+        [currentPage]: availableVariants[0].variant,
+      });
+    }
+    
     if (photos[currentPage] && photos[currentPage].length > layout) {
       const newPhotos = [...photos];
       newPhotos[currentPage] = newPhotos[currentPage].slice(0, layout);
@@ -602,23 +652,195 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     }
   };
 
-  const getGridClass = (layout: number) => {
-    switch (layout) {
-      case 1:
-        return 'grid-cols-1';
-      case 2:
-        return 'grid-cols-2';
-      case 3:
-        return 'grid-cols-3';
-      case 4:
-        return 'grid-cols-2';
-      case 5:
-        return 'grid-cols-3';
-      case 6:
-        return 'grid-cols-3';
-      default:
-        return 'grid-cols-2';
+  const handleVariantChange = (variant: LayoutVariant) => {
+    setPageLayoutVariants({
+      ...pageLayoutVariants,
+      [currentPage]: variant,
+    });
+  };
+
+  const getCurrentVariant = (): LayoutVariant => {
+    return pageLayoutVariants[currentPage] || 'horizontal';
+  };
+
+  const getGridClass = (layout: number, variant?: LayoutVariant) => {
+    const currentVariant = variant || getCurrentVariant();
+    
+    // For 1 photo layouts
+    if (layout === 1) {
+      if (currentVariant === 'bleed') {
+        return 'grid-cols-1'; // Full bleed
+      } else if (currentVariant === 'margin') {
+        return 'grid-cols-1'; // With margin (we'll add padding in the container)
+      } else if (currentVariant === 'horizontal-centered') {
+        return 'grid-cols-1'; // Horizontal centered
+      }
+      return 'grid-cols-1';
     }
+    
+    // For 2 photo layouts
+    if (layout === 2) {
+      if (currentVariant === 'horizontal') {
+        return 'grid-cols-2'; // Side by side
+      } else if (currentVariant === 'vertical') {
+        return 'grid-cols-1'; // Stacked vertically
+      }
+      return 'grid-cols-2';
+    }
+    
+    // For 3 photo layouts
+    if (layout === 3) {
+      if (currentVariant === 'horizontal') {
+        return 'grid-cols-3'; // Horizontal row
+      } else if (currentVariant === 'vertical') {
+        return 'grid-cols-1'; // Vertical stack
+      }
+      return 'grid-cols-3';
+    }
+    
+    // For 4 photo layouts (always 2x2)
+    if (layout === 4) {
+      return 'grid-cols-2';
+    }
+    
+    // For 6 photo layouts (always 3x2)
+    if (layout === 6) {
+      return 'grid-cols-3';
+    }
+    
+    // For 9 photo layouts (always 3x3)
+    if (layout === 9) {
+      return 'grid-cols-3';
+    }
+    
+    return 'grid-cols-2';
+  };
+
+  const getContainerStyle = (layout: number, variant?: LayoutVariant) => {
+    const currentVariant = variant || getCurrentVariant();
+    const format = getAlbumFormat();
+    
+    // Add padding for margin variant in 1-photo layouts
+    if (layout === 1 && currentVariant === 'margin') {
+      return { padding: '1rem', aspectRatio: undefined };
+    }
+    
+    // For horizontal-centered in 1-photo layouts (portrait photo centered)
+    if (layout === 1 && currentVariant === 'horizontal-centered') {
+      return { aspectRatio: '3/2' }; // Landscape aspect ratio for the container
+    }
+    
+    // Remove aspect-ratio for vertical stack to allow auto-sizing
+    if (currentVariant === 'vertical') {
+      return { aspectRatio: undefined };
+    }
+    
+    return {};
+  };
+
+  // Get the aspect ratio for the page container based on album format
+  const getPageAspectRatio = (): string => {
+    const format = getAlbumFormat();
+    if (format === 'square') return '1 / 1'; // 1:1 for square albums
+    if (format === 'horizontal') return '28 / 21'; // 28x21 cm (landscape orientation - wider than tall)
+    if (format === 'vertical') return '21 / 28'; // 21x28 cm (portrait orientation - taller than wide)
+    return '1 / 1'; // default to square
+  };
+
+  // Get the slot class based on layout variant - use aspect-square only when appropriate
+  const getSlotClass = () => {
+    const currentVariant = getCurrentVariant();
+    const currentLayout = getCurrentLayout();
+    const format = getAlbumFormat();
+    
+    // For vertical stack, don't use aspect-square - let it auto-size
+    if (currentVariant === 'vertical') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 1 photo in horizontal format, use auto height
+    if (currentLayout === 1 && format === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 2 photos in horizontal format (side by side), use auto height
+    if (currentLayout === 2 && format === 'horizontal' && currentVariant === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 3 photos in horizontal format (row), use auto height
+    if (currentLayout === 3 && format === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 4 photos (2x2) in horizontal format, use auto height
+    if (currentLayout === 4 && format === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 6 photos (3x2) in horizontal format, use auto height
+    if (currentLayout === 6 && format === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For 9 photos (3x3) in horizontal format, use auto height
+    if (currentLayout === 9 && format === 'horizontal') {
+      return 'border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50 h-full';
+    }
+    
+    // For other layouts, use aspect-square
+    return 'aspect-square border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50';
+  };
+
+  // Get slot class for thumbnails in All Pages section
+  const getThumbnailSlotClass = (layout: number, variant?: LayoutVariant) => {
+    const format = getAlbumFormat();
+    
+    // For vertical stack in thumbnails
+    if (variant === 'vertical') {
+      return 'bg-gray-200 rounded overflow-hidden h-full';
+    }
+    
+    // For 1 photo in horizontal format
+    if (layout === 1 && format === 'horizontal') {
+      return 'bg-gray-200 rounded overflow-hidden h-full';
+    }
+    
+    // For 2 photos side by side in horizontal format
+    if (layout === 2 && format === 'horizontal' && variant === 'horizontal') {
+      return 'bg-gray-200 rounded overflow-hidden h-full';
+    }
+    
+    // For 3 photos in horizontal format
+    if (layout === 3 && format === 'horizontal') {
+      return 'bg-gray-200 rounded overflow-hidden h-full';
+    }
+    
+    // For grid layouts in horizontal format, use auto height
+    if (format === 'horizontal' && (layout === 4 || layout === 6 || layout === 9)) {
+      return 'bg-gray-200 rounded overflow-hidden h-full';
+    }
+    
+    // Default: aspect-square
+    return 'aspect-square bg-gray-200 rounded overflow-hidden';
+  };
+
+  // Check if grid should be vertically centered (for square format with 2 or 3 photos)
+  const shouldCenterVertically = (layout: number, variant?: LayoutVariant) => {
+    const format = getAlbumFormat();
+    const currentVariant = variant || getCurrentVariant();
+    
+    // Center vertically for square format with 2 side-by-side or 3 photos in a row
+    if (format === 'square') {
+      if (layout === 2 && currentVariant === 'horizontal') {
+        return true;
+      }
+      if (layout === 3 && currentVariant === 'horizontal') {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   const removePhoto = (pageIndex: number, photoIndex: number) => {
@@ -635,15 +857,19 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
     
     // Remove layout for deleted page and shift remaining layouts
     const newLayouts: Record<number, number> = {};
+    const newVariants: Record<number, LayoutVariant> = {};
     Object.keys(pageLayouts).forEach((key) => {
       const pageIndex = parseInt(key);
       if (pageIndex < currentPage) {
         newLayouts[pageIndex] = pageLayouts[pageIndex];
+        newVariants[pageIndex] = pageLayoutVariants[pageIndex];
       } else if (pageIndex > currentPage) {
         newLayouts[pageIndex - 1] = pageLayouts[pageIndex];
+        newVariants[pageIndex - 1] = pageLayoutVariants[pageIndex];
       }
     });
     setPageLayouts(newLayouts);
+    setPageLayoutVariants(newVariants);
     
     // Move to previous page if we deleted the last page
     if (currentPage >= newPhotos.length && currentPage > 0) {
@@ -804,8 +1030,8 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
             {isEditMode && (
               <div className="mb-6">
                 <p className="text-sm text-gray-600 mb-3">Photos per page:</p>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5, 6].map((layout) => (
+                <div className="flex gap-2 mb-4">
+                  {getAvailableLayouts().map((layout) => (
                     <button
                       key={layout}
                       onClick={() => handleLayoutChange(layout)}
@@ -819,12 +1045,38 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
                     </button>
                   ))}
                 </div>
+                
+                {/* Layout variant selector */}
+                {getLayoutVariants(getCurrentLayout()).length > 1 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-600 mb-3">Layout style:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {getLayoutVariants(getCurrentLayout()).map((variantOption) => (
+                        <button
+                          key={variantOption.variant}
+                          onClick={() => handleVariantChange(variantOption.variant)}
+                          className={`px-4 py-2 rounded border-2 transition-all ${
+                            getCurrentVariant() === variantOption.variant
+                              ? 'border-black bg-black text-white'
+                              : 'border-gray-300 bg-white hover:border-gray-400'
+                          }`}
+                        >
+                          {variantOption.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Photo grid for current page */}
-            <div className={`grid ${getGridClass(getCurrentLayout())} gap-4 mb-6`}>
-              {Array.from({ length: getCurrentLayout() }).map((_, index) => {
+            <div 
+              className="w-full mb-6 mx-auto" 
+              style={{ aspectRatio: getPageAspectRatio(), maxWidth: '600px' }}
+            >
+              <div className={`grid ${getGridClass(getCurrentLayout())} gap-4 h-full ${shouldCenterVertically(getCurrentLayout()) ? 'items-center' : ''}`}>
+                {Array.from({ length: getCurrentLayout() }).map((_, index) => {
                 const photo = photos[currentPage]?.[index];
                 const textBox = textBoxSlots[currentPage]?.[index];
                 const hasContent = photo || textBox;
@@ -832,7 +1084,8 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
                 return (
                   <div
                     key={index}
-                    className="aspect-square border-2 border-dashed border-gray-300 rounded-lg overflow-hidden relative bg-gray-50"
+                    className={getSlotClass()}
+                    style={getContainerStyle(getCurrentLayout(), getCurrentVariant())}
                   >
                     {/* Show text box if exists */}
                     {textBox ? (
@@ -989,6 +1242,7 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
                 );
               })}
             </div>
+          </div>
 
             {/* Text Editor Modal */}
             {editingTextSlot && (
@@ -1159,21 +1413,26 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
                       <span className="text-sm">Page {index + 1}</span>
                       <span className="text-xs text-gray-500">{photoCount}/{pageLayout}</span>
                     </div>
-                    <div className={`grid ${getGridClass(pageLayout)} gap-1`}>
-                      {Array.from({ length: pageLayout }).map((_, photoIndex) => (
-                        <div
-                          key={photoIndex}
-                          className="aspect-square bg-gray-200 rounded overflow-hidden"
-                        >
-                          {pagePhotos[photoIndex] && (
-                            <img
-                              src={pagePhotos[photoIndex]}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                      ))}
+                    <div className="w-full" style={{ aspectRatio: getPageAspectRatio() }}>
+                      <div className={`grid ${getGridClass(pageLayout)} gap-1 h-full ${shouldCenterVertically(pageLayout, pageLayoutVariants[index]) ? 'items-center' : ''}`}>
+                        {Array.from({ length: pageLayout }).map((_, photoIndex) => {
+                          const pageVariant = pageLayoutVariants[index];
+                          return (
+                            <div
+                              key={photoIndex}
+                              className={getThumbnailSlotClass(pageLayout, pageVariant)}
+                            >
+                              {pagePhotos[photoIndex] && (
+                                <img
+                                  src={pagePhotos[photoIndex]}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </button>
                 );
@@ -1182,6 +1441,18 @@ export default function PhotoOrganizer({ album, photos, onPhotosChange, textBoxS
           </div>
         </div>
       </div>
+
+      {/* Continue to Checkout Button */}
+      {onComplete && photos.flat().length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={onComplete}
+            className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
+          >
+            Continue to Checkout
+          </button>
+        </div>
+      )}
     </div>
   );
 }
