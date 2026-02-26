@@ -47,7 +47,7 @@ export const DESIGN = {
 
   // Typography
   text: {
-    h1: 'text-5xl md:text-7xl font-medium mb-6',
+    h1: 'text-5xl md:text-7xl font-medium mb-6 text-black',
     h2: 'text-5xl text-center font-medium mb-4',
     h3: 'text-3xl font-medium mb-3',
     h4: 'text-2xl font-medium mb-2',

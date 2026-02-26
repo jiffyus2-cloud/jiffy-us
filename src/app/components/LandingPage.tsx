@@ -1,3 +1,6 @@
+// RECORDATORIO: Los nombres de los archivos importados (ej. carrusela.png) deben coincidir 
+// exactamente con las mayúsculas/minúsculas del archivo real en el sistema de archivos 
+// para evitar fallos en entornos de producción (Linux/Vercel).
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
@@ -10,23 +13,36 @@ import { Header } from './navigation/Header';
 import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
 import calendarImage from '../../assets/e10b8bcd9dce4c4659f29f62c8704217f6ab8e6a.png';
-import React from 'react';
+
+import CarruselA from '../../assets/carrusela.png';
+import CarruselB from '../../assets/carruselb.png';
+import CarruselC from '../../assets/carruselc.png';
+import CarruselD from '../../assets/carruseld.png';
 
 const heroImages = [
   {
-    url: 'https://images.unsplash.com/photo-1627353802168-e8e8a81e51f6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwaG90byUyMGFsYnVtJTIwbWVtb3JpZXMlMjBzY3JhcGJvb2t8ZW58MXx8fHwxNzcxNjEyMzY0fDA&ixlib=rb-4.1.0&q=80&w=1080',
+    url: CarruselA,
     title: 'Preserve Your Precious Moments',
-    subtitle: 'Create stunning photo albums that tell your story'
+    description: 'Create stunning photo albums that tell your story',
+    highlight: 'High quality finishes for every memory'
   },
   {
-    url: 'https://images.unsplash.com/photo-1758562235074-c54b9f68af12?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYW1pbHklMjBtZW1vcmllcyUyMHBob3RvZ3JhcGh5JTIwY29sbGVjdGlvbnxlbnwxfHx8fDE3NzE2MTIzNjR8MA&ixlib=rb-4.1.0&q=80&w=1080',
+    url: CarruselB,
     title: 'Memories That Last Forever',
-    subtitle: 'Design personalized calendars and gifts for every occasion'
+    description: 'Design personalized calendars and gifts for every occasion',
+    highlight: 'Capture every day with a custom touch'
   },
   {
-    url: 'https://images.unsplash.com/photo-1543253454-467bd6c1e154?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjcmVhdGl2ZSUyMHBob3RvJTIwYWxidW0lMjBkZXNpZ258ZW58MXx8fHwxNzcxNjEyMzY0fDA&ixlib=rb-4.1.0&q=80&w=1080',
+    url: CarruselC,
     title: 'Your Creativity, Our Quality',
-    subtitle: 'Professional printing with premium materials'
+    description: 'Professional printing with premium materials',
+    highlight: 'Designed by you, crafted by us'
+  },
+  {
+    url: CarruselD,
+    title: 'The Perfect Personalized Gift',
+    description: 'Surprise your loved ones with something unique',
+    highlight: 'Fast delivery and 100% satisfaction guaranteed'
   }
 ];
 
@@ -114,35 +130,44 @@ export default function LandingPage() {
                 alt="Hero"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black bg-opacity-40" />
+              {/*<div className="absolute inset-0 bg-black bg-opacity-40" />*/}
             </div>
           </motion.div>
         </AnimatePresence>
 
-        {/* Hero Content */}
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="text-center text-white px-4 max-w-4xl">
+        {/* Hero Content - Aligned to Left */}
+        <div className="absolute inset-0 flex items-center justify-start z-20">
+          <div className="text-left text-white pl-12 md:pl-24 pr-5 py-5 bg-white/40 max-w-4xl w-fit">
             <motion.h1
               key={`title-${currentSlide}`}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className={DESIGN.text.h1}
+              className={`${DESIGN.text.h1} text-[var(--color-black)]`}
             >
               {heroImages[currentSlide].title}
             </motion.h1>
             <motion.p
-              key={`subtitle-${currentSlide}`}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
+              key={`desc-${currentSlide}`}
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className={DESIGN.text.subtitle}
+              className="text-xl md:text-2xl mb-4 text-gray-800"
             >
-              {heroImages[currentSlide].subtitle}
+              {heroImages[currentSlide].description}
+            </motion.p>
+            <motion.p
+              key={`highlight-${currentSlide}`}
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="text-xl md:text-2xl mb-8 font-bold text-gray-800"
+            >
+              {heroImages[currentSlide].highlight}
             </motion.p>
             <motion.button
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.7 }}
               onClick={() => navigate('/create')}
               className={`${DESIGN.button.base} ${DESIGN.button.secondary}`}
@@ -152,14 +177,14 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Carousel Indicators */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+        {/* Slide Indicators */}
+        <div className="absolute bottom-8 left-12 md:left-24 z-30 flex gap-2">
           {heroImages.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`${DESIGN.nav.indicator} ${
-                index === currentSlide ? DESIGN.nav.indicatorActive : DESIGN.nav.indicatorInactive
+              className={`h-2 transition-all rounded-full ${
+                currentSlide === index ? 'w-8 bg-white' : 'w-2 bg-white/50'
               }`}
             />
           ))}

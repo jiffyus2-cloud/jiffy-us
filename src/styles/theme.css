@@ -36,6 +36,7 @@
   --ring: oklch(0.708 0 0);
 
   /* Specific Shades */
+  --color-black: #000000;
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
