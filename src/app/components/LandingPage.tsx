@@ -137,7 +137,7 @@ export default function LandingPage() {
 
         {/* Hero Content - Aligned to Left */}
         <div className="absolute inset-0 flex items-center justify-start z-20">
-          <div className="text-left text-white pl-12 md:pl-24 pr-5 py-5 bg-white/40 max-w-4xl w-fit">
+          <div className="text-left text-white pl-12 md:pl-24 pr-16 py-10 bg-white/40 max-w-4xl w-fit rounded-r-2xl backdrop-blur-sm">
             <motion.h1
               key={`title-${currentSlide}`}
               initial={{ x: -20, opacity: 0 }}
