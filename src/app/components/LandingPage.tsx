@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calendar, Coffee } from 'lucide-react';
+import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calendar, Coffee, Tag, Truck, Gift } from 'lucide-react';
 import ProductDetailsModal from './ProductDetailsModal';
 import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
@@ -51,6 +51,27 @@ export default function LandingPage() {
       title: t('hero.4.title'),
       description: t('hero.4.desc'),
       highlight: t('hero.4.highlight')
+    }
+  ];
+
+  const promotions = [
+    {
+      icon: <Tag className="w-8 h-8" />,
+      title: t('promo.1.title'),
+      desc: t('promo.1.desc'),
+      color: 'bg-blue-50 text-blue-700 border-blue-200'
+    },
+    {
+      icon: <Truck className="w-8 h-8" />,
+      title: t('promo.2.title'),
+      desc: t('promo.2.desc'),
+      color: 'bg-green-50 text-green-700 border-green-200'
+    },
+    {
+      icon: <Gift className="w-8 h-8" />,
+      title: t('promo.3.title'),
+      desc: t('promo.3.desc'),
+      color: 'bg-purple-50 text-purple-700 border-purple-200'
     }
   ];
 
@@ -189,6 +210,32 @@ export default function LandingPage() {
               }`}
             />
           ))}
+        </div>
+      </section>
+
+      {/* Promotions Panel */}
+      <section className="bg-white py-12 border-b border-gray-100">
+        <div className={DESIGN.layout.container}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {promotions.map((promo, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                viewport={{ once: true }}
+                className={`p-6 rounded-2xl border-2 ${promo.color} flex items-center gap-5 shadow-sm hover:shadow-md transition-shadow`}
+              >
+                <div className="shrink-0">
+                  {promo.icon}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold mb-1">{promo.title}</h3>
+                  <p className="text-sm opacity-90 font-medium">{promo.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 

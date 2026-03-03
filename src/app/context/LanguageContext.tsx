@@ -152,6 +152,15 @@ const translations = {
     'hero.4.desc': 'Surprise your loved ones with something unique',
     'hero.4.highlight': 'Fast delivery and 100% satisfaction guaranteed',
 
+    // Promotions
+    'promo.title': 'Active Promotions',
+    'promo.1.title': '20% Off Your First Order',
+    'promo.1.desc': 'Use code WELCOME20 at checkout',
+    'promo.2.title': 'Free Shipping',
+    'promo.2.desc': 'On all orders over 50€',
+    'promo.3.title': 'Special Offer 3x2',
+    'promo.3.desc': 'Buy 2 photo albums and get 1 calendar free!',
+
     // Common
     'common.new': 'NEW',
   },
@@ -297,6 +306,15 @@ const translations = {
     'hero.4.title': 'El Regalo Personalizado Perfecto',
     'hero.4.desc': 'Sorprende a tus seres queridos con algo único',
     'hero.4.highlight': 'Entrega rápida y satisfacción 100% garantizada',
+
+    // Promotions
+    'promo.title': 'Promociones Activas',
+    'promo.1.title': '20% de Descuento en tu Primer Pedido',
+    'promo.1.desc': 'Usa el código BIENVENIDO20 al finalizar la compra',
+    'promo.2.title': 'Envío Gratis',
+    'promo.2.desc': 'En todos los pedidos superiores a 50€',
+    'promo.3.title': 'Oferta Especial 3x2',
+    'promo.3.desc': '¡Compra 2 álbumes y llévate 1 calendario gratis!',
 
     // Common
     'common.new': 'NUEVO',

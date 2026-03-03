@@ -21,15 +21,15 @@ export function Header() {
             variant="ghost" 
             size="sm" 
             onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-16 sm:w-20"
           >
             <Globe className="w-4 h-4" />
             <span className="uppercase">{language}</span>
           </Button>
-          <Button variant="ghost" asChild size="sm" className="sm:size-default">
+          <Button variant="ghost" asChild size="sm" className="sm:size-default w-36 sm:w-44">
             <Link to="/login">{t('nav.login')}</Link>
           </Button>
-          <Button asChild size="sm" className="sm:size-lg rounded-lg font-medium">
+          <Button asChild size="sm" className="sm:size-lg rounded-lg font-medium w-36 sm:w-44">
             <Link to="/registro">{t('nav.signup')}</Link>
           </Button>
         </nav>
