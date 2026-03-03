@@ -1,9 +1,11 @@
 import { createBrowserRouter } from 'react-router';
 import LandingPage from './components/LandingPage';
 import Creator from './components/Creator';
+import UserDashboard from './components/UserDashboard';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Header } from './components/navigation/Header';
+import { Navigate } from 'react-router';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -17,7 +19,11 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => (
 export const router = createBrowserRouter([
   {
     path: '/',
-    Component: LandingPage,
+    element: <LandingPage />,
+  },
+  {
+    path: '/dashboard',
+    Component: UserDashboard,
   },
   {
     path: '/create',
@@ -27,7 +33,7 @@ export const router = createBrowserRouter([
     path: '/login',
     element: (
       <AuthLayout>
-        <LoginForm onSuccess={() => window.location.href = '/'} />
+        <LoginForm onSuccess={() => (window.location.href = '/')} />
       </AuthLayout>
     ),
   },
@@ -35,7 +41,7 @@ export const router = createBrowserRouter([
     path: '/registro',
     element: (
       <AuthLayout>
-        <RegisterForm onSuccess={() => window.location.href = '/'} />
+        <RegisterForm onSuccess={() => (window.location.href = '/')} />
       </AuthLayout>
     ),
   },

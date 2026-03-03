@@ -12,11 +12,14 @@ import MugStyleSelection, { MugProduct } from './MugStyleSelection';
 import MugCustomization, { MugCustomizationOptions } from './MugCustomization';
 import MugOrganizer, { MugItem } from './MugOrganizer';
 import Checkout from './Checkout';
+import { useLanguage } from '../context/LanguageContext';
 
 type Step = 'product' | 'style' | 'customization' | 'organize' | 'checkout';
 
 export default function Creator() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
+  // ... rest of the component state
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
@@ -39,14 +42,17 @@ export default function Creator() {
 
   const handleSelectAlbum = (album: Album) => {
     setSelectedAlbum(album);
+    setCurrentStep('customization');
   };
 
   const handleSelectCalendar = (calendar: Calendar) => {
     setSelectedCalendar(calendar);
+    setCurrentStep('customization');
   };
 
   const handleSelectMug = (mug: MugProduct) => {
     setSelectedMug(mug);
+    setCurrentStep('customization');
   };
 
   const handleCustomizationComplete = (options: CustomizationOptions) => {
@@ -113,32 +119,32 @@ export default function Creator() {
   const getProgressSteps = () => {
     if (selectedProduct === 'album') {
       return [
-        { id: 'product', label: 'Product', active: true },
-        { id: 'style', label: 'Style', active: currentStep !== 'product' },
-        { id: 'customization', label: 'Customize', active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'organize', label: 'Photos', active: currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'checkout', label: 'Checkout', active: currentStep === 'checkout' },
+        { id: 'product', label: t('step.product'), active: true },
+        { id: 'style', label: t('step.style'), active: currentStep !== 'product' },
+        { id: 'customization', label: t('step.customize'), active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'organize', label: t('step.photos'), active: currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'checkout', label: t('step.checkout'), active: currentStep === 'checkout' },
       ];
     } else if (selectedProduct === 'calendar') {
       return [
-        { id: 'product', label: 'Product', active: true },
-        { id: 'style', label: 'Style', active: currentStep !== 'product' },
-        { id: 'customization', label: 'Customize', active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'organize', label: 'Photos', active: currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'checkout', label: 'Checkout', active: currentStep === 'checkout' },
+        { id: 'product', label: t('step.product'), active: true },
+        { id: 'style', label: t('step.style'), active: currentStep !== 'product' },
+        { id: 'customization', label: t('step.customize'), active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'organize', label: t('step.photos'), active: currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'checkout', label: t('step.checkout'), active: currentStep === 'checkout' },
       ];
     } else if (selectedProduct === 'mug') {
       return [
-        { id: 'product', label: 'Product', active: true },
-        { id: 'style', label: 'Style', active: currentStep !== 'product' },
-        { id: 'customization', label: 'Customize', active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'organize', label: 'Design', active: currentStep === 'organize' || currentStep === 'checkout' },
-        { id: 'checkout', label: 'Checkout', active: currentStep === 'checkout' },
+        { id: 'product', label: t('step.product'), active: true },
+        { id: 'style', label: t('step.style'), active: currentStep !== 'product' },
+        { id: 'customization', label: t('step.customize'), active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'organize', label: t('step.design'), active: currentStep === 'organize' || currentStep === 'checkout' },
+        { id: 'checkout', label: t('step.checkout'), active: currentStep === 'checkout' },
       ];
     }
     
     return [
-      { id: 'product', label: 'Product', active: true },
+      { id: 'product', label: t('step.product'), active: true },
     ];
   };
 
@@ -281,12 +287,12 @@ export default function Creator() {
             className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors"
           >
             <Home className="w-5 h-5" />
-            <span className="hidden md:inline">Home</span>
+            <span className="hidden md:inline">{t('nav.home')}</span>
           </button>
           
           {currentStep !== 'product' && (
             <div className="text-sm text-gray-500">
-              Step {activeStepIndex + 1} of {progressSteps.length}
+              {t('step.step')} {activeStepIndex + 1} {t('step.of')} {progressSteps.length}
             </div>
           )}
         </div>
@@ -354,7 +360,7 @@ export default function Creator() {
             className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span className="hidden md:inline">Back</span>
+            <span className="hidden md:inline">{t('step.back')}</span>
           </button>
         </div>
       )}
@@ -365,25 +371,6 @@ export default function Creator() {
       {currentStep === 'style' && selectedProduct && (
         <>
           {renderStyleSelection()}
-          <div className="max-w-6xl mx-auto px-4 pb-12">
-            <button
-              onClick={() => setCurrentStep('customization')}
-              disabled={
-                (selectedProduct === 'album' && !selectedAlbum) ||
-                (selectedProduct === 'calendar' && !selectedCalendar) ||
-                (selectedProduct === 'mug' && !selectedMug)
-              }
-              className={`w-full py-4 rounded-lg transition-colors text-lg ${
-                ((selectedProduct === 'album' && selectedAlbum) || 
-                 (selectedProduct === 'calendar' && selectedCalendar) ||
-                 (selectedProduct === 'mug' && selectedMug))
-                  ? 'bg-black text-white hover:bg-gray-800 cursor-pointer'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              Continue to Customization
-            </button>
-          </div>
         </>
       )}
       

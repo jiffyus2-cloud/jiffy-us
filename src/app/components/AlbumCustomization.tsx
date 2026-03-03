@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Upload, X, Settings } from 'lucide-react';
+import { Upload, X, Settings, Image as ImageIcon } from 'lucide-react';
 import type { Album } from './AlbumSelection';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface CustomizationOptions {
   coverType: 'Tela' | 'Papel';
@@ -22,33 +23,66 @@ interface AlbumCustomizationProps {
   onCustomizationComplete: (options: CustomizationOptions) => void;
 }
 
-const coverColors = [
-  { name: 'Beige', color: '#E8DCC4' },
-  { name: 'Gray', color: '#9B9B9B' },
-  { name: 'Black', color: '#000000' },
-  { name: 'White', color: '#FFFFFF' },
-];
-
-const typographyColors = [
-  { name: 'Black', color: '#000000' },
-  { name: 'White', color: '#FFFFFF' },
-  { name: 'Gold', color: '#D4AF37' },
-  { name: 'Silver', color: '#C0C0C0' },
-  { name: 'Navy', color: '#1A1A3E' },
-];
-
 export default function AlbumCustomization({ album, onCustomizationComplete }: AlbumCustomizationProps) {
+  const { t } = useLanguage();
   const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Tela');
   const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
-  const [coverColor, setCoverColor] = useState(coverColors[0].color);
-  const [typographyColor, setTypographyColor] = useState(typographyColors[0].color);
+  
+  // Dynamic color options based on coverType
+  const getCoverColors = () => {
+    if (coverType === 'Tela') {
+      return [
+        { name: t('album.tela'), color: '#E8DCC4', isPhoto: true }, // Using Beige as placeholder for texture
+        { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
+      ];
+    } else {
+      return [
+        { name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, // Slightly off-white for photo option
+        { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
+      ];
+    }
+  };
+
+  const getTypographyColors = () => {
+    if (coverType === 'Tela') {
+      return [
+        { name: t('album.color.gold'), color: '#D4AF37' },
+        { name: t('album.color.silver'), color: '#C0C0C0' },
+        { name: t('album.color.black'), color: '#000000' },
+      ];
+    } else {
+      return [
+        { name: t('album.color.black'), color: '#000000' },
+      ];
+    }
+  };
+
+  const currentCoverColors = getCoverColors();
+  const currentTypographyColors = getTypographyColors();
+
+  const [coverColor, setCoverColor] = useState(currentCoverColors[0].color);
+  const [typographyColor, setTypographyColor] = useState(currentTypographyColors[0].color);
+
+  const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
+    setCoverType(type);
+    const newCoverColors = type === 'Tela' 
+      ? [{ name: t('album.tela'), color: '#E8DCC4', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }]
+      : [{ name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }];
+    const newTypoColors = type === 'Tela'
+      ? [{ name: t('album.color.gold'), color: '#D4AF37' }, { name: t('album.color.silver'), color: '#C0C0C0' }, { name: t('album.color.black'), color: '#000000' }]
+      : [{ name: t('album.color.black'), color: '#000000' }];
+    
+    setCoverColor(newCoverColors[0].color);
+    setTypographyColor(newTypoColors[0].color);
+  };
+
   const [paperType, setPaperType] = useState<'Mate' | 'Brillante'>('Mate');
   const [pages, setPages] = useState(20);
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [coverContent, setCoverContent] = useState({
-    title: 'My Photo Album',
-    subtitle: '2024',
-    spineText: 'Memories',
+    title: t('album.defaultTitle'),
+    subtitle: t('album.defaultSubtitle'),
+    spineText: t('album.defaultSpine'),
     coverPhoto: '',
   });
 
@@ -67,11 +101,12 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-12">
       {/* Album Cover Preview - Clickeable */}
-      <div className="mb-12">
-        <h3 className="text-xl font-medium mb-4 text-center">Carátula</h3>
+      <div className="mb-12" style={{ color: 'rgba(10, 10, 10, 0.45)' }}>
+        <h3 className="text-xl font-medium mb-4 text-center">{t('album.caratula')}</h3>
         <button
           onClick={() => setShowCoverEditor(true)}
           className="w-full relative bg-gray-50 rounded-lg p-12 flex items-center justify-center hover:bg-gray-100 transition-colors group"
+          style={{ color: 'rgba(10, 10, 10, 1)' }}
         >
           {/* Front Cover Preview - Same as modal */}
           <div 
@@ -121,10 +156,10 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           </div>
 
           {/* Hover Overlay */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
+          <div className="absolute inset-0 bg-transparent group-hover:bg-black group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
               <Settings className="w-5 h-5" />
-              <span className="font-medium">Click to customize cover</span>
+              <span className="font-medium">{t('album.clickToCustomize')}</span>
             </div>
           </div>
         </button>
@@ -145,7 +180,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         <div className="relative flex justify-center">
           <div className="bg-white px-4">
             <div className="w-16 h-16 rounded-full border-4 border-black bg-white flex items-center justify-center">
-              <span className="text-sm">NEW</span>
+              <span className="text-sm">{t('common.new')}</span>
             </div>
           </div>
         </div>
@@ -154,34 +189,34 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
       <div className="space-y-10">
         {/* Tipo de Carátula */}
         <div>
-          <h3 className="text-2xl mb-4">Tipo de Carátula</h3>
+          <h3 className="text-2xl mb-4">{t('album.coverType')}</h3>
           <div className="grid grid-cols-2 gap-4 max-w-md">
             <button
-              onClick={() => setCoverType('Tela')}
+              onClick={() => handleCoverTypeChange('Tela')}
               className={`py-6 text-xl rounded-lg border-4 transition-all ${
                 coverType === 'Tela'
                   ? 'bg-black text-white border-black'
                   : 'bg-white text-black border-black'
               }`}
             >
-              Tela
+              {t('album.tela')}
             </button>
             <button
-              onClick={() => setCoverType('Papel')}
+              onClick={() => handleCoverTypeChange('Papel')}
               className={`py-6 text-xl rounded-lg border-4 transition-all ${
                 coverType === 'Papel'
                   ? 'bg-black text-white border-black'
                   : 'bg-white text-black border-black'
               }`}
             >
-              Papel
+              {t('album.papel')}
             </button>
           </div>
         </div>
 
         {/* Tamaño */}
         <div>
-          <h3 className="text-2xl mb-4">Tamaño</h3>
+          <h3 className="text-2xl mb-4">{t('album.size')}</h3>
           <div className="grid grid-cols-2 gap-4 max-w-md">
             <button
               onClick={() => setSize('Cuadrado 20x20 cm')}
@@ -191,7 +226,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Cuadrado 20x20 cm
+              {t('album.size.sq20')}
             </button>
             <button
               onClick={() => setSize('Cuadrado 30x30 cm')}
@@ -201,7 +236,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Cuadrado 30x30 cm
+              {t('album.size.sq30')}
             </button>
             <button
               onClick={() => setSize('Horizontal 21x28 cm')}
@@ -211,7 +246,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Horizontal 21x28 cm
+              {t('album.size.hor21')}
             </button>
             <button
               onClick={() => setSize('Vertical 28x21 cm')}
@@ -221,54 +256,60 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Vertical 28x21 cm
+              {t('album.size.ver28')}
             </button>
           </div>
         </div>
 
         {/* Color de Carátula */}
         <div>
-          <h3 className="text-2xl mb-4">Color de Carátula</h3>
-          <div className="flex gap-4">
-            {coverColors.map((colorOption) => (
-              <button
-                key={colorOption.color}
-                onClick={() => setCoverColor(colorOption.color)}
-                className={`w-16 h-16 rounded-full border-4 transition-all ${
-                  coverColor === colorOption.color
-                    ? 'border-black scale-110'
-                    : 'border-gray-300 hover:border-gray-400'
-                }`}
-                style={{ backgroundColor: colorOption.color }}
-                title={colorOption.name}
-              />
+          <h3 className="text-2xl mb-4">{t('album.coverColor')}</h3>
+          <div className="flex flex-wrap gap-4">
+            {currentCoverColors.map((colorOption: any) => (
+              <div key={colorOption.color} className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => setCoverColor(colorOption.color)}
+                  className={`w-16 h-16 rounded-full border-4 transition-all flex items-center justify-center ${
+                    coverColor === colorOption.color
+                      ? 'border-black scale-110'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                  style={{ backgroundColor: colorOption.color }}
+                >
+                  {colorOption.isPhoto && (
+                    <ImageIcon className="w-8 h-8 text-gray-500" />
+                  )}
+                </button>
+                <span className="text-xs text-center max-w-[80px]">{colorOption.name}</span>
+              </div>
             ))}
           </div>
         </div>
 
         {/* Color de Tipografía */}
         <div>
-          <h3 className="text-2xl mb-4">Color de Tipografía</h3>
-          <div className="flex gap-4">
-            {typographyColors.map((colorOption) => (
-              <button
-                key={colorOption.color}
-                onClick={() => setTypographyColor(colorOption.color)}
-                className={`w-16 h-16 rounded-full border-4 transition-all ${
-                  typographyColor === colorOption.color
-                    ? 'border-black scale-110'
-                    : 'border-gray-300 hover:border-gray-400'
-                }`}
-                style={{ backgroundColor: colorOption.color }}
-                title={colorOption.name}
-              />
+          <h3 className="text-2xl mb-4">{t('album.typographyColor')}</h3>
+          <div className="flex flex-wrap gap-4">
+            {currentTypographyColors.map((colorOption) => (
+              <div key={colorOption.color} className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => setTypographyColor(colorOption.color)}
+                  className={`w-16 h-16 rounded-full border-4 transition-all ${
+                    typographyColor === colorOption.color
+                      ? 'border-black scale-110'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                  style={{ backgroundColor: colorOption.color }}
+                />
+                <span className="text-xs text-center">{colorOption.name}</span>
+              </div>
             ))}
           </div>
         </div>
 
         {/* Tipo de Papel */}
         <div>
-          <h3 className="text-2xl mb-4">Tipo de Papel</h3>
+          <h3 className="text-2xl mb-4">{t('album.paperType')}</h3>
           <div className="grid grid-cols-2 gap-4 max-w-md">
             <button
               onClick={() => setPaperType('Mate')}
@@ -278,7 +319,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Mate
+              {t('album.mate')}
             </button>
             <button
               onClick={() => setPaperType('Brillante')}
@@ -288,7 +329,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   : 'bg-white text-black border-black'
               }`}
             >
-              Brillante
+              {t('album.brillante')}
             </button>
           </div>
         </div>
@@ -300,7 +341,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           onClick={handleContinue}
           className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
         >
-          Continuar
+          {t('album.continue')}
         </button>
       </div>
 
@@ -310,7 +351,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           <div className="min-h-screen flex items-start md:items-center justify-center p-4 py-8">
             <div className="bg-white rounded-lg p-6 md:p-8 max-w-6xl w-full shadow-2xl">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-medium">Customize Cover Content</h3>
+                <h3 className="text-2xl font-medium">{t('album.customizeCoverContent')}</h3>
                 <button
                   onClick={() => setShowCoverEditor(false)}
                   className="text-gray-500 hover:text-black transition-colors"
@@ -322,48 +363,48 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Form Section */}
                 <div className="space-y-6">
-                  <h4 className="text-lg font-medium mb-4">Cover Details</h4>
+                  <h4 className="text-lg font-medium mb-4">{t('album.coverDetails')}</h4>
 
                   {/* Title */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Title</label>
+                    <label className="block text-sm font-medium mb-2">{t('album.title')}</label>
                     <input
                       type="text"
                       value={coverContent.title}
                       onChange={(e) => setCoverContent({ ...coverContent, title: e.target.value })}
-                      placeholder="Enter album title..."
+                      placeholder={t('album.titlePlaceholder')}
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
                     />
                   </div>
 
                   {/* Subtitle */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Subtitle</label>
+                    <label className="block text-sm font-medium mb-2">{t('album.subtitle')}</label>
                     <input
                       type="text"
                       value={coverContent.subtitle}
                       onChange={(e) => setCoverContent({ ...coverContent, subtitle: e.target.value })}
-                      placeholder="Enter subtitle (e.g., year, location)..."
+                      placeholder={t('album.subtitlePlaceholder')}
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
                     />
                   </div>
 
                   {/* Spine Text */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Spine Text</label>
+                    <label className="block text-sm font-medium mb-2">{t('album.spineText')}</label>
                     <input
                       type="text"
                       value={coverContent.spineText}
                       onChange={(e) => setCoverContent({ ...coverContent, spineText: e.target.value })}
-                      placeholder="Text for the spine..."
+                      placeholder={t('album.spinePlaceholder')}
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-black"
                     />
-                    <p className="text-xs text-gray-500 mt-1">This text will appear on the spine of the album</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('album.spineNote')}</p>
                   </div>
 
                   {/* Cover Photo */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Cover Photo</label>
+                    <label className="block text-sm font-medium mb-2">{t('album.coverPhoto')}</label>
                     {coverContent.coverPhoto ? (
                       <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
                         <img
@@ -402,7 +443,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                         className="w-full aspect-video border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                       >
                         <Upload className="w-8 h-8 text-gray-400" />
-                        <span className="text-sm text-gray-600">Upload Cover Photo</span>
+                        <span className="text-sm text-gray-600">{t('album.uploadCoverPhoto')}</span>
                       </button>
                     )}
                   </div>
@@ -411,17 +452,17 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                     onClick={() => setShowCoverEditor(false)}
                     className="w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                   >
-                    Apply Changes
+                    {t('album.applyChanges')}
                   </button>
                 </div>
 
                 {/* Preview Section */}
                 <div className="space-y-6">
-                  <h4 className="text-lg font-medium mb-4">Live Preview</h4>
+                  <h4 className="text-lg font-medium mb-4">{t('album.livePreview')}</h4>
                   
                   {/* Front Cover Preview */}
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">Front Cover</p>
+                    <p className="text-sm text-gray-600 mb-2">{t('album.frontCover')}</p>
                     <div 
                       className="aspect-[3/4] rounded-lg shadow-xl overflow-hidden relative border border-gray-200"
                       style={{ backgroundColor: coverColor }}
@@ -471,7 +512,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
                   {/* Spine Preview */}
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">Spine</p>
+                    <p className="text-sm text-gray-600 mb-2">{t('album.spine')}</p>
                     <div 
                       className="h-20 rounded-lg shadow-lg flex items-center justify-center px-4 border border-gray-200"
                       style={{ backgroundColor: coverColor }}
@@ -493,8 +534,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                   {/* 3D View Hint */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800">
-                      <span className="font-medium">Preview Note:</span> This is a simplified preview. 
-                      The final album will have a professional finish matching your selected cover type ({coverType}).
+                      <span className="font-medium">{t('album.previewNote')}:</span> {t('album.previewNoteText')}
                     </p>
                   </div>
                 </div>
@@ -506,5 +546,3 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     </div>
   );
 }
-
-export type { CustomizationOptions };

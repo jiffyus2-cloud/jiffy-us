@@ -2,6 +2,7 @@ import { X, BookImage, Calendar, Coffee, Check } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface ProductDetailsModalProps {
 
 export default function ProductDetailsModal({ isOpen, onClose, productType }: ProductDetailsModalProps) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -25,9 +27,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
     switch (productType) {
       case 'album':
         return {
-          title: 'Photo Albums',
+          title: t('product.album'),
           icon: <BookImage className="w-12 h-12" />,
-          description: 'Create beautiful, professionally printed photo albums with customizable covers and premium paper quality.',
+          description: t('product.albumDesc'),
           styles: [
             { 
               name: 'Classic Album', 
@@ -65,9 +67,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
         };
       case 'calendar':
         return {
-          title: 'Photo Calendars',
+          title: t('product.calendar'),
           icon: <Calendar className="w-12 h-12" />,
-          description: 'Design personalized wall calendars featuring your favorite photos for each month of the year.',
+          description: t('product.calendarDesc'),
           styles: [
             { 
               name: 'Wall Calendar', 
@@ -105,9 +107,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
         };
       case 'mug':
         return {
-          title: 'Mugs & Thermos',
+          title: t('product.mug'),
           icon: <Coffee className="w-12 h-12" />,
-          description: 'Create unique photo mugs and thermos bottles perfect for coffee, tea, or your favorite beverages.',
+          description: t('product.mugDesc'),
           styles: [
             { 
               name: 'Classic Mug', 
@@ -176,7 +178,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
         <div className="p-6 space-y-8">
           {/* Available Styles */}
           <div>
-            <h3 className="text-2xl mb-4">Available Styles</h3>
+            <h3 className="text-2xl mb-4">{t('details.availableStyles')}</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {productData.styles.map((style, index) => (
                 <div
@@ -204,7 +206,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
 
           {/* Specifications */}
           <div>
-            <h3 className="text-2xl mb-4">Specifications</h3>
+            <h3 className="text-2xl mb-4">{t('details.specifications')}</h3>
             <div className="bg-gray-50 rounded-lg p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {productData.specifications.map((spec, index) => (
@@ -219,9 +221,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
 
           {/* Gallery - Customer Examples */}
           <div>
-            <h3 className="text-2xl mb-4">Customer Examples</h3>
+            <h3 className="text-2xl mb-4">{t('details.customerExamples')}</h3>
             <p className="text-gray-600 mb-4">
-              See what other customers have created with our products
+              {t('details.customerExamplesDesc')}
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {productData.gallery.map((image, index) => (
@@ -246,7 +248,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
               onClick={handleMakeYourOwn}
               className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg font-medium"
             >
-              Make Your Own {productData.title}
+              {t('details.makeYourOwn')} {productData.title}
             </button>
           </div>
         </div>

@@ -9,6 +9,7 @@ import ProductDetailsModal from './ProductDetailsModal';
 import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
 import { Header } from './navigation/Header';
+import { useLanguage } from '../context/LanguageContext';
 
 import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
@@ -19,88 +20,89 @@ import CarruselB from '../../assets/carruselb.png';
 import CarruselC from '../../assets/carruselc.png';
 import CarruselD from '../../assets/carruseld.png';
 
-const heroImages = [
-  {
-    url: CarruselA,
-    title: 'Preserve Your Precious Moments',
-    description: 'Create stunning photo albums that tell your story',
-    highlight: 'High quality finishes for every memory'
-  },
-  {
-    url: CarruselB,
-    title: 'Memories That Last Forever',
-    description: 'Design personalized calendars and gifts for every occasion',
-    highlight: 'Capture every day with a custom touch'
-  },
-  {
-    url: CarruselC,
-    title: 'Your Creativity, Our Quality',
-    description: 'Professional printing with premium materials',
-    highlight: 'Designed by you, crafted by us'
-  },
-  {
-    url: CarruselD,
-    title: 'The Perfect Personalized Gift',
-    description: 'Surprise your loved ones with something unique',
-    highlight: 'Fast delivery and 100% satisfaction guaranteed'
-  }
-];
-
-const testimonials = [
-  {
-    name: 'Sarah Johnson',
-    rating: 5,
-    comment: 'Absolutely love my photo album! The quality is exceptional and the customization options made it truly special.',
-    avatar: 'https://images.unsplash.com/photo-1762613875432-1b80b1682905?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGN1c3RvbWVyJTIwcmV2aWV3JTIwc2F0aXNmYWN0aW9ufGVufDF8fHx8MTc3MTYxMjM2NXww&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'Michael Chen',
-    rating: 5,
-    comment: 'The photo calendar I created is stunning! It made the perfect gift for my parents. Will definitely order again.',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400'
-  },
-  {
-    name: 'Emma Rodriguez',
-    rating: 5,
-    comment: 'Easy to use and the final product exceeded my expectations. The printing quality is top-notch!',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400'
-  },
-  {
-    name: 'David Thompson',
-    rating: 5,
-    comment: 'Created a custom mug with family photos. It turned out amazing! Great quality and fast shipping.',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400'
-  }
-];
-
-const faqs = [
-  {
-    question: 'How long does it take to receive my order?',
-    answer: 'Standard shipping takes 5-7 business days. Express shipping (2-3 business days) is also available at checkout.'
-  },
-  {
-    question: 'What file formats do you accept for photos?',
-    answer: 'We accept JPG, PNG, and HEIC formats. For best quality, we recommend high-resolution images (at least 1200x1200 pixels).'
-  },
-  {
-    question: 'Can I edit my design after placing an order?',
-    answer: 'You can edit your design until the order enters production (usually within 24 hours). Contact our support team for assistance.'
-  },
-  {
-    question: 'What is your return policy?',
-    answer: 'We offer a 100% satisfaction guarantee. If you\'re not happy with your product, contact us within 14 days for a refund or reprint.'
-  },
-  {
-    question: 'Do you offer bulk discounts?',
-    answer: 'Yes! Orders of 10+ items receive a 15% discount, and 25+ items receive 25% off. Contact us for custom quotes on larger orders.'
-  }
-];
-
 export default function LandingPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
+
+  const heroImages = [
+    {
+      url: CarruselA,
+      title: t('hero.1.title'),
+      description: t('hero.1.desc'),
+      highlight: t('hero.1.highlight')
+    },
+    {
+      url: CarruselB,
+      title: t('hero.2.title'),
+      description: t('hero.2.desc'),
+      highlight: t('hero.2.highlight')
+    },
+    {
+      url: CarruselC,
+      title: t('hero.3.title'),
+      description: t('hero.3.desc'),
+      highlight: t('hero.3.highlight')
+    },
+    {
+      url: CarruselD,
+      title: t('hero.4.title'),
+      description: t('hero.4.desc'),
+      highlight: t('hero.4.highlight')
+    }
+  ];
+
+  const testimonials = [
+    {
+      name: 'Sarah Johnson',
+      rating: 5,
+      comment: t('testimonial.1.comment'),
+      avatar: 'https://images.unsplash.com/photo-1762613875432-1b80b1682905?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGN1c3RvbWVyJTIwcmV2aWV3JTIwc2F0aXNmYWN0aW9ufGVufDF8fHx8MTc3MTYxMjM2NXww&ixlib=rb-4.1.0&q=80&w=1080'
+    },
+    {
+      name: 'Michael Chen',
+      rating: 5,
+      comment: t('testimonial.2.comment'),
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400'
+    },
+    {
+      name: 'Emma Rodriguez',
+      rating: 5,
+      comment: t('testimonial.3.comment'),
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400'
+    },
+    {
+      name: 'David Thompson',
+      rating: 5,
+      comment: t('testimonial.4.comment'),
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400'
+    }
+  ];
+
+  const faqs = [
+    {
+      question: t('faq.1.q'),
+      answer: t('faq.1.a')
+    },
+    {
+      question: t('faq.2.q'),
+      answer: t('faq.2.a')
+    },
+    {
+      question: t('faq.3.q'),
+      answer: t('faq.3.a')
+    },
+    {
+      question: t('faq.4.q'),
+      answer: t('faq.4.a')
+    },
+    {
+      question: t('faq.5.q'),
+      answer: t('faq.5.a')
+    }
+  ];
 
   // Auto-advance carousel
   useEffect(() => {
@@ -108,13 +110,13 @@ export default function LandingPage() {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [heroImages.length]);
 
   return (
     <div className="w-full">
       <Header />
       {/* Hero Carousel Section */}
-      <section className="relative h-[calc(100vh-80px)] w-full overflow-hidden">
+      <section className="relative h-[70vh] w-full overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentSlide}
@@ -130,7 +132,6 @@ export default function LandingPage() {
                 alt="Hero"
                 className="w-full h-full object-cover"
               />
-              {/*<div className="absolute inset-0 bg-black bg-opacity-40" />*/}
             </div>
           </motion.div>
         </AnimatePresence>
@@ -172,7 +173,7 @@ export default function LandingPage() {
               onClick={() => navigate('/create')}
               className={`${DESIGN.button.base} ${DESIGN.button.secondary}`}
             >
-              Let's Design
+              {t('landing.letsDesign')}
             </motion.button>
           </div>
         </div>
@@ -194,9 +195,9 @@ export default function LandingPage() {
       {/* Products Section - Bento Boxes */}
       <section className={DESIGN.layout.sectionGray}>
         <div className={DESIGN.layout.container}>
-          <h2 className={DESIGN.text.h2}>Our Products</h2>
+          <h2 className={DESIGN.text.h2}>{t('landing.ourProducts')}</h2>
           <p className={DESIGN.text.sectionSubtitle}>
-            Transform your memories into unique personalized products
+            {t('landing.productsSubtitle')}
           </p>
 
           <div className={DESIGN.layout.grid}>
@@ -211,15 +212,15 @@ export default function LandingPage() {
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <BookImage className="w-12 h-12 mb-4" />
-                  <h3 className={DESIGN.text.h3}>Photo Albums</h3>
+                  <h3 className={DESIGN.text.h3}>{t('product.album')}</h3>
                   <p className="text-lg mb-4 text-gray-200">
-                    Create professional photo albums with custom covers and high-quality paper.
+                    {t('product.albumDesc')}
                   </p>
                   <button
                     onClick={() => setSelectedProduct('album')}
                     className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
                   >
-                    More
+                    {t('landing.more')}
                   </button>
                 </div>
               </div>
@@ -236,15 +237,15 @@ export default function LandingPage() {
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <Calendar className="w-10 h-10 mb-3" />
-                  <h3 className="text-2xl mb-2 font-medium">Calendars</h3>
+                  <h3 className="text-2xl mb-2 font-medium">{t('product.calendar')}</h3>
                   <p className="text-sm mb-3 text-gray-200">
-                    Personalized calendars with your best photos.
+                    {t('product.calendarDesc')}
                   </p>
                   <button
                     onClick={() => setSelectedProduct('calendar')}
                     className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
                   >
-                    More
+                    {t('landing.more')}
                   </button>
                 </div>
               </div>
@@ -261,15 +262,15 @@ export default function LandingPage() {
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <Coffee className="w-10 h-10 mb-3" />
-                  <h3 className="text-2xl mb-2 font-medium">Mugs & Thermos</h3>
+                  <h3 className="text-2xl mb-2 font-medium">{t('product.mug')}</h3>
                   <p className="text-sm mb-3 text-gray-200">
-                    Custom mugs with your favorite photos.
+                    {t('product.mugDesc')}
                   </p>
                   <button
                     onClick={() => setSelectedProduct('mug')}
                     className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
                   >
-                    More
+                    {t('landing.more')}
                   </button>
                 </div>
               </div>
@@ -281,9 +282,9 @@ export default function LandingPage() {
       {/* Process Section */}
       <section className={DESIGN.layout.section}>
         <div className="max-w-6xl mx-auto">
-          <h2 className={DESIGN.text.h2}>Simple Process</h2>
+          <h2 className={DESIGN.text.h2}>{t('landing.simpleProcess')}</h2>
           <p className={DESIGN.text.sectionSubtitle}>
-            Create your personalized product in just 3 easy steps
+            {t('landing.processSubtitle')}
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
@@ -297,9 +298,9 @@ export default function LandingPage() {
                 {/* Connector Line */}
                 <div className="hidden md:block absolute top-16 left-[60%] w-full h-0.5 bg-gray-300" />
               </div>
-              <h3 className={DESIGN.text.h3}>Choose Your Project</h3>
+              <h3 className={DESIGN.text.h3}>{t('landing.step1Title')}</h3>
               <p className={DESIGN.text.body}>
-                Select from photo albums, calendars, mugs, and more customizable products.
+                {t('landing.step1Desc')}
               </p>
             </div>
 
@@ -313,9 +314,9 @@ export default function LandingPage() {
                 {/* Connector Line */}
                 <div className="hidden md:block absolute top-16 left-[60%] w-full h-0.5 bg-gray-300" />
               </div>
-              <h3 className={DESIGN.text.h3}>Customize It</h3>
+              <h3 className={DESIGN.text.h3}>{t('landing.step2Title')}</h3>
               <p className={DESIGN.text.body}>
-                Choose colors, sizes, materials, and design your cover with our intuitive editor.
+                {t('landing.step2Desc')}
               </p>
             </div>
 
@@ -327,9 +328,9 @@ export default function LandingPage() {
                   <span className="text-6xl text-white font-bold relative z-10">3</span>
                 </div>
               </div>
-              <h3 className={DESIGN.text.h3}>Pick Your Moments</h3>
+              <h3 className={DESIGN.text.h3}>{t('landing.step3Title')}</h3>
               <p className={DESIGN.text.body}>
-                Upload your favorite photos and arrange them your way. We'll take care of the rest!
+                {t('landing.step3Desc')}
               </p>
             </div>
           </div>
@@ -339,7 +340,7 @@ export default function LandingPage() {
               onClick={() => navigate('/create')}
               className={`${DESIGN.button.base} ${DESIGN.button.primary}`}
             >
-              Start Now
+              {t('landing.startNow')}
             </button>
           </div>
         </div>
@@ -348,9 +349,9 @@ export default function LandingPage() {
       {/* Testimonials Section */}
       <section className={DESIGN.layout.sectionGray}>
         <div className={DESIGN.layout.container}>
-          <h2 className={DESIGN.text.h2}>What Our Customers Say</h2>
+          <h2 className={DESIGN.text.h2}>{t('landing.testimonials')}</h2>
           <p className={DESIGN.text.sectionSubtitle}>
-            Thousands of satisfied customers have created their products with us
+            {t('landing.testimonialsSubtitle')}
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -381,9 +382,9 @@ export default function LandingPage() {
       {/* FAQ Section */}
       <section className={DESIGN.layout.section}>
         <div className={DESIGN.layout.containerNarrow}>
-          <h2 className={DESIGN.text.h2}>Frequently Asked Questions</h2>
+          <h2 className={DESIGN.text.h2}>{t('landing.faq')}</h2>
           <p className={DESIGN.text.sectionSubtitle}>
-            Everything you need to know about our products and services
+            {t('landing.faqSubtitle')}
           </p>
 
           <div className="space-y-4">
@@ -419,45 +420,45 @@ export default function LandingPage() {
             <div>
               <h3 className="text-2xl mb-4 font-medium">Photo Creator</h3>
               <p className="text-gray-400">
-                Creating beautiful memories since 2024. Quality products, personalized for you.
+                {t('footer.description')}
               </p>
             </div>
 
             {/* Products */}
             <div>
-              <h4 className={DESIGN.text.footerHeading}>Products</h4>
+              <h4 className={DESIGN.text.footerHeading}>{t('footer.products')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className={DESIGN.text.footerLink}>Photo Albums</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Calendars</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Mugs & Thermos</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Gift Sets</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('product.album')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('product.calendar')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('product.mug')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.helpCenter')}</a></li>
               </ul>
             </div>
 
             {/* Support */}
             <div>
-              <h4 className={DESIGN.text.footerHeading}>Support</h4>
+              <h4 className={DESIGN.text.footerHeading}>{t('footer.support')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className={DESIGN.text.footerLink}>Help Center</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Shipping Info</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Returns</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Contact Us</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.helpCenter')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.shippingInfo')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.returns')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.contactUs')}</a></li>
               </ul>
             </div>
 
             {/* Legal */}
             <div>
-              <h4 className={DESIGN.text.footerHeading}>Legal</h4>
+              <h4 className={DESIGN.text.footerHeading}>{t('footer.legal')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className={DESIGN.text.footerLink}>Privacy Policy</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Terms of Service</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>Cookie Policy</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.privacyPolicy')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.termsOfService')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.cookiePolicy')}</a></li>
               </ul>
             </div>
           </div>
 
           <div className={DESIGN.footer.bottom}>
-            <p>&copy; 2026 Photo Creator. All rights reserved.</p>
+            <p>&copy; 2026 Photo Creator. {t('footer.rights')}</p>
           </div>
         </div>
       </footer>
