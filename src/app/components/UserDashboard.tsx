@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Package, 
   Truck, 
@@ -29,6 +29,8 @@ import {
   DialogFooter
 } from './ui/dialog';
 import { Textarea } from './ui/textarea';
+import { useAuth } from '../../hooks/useAuth';
+import { Header } from './navigation/Header';
 
 // Types for our dashboard
 type OrderStatus = 'Recibido' | 'En Producción' | 'Enviado' | 'Entregado';
@@ -45,7 +47,7 @@ interface Order {
 const STEPS: OrderStatus[] = ['Recibido', 'En Producción', 'Enviado', 'Entregado'];
 
 const UserDashboard: React.FC = () => {
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const { userData } = useAuth();
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -99,30 +101,23 @@ const UserDashboard: React.FC = () => {
 
   return (
     <div className={`min-h-screen bg-gray-50 pb-20`}>
-      {/* Header / Hero Section */}
-      <header className="bg-white border-b border-gray-200 pt-12 pb-8">
+      <Header />
+      
+      {/* Hero Section Simplified */}
+      <div className="bg-white border-b border-gray-200 py-8">
         <div className={DESIGN.layout.container}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                ¡Hola, {user ? user.name : 'Bienvenido'}! 👋
-              </h1>
-              <p className="text-gray-500 mt-1">
-                Gestiona tus recuerdos y sigue tus pedidos en tiempo real.
-              </p>
-            </div>
-            <Button 
-              className={`${DESIGN.button.primary} px-8 py-6 rounded-xl flex items-center gap-2 text-lg shadow-lg hover:shadow-xl transition-all`}
-              onClick={() => window.location.href = '/create'}
-            >
-              <Plus className="w-6 h-6" />
-              Crear Nuevo Pedido
-            </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Mi Panel de Control
+            </h1>
+            <p className="text-gray-500 mt-1">
+              Gestiona tus recuerdos y sigue tus pedidos en tiempo real.
+            </p>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className={`${DESIGN.layout.container} mt-12 space-y-12`}>
+      <main className={`${DESIGN.layout.container} mt-8 space-y-12`}>
         
         {/* Ongoing Orders Section */}
         <section>

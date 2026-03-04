@@ -42,7 +42,7 @@ export const router = createBrowserRouter([
     path: '/login',
     element: (
       <AuthLayout>
-        <LoginForm onSuccess={() => (window.location.href = '/')} />
+        <LoginForm />
       </AuthLayout>
     ),
   },
@@ -50,7 +50,7 @@ export const router = createBrowserRouter([
     path: '/registro',
     element: (
       <AuthLayout>
-        <RegisterForm onSuccess={() => (window.location.href = '/')} />
+        <RegisterForm />
       </AuthLayout>
     ),
   },

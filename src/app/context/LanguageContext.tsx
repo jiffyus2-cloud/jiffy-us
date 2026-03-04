@@ -14,6 +14,7 @@ const translations = {
     'nav.login': 'Log In',
     'nav.signup': 'Sign Up',
     'nav.home': 'Home',
+    'nav.dashboard': 'Projects',
     
     // Creator Steps
     'step.product': 'Product',
@@ -169,6 +170,7 @@ const translations = {
     'nav.login': 'Iniciar Sesión',
     'nav.signup': 'Registrarse',
     'nav.home': 'Inicio',
+    'nav.dashboard': 'Proyectos',
     
     // Creator Steps
     'step.product': 'Producto',
