@@ -6,6 +6,7 @@ import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Header } from './components/navigation/Header';
 import { Navigate } from 'react-router';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -23,11 +24,19 @@ export const router = createBrowserRouter([
   },
   {
     path: '/dashboard',
-    Component: UserDashboard,
+    element: (
+      <ProtectedRoute>
+        <UserDashboard />
+      </ProtectedRoute>
+    ),
   },
   {
     path: '/create',
-    Component: Creator,
+    element: (
+      <ProtectedRoute>
+        <Creator />
+      </ProtectedRoute>
+    ),
   },
   {
     path: '/login',
