@@ -1,50 +1,41 @@
-import { useForm } from 'react-hook-form';
-import { Link } from 'react-router';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
-import { useState } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
 }
 
 export function RegisterForm({ onSuccess }: RegisterFormProps) {
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+  
+  const { register, isLoading, error: authError } = useAuth();
+  const navigate = useNavigate();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
 
-  const onSubmit = async (data: any) => {
-    if (data.password !== data.confirmPassword) {
-      setError('Las contraseñas no coinciden');
+    if (password !== confirmPassword) {
+      setLocalError('Las contraseñas no coinciden');
       return;
     }
-    
-    setIsLoading(true);
-    setError(null);
+
     try {
-      // Simulación de registro
-      console.log('Register data:', data);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await register(email, password, name);
       onSuccess?.();
+      navigate('/dashboard');
     } catch (err) {
-      setError('Hubo un error al crear tu cuenta. Por favor, inténtalo de nuevo.');
-    } finally {
-      setIsLoading(false);
+      // Error handled by useAuth
     }
   };
 
@@ -56,11 +47,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           Ingresa tus datos para comenzar a crear tus álbumes
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4 py-2.5">
-          {error && (
+          {(localError || authError) && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{localError || authError}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">
@@ -69,15 +60,10 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               id="name"
               type="text"
               placeholder="Tu nombre"
-              {...register('name', {
-                required: 'El nombre es obligatorio',
-                minLength: { value: 3, message: 'El nombre debe tener al menos 3 caracteres' },
-              })}
-              className={errors.name ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
             />
-            {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
-            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Correo electrónico</Label>
@@ -85,18 +71,10 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               id="email"
               type="email"
               placeholder="nombre@ejemplo.com"
-              {...register('email', {
-                required: 'El correo es obligatorio',
-                pattern: {
-                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                  message: 'Correo electrónico inválido',
-                },
-              })}
-              className={errors.email ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -104,32 +82,20 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               <Input
                 id="password"
                 type="password"
-                {...register('password', {
-                  required: 'La contraseña es obligatoria',
-                  minLength: {
-                    value: 6,
-                    message: 'Al menos 6 caracteres',
-                  },
-                })}
-                className={errors.password ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password.message}</p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                {...register('confirmPassword', {
-                  required: 'Confirma tu contraseña',
-                })}
-                className={errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
               />
-              {errors.confirmPassword && (
-                <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
-              )}
             </div>
           </div>
         </CardContent>

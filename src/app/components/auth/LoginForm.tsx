@@ -1,43 +1,31 @@
-import { useForm } from 'react-hook-form';
-import { Link } from 'react-router';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
-import { useState } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface LoginFormProps {
   onSuccess?: () => void;
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  });
+  const { login, isLoading, error } = useAuth();
+  const navigate = useNavigate();
 
-  const onSubmit = async (data: any) => {
-    setIsLoading(true);
-    setError(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      // Simulación de login
-      console.log('Login data:', data);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await login(email, password);
       onSuccess?.();
+      navigate('/dashboard');
     } catch (err) {
-      setError('Credenciales inválidas. Por favor, inténtalo de nuevo.');
-    } finally {
-      setIsLoading(false);
+      // Error handled by useAuth
     }
   };
 
@@ -49,7 +37,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           Ingresa tus credenciales para acceder a tu cuenta
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4 py-2.5">
           {error && (
             <Alert variant="destructive">
@@ -62,18 +50,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               id="email"
               type="email"
               placeholder="nombre@ejemplo.com"
-              {...register('email', {
-                required: 'El correo es obligatorio',
-                pattern: {
-                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                  message: 'Correo electrónico inválido',
-                },
-              })}
-              className={errors.email ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -82,18 +62,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             <Input
               id="password"
               type="password"
-              {...register('password', {
-                required: 'La contraseña es obligatoria',
-                minLength: {
-                  value: 6,
-                  message: 'La contraseña debe tener al menos 6 caracteres',
-                },
-              })}
-              className={errors.password ? 'border-destructive focus-visible:ring-destructive/20' : ''}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
             />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
