@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Type, Image as ImageIcon } from 'lucide-react';
-import type { MugProduct } from './MugStyleSelection';
+import { MugProduct } from '../types/products';
 
 export interface MugCustomizationOptions {
   size: string;
@@ -16,35 +16,22 @@ interface MugCustomizationProps {
 
 export default function MugCustomization({ product, onCustomizationComplete }: MugCustomizationProps) {
   const [size, setSize] = useState('standard');
-  const [capacity, setCapacity] = useState(product.type === 'thermos' ? '500ml' : '350ml');
+  const [capacity, setCapacity] = useState('350ml');
   const [material, setMaterial] = useState('ceramic');
   const [textImageRelation, setTextImageRelation] = useState<'separate' | 'text-cutout'>('separate');
 
-  const sizes = product.type === 'thermos'
-    ? [
-        { id: 'small', name: 'Small', description: '12 oz / 350ml' },
-        { id: 'standard', name: 'Standard', description: '17 oz / 500ml' },
-        { id: 'large', name: 'Large', description: '25 oz / 750ml' },
-      ]
-    : [
-        { id: 'standard', name: 'Standard', description: '11 oz / 325ml' },
-        { id: 'large', name: 'Large', description: '15 oz / 450ml' },
-      ];
+  const sizes = [
+    { id: 'standard', name: 'Standard', description: '11 oz / 325ml' },
+    { id: 'large', name: 'Large', description: '15 oz / 450ml' },
+  ];
 
-  const capacities = product.type === 'thermos'
-    ? ['350ml', '500ml', '750ml', '1000ml']
-    : ['300ml', '350ml', '450ml'];
+  const capacities = ['300ml', '350ml', '450ml'];
 
-  const materials = product.type === 'thermos'
-    ? [
-        { id: 'stainless-steel', name: 'Stainless Steel', price: 0, description: 'Durable and keeps temperature' },
-        { id: 'vacuum-insulated', name: 'Vacuum Insulated', price: 5, description: 'Superior temperature retention' },
-      ]
-    : [
-        { id: 'ceramic', name: 'Ceramic', price: 0, description: 'Classic and microwave safe' },
-        { id: 'porcelain', name: 'Porcelain', price: 3, description: 'Premium quality and elegant' },
-        { id: 'stainless-steel', name: 'Stainless Steel', price: 4, description: 'Durable and travel-friendly' },
-      ];
+  const materials = [
+    { id: 'ceramic', name: 'Ceramic', price: 0, description: 'Classic and microwave safe' },
+    { id: 'porcelain', name: 'Porcelain', price: 3, description: 'Premium quality and elegant' },
+    { id: 'stainless-steel', name: 'Stainless Steel', price: 4, description: 'Durable and travel-friendly' },
+  ];
 
   const calculatePrice = () => {
     const materialPrice = materials.find(m => m.id === material)?.price || 0;
@@ -73,7 +60,7 @@ export default function MugCustomization({ product, onCustomizationComplete }: M
         {/* Size Selection */}
         <div>
           <h3 className="text-xl mb-4">Size</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sizes.map((sizeOption) => (
               <button
                 key={sizeOption.id}
@@ -137,7 +124,7 @@ export default function MugCustomization({ product, onCustomizationComplete }: M
         <div>
           <h3 className="text-xl mb-4">Text and Image Relation</h3>
           <p className="text-sm text-gray-600 mb-4">
-            Choose how text and images will be displayed on your {product.type === 'mug' ? 'mug' : 'thermos'}
+            Choose how text and images will be displayed on your mug
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Separate Option */}

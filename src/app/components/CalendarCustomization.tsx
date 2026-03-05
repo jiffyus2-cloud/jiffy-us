@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Calendar } from './CalendarStyleSelection';
+import { Calendar } from '../types/products';
 
 export interface CalendarCustomizationOptions {
   size: string;

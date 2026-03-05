@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Upload, X, Settings, Image as ImageIcon } from 'lucide-react';
-import type { Album } from './AlbumSelection';
+import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 
 export interface CustomizationOptions {

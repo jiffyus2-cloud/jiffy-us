@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Upload, X, Plus, Eye, Edit3, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { MugProduct } from './MugStyleSelection';
+import { MugProduct } from '../types/products';
 import type { MugCustomizationOptions } from './MugCustomization';
 
 export interface MugItem {
   id: string;
-  photos: string[]; // Changed from single photo to array
+  photos: string[];
   text: string;
   fontSize: number;
   fontFamily: string;
@@ -28,7 +28,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
   const safeItems = items || [];
   
   // Ensure mug has default values
-  const safeMug = mug || { name: 'Product', type: 'mug' as const };
+  const safeMug = mug || { name: 'Mug', type: 'mug' as const };
   
   // Ensure onItemsChange is a function
   const safeOnItemsChange = typeof onItemsChange === 'function' ? onItemsChange : () => {};
@@ -36,7 +36,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
   const addNewItem = () => {
     const newItem: MugItem = {
       id: Date.now().toString(),
-      photos: [], // Initialize with empty array
+      photos: [],
       text: '',
       fontSize: 20,
       fontFamily: 'Arial',
@@ -109,7 +109,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
           <div>
             <h2 className="text-2xl md:text-3xl mb-2">Create Your {safeMug.name}s</h2>
             <p className="text-sm md:text-base text-gray-600">
-              {safeItems.length} {safeMug.type === 'mug' ? 'mug' : 'thermos'}{safeItems.length !== 1 ? 's' : ''} created
+              {safeItems.length} mug{safeItems.length !== 1 ? 's' : ''} created
             </p>
           </div>
           <div className="flex items-center justify-between gap-2 md:gap-3">
@@ -152,13 +152,13 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
 
       {safeItems.length === 0 && (
         <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-600 mb-4">No {safeMug.type === 'mug' ? 'mugs' : 'thermos bottles'} created yet</p>
+          <p className="text-gray-600 mb-4">No mugs created yet</p>
           <button
             onClick={addNewItem}
             className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             <Plus className="w-5 h-5" />
-            Create Your First {safeMug.type === 'mug' ? 'Mug' : 'Thermos'}
+            Create Your First Mug
           </button>
         </div>
       )}
@@ -300,80 +300,41 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
               // Mockup Mode
               <div className="relative">
                 <div className="aspect-[3/4] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center p-8">
-                  {/* Mug/Thermos Mockup */}
+                  {/* Mug Mockup */}
                   <div className="relative w-full h-full">
-                    {safeMug.type === 'mug' ? (
-                      // Mug mockup
-                      <div className="w-full h-full relative">
-                        {/* Mug shape */}
-                        <div className="absolute inset-0 bg-white rounded-b-3xl shadow-2xl" style={{
-                          clipPath: 'polygon(10% 0%, 90% 0%, 95% 100%, 5% 100%)'
-                        }}>
-                          {/* Photo on mug */}
-                          {item.photos.length > 0 && (
-                            <div className="absolute inset-0 p-8">
-                              <img
-                                src={item.photos[getCurrentPhotoIndex(item.id)]}
-                                alt="Mug design"
-                                className="w-full h-full object-cover rounded"
-                              />
-                            </div>
-                          )}
-                          
-                          {/* Text on mug */}
-                          {item.text && (
-                            <div 
-                              className="absolute inset-0 flex items-center justify-center p-8"
-                              style={{
-                                fontSize: `${item.fontSize * 0.8}px`,
-                                fontFamily: item.fontFamily,
-                                color: item.photos.length > 0 ? 'white' : 'black',
-                                textShadow: item.photos.length > 0 ? '2px 2px 4px rgba(0,0,0,0.8)' : 'none',
-                              }}
-                            >
-                              {item.text}
-                            </div>
-                          )}
+                    {/* Mug shape */}
+                    <div className="absolute inset-0 bg-white rounded-b-3xl shadow-2xl" style={{
+                      clipPath: 'polygon(10% 0%, 90% 0%, 95% 100%, 5% 100%)'
+                    }}>
+                      {/* Photo on mug */}
+                      {item.photos.length > 0 && (
+                        <div className="absolute inset-0 p-8">
+                          <img
+                            src={item.photos[getCurrentPhotoIndex(item.id)]}
+                            alt="Mug design"
+                            className="w-full h-full object-cover rounded"
+                          />
                         </div>
-                        
-                        {/* Mug handle */}
-                        <div className="absolute right-0 top-1/4 w-8 h-1/2 bg-white rounded-r-full shadow-lg" />
-                      </div>
-                    ) : (
-                      // Thermos mockup
-                      <div className="w-full h-full relative flex justify-center">
-                        <div className="w-2/3 h-full bg-gradient-to-r from-gray-300 to-gray-100 rounded-t-lg rounded-b-lg shadow-2xl relative overflow-hidden">
-                          {/* Cap */}
-                          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-gray-400 to-gray-300 rounded-t-lg" />
-                          
-                          {/* Photo on thermos */}
-                          {item.photos.length > 0 && (
-                            <div className="absolute top-20 left-0 right-0 bottom-4 p-4">
-                              <img
-                                src={item.photos[getCurrentPhotoIndex(item.id)]}
-                                alt="Thermos design"
-                                className="w-full h-full object-cover rounded"
-                              />
-                            </div>
-                          )}
-                          
-                          {/* Text on thermos */}
-                          {item.text && (
-                            <div 
-                              className="absolute top-20 left-0 right-0 bottom-4 flex items-center justify-center p-4"
-                              style={{
-                                fontSize: `${item.fontSize * 0.7}px`,
-                                fontFamily: item.fontFamily,
-                                color: item.photos.length > 0 ? 'white' : 'black',
-                                textShadow: item.photos.length > 0 ? '2px 2px 4px rgba(0,0,0,0.8)' : 'none',
-                              }}
-                            >
-                              {item.text}
-                            </div>
-                          )}
+                      )}
+                      
+                      {/* Text on mug */}
+                      {item.text && (
+                        <div 
+                          className="absolute inset-0 flex items-center justify-center p-8"
+                          style={{
+                            fontSize: `${item.fontSize * 0.8}px`,
+                            fontFamily: item.fontFamily,
+                            color: item.photos.length > 0 ? 'white' : 'black',
+                            textShadow: item.photos.length > 0 ? '2px 2px 4px rgba(0,0,0,0.8)' : 'none',
+                          }}
+                        >
+                          {item.text}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                    
+                    {/* Mug handle */}
+                    <div className="absolute right-0 top-1/4 w-8 h-1/2 bg-white rounded-r-full shadow-lg" />
                   </div>
                 </div>
                 

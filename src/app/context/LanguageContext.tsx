@@ -18,7 +18,6 @@ const translations = {
     
     // Creator Steps
     'step.product': 'Product',
-    'step.style': 'Style',
     'step.customize': 'Customize',
     'step.photos': 'Photos',
     'step.design': 'Design',
@@ -83,10 +82,12 @@ const translations = {
     'product.album': 'Photo Album',
     'product.calendar': 'Photo Calendar',
     'product.mug': 'Photo Mug',
-    'product.continue': 'Continue to Style Selection',
+    'product.photoPack': 'Photo Pack',
+    'product.continue': 'Continue',
     'product.albumDesc': 'Create a beautiful, professionally printed photo album with customizable covers, layouts, and premium paper quality.',
     'product.calendarDesc': 'Design a personalized wall calendar featuring your favorite photos for each month of the year.',
     'product.mugDesc': 'Create a unique photo mug with your favorite image, perfect for coffee or tea.',
+    'product.photoPackDesc': 'High-quality prints of your favorite moments, delivered in a beautiful package.',
 
     // Landing Page
     'landing.letsDesign': "Let's Design",
@@ -239,10 +240,12 @@ const translations = {
     'product.album': 'Álbum de Fotos',
     'product.calendar': 'Calendario de Fotos',
     'product.mug': 'Taza de Fotos',
-    'product.continue': 'Continuar a la Selección de Estilo',
+    'product.photoPack': 'Pack de Fotos',
+    'product.continue': 'Continuar',
     'product.albumDesc': 'Crea un hermoso álbum de fotos impreso profesionalmente con portadas personalizables, diseños y papel de calidad premium.',
     'product.calendarDesc': 'Diseña un calendario de pared personalizado con tus fotos favoritas para cada mes del año.',
     'product.mugDesc': 'Crea una taza de fotos única con tu imagen favorita, perfecta para café o té.',
+    'product.photoPackDesc': 'Impresiones de alta calidad de tus momentos favoritos, entregadas en un paquete hermoso.',
 
     // Landing Page
     'landing.letsDesign': 'Vamos a Diseñar',

@@ -1,21 +1,17 @@
 import { useState } from 'react';
 import { CreditCard, Lock } from 'lucide-react';
-import type { Album } from './AlbumSelection';
-import type { Calendar } from './CalendarStyleSelection';
-import type { MugProduct } from './MugStyleSelection';
+import { Album, Calendar, MugProduct, PhotoPack } from '../types/products';
 
 interface CheckoutProps {
-  product: Album | Calendar | MugProduct;
-  productType: 'album' | 'calendar' | 'mug';
-  photoCount?: number;
-  textBoxCount?: number;
-  totalPages?: number;
-  itemCount?: number;
-  customizationDetails?: any;
-  onComplete: () => void;
+  product: Album | Calendar | MugProduct | PhotoPack;
+  productType: 'album' | 'calendar' | 'mug' | 'photo-pack';
+  photos?: string[] | string[][];
+  mugItems?: any[];
+  textBoxSlots?: any;
+  customization?: any;
 }
 
-export default function Checkout({ product, productType, photoCount, textBoxCount, totalPages, itemCount, customizationDetails, onComplete }: CheckoutProps) {
+export default function Checkout({ product, productType, photos, mugItems, customization }: CheckoutProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -32,7 +28,6 @@ export default function Checkout({ product, productType, photoCount, textBoxCoun
     // Simulate payment processing
     setTimeout(() => {
       alert('Order placed successfully! 🎉');
-      onComplete();
     }, 1000);
   };
 
@@ -46,14 +41,15 @@ export default function Checkout({ product, productType, photoCount, textBoxCoun
   const calculateTotal = () => {
     let basePrice = 0;
     
-    if (productType === 'mug' && itemCount && 'basePrice' in product) {
+    if (productType === 'mug' && mugItems && 'basePrice' in product) {
       // Calculate price based on quantity and material
-      const materialPrice = customizationDetails?.material === 'vacuum-insulated' ? 5 :
-                           customizationDetails?.material === 'porcelain' ? 3 :
-                           customizationDetails?.material === 'stainless-steel' ? 4 : 0;
-      basePrice = (product.basePrice + materialPrice) * itemCount;
+      const materialPrice = customization?.material === 'porcelain' ? 3 :
+                           customization?.material === 'stainless-steel' ? 4 : 0;
+      basePrice = (product.basePrice + materialPrice) * mugItems.length;
+    } else if (productType === 'photo-pack' && Array.isArray(photos)) {
+      basePrice = (product as PhotoPack).basePrice * photos.length;
     } else {
-      basePrice = product.price || ('basePrice' in product ? product.basePrice : 0);
+      basePrice = (product as any).price || (product as any).basePrice || 0;
     }
     
     return basePrice;
@@ -63,6 +59,10 @@ export default function Checkout({ product, productType, photoCount, textBoxCoun
   const shipping = 9.99;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
+
+  const photoCount = productType === 'album' 
+    ? (photos as string[][])?.flat().filter(p => p).length 
+    : (photos as string[])?.filter(p => p).length;
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
@@ -79,25 +79,7 @@ export default function Checkout({ product, productType, photoCount, textBoxCoun
                 <span className="text-gray-600">Product</span>
                 <span>{product.name}</span>
               </div>
-              {productType === 'album' && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Pages</span>
-                    <span>{totalPages}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Photos</span>
-                    <span>{photoCount}</span>
-                  </div>
-                  {textBoxCount && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Text Boxes</span>
-                      <span>{textBoxCount}</span>
-                    </div>
-                  )}
-                </>
-              )}
-              {productType === 'calendar' && (
+              {(productType === 'album' || productType === 'calendar' || productType === 'photo-pack') && (
                 <>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Photos</span>
@@ -108,16 +90,22 @@ export default function Checkout({ product, productType, photoCount, textBoxCoun
               {productType === 'mug' && (
                 <>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Photos</span>
-                    <span>{photoCount}</span>
+                    <span className="text-gray-600">Items</span>
+                    <span>{mugItems?.length || 0}</span>
                   </div>
-                  {itemCount && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Items</span>
-                      <span>{itemCount}</span>
-                    </div>
-                  )}
                 </>
+              )}
+              {productType === 'photo-pack' && customization && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Size:</span>
+                    <span>{customization.size}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Finish:</span>
+                    <span>{customization.finish}</span>
+                  </div>
+                </div>
               )}
             </div>
 

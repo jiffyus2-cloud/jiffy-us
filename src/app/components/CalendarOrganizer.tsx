@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Upload, X, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
-import type { Calendar } from './CalendarStyleSelection';
+import { Calendar } from '../types/products';
 import type { CalendarCustomizationOptions } from './CalendarCustomization';
+import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -15,9 +17,11 @@ const MONTHS = [
 ];
 
 export default function CalendarOrganizer({ calendar, customization, onComplete }: CalendarOrganizerProps) {
+  const { year } = customization;
   const [currentMonth, setCurrentMonth] = useState(0);
   const [photos, setPhotos] = useState<string[]>(Array(12).fill(''));
-  const year = new Date().getFullYear();
+
+  const holidays = useMemo(() => getColombianHolidays(year), [year]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, monthIndex: number) => {
     const file = event.target.files?.[0];
@@ -168,28 +172,52 @@ export default function CalendarOrganizer({ calendar, customization, onComplete 
             {/* Calendar grid */}
             <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
               <h4 className="text-sm text-gray-600 mb-3">Calendar preview</h4>
-              <div className="grid grid-cols-7 gap-1">
-                {/* Week day headers */}
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="text-center text-xs text-gray-600 py-1">
-                    {day}
-                  </div>
-                ))}
-                
-                {/* Calendar days */}
-                {generateCalendarGrid(currentMonth).map((day, index) => (
-                  <div
-                    key={index}
-                    className={`aspect-square flex items-center justify-center text-sm rounded ${
-                      day
-                        ? 'bg-white border border-gray-200 hover:bg-gray-50'
-                        : 'bg-transparent'
-                    }`}
-                  >
-                    {day || ''}
-                  </div>
-                ))}
-              </div>
+              <TooltipProvider>
+                <div className="grid grid-cols-7 gap-1">
+                  {/* Week day headers */}
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <div key={day} className="text-center text-xs text-gray-600 py-1">
+                      {day}
+                    </div>
+                  ))}
+                  
+                  {/* Calendar days */}
+                  {generateCalendarGrid(currentMonth).map((day, index) => {
+                    if (!day) return <div key={index} className="aspect-square bg-transparent" />;
+                    
+                    const date = new Date(year, currentMonth, day);
+                    const holiday = isHoliday(date, holidays);
+                    
+                    const dayContent = (
+                      <div
+                        className={`aspect-square flex flex-col items-center justify-center text-sm rounded relative ${
+                          holiday
+                            ? 'bg-red-50 border border-red-200 text-red-600 font-bold'
+                            : 'bg-white border border-gray-200'
+                        } hover:bg-gray-50 transition-colors`}
+                      >
+                        <span>{day}</span>
+                        {holiday && <div className="absolute bottom-0.5 w-1 h-1 bg-red-600 rounded-full" />}
+                      </div>
+                    );
+
+                    if (holiday) {
+                      return (
+                        <Tooltip key={index}>
+                          <TooltipTrigger asChild>
+                            {dayContent}
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{holiday.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    }
+
+                    return <div key={index} className="aspect-square">{dayContent}</div>;
+                  })}
+                </div>
+              </TooltipProvider>
             </div>
           </div>
         </div>

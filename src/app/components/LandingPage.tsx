@@ -343,7 +343,7 @@ export default function LandingPage() {
                   <span className="text-6xl text-white font-bold relative z-10">1</span>
                 </div>
                 {/* Connector Line */}
-                <div className="hidden md:block absolute top-16 left-[60%] w-full h-0.5 bg-gray-300" />
+                <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step1Title')}</h3>
               <p className={DESIGN.text.body}>
@@ -359,7 +359,7 @@ export default function LandingPage() {
                   <span className="text-6xl text-white font-bold relative z-10">2</span>
                 </div>
                 {/* Connector Line */}
-                <div className="hidden md:block absolute top-16 left-[60%] w-full h-0.5 bg-gray-300" />
+                <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step2Title')}</h3>
               <p className={DESIGN.text.body}>

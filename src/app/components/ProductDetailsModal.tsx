@@ -1,4 +1,4 @@
-import { X, BookImage, Calendar, Coffee, Check } from 'lucide-react';
+import { X, BookImage, Calendar, Coffee, Check, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState } from 'react';
@@ -18,7 +18,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
   if (!isOpen) return null;
 
   const handleMakeYourOwn = () => {
-    // Navigate to creator and start at style selection for this product
+    // Navigate to creator and start at product customization for this product
     navigate('/create', { state: { startProduct: productType } });
   };
 
@@ -117,24 +117,14 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
               image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3aGl0ZSUyMGNlcmFtaWMlMjBjb2ZmZWUlMjBtdWclMjBjbGFzc2ljfGVufDF8fHx8MTc3MTYxODA1N3ww&ixlib=rb-4.1.0&q=80&w=1080'
             },
             { 
-              name: 'Travel Mug', 
-              description: 'Insulated for on-the-go',
-              image: 'https://images.unsplash.com/photo-1768726455302-d70cf11865e3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0cmF2ZWwlMjBtdWclMjBpbnN1bGF0ZWQlMjBzdGFpbmxlc3MlMjBzdGVlbHxlbnwxfHx8fDE3NzE2MTgwNTd8MA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Thermos Bottle', 
-              description: 'Keeps drinks hot or cold',
-              image: 'https://images.unsplash.com/photo-1592999641298-434e28c11d14?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0aGVybW9zJTIwYm90dGxlJTIwd2F0ZXIlMjBpbnN1bGF0ZWR8ZW58MXx8fHwxNzcxNjE4MDU4fDA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
               name: 'Color Handle Mug', 
               description: 'Accent color handles',
               image: 'https://images.unsplash.com/photo-1704663198277-f3671defb217?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvcmZ1bCUyMGhhbmRsZSUyMGNvZmZlZSUyMG11ZyUyMGNlcmFtaWN8ZW58MXx8fHwxNzcxNjE4MDU5fDA&ixlib=rb-4.1.0&q=80&w=1080'
             }
           ],
           specifications: [
-            { label: 'Materials', value: 'Ceramic, Stainless Steel' },
-            { label: 'Capacity', value: '11oz, 15oz, 20oz' },
+            { label: 'Materials', value: 'Ceramic, Porcelain, Stainless Steel' },
+            { label: 'Capacity', value: '11oz, 15oz' },
             { label: 'Color Options', value: 'White, Black, Red, Blue' },
             { label: 'Features', value: 'Dishwasher safe, Microwave safe' }
           ],
@@ -143,6 +133,36 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=800',
             'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800',
             'https://images.unsplash.com/photo-1534353436294-0dbd4bdac845?w=800'
+          ]
+        };
+      case 'photo-pack':
+        return {
+          title: t('product.photoPack'),
+          icon: <ImageIcon className="w-12 h-12" />,
+          description: t('product.photoPackDesc'),
+          styles: [
+            { 
+              name: 'Standard Prints', 
+              description: 'Classic 4x6 or 5x7 prints',
+              image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800&h=1000&fit=crop'
+            },
+            { 
+              name: 'Polaroid Style', 
+              description: 'Retro white border prints',
+              image: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?w=800&h=1000&fit=crop'
+            }
+          ],
+          specifications: [
+            { label: 'Sizes', value: '4x6", 5x7", 8x10"' },
+            { label: 'Paper', value: 'Premium Photo Paper' },
+            { label: 'Finish', value: 'Matte or Glossy' },
+            { label: 'Packaging', value: 'Beautiful storage box included' }
+          ],
+          gallery: [
+            'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=800',
+            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800',
+            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800',
+            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800'
           ]
         };
     }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, X, ChevronLeft, ChevronRight, Image as ImageIcon, Sparkles, Grid3x3, Edit3, Layers, Shuffle, Trash2, Type, ArrowLeft, ArrowRight } from 'lucide-react';
-import type { Album } from './AlbumSelection';
+import { Album } from '../types/products';
 import type { CustomizationOptions } from './AlbumCustomization';
 
 interface PhotoOrganizerProps {
