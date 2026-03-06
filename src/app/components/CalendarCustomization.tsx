@@ -29,8 +29,8 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
   ];
 
   const orientations = [
-    { id: 'vertical', name: t('calendar.orientation.vertical') || 'Vertical', icon: <RectangleVertical className="w-6 h-6" />, desc: t('calendar.orientation.verticalDesc') || 'Imagen arriba, días abajo' },
-    { id: 'horizontal', name: t('calendar.orientation.horizontal') || 'Horizontal', icon: <RectangleHorizontal className="w-6 h-6" />, desc: t('calendar.orientation.horizontalDesc') || 'Imagen a la izquierda, días a la derecha' },
+    { id: 'vertical', name: t('calendar.orientation.vertical') || 'Vertical', icon: <RectangleVertical className="w-6 h-6" /> },
+    { id: 'horizontal', name: t('calendar.orientation.horizontal') || 'Horizontal', icon: <RectangleHorizontal className="w-6 h-6" /> },
   ];
 
   // Generate years from 2026 to 2041
@@ -50,22 +50,22 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       {/* Calendar Preview */}
       <div className="mb-12">
         <h3 className="text-xl font-medium mb-4 text-center text-gray-400">{t('calendar.preview') || 'Vista Previa'}</h3>
-        <div className="w-full max-w-[500px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center overflow-hidden border-2 border-gray-100 shadow-sm transition-all duration-500">
+        <div className="w-full max-w-[600px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center overflow-hidden border-2 border-gray-100 shadow-sm transition-all duration-500">
           <div className={`bg-white shadow-2xl rounded-sm overflow-hidden flex transition-all duration-500 ${
-            orientation === 'vertical' ? 'flex-col aspect-[3/4] w-[300px]' : 'flex-row aspect-[4/3] w-[450px]'
+            orientation === 'vertical' ? 'flex-col aspect-[21/28] w-[300px]' : 'flex-row aspect-[28/21] w-[450px]'
           }`}>
              <div className={`bg-gray-100 flex items-center justify-center transition-all duration-500 ${
-                orientation === 'vertical' ? 'w-full h-[60%] border-b' : 'w-[50%] h-full border-r'
+                orientation === 'vertical' ? 'w-full h-1/2 border-b' : 'w-1/2 h-full border-r'
              } border-gray-200`}>
                 <ImageIcon className="w-16 h-16 text-gray-300" />
              </div>
-             <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1`}>
+             <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1 h-full w-full`}>
                 <div className="text-2xl font-bold">{year}</div>
                 <div className="text-[10px] uppercase tracking-widest text-gray-400">Calendar</div>
                 {/* Mock grid */}
-                <div className="grid grid-cols-7 gap-1 w-full mt-2">
-                   {Array.from({ length: 28 }).map((_, i) => (
-                      <div key={i} className="aspect-square bg-gray-50 rounded-[1px]" />
+                <div className="flex-1 grid grid-cols-7 gap-1 w-full mt-2 min-h-0">
+                   {Array.from({ length: 35 }).map((_, i) => (
+                      <div key={i} className="bg-gray-50 rounded-[1px] min-h-[10px]" />
                    ))}
                 </div>
              </div>
@@ -82,19 +82,16 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
               <button
                 key={opt.id}
                 onClick={() => setOrientation(opt.id as 'vertical' | 'horizontal')}
-                className={`py-6 px-6 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
+                className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
                   orientation === opt.id
-                    ? 'bg-black text-white border-black shadow-xl scale-[1.02]'
+                    ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
                     : 'bg-white text-black border-gray-200 hover:border-black'
                 }`}
               >
-                <div className={`p-3 rounded-lg ${orientation === opt.id ? 'bg-white/20' : 'bg-gray-100'}`}>
+                <div className={`p-2 rounded-lg ${orientation === opt.id ? 'bg-white/20' : 'bg-gray-100'}`}>
                   {opt.icon}
                 </div>
-                <div>
-                  <div className="text-xl font-bold">{opt.name}</div>
-                  <div className={`text-sm ${orientation === opt.id ? 'text-gray-300' : 'text-gray-500'}`}>{opt.desc}</div>
-                </div>
+                <div className="text-lg font-bold">{opt.name}</div>
               </button>
             ))}
           </div>

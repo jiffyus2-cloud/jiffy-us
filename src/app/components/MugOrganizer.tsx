@@ -213,17 +213,11 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
               }`}
             >
               <div className="grid grid-cols-1 md:grid-cols-2">
-                {/* Visual Section (Mockup style) */}
-                <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center p-12 border-r border-gray-100">
-                   <div className="relative w-full h-full max-w-[280px]">
-                      {/* Mug handle */}
-                      <div className="absolute right-0 top-1/4 w-12 h-1/2 border-8 border-white rounded-r-full shadow-lg" />
-                      {/* Mug body */}
-                      <div className="absolute inset-0 bg-white rounded-b-[2.5rem] shadow-2xl overflow-hidden" style={{
-                         clipPath: 'polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%)'
-                      }}>
+                {/* Visual Section (Clean Editor style) */}
+                <div className="aspect-square bg-gray-100 flex items-center justify-center p-12 border-r border-gray-100">
+                   <div className="relative w-full h-full bg-white shadow-xl rounded-xl border-4 border-gray-100 overflow-hidden">
                          {/* Design Area */}
-                         <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
+                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                             {item.photos[0] ? (
                                <div className="w-full h-full relative">
                                   <ImageCropper 
@@ -236,8 +230,8 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                                </div>
                             ) : (
                                <div className="text-gray-300 flex flex-col items-center gap-2">
-                                  <ImageIcon className="w-12 h-12" />
-                                  <span className="text-[10px] font-bold uppercase">No Photo</span>
+                                  <ImageIcon className="w-16 h-16" />
+                                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Design Area - No Photo</span>
                                </div>
                             )}
                             
@@ -245,10 +239,10 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                                <div 
                                  className="absolute inset-0 flex items-center justify-center p-10 pointer-events-none"
                                  style={{
-                                    fontSize: `${item.fontSize * 0.8}px`,
+                                    fontSize: `${item.fontSize}px`,
                                     fontFamily: item.fontFamily,
                                     color: item.photos[0] ? 'white' : 'black',
-                                    textShadow: item.photos[0] ? '0 2px 4px rgba(0,0,0,0.5)' : 'none',
+                                    textShadow: item.photos[0] ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
                                     textAlign: 'center'
                                  }}
                                >
@@ -256,7 +250,6 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                                </div>
                             )}
                          </div>
-                      </div>
                    </div>
                 </div>
 

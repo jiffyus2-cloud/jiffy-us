@@ -51,25 +51,6 @@ export default function MugCustomization({ product, onCustomizationComplete }: M
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-12">
-      {/* Mug Preview */}
-      <div className="mb-12">
-        <h3 className="text-xl font-medium mb-4 text-center text-gray-400">{t('calendar.preview') || 'Vista Previa'}</h3>
-        <div className="w-full max-w-[400px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center border-2 border-gray-100 shadow-sm">
-           <div className="relative w-48 h-56">
-              {/* Mug shape */}
-              <div className={`absolute inset-0 rounded-b-[2rem] shadow-xl border-4 border-gray-200 ${material === 'stainless-steel' ? 'bg-gradient-to-br from-gray-300 to-gray-400' : 'bg-white'}`} style={{
-                clipPath: 'polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%)'
-              }}>
-                <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                   <ImageIcon className="w-16 h-16" />
-                </div>
-              </div>
-              {/* Mug handle */}
-              <div className={`absolute -right-8 top-12 w-12 h-24 border-8 rounded-r-full ${material === 'stainless-steel' ? 'border-gray-400' : 'border-gray-100'}`} />
-           </div>
-        </div>
-      </div>
-
       <div className="space-y-10">
         {/* Size Selection */}
         <div>

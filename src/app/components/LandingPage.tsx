@@ -14,6 +14,7 @@ import { useLanguage } from '../context/LanguageContext';
 import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
 import calendarImage from '../../assets/e10b8bcd9dce4c4659f29f62c8704217f6ab8e6a.png';
+import photoPackImage from '../../assets/926a104c374871caf4fcad0882de38be9da36b8a.png';
 
 import CarruselA from '../../assets/carrusela.png';
 import CarruselB from '../../assets/carruselb.png';
@@ -322,6 +323,31 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+
+            {/* Photo Packs - Wide */}
+            <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className="relative h-80">
+                <img
+                  src={photoPackImage}
+                  alt="Photo Packs"
+                  className="w-full h-full object-cover"
+                />
+                <div className={DESIGN.card.overlay} />
+                <div className={DESIGN.card.content}>
+                  <ImageIcon className="w-10 h-10 mb-3" />
+                  <h3 className="text-2xl mb-2 font-medium">{t('product.photoPack')}</h3>
+                  <p className="text-sm mb-3 text-gray-200">
+                    {t('product.photoPackDesc')}
+                  </p>
+                  <button
+                    onClick={() => setSelectedProduct('photo-pack')}
+                    className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
+                  >
+                    {t('landing.more')}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -478,7 +504,7 @@ export default function LandingPage() {
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.album')}</a></li>
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.calendar')}</a></li>
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.mug')}</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.helpCenter')}</a></li>
+                <li><a href="#" className={DESIGN.text.footerLink}>{t('product.photoPack')}</a></li>
               </ul>
             </div>
 

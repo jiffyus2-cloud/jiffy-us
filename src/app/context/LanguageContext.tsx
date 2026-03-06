@@ -114,6 +114,19 @@ const translations = {
     'product.mugDesc': 'Create a unique photo mug with your favorite image, perfect for coffee or tea.',
     'product.photoPackDesc': 'High-quality prints of your favorite moments, delivered in a beautiful package.',
 
+    // Calendar
+    'calendar.preview': 'Calendar Preview',
+    'calendar.size.standard': 'Standard size',
+    'calendar.size.large': 'Large',
+    'calendar.size.square': 'Square',
+    'calendar.year': 'Calendar Year',
+    'calendar.moreYears': 'More years...',
+    'calendar.uploadDesc': 'Select the photos you want for each month of your calendar.',
+    'calendar.uploadPrompt': 'Upload photos to continue',
+    'calendar.orientation': 'Orientation',
+    'calendar.orientation.vertical': 'Vertical',
+    'calendar.orientation.horizontal': 'Horizontal',
+
     // Landing Page
     'landing.letsDesign': "Let's Design",
     'landing.ourProducts': 'Our Products',
@@ -261,6 +274,9 @@ const translations = {
     'calendar.moreYears': 'Más años...',
     'calendar.uploadDesc': 'Selecciona las fotos que quieras para cada mes de tu calendario.',
     'calendar.uploadPrompt': 'Sube fotos para continuar',
+    'calendar.orientation': 'orientacion',
+    'calendar.orientation.vertical': 'vertical',
+    'calendar.orientation.horizontal': 'horizontal',
 
     // Mug
     'mug.capacity': 'Capacidad de la Taza',

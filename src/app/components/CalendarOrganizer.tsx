@@ -192,12 +192,12 @@ export default function CalendarOrganizer({
               className={`bg-white rounded-xl shadow-sm border-2 transition-all overflow-hidden ${
                 editingMonthIndex === index ? 'border-black ring-4 ring-black/5' : 'border-gray-100'
               }`}
-              style={{ aspectRatio: customization.orientation === 'horizontal' ? '4/3' : '3/4' }}
+              style={{ aspectRatio: customization.orientation === 'horizontal' ? '28/21' : '21/28' }}
             >
-              <div className={`grid h-full ${customization.orientation === 'horizontal' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`flex h-full ${customization.orientation === 'horizontal' ? 'flex-row' : 'flex-col'}`}>
                 {/* Photo Section */}
                 <div className={`bg-gray-50 relative ${
-                  customization.orientation === 'horizontal' ? 'border-r border-gray-100' : 'h-[60%] border-b border-gray-100'
+                  customization.orientation === 'horizontal' ? 'w-1/2 border-r border-gray-100' : 'h-1/2 border-b border-gray-100'
                 }`}>
                   {photos[index] ? (
                     <>
@@ -251,24 +251,24 @@ export default function CalendarOrganizer({
 
                 {/* Calendar Grid Section */}
                 <div className={`p-6 flex flex-col justify-center bg-gray-50/50 ${
-                  customization.orientation === 'vertical' ? 'flex-1' : ''
+                  customization.orientation === 'horizontal' ? 'w-1/2' : 'flex-1'
                 }`}>
-                   <div className="text-center mb-4">
-                      <span className="text-xl font-bold">{month} {year}</span>
+                   <div className="text-center mb-2">
+                      <span className="text-lg font-bold">{month} {year}</span>
                    </div>
                    <TooltipProvider>
-                    <div className="grid grid-cols-7 gap-1">
+                    <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                        <div key={i} className="text-center text-[10px] font-bold text-gray-400 py-2">
+                        <div key={i} className="text-center text-[10px] font-bold text-gray-400">
                           {day}
                         </div>
                       ))}
                       {generateCalendarGrid(index).map((day, i) => {
-                        if (!day) return <div key={i} className="aspect-square" />;
+                        if (!day) return <div key={i} className="h-full min-h-[30px]" />;
                         const date = new Date(year, index, day);
                         const holiday = isHoliday(date, holidays);
                         const content = (
-                          <div className={`aspect-square flex items-center justify-center text-[10px] sm:text-xs rounded ${
+                          <div className={`h-full min-h-[30px] flex items-center justify-center text-[10px] sm:text-xs rounded ${
                             holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100' : 'bg-white border border-gray-100'
                           }`}>
                             {day}
@@ -276,10 +276,10 @@ export default function CalendarOrganizer({
                         );
                         return holiday ? (
                           <Tooltip key={i}>
-                            <TooltipTrigger asChild>{content}</TooltipTrigger>
+                            <TooltipTrigger asChild className="h-full w-full">{content}</TooltipTrigger>
                             <TooltipContent><p>{holiday.name}</p></TooltipContent>
                           </Tooltip>
-                        ) : <div key={i}>{content}</div>;
+                        ) : <div key={i} className="h-full w-full">{content}</div>;
                       })}
                     </div>
                   </TooltipProvider>
