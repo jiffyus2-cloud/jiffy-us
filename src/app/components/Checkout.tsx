@@ -6,12 +6,13 @@ interface CheckoutProps {
   product: Album | Calendar | MugProduct | PhotoPack;
   productType: 'album' | 'calendar' | 'mug' | 'photo-pack';
   photos?: string[] | string[][];
+  photoCrops?: Record<string, { x: number; y: number; zoom: number }>;
   mugItems?: any[];
   textBoxSlots?: any;
   customization?: any;
 }
 
-export default function Checkout({ product, productType, photos, mugItems, customization }: CheckoutProps) {
+export default function Checkout({ product, productType, photos, photoCrops, mugItems, customization }: CheckoutProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',

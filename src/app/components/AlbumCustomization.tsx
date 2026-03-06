@@ -18,6 +18,7 @@ export interface CustomizationOptions {
     coverSubtitle: string;
     coverYear: string;
     selectedLayout: number;
+    coverCrop?: { x: number; y: number; zoom: number };
   };
 }
 
@@ -87,7 +88,8 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     coverSubtitle: t('album.defaultSubtitle'),
     coverYear: '2024',
     coverImage: '',
-    selectedLayout: 1
+    selectedLayout: 1,
+    coverCrop: { x: 50, y: 50, zoom: 1 }
   });
 
   const handleContinue = () => {
@@ -129,6 +131,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
               coverSubtitle={coverContent.coverSubtitle}
               coverYear={coverContent.coverYear}
               selectedLayout={coverContent.selectedLayout}
+              coverCrop={coverContent.coverCrop}
             />
           </div>
 

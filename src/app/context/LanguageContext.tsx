@@ -84,8 +84,8 @@ const translations = {
     'organizer.autoDistributeDesc': 'Based on your selection, we will distribute your photos automatically. You can still move them and change layouts later.',
     'organizer.createAlbum': 'Create Album',
     'organizer.complete': 'Confirm Organization',
-    'organizer.addPhoto': 'Add Photo',
-    'organizer.addText': 'Add Text',
+    'organizer.addPhoto': 'añadir Photo',
+    'organizer.addText': 'añadir texto',
     'organizer.editText': 'Edit Text Box',
     'organizer.removeText': 'Remove Text Box',
     'organizer.content': 'Content',
@@ -267,6 +267,8 @@ const translations = {
     'organizer.autoDistributeDesc': 'Basándonos en tu selección, distribuiremos tus fotos automáticamente. Podrás moverlas y cambiar los diseños más tarde.',
     'organizer.createAlbum': 'Crear Álbum',
     'organizer.complete': 'Confirmar Organización',
+    'organizer.addPhoto': 'añadir Photo',
+    'organizer.addText': 'añadir texto',
 
     // Product Details Modal
     'details.availableStyles': 'Estilos Disponibles',

@@ -7,12 +7,15 @@ import {
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import type { CustomizationOptions } from './AlbumCustomization';
+import ImageCropper from './ImageCropper';
 
 interface PhotoOrganizerProps {
   album: Album;
   customization: CustomizationOptions;
   photos: string[][];
   onPhotosChange: (photos: string[][]) => void;
+  photoCrops: Record<string, { x: number; y: number; zoom: number }>;
+  onPhotoCropsChange: (crops: Record<string, { x: number; y: number; zoom: number }>) => void;
   textBoxSlots: Record<number, Record<number, any>>;
   onTextBoxSlotsChange: (slots: Record<number, Record<number, any>>) => void;
   onComplete?: () => void;
@@ -25,6 +28,8 @@ export default function PhotoOrganizer({
   customization, 
   photos, 
   onPhotosChange, 
+  photoCrops,
+  onPhotoCropsChange,
   textBoxSlots,
   onTextBoxSlotsChange,
   onComplete 
@@ -187,6 +192,16 @@ export default function PhotoOrganizer({
     [pagePhotos[photoIndex], pagePhotos[targetIndex]] = [pagePhotos[targetIndex], pagePhotos[photoIndex]];
     newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
+
+    // Also move crops
+    const currentCrop = photoCrops[`${pageIndex}-${photoIndex}`];
+    const targetCrop = photoCrops[`${pageIndex}-${targetIndex}`];
+    const newCrops = { ...photoCrops };
+    if (currentCrop) newCrops[`${pageIndex}-${targetIndex}`] = currentCrop;
+    else delete newCrops[`${pageIndex}-${targetIndex}`];
+    if (targetCrop) newCrops[`${pageIndex}-${photoIndex}`] = targetCrop;
+    else delete newCrops[`${pageIndex}-${photoIndex}`];
+    onPhotoCropsChange(newCrops);
   };
 
   const handleAddTextBox = (pageIndex: number, photoIndex: number) => {
@@ -219,6 +234,13 @@ export default function PhotoOrganizer({
       newSlots[pageIndex][photoIndex] = { ...newSlots[pageIndex][photoIndex], ...updates };
       onTextBoxSlotsChange(newSlots);
     }
+  };
+
+  const handleCropChange = (pageIndex: number, photoIndex: number, crop: { x: number, y: number, zoom: number }) => {
+    onPhotoCropsChange({
+      ...photoCrops,
+      [`${pageIndex}-${photoIndex}`]: crop
+    });
   };
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
@@ -366,15 +388,24 @@ export default function PhotoOrganizer({
               </span>
               <button
                 onClick={() => setEditingPageIndex(editingPageIndex === pageIndex ? null : pageIndex)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
+                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${
                   editingPageIndex === pageIndex
                     ? 'bg-black text-white border-black'
                     : 'bg-white text-black border-gray-200 hover:border-black'
                 }`}
               >
-                {editingPageIndex === pageIndex ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-                <span className="text-sm font-medium">
-                  {editingPageIndex === pageIndex ? 'Finish Editing' : 'Habilitar Edición'}
+                {editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Edit3 className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                <span className="text-xs md:text-sm font-bold uppercase tracking-tight">
+                  {editingPageIndex === pageIndex ? (
+                    <span className="hidden sm:inline">Finalizar Edición</span>
+                  ) : (
+                    <span className="hidden sm:inline">Habilitar Edición</span>
+                  )}
+                  {editingPageIndex === pageIndex ? (
+                    <span className="sm:hidden">LISTO</span>
+                  ) : (
+                    <span className="sm:hidden">EDITAR</span>
+                  )}
                 </span>
               </button>
             </div>
@@ -394,35 +425,42 @@ export default function PhotoOrganizer({
                   <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentPhotosPerPage, pageLayouts[pageIndex])}`}>
                     {slots.map((photo, photoIndex) => {
                       const textBox = textBoxSlots[pageIndex]?.[photoIndex];
+                      const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
                       
                       return (
                         <div key={photoIndex} className="relative group/photo overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center border border-gray-100">
                           {photo ? (
                             <>
-                              <img src={photo} alt="" className="w-full h-full object-cover" />
+                              <ImageCropper 
+                                src={photo} 
+                                defaultPosition={crop}
+                                defaultZoom={crop.zoom}
+                                onCropChange={(newCrop) => handleCropChange(pageIndex, photoIndex, newCrop)}
+                                isEditable={editingPageIndex === pageIndex}
+                              />
                               {/* Photo Actions (when editing page) */}
                               {editingPageIndex === pageIndex && (
-                                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center gap-2 transition-opacity">
+                                <div className="absolute top-2 left-2 flex gap-1 transition-opacity">
                                   <button 
                                     onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')}
-                                    className="p-2 bg-white rounded-full hover:bg-gray-100"
+                                    className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm"
                                     title="Move left"
                                   >
-                                    <ArrowLeft className="w-4 h-4" />
+                                    <ArrowLeft className="w-3.5 h-3.5" />
                                   </button>
                                   <button 
                                     onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)}
-                                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
+                                    className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm"
                                     title="Delete photo"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                   <button 
                                     onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')}
-                                    className="p-2 bg-white rounded-full hover:bg-gray-100"
+                                    className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm"
                                     title="Move right"
                                   >
-                                    <ArrowRight className="w-4 h-4" />
+                                    <ArrowRight className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               )}
@@ -439,21 +477,21 @@ export default function PhotoOrganizer({
                                 }}
                                 className="w-full"
                               >
-                                {textBox.text || 'Add Text...'}
+                                {textBox.text || t('organizer.addText') + '...'}
                               </div>
                               {editingPageIndex === pageIndex && (
                                 <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center gap-2 opacity-0 group-hover/photo:opacity-100 transition-opacity">
                                   <button 
                                     onClick={() => setEditingTextSlot({ pageIndex, photoIndex })}
                                     className="p-2 bg-white rounded-full hover:bg-gray-100"
-                                    title="Edit Text"
+                                    title={t('organizer.editText') || "Edit Text"}
                                   >
                                     <Edit3 className="w-4 h-4" />
                                   </button>
                                   <button 
                                     onClick={() => handleRemoveTextBox(pageIndex, photoIndex)}
                                     className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
-                                    title="Remove Text Box"
+                                    title={t('organizer.removeText') || "Remove Text Box"}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -479,7 +517,7 @@ export default function PhotoOrganizer({
                                   <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300">
                                     <ImageIcon className="w-6 h-6" />
                                   </div>
-                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addPhoto') || 'Foto'}</span>
+                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addPhoto')}</span>
                                 </button>
                                 <div className="h-px bg-gray-200 w-12 mx-auto" />
                                 <button
@@ -489,7 +527,7 @@ export default function PhotoOrganizer({
                                   <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300">
                                     <Type className="w-6 h-6" />
                                   </div>
-                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addText') || 'Texto'}</span>
+                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addText')}</span>
                                 </button>
                               </div>
                             )
@@ -504,34 +542,34 @@ export default function PhotoOrganizer({
 
             {/* Page Actions (when editing page) */}
             {editingPageIndex === pageIndex && (
-              <div className="absolute right-2 xl:-right-24 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-2 bg-white rounded-xl shadow-xl border border-gray-100 z-50 animate-in slide-in-from-left-4 w-20">
+              <div className="absolute -right-2 sm:right-2 xl:-right-24 top-1/2 -translate-y-1/2 flex flex-col gap-1 md:gap-2 p-1 md:p-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 animate-in slide-in-from-right-4 w-14 md:w-20">
                 <button
                   onClick={() => handleMovePage(pageIndex, 'up')}
                   disabled={pageIndex === 0}
-                  className="p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                  className="p-2 md:p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
                   title="Move Page Up"
                 >
-                  <ChevronUp className="w-6 h-6 mx-auto" />
+                  <ChevronUp className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
                 </button>
                 <button
                   onClick={() => handleMovePage(pageIndex, 'down')}
                   disabled={pageIndex === photos.length - 1}
-                  className="p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                  className="p-2 md:p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
                   title="Move Page Down"
                 >
-                  <ChevronDown className="w-6 h-6 mx-auto" />
+                  <ChevronDown className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
                 </button>
                 <div className="h-px bg-gray-100 my-1" />
                 
                 {/* Photos Per Page Selection */}
                 <div className="flex flex-col gap-1 px-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-1">Fotos/Pág</span>
+                  <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 md:mb-1 leading-tight">Fotos Pág</span>
                   <div className="grid grid-cols-2 gap-1">
                     {allowedPhotosPerPage.map(opt => (
                       <button
                         key={opt}
                         onClick={() => setPagePhotosPerPage({ ...pagePhotosPerPage, [pageIndex]: opt })}
-                        className={`p-1.5 rounded text-[10px] font-bold ${
+                        className={`p-1 md:p-1.5 rounded text-[9px] md:text-[10px] font-bold ${
                           (pagePhotosPerPage[pageIndex] || getClosestAllowed(pagePhotos.length)) === opt 
                             ? 'bg-black text-white' 
                             : 'bg-gray-50 hover:bg-gray-200'
@@ -548,16 +586,16 @@ export default function PhotoOrganizer({
                   <>
                     <div className="h-px bg-gray-100 my-1" />
                     <div className="flex flex-col gap-1 px-1">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-1">Layout</span>
+                      <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 md:mb-1">Layout</span>
                       <button
                         onClick={() => setPageLayouts({ ...pageLayouts, [pageIndex]: 'row' })}
-                        className={`p-2 rounded text-[10px] font-medium ${pageLayouts[pageIndex] === 'row' || !pageLayouts[pageIndex] ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
+                        className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'row' || !pageLayouts[pageIndex] ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Fila
                       </button>
                       <button
                         onClick={() => setPageLayouts({ ...pageLayouts, [pageIndex]: 'column' })}
-                        className={`p-2 rounded text-[10px] font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
+                        className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Col
                       </button>
@@ -577,17 +615,17 @@ export default function PhotoOrganizer({
                     };
                     input.click();
                   }}
-                  className="p-3 hover:bg-blue-50 text-blue-600 rounded-lg"
-                  title="Add Photo"
+                  className="p-2 md:p-3 hover:bg-blue-50 text-blue-600 rounded-lg"
+                  title={t('organizer.addPhoto')}
                 >
-                  <ImageIcon className="w-6 h-6 mx-auto" />
+                  <ImageIcon className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
                 </button>
                 <button
                   onClick={() => handleDeletePage(pageIndex)}
-                  className="p-3 hover:bg-red-50 text-red-600 rounded-lg"
+                  className="p-2 md:p-3 hover:bg-red-50 text-red-600 rounded-lg"
                   title="Delete Page"
                 >
-                  <Trash2 className="w-6 h-6 mx-auto" />
+                  <Trash2 className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
                 </button>
               </div>
             )}

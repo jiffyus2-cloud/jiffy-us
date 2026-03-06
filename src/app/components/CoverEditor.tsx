@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Upload, X, Check, Layout, Type, Image as ImageIcon } from 'lucide-react';
 import CoverPreview from './CoverPreview';
+import ImageCropper from './ImageCropper';
 
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -11,6 +12,7 @@ interface CoverEditorProps {
     coverSubtitle: string;
     coverYear: string;
     selectedLayout: number;
+    coverCrop: { x: number; y: number; zoom: number };
   }) => void;
   initialData?: {
     coverImage: string;
@@ -18,6 +20,7 @@ interface CoverEditorProps {
     coverSubtitle: string;
     coverYear: string;
     selectedLayout: number;
+    coverCrop?: { x: number; y: number; zoom: number };
   };
 }
 
@@ -33,6 +36,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || 'Un viaje inolvidable');
   const [coverYear, setCoverYear] = useState(initialData?.coverYear || '2024');
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
+  const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1 });
 
   // Derivados de Formato
   const isVertical = coverSize === '28x21';
@@ -56,6 +60,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverImage(reader.result as string);
+        setCoverCrop({ x: 50, y: 50, zoom: 1 }); // Reset crop on new image
       };
       reader.readAsDataURL(file);
     }
@@ -89,6 +94,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             coverSubtitle={coverSubtitle}
             coverYear={coverYear}
             selectedLayout={selectedLayout}
+            coverCrop={coverCrop}
           />
         </div>
 
@@ -201,14 +207,23 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
               <h3 className="text-xs font-black uppercase tracking-widest">Imagen de Portada</h3>
             </div>
              {coverImage ? (
-                <div className="relative group rounded-2xl overflow-hidden shadow-md">
-                  <img src={coverImage} alt="Cover preview" className="w-full h-48 object-cover" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div 
+                  className="relative group rounded-2xl overflow-hidden shadow-md w-full"
+                  style={{ aspectRatio: aspectRatio }}
+                >
+                  <ImageCropper 
+                    src={coverImage} 
+                    defaultPosition={coverCrop} 
+                    defaultZoom={coverCrop.zoom}
+                    onCropChange={setCoverCrop}
+                    isEditable={true}
+                  />
+                  <div className="absolute top-2 left-2 z-10">
                     <button 
                       onClick={() => setCoverImage('')}
-                      className="bg-white text-black p-3 rounded-full hover:scale-110 transition-transform shadow-xl"
+                      className="bg-white/90 text-black p-2 rounded-full hover:scale-110 transition-transform shadow-xl hover:bg-white"
                     >
-                      <X size={20} />
+                      <X size={16} />
                     </button>
                   </div>
                 </div>
@@ -225,16 +240,16 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </div>
 
         {/* Footer de Acciones */}
-        <div className="p-8 border-t border-gray-100 bg-gray-50/50 space-y-4">
+        <div className="p-4 md:p-8 border-t border-gray-100 bg-gray-50/50 grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
           <button 
-            onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, selectedLayout })}
-            className="w-full py-5 bg-black text-white font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all shadow-xl active:scale-[0.98]"
+            onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, selectedLayout, coverCrop })}
+            className="py-3 md:py-5 bg-black text-white font-black uppercase tracking-tighter md:tracking-widest rounded-xl md:rounded-2xl flex items-center justify-center gap-2 md:gap-3 hover:bg-zinc-800 transition-all shadow-lg md:shadow-xl active:scale-[0.98] text-[10px] sm:text-xs md:text-base"
           >
-            <Check size={20} /> Guardar Cambios
+            <Check size={16} className="md:w-5 md:h-5" /> Guardar Cambios
           </button>
           <button 
             onClick={onClose}
-            className="w-full py-4 bg-white text-black border-2 border-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-50 transition-all"
+            className="py-3 md:py-4 bg-white text-black border-2 border-black font-black uppercase tracking-tighter md:tracking-widest rounded-xl md:rounded-2xl hover:bg-gray-50 transition-all text-[10px] sm:text-xs md:text-base"
           >
             Cerrar Editor
           </button>

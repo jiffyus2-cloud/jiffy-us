@@ -44,6 +44,7 @@ export default function Creator() {
   const [photoPackCustomization, setPhotoPackCustomization] = useState<PhotoPackCustomizationOptions | null>(null);
   
   const [photos, setPhotos] = useState<string[][]>([]);
+  const [photoCrops, setPhotoCrops] = useState<Record<string, { x: number, y: number, zoom: number }>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<string[]>([]);
   const [photoPackPhotos, setPhotoPackPhotos] = useState<string[]>([]);
   const [mugItems, setMugItems] = useState<MugItem[]>([]);
@@ -121,6 +122,7 @@ export default function Creator() {
       setCalendarPhotos([]);
       setMugItems([]);
       setPhotoPackPhotos([]);
+      setPhotoCrops({});
     }
   };
 
@@ -223,6 +225,8 @@ export default function Creator() {
           customization={customization}
           photos={photos}
           onPhotosChange={setPhotos}
+          photoCrops={photoCrops}
+          onPhotoCropsChange={setPhotoCrops}
           textBoxSlots={textBoxSlots}
           onTextBoxSlotsChange={setTextBoxSlots}
           onComplete={handleCheckoutRedirect}
@@ -381,6 +385,7 @@ export default function Creator() {
           productType={selectedProduct!}
           customization={getActiveCustomization()!}
           photos={getActivePhotos()}
+          photoCrops={photoCrops}
           mugItems={selectedProduct === 'mug' ? mugItems : []}
           textBoxSlots={selectedProduct === 'mug' ? textBoxSlots : {}}
         />

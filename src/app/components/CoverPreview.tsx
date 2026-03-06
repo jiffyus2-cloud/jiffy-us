@@ -7,6 +7,7 @@ interface CoverPreviewProps {
   coverSubtitle: string;
   coverYear: string;
   selectedLayout: number;
+  coverCrop?: { x: number; y: number; zoom: number };
 }
 
 const CoverPreview: React.FC<CoverPreviewProps> = ({
@@ -16,6 +17,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverSubtitle,
   coverYear,
   selectedLayout,
+  coverCrop = { x: 50, y: 50, zoom: 1 }
 }) => {
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -179,7 +181,11 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         <img 
           src={coverImage} 
           alt="Portada del Álbum" 
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-105" 
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700" 
+          style={{
+            objectPosition: '50% 50%',
+            transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)`
+          }}
         />
       ) : (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
