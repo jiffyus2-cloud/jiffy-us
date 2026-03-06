@@ -38,7 +38,7 @@ export const BASE_ALBUM: Album = {
   name: 'Classic Album',
   description: 'Our signature premium photo album',
   price: 69.99,
-  pages: 20,
+  pages: 40,
   image: 'https://images.unsplash.com/photo-1582047099758-862642d6c7df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsaW5lbiUyMHBob3RvJTIwYWxidW0lMjBlbGVnYW50fGVufDF8fHx8MTc3MTQ1NTUyOHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
 };
 
