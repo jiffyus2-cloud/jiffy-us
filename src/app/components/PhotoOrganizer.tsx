@@ -18,6 +18,10 @@ interface PhotoOrganizerProps {
   onPhotoCropsChange: (crops: Record<string, { x: number; y: number; zoom: number }>) => void;
   textBoxSlots: Record<number, Record<number, any>>;
   onTextBoxSlotsChange: (slots: Record<number, Record<number, any>>) => void;
+  pageLayouts: Record<number, 'grid' | 'row' | 'column'>;
+  onPageLayoutsChange: (layouts: Record<number, 'grid' | 'row' | 'column'>) => void;
+  pageLayoutVariants: Record<number, number>;
+  onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
 }
 
@@ -32,6 +36,10 @@ export default function PhotoOrganizer({
   onPhotoCropsChange,
   textBoxSlots,
   onTextBoxSlotsChange,
+  pageLayouts,
+  onPageLayoutsChange,
+  pageLayoutVariants,
+  onPageLayoutVariantsChange,
   onComplete 
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
@@ -39,8 +47,6 @@ export default function PhotoOrganizer({
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
-  const [pageLayouts, setPageLayouts] = useState<Record<number, 'grid' | 'row' | 'column'>>({});
-  const [pagePhotosPerPage, setPagePhotosPerPage] = useState<Record<number, number>>({});
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -418,7 +424,7 @@ export default function PhotoOrganizer({
               style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
             >
               {(() => {
-                const currentPhotosPerPage = pagePhotosPerPage[pageIndex] || getClosestAllowed(pagePhotos.length);
+                const currentPhotosPerPage = pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length);
                 const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => pagePhotos[i] || null);
                 
                 return (
@@ -440,7 +446,7 @@ export default function PhotoOrganizer({
                               />
                               {/* Photo Actions (when editing page) */}
                               {editingPageIndex === pageIndex && (
-                                <div className="absolute top-2 left-2 flex gap-1 transition-opacity">
+                                <div className="absolute top-2 right-2 flex gap-1 transition-opacity z-10">
                                   <button 
                                     onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')}
                                     className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm"
@@ -568,9 +574,9 @@ export default function PhotoOrganizer({
                     {allowedPhotosPerPage.map(opt => (
                       <button
                         key={opt}
-                        onClick={() => setPagePhotosPerPage({ ...pagePhotosPerPage, [pageIndex]: opt })}
+                        onClick={() => onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: opt })}
                         className={`p-1 md:p-1.5 rounded text-[9px] md:text-[10px] font-bold ${
-                          (pagePhotosPerPage[pageIndex] || getClosestAllowed(pagePhotos.length)) === opt 
+                          (pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === opt 
                             ? 'bg-black text-white' 
                             : 'bg-gray-50 hover:bg-gray-200'
                         }`}
@@ -582,19 +588,19 @@ export default function PhotoOrganizer({
                 </div>
 
                 {/* Layout Selection (Enabled only when 2 photos) */}
-                {(pagePhotosPerPage[pageIndex] || getClosestAllowed(pagePhotos.length)) === 2 && (
+                {(pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === 2 && (
                   <>
                     <div className="h-px bg-gray-100 my-1" />
                     <div className="flex flex-col gap-1 px-1">
                       <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 md:mb-1">Layout</span>
                       <button
-                        onClick={() => setPageLayouts({ ...pageLayouts, [pageIndex]: 'row' })}
+                        onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })}
                         className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'row' || !pageLayouts[pageIndex] ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Fila
                       </button>
                       <button
-                        onClick={() => setPageLayouts({ ...pageLayouts, [pageIndex]: 'column' })}
+                        onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })}
                         className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Col

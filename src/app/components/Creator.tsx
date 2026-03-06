@@ -10,7 +10,6 @@ import MugCustomization, { MugCustomizationOptions } from './MugCustomization';
 import MugOrganizer, { MugItem } from './MugOrganizer';
 import PhotoPackCustomization, { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
 import PhotoPackOrganizer from './PhotoPackOrganizer';
-import Checkout from './Checkout';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
@@ -24,12 +23,74 @@ export default function Creator() {
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
 
-  const handleCheckoutRedirect = () => {
+  const handleCheckoutRedirect = (finalData?: { 
+    photos?: string[][] | string[], 
+    mugItems?: MugItem[], 
+    textBoxSlots?: Record<number, Record<number, any>> 
+  }) => {
     if (!user) {
       navigate('/login', { state: { from: location } });
       return;
     }
-    setCurrentStep('checkout');
+
+    const activeProduct = getActiveProduct();
+    const activeCustomization = getActiveCustomization();
+    
+    // Determine which photos to use (passed data or current state)
+    let currentPhotosRaw = finalData?.photos || getActivePhotos();
+    
+    // Normalize photos to string[][] for the backend/checkout
+    let photos: string[][] = [];
+    if (Array.isArray(currentPhotosRaw)) {
+      if (currentPhotosRaw.length > 0 && typeof currentPhotosRaw[0] === 'string') {
+        // Flat array (Calendar, PhotoPack) -> convert to nested
+        photos = (currentPhotosRaw as string[]).map(p => [p]);
+      } else {
+        // Already nested or empty
+        photos = currentPhotosRaw as string[][];
+      }
+    }
+
+    let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
+    let currentTextBoxSlots = finalData?.textBoxSlots || (selectedProduct === 'mug' ? textBoxSlots : {});
+
+    // Prepare coverData for Checkout preview
+    let coverData = { image: '', title: '' };
+    if (selectedProduct === 'album' && (customization as any)?.coverContent) {
+      coverData = {
+        image: (customization as any).coverContent.coverImage,
+        title: (customization as any).coverContent.coverTitle
+      };
+    } else if (activeProduct) {
+      coverData = {
+        image: '', // Default or placeholder
+        title: activeProduct.name
+      };
+    }
+
+    const activePhotoCrops = selectedProduct === 'album' ? photoCrops 
+                           : selectedProduct === 'calendar' ? calendarPhotoCrops
+                           : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
+                           : {};
+
+    const designData = {
+      photos,
+      pageLayouts,
+      pageLayoutVariants,
+      textBoxSlots: currentTextBoxSlots,
+      customization: activeCustomization,
+      coverData,
+      photoCrops: activePhotoCrops,
+      mugItems: currentMugItems
+    };
+
+    navigate('/checkout', { 
+      state: { 
+        designData,
+        product: activeProduct,
+        productType: selectedProduct
+      } 
+    });
   };
 
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
@@ -46,9 +107,13 @@ export default function Creator() {
   const [photos, setPhotos] = useState<string[][]>([]);
   const [photoCrops, setPhotoCrops] = useState<Record<string, { x: number, y: number, zoom: number }>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<string[]>([]);
+  const [calendarPhotoCrops, setCalendarPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
   const [photoPackPhotos, setPhotoPackPhotos] = useState<string[]>([]);
+  const [photoPackPhotoCrops, setPhotoPackPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
   const [mugItems, setMugItems] = useState<MugItem[]>([]);
   const [textBoxSlots, setTextBoxSlots] = useState<Record<number, Record<number, any>>>({});  
+  const [pageLayouts, setPageLayouts] = useState<Record<number, 'grid' | 'row' | 'column'>>({});
+  const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, number>>({});
   const progressRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -83,23 +148,21 @@ export default function Creator() {
 
   const handlePhotosComplete = (uploadedPhotos: string[][]) => {
     setPhotos(uploadedPhotos);
-    handleCheckoutRedirect();
+    handleCheckoutRedirect({ photos: uploadedPhotos });
   };
 
   const handleCalendarPhotosComplete = (uploadedPhotos: string[]) => {
     setCalendarPhotos(uploadedPhotos);
-    handleCheckoutRedirect();
+    handleCheckoutRedirect({ photos: uploadedPhotos });
   };
 
   const handlePhotoPackPhotosComplete = (uploadedPhotos: string[]) => {
     setPhotoPackPhotos(uploadedPhotos);
-    handleCheckoutRedirect();
+    handleCheckoutRedirect({ photos: uploadedPhotos });
   };
 
-  const handleMugItemsComplete = (items: MugItem[], slots: Record<number, Record<number, any>>) => {
-    setMugItems(items);
-    setTextBoxSlots(slots);
-    handleCheckoutRedirect();
+  const handleMugItemsComplete = () => {
+    handleCheckoutRedirect({ mugItems: mugItems });
   };
 
   const handleBack = () => {
@@ -149,10 +212,44 @@ export default function Creator() {
   const progressSteps = getProgressSteps();
   const activeStepIndex = progressSteps.findIndex(step => step.id === currentStep);
 
-  // Handle direct navigation from modal
+  // Handle direct navigation from modal or state restoration from checkout
   useEffect(() => {
-    const state = location.state as { startProduct?: ProductType } | null;
-    if (state?.startProduct && !selectedProduct) {
+    const state = location.state as any;
+    
+    // Restoration from checkout
+    if (state?.designData && !selectedProduct) {
+      const { designData, product, productType } = state;
+      
+      setSelectedProduct(productType);
+      setCurrentStep('organize');
+
+      if (productType === 'album') {
+        setSelectedAlbum(product);
+        setCustomization(designData.customization);
+        setPhotos(designData.photos);
+        setPhotoCrops(designData.photoCrops || {});
+        setTextBoxSlots(designData.textBoxSlots || {});
+        setPageLayouts(designData.pageLayouts || {});
+        setPageLayoutVariants(designData.pageLayoutVariants || {});
+      } else if (productType === 'calendar') {
+        setSelectedCalendar(product);
+        setCalendarCustomization(designData.customization);
+        setCalendarPhotos(designData.photos.map((p: string[]) => p[0]));
+        setCalendarPhotoCrops(designData.photoCrops || {});
+      } else if (productType === 'mug') {
+        setSelectedMug(product);
+        setMugCustomization(designData.customization);
+        setMugItems(designData.mugItems || []);
+        setTextBoxSlots(designData.textBoxSlots || {});
+      } else if (productType === 'photo-pack') {
+        setSelectedPhotoPack(product);
+        setPhotoPackCustomization(designData.customization);
+        setPhotoPackPhotos(designData.photos.map((p: string[]) => p[0]));
+        setPhotoPackPhotoCrops(designData.photoCrops || {});
+      }
+    } 
+    // Handle direct navigation from modal
+    else if (state?.startProduct && !selectedProduct) {
       handleSelectProduct(state.startProduct);
     }
   }, [location.state, selectedProduct]);
@@ -229,7 +326,11 @@ export default function Creator() {
           onPhotoCropsChange={setPhotoCrops}
           textBoxSlots={textBoxSlots}
           onTextBoxSlotsChange={setTextBoxSlots}
-          onComplete={handleCheckoutRedirect}
+          pageLayouts={pageLayouts}
+          onPageLayoutsChange={setPageLayouts}
+          pageLayoutVariants={pageLayoutVariants}
+          onPageLayoutVariantsChange={setPageLayoutVariants}
+          onComplete={() => handlePhotosComplete(photos)}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
@@ -237,6 +338,10 @@ export default function Creator() {
         <CalendarOrganizer 
           calendar={selectedCalendar!}
           customization={calendarCustomization}
+          photos={calendarPhotos}
+          onPhotosChange={setCalendarPhotos}
+          photoCrops={calendarPhotoCrops}
+          onPhotoCropsChange={setCalendarPhotoCrops}
           onComplete={handleCalendarPhotosComplete}
         />
       );
@@ -247,7 +352,7 @@ export default function Creator() {
           customization={mugCustomization}
           items={mugItems}
           onItemsChange={setMugItems}
-          onComplete={handleCheckoutRedirect}
+          onComplete={handleMugItemsComplete}
         />
       );
     } else if (selectedProduct === 'photo-pack' && photoPackCustomization) {
@@ -255,6 +360,10 @@ export default function Creator() {
         <PhotoPackOrganizer 
           photoPack={selectedPhotoPack!}
           customization={photoPackCustomization}
+          photos={photoPackPhotos}
+          onPhotosChange={setPhotoPackPhotos}
+          photoCrops={photoPackPhotoCrops}
+          onPhotoCropsChange={setPhotoPackPhotoCrops}
           onComplete={handlePhotoPackPhotosComplete}
         />
       );
@@ -378,18 +487,6 @@ export default function Creator() {
       {currentStep === 'customization' && renderCustomization()}
       
       {currentStep === 'organize' && renderOrganizer()}
-      
-      {currentStep === 'checkout' && (
-        <Checkout 
-          product={getActiveProduct()!}
-          productType={selectedProduct!}
-          customization={getActiveCustomization()!}
-          photos={getActivePhotos()}
-          photoCrops={photoCrops}
-          mugItems={selectedProduct === 'mug' ? mugItems : []}
-          textBoxSlots={selectedProduct === 'mug' ? textBoxSlots : {}}
-        />
-      )}
     </div>
   );
 }

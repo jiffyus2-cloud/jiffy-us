@@ -1,19 +1,40 @@
 import { useState, useRef } from 'react';
-import { Upload, X, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { 
+  Upload, X, Image as ImageIcon, Trash2,
+  Check, Edit3, Plus
+} from 'lucide-react';
 import { PhotoPack } from '../types/products';
+import { useLanguage } from '../context/LanguageContext';
 import { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
+import ImageCropper from './ImageCropper';
 
 interface PhotoPackOrganizerProps {
   photoPack: PhotoPack;
   customization: PhotoPackCustomizationOptions;
+  photos: string[];
+  onPhotosChange: (photos: string[]) => void;
+  photoCrops: Record<number, { x: number; y: number; zoom: number }>;
+  onPhotoCropsChange: (crops: Record<number, { x: number; y: number; zoom: number }>) => void;
   onComplete: (photos: string[]) => void;
 }
 
-export default function PhotoPackOrganizer({ photoPack, customization, onComplete }: PhotoPackOrganizerProps) {
-  const [photos, setPhotos] = useState<string[]>([]);
+type Step = 'upload' | 'editor';
+
+export default function PhotoPackOrganizer({ 
+  photoPack, 
+  customization, 
+  photos,
+  onPhotosChange,
+  photoCrops,
+  onPhotoCropsChange,
+  onComplete 
+}: PhotoPackOrganizerProps) {
+  const { t } = useLanguage();
+  const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
+  const [editingPhotoIndex, setEditingPhotoIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
@@ -30,7 +51,8 @@ export default function PhotoPackOrganizer({ photoPack, customization, onComplet
           loadedCount++;
 
           if (loadedCount === filesArray.length) {
-            setPhotos((prev) => [...prev, ...loadedPhotos]);
+            onPhotosChange([...photos, ...loadedPhotos]);
+            setStep('editor');
           }
         }
       };
@@ -39,80 +61,154 @@ export default function PhotoPackOrganizer({ photoPack, customization, onComplet
   };
 
   const removePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    onPhotosChange(photos.filter((_, i) => i !== index));
+    if (editingPhotoIndex === index) setEditingPhotoIndex(null);
+  };
+
+  const handleCropChange = (index: number, crop: { x: number, y: number, zoom: number }) => {
+    onPhotoCropsChange({
+      ...photoCrops,
+      [index]: crop
+    });
   };
 
   const totalPrice = photos.length * photoPack.basePrice;
 
-  return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-12">
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl mb-2">Upload Your Photos</h2>
+  if (step === 'upload') {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4">
+            <Upload className="w-10 h-10" />
+          </div>
+          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
           <p className="text-gray-600">
-            {photos.length} photos added • {customization.size} • {customization.finish} finish
+            {t('photopack.uploadDesc') || 'Select the photos you want to print. Each photo can be individually adjusted.'}
           </p>
         </div>
-        <div className="bg-gray-50 px-6 py-3 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-500">Estimated Price</div>
-          <div className="text-2xl font-bold">${totalPrice.toFixed(2)}</div>
+
+        <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+          >
+            <ImageIcon className="w-16 h-16 text-gray-400" />
+            <div className="text-center">
+              <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
+              <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleBatchUpload}
+            className="hidden"
+          />
+
+          {photos.length > 0 && (
+             <div className="mt-8">
+                <button
+                  onClick={() => setStep('editor')}
+                  className="w-full py-4 bg-black text-white rounded-lg text-lg font-medium hover:bg-gray-800 transition-all"
+                >
+                  {t('organizer.continueToPages')}
+                </button>
+             </div>
+          )}
         </div>
       </div>
+    );
+  }
 
-      {/* Upload Area */}
-      <div 
-        onClick={() => fileInputRef.current?.click()}
-        className="mb-8 border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-black hover:bg-gray-50 transition-all cursor-pointer"
-      >
-        <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-xl mb-2">Click to upload photos</h3>
-        <p className="text-gray-500">You can select multiple photos at once</p>
+  return (
+    <div className="w-full max-w-5xl mx-auto px-4 py-12">
+      <div className="flex items-center justify-between mb-8 sticky top-24 bg-white/95 backdrop-blur-sm z-40 py-4 border-b">
+        <div>
+          <h2 className="text-2xl font-bold">{photoPack.name} Editor</h2>
+          <p className="text-gray-500">{photos.length} photos • ${totalPrice.toFixed(2)} total</p>
+        </div>
+        <button
+          onClick={() => onComplete(photos)}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium"
+        >
+          {t('organizer.complete')}
+        </button>
+      </div>
+
+      <div className="space-y-12">
+        {photos.map((photo, index) => (
+          <div key={index} className="relative group">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">
+                Photo #{index + 1}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingPhotoIndex(editingPhotoIndex === index ? null : index)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
+                    editingPhotoIndex === index
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-black border-gray-200 hover:border-black'
+                  }`}
+                >
+                  {editingPhotoIndex === index ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                  <span className="text-xs font-bold uppercase tracking-tight">
+                    {editingPhotoIndex === index ? 'Finalizar Edición' : 'Habilitar Edición'}
+                  </span>
+                </button>
+                {editingPhotoIndex === index && (
+                   <button
+                    onClick={() => removePhoto(index)}
+                    className="p-2 bg-red-50 text-red-600 rounded-full border-2 border-red-100 hover:bg-red-100 transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div 
+              className={`bg-white rounded-xl shadow-sm border-2 transition-all overflow-hidden ${
+                editingPhotoIndex === index ? 'border-black ring-4 ring-black/5' : 'border-gray-100'
+              }`}
+            >
+              <div 
+                className="relative bg-gray-50 flex items-center justify-center overflow-hidden"
+                style={{ aspectRatio: customization.size === '4x6' ? '4/6' : customization.size === '5x7' ? '5/7' : '8/10' }}
+              >
+                <ImageCropper 
+                  src={photo} 
+                  defaultPosition={photoCrops[index] || { x: 50, y: 50, zoom: 1 }}
+                  defaultZoom={photoCrops[index]?.zoom || 1}
+                  onCropChange={(newCrop) => handleCropChange(index, newCrop)}
+                  isEditable={editingPhotoIndex === index}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-20 text-center pb-20">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"
+        >
+          <Plus className="w-6 h-6" />
+          <span className="text-lg font-medium">Add More Photos to Pack</span>
+        </button>
         <input
           ref={fileInputRef}
           type="file"
           multiple
           accept="image/*"
-          onChange={handleFileUpload}
+          onChange={handleBatchUpload}
           className="hidden"
         />
       </div>
-
-      {/* Photos Grid */}
-      {photos.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {photos.map((photo, index) => (
-            <div key={index} className="aspect-square relative group border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-              <img src={photo} alt="" className="w-full h-full object-cover" />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removePhoto(index);
-                }}
-                className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="py-20 text-center bg-gray-50 rounded-lg border-2 border-gray-100">
-          <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No photos uploaded yet</p>
-        </div>
-      )}
-
-      {/* Actions */}
-      {photos.length > 0 && (
-        <div className="mt-12 flex justify-end">
-          <button
-            onClick={() => onComplete(photos)}
-            className="px-8 py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
-          >
-            Continue to Checkout
-          </button>
-        </div>
-      )}
     </div>
   );
 }
+

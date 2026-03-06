@@ -3,6 +3,7 @@ import LandingPage from './components/LandingPage';
 import Creator from './components/Creator';
 import UserDashboard from './components/UserDashboard';
 import Checkout from './components/Checkout';
+import Success from './components/Success';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Header } from './components/navigation/Header';
@@ -54,9 +55,12 @@ export const router = createBrowserRouter([
     path: '/checkout',
     element: (
       <ProtectedRoute>
-        {/* Note: This is a placeholder for the future standalone checkout route */}
-        <Checkout product={{} as any} productType="album" />
+        <Checkout />
       </ProtectedRoute>
     ),
+  },
+  {
+    path: '/success',
+    element: <Success />,
   },
 ]);

@@ -99,9 +99,8 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       <img
         src={src}
         alt="Crop view"
-        className="w-full h-full object-cover transition-transform duration-75 pointer-events-none select-none"
+        className="w-full h-full object-contain transition-transform duration-75 pointer-events-none select-none"
         style={{
-          objectPosition: '50% 50%',
           transform: `scale(${zoom}) translate(${(50 - position.x)}%, ${(50 - position.y)}%)`,
         }}
       />
@@ -109,7 +108,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       {isEditable && (
         <>
           {/* Botón flotante para activar modo arrastre */}
-          <div className="absolute top-2 right-2 flex gap-2 z-10">
+          <div className="absolute top-2 left-2 flex gap-2 z-10">
             <button
               onClick={(e) => {
                 e.stopPropagation();

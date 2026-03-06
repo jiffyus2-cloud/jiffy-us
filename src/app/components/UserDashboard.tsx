@@ -5,7 +5,7 @@ import {
   Clock, 
   Plus, 
   ChevronRight, 
-  CheckCircle2, 
+  CheckCircle, 
   History,
   ExternalLink,
   RotateCcw,
@@ -151,12 +151,11 @@ const UserDashboard: React.FC = () => {
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors
                               ${isActive ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-300'}`}>
                               {idx < getStepIndex(order.status) ? (
-                                <CheckCircle2 className="w-5 h-5" />
+                                <CheckCircle className="w-5 h-5" />
                               ) : (
                                 <span className="text-xs font-bold">{idx + 1}</span>
                               )}
-                            </div>
-                            <span className={`text-[10px] mt-2 font-medium hidden md:block
+                            </div>                            <span className={`text-[10px] mt-2 font-medium hidden md:block
                               ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
                               {step}
                             </span>

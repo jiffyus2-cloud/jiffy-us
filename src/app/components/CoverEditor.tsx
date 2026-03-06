@@ -218,7 +218,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     onCropChange={setCoverCrop}
                     isEditable={true}
                   />
-                  <div className="absolute top-2 left-2 z-10">
+                  <div className="absolute top-2 right-2 z-10">
                     <button 
                       onClick={() => setCoverImage('')}
                       className="bg-white/90 text-black p-2 rounded-full hover:scale-110 transition-transform shadow-xl hover:bg-white"

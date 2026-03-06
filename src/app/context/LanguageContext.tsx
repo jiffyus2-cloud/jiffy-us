@@ -252,6 +252,44 @@ const translations = {
     'album.spinePlaceholder': 'Texto para el lomo...',
     'album.spineNote': 'Este texto aparecerá en el lomo del álbum',
 
+    // Calendar
+    'calendar.preview': 'Vista Previa del Calendario',
+    'calendar.size.standard': 'Tamaño estándar',
+    'calendar.size.large': 'Grande',
+    'calendar.size.square': 'Cuadrado',
+    'calendar.year': 'Año del Calendario',
+    'calendar.moreYears': 'Más años...',
+    'calendar.uploadDesc': 'Selecciona las fotos que quieras para cada mes de tu calendario.',
+    'calendar.uploadPrompt': 'Sube fotos para continuar',
+
+    // Mug
+    'mug.capacity': 'Capacidad de la Taza',
+    'mug.material': 'Material de la Taza',
+    'mug.material.ceramic': 'Cerámica',
+    'mug.material.ceramicDesc': 'Clásico y apto para microondas',
+    'mug.material.porcelain': 'Porcelana',
+    'mug.material.porcelainDesc': 'Calidad premium y elegante',
+    'mug.material.steel': 'Acero Inoxidable',
+    'mug.material.steelDesc': 'Duradero y para viajes',
+    'mug.style': 'Estilo de Diseño',
+    'mug.style.separate': 'Imagen y Texto',
+    'mug.style.separateDesc': 'La imagen y el texto se muestran por separado en la taza.',
+    'mug.style.cutout': 'Texto con Foto',
+    'mug.style.cutoutDesc': 'Tu foto aparece dentro de las letras de un texto grande.',
+    'mug.uploadDesc': 'Sube fotos para tus tazas personalizadas. Cada foto creará un diseño de taza separado.',
+    'mug.startEmpty': 'Empezar con una taza vacía',
+    'mug.size.standard': 'Estándar',
+    'mug.size.large': 'Grande',
+
+    // Photo Pack
+    'photopack.finish': 'Acabado de las Fotos',
+    'photopack.finish.matteDesc': 'Sin reflejos, aspecto profesional',
+    'photopack.finish.glossyDesc': 'Brillante, colores vibrantes',
+    'photopack.uploadDesc': 'Selecciona las fotos que quieres imprimir. Cada foto se puede ajustar individualmente.',
+    'photopack.size.standard': 'Tamaño estándar',
+    'photopack.size.medium': 'Algo más grande',
+    'photopack.size.large': 'Retratos',
+
     // Photo Organizer Setup
     'organizer.uploadTitle': 'Sube Tus Fotos',
     'organizer.uploadDesc': 'Selecciona al menos 40 fotos para empezar a crear tu álbum.',
