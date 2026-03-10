@@ -2,6 +2,19 @@ import { db, storage } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
+const sanitizeForFirestore = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object' || obj instanceof Date) return obj;
+  if (Array.isArray(obj)) return obj.map(item => sanitizeForFirestore(item));
+  
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      acc[key] = sanitizeForFirestore(value);
+    }
+    return acc;
+  }, {} as any);
+};
+
 export interface DesignData {
   customization: any;
   coverData: {
@@ -14,6 +27,7 @@ export interface DesignData {
   };
   photos: string[][];
   pageLayouts: any[];
+  pageLayoutVariants?: any[];
   textBoxSlots: any;
   photoCrops: Record<string, any>;
 }
@@ -67,6 +81,7 @@ export async function saveCompleteOrder(
   designData: DesignData,
   orderDetails: OrderDetails
 ) {
+  const { shippingAddress, billingAddress } = orderDetails;
   const timestamp = Date.now();
   const folderPath = `orders/${userId}/${timestamp}`;
 
@@ -76,10 +91,15 @@ export async function saveCompleteOrder(
     coverImageUrl = await uploadImage(`${folderPath}/cover`, coverImageUrl);
   }
 
-  // 2. Subir fotos de las páginas
-  const uploadedPhotos: string[][] = [];
-  for (let pageIndex = 0; pageIndex < designData.photos.length; pageIndex++) {
-    const pagePhotos = designData.photos[pageIndex];
+  // CALCULAR TOTAL DE PÁGINAS DE FORMA SEGURA
+  const totalPages = Array.isArray(designData.photos) 
+    ? designData.photos.length 
+    : Object.keys(designData.photos || {}).length || 0;
+
+  // 2. Subir fotos de las páginas (urlsSubidas)
+  const urlsSubidas: string[][] = [];
+  for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+    const pagePhotos = (Array.isArray(designData.photos) ? designData.photos[pageIndex] : (designData.photos as any)?.[pageIndex]) || [];
     const uploadedPagePhotos: string[] = [];
     
     for (let photoIndex = 0; photoIndex < pagePhotos.length; photoIndex++) {
@@ -91,26 +111,48 @@ export async function saveCompleteOrder(
         uploadedPagePhotos.push(photoData);
       }
     }
-    uploadedPhotos.push(uploadedPagePhotos);
+    urlsSubidas.push(uploadedPagePhotos);
   }
 
-  // 3. Construir el orderPayload final
+  // 3. Crear formattedPages con validación estricta y sin usar .map() directo
+  const formattedPages = Array.from({ length: totalPages }, (_, i) => {
+    const layout = (Array.isArray(designData.pageLayouts) ? designData.pageLayouts[i] : (designData.pageLayouts as any)?.[i]) || 1;
+    const variant = (Array.isArray(designData.pageLayoutVariants) ? designData.pageLayoutVariants[i] : (designData.pageLayoutVariants as any)?.[i]) || null;
+    const texts = (Array.isArray(designData.textBoxSlots) ? designData.textBoxSlots[i] : (designData.textBoxSlots as any)?.[i]) || [];
+    const images = urlsSubidas[i] || [];
+    const crops = designData.photoCrops ? (designData.photoCrops['page' + i] || designData.photoCrops[i]) : null;
+
+    return {
+      pageIndex: i,
+      layout,
+      variant,
+      texts,
+      images,
+      crops
+    };
+  });
+
+  // 4. Limpiar el orderPayload final: Eliminar arrays bidimensionales originales
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { photos, textBoxSlots, pageLayouts, pageLayoutVariants, photoCrops, ...restDesignData } = designData;
+
+  // 1. Construyes tu payload normal
   const orderPayload = {
     userId,
-    designData: {
-      ...designData,
-      coverData: {
-        ...designData.coverData,
-        image: coverImageUrl
-      },
-      photos: uploadedPhotos
-    },
-    orderDetails,
     status: 'mock_paid',
-    createdAt: serverTimestamp()
+    createdAt: new Date().toISOString(), // Usamos ISO string para evitar fallos con fechas
+    customization: designData.customization,
+    coverData: designData.coverData || null,
+    pages: formattedPages,
+    shippingAddress,
+    billingAddress
   };
 
-  // 4. Guardar en Firestore
-  const docRef = await addDoc(collection(db, 'orders'), orderPayload);
+  // 2. LO PASAS POR EL FILTRO PARA DESTRUIR LOS "UNDEFINED"
+  const finalPayload = sanitizeForFirestore(orderPayload);
+
+  // 3. Lo envías a Firebase
+  const docRef = await addDoc(collection(db, 'orders'), finalPayload);
+  
   return docRef.id;
 }
