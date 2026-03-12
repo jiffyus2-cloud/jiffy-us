@@ -1,8 +1,8 @@
 import { db, storage } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
-const sanitizeForFirestore = (obj: any): any => {
+export const sanitizeForFirestore = (obj: any): any => {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== 'object' || obj instanceof Date) return obj;
   if (Array.isArray(obj)) return obj.map(item => sanitizeForFirestore(item));
@@ -79,7 +79,10 @@ async function uploadImage(path: string, imageData: string): Promise<string> {
 export async function saveCompleteOrder(
   userId: string,
   designData: DesignData,
-  orderDetails: OrderDetails
+  orderDetails: OrderDetails,
+  product: any,
+  total: number,
+  status: string = 'mock_paid'
 ) {
   const { shippingAddress, billingAddress } = orderDetails;
   const timestamp = Date.now();
@@ -139,10 +142,15 @@ export async function saveCompleteOrder(
   // 1. Construyes tu payload normal
   const orderPayload = {
     userId,
-    status: 'mock_paid',
-    createdAt: new Date().toISOString(), // Usamos ISO string para evitar fallos con fechas
+    status,
+    product,
+    total,
+    createdAt: new Date().toISOString(), 
     customization: designData.customization,
-    coverData: designData.coverData || null,
+    coverData: {
+      ...designData.coverData,
+      image: coverImageUrl
+    },
     pages: formattedPages,
     shippingAddress,
     billingAddress
@@ -155,4 +163,21 @@ export async function saveCompleteOrder(
   const docRef = await addDoc(collection(db, 'orders'), finalPayload);
   
   return docRef.id;
+}
+
+export async function getUserOrders(userId: string) {
+  const ordersRef = collection(db, 'orders');
+  const q = query(
+    ordersRef,
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
+
+  const querySnapshot = await getDocs(q);
+  const orders: any[] = [];
+  querySnapshot.forEach((doc) => {
+    orders.push({ id: doc.id, ...doc.data() });
+  });
+
+  return orders;
 }

@@ -45,7 +45,7 @@ export default function PhotoOrganizer({
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [numPages, setNumPages] = useState(40);
+  const [numPages, setNumPages] = useState(customization.pages || 40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
@@ -119,17 +119,40 @@ export default function PhotoOrganizer({
 
   // 2. Distribute photos into pages
   const handleFinalizeSetup = () => {
-    const newPhotos: string[][] = [];
-    const photosToDistribute = [...uploadedPhotos];
-    
-    // Distribute photos evenly across pages
     const totalPages = Math.max(40, numPages);
-    let photosPerPage = Math.max(1, Math.ceil(photosToDistribute.length / totalPages));
-    photosPerPage = getClosestAllowed(photosPerPage);
+    const photosToDistribute = [...uploadedPhotos];
+    const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
+    // First round: ensure every page has at least one photo
     for (let i = 0; i < totalPages; i++) {
-      const pagePhotos = photosToDistribute.splice(0, photosPerPage);
-      newPhotos.push(pagePhotos);
+      if (photosToDistribute.length > 0) {
+        newPhotos[i].push(photosToDistribute.shift()!);
+      }
+    }
+
+    // Subsequent rounds: distribute remaining photos respecting allowed counts
+    let pageIndex = 0;
+    let consecutiveFullPages = 0;
+    
+    while (photosToDistribute.length > 0 && consecutiveFullPages < totalPages) {
+      const currentPagePhotos = newPhotos[pageIndex];
+      const currentCount = currentPagePhotos.length;
+      const nextAllowed = allowedPhotosPerPage.find(opt => opt > currentCount);
+      
+      if (nextAllowed) {
+        const canAdd = nextAllowed - currentCount;
+        const toAdd = Math.min(canAdd, photosToDistribute.length);
+        if (toAdd > 0) {
+          currentPagePhotos.push(...photosToDistribute.splice(0, toAdd));
+          consecutiveFullPages = 0; // Reset as we successfully added to a page
+        } else {
+          consecutiveFullPages++;
+        }
+      } else {
+        consecutiveFullPages++;
+      }
+      
+      pageIndex = (pageIndex + 1) % totalPages;
     }
 
     onPhotosChange(newPhotos);
@@ -368,6 +391,30 @@ export default function PhotoOrganizer({
     );
   }
 
+  const handleComplete = () => {
+    // Validar que todas las páginas tengan al menos una imagen o un cuadro de texto
+    const emptyPageIndices = photos.reduce((acc, pagePhotos, index) => {
+      const hasPhotos = pagePhotos.length > 0;
+      const hasText = textBoxSlots[index] && Object.keys(textBoxSlots[index]).length > 0;
+      
+      if (!hasPhotos && !hasText) {
+        acc.push(index + 1);
+      }
+      return acc;
+    }, [] as number[]);
+
+    if (emptyPageIndices.length > 0) {
+      alert(
+        `Tu álbum contiene páginas vacías (Página ${emptyPageIndices.join(', ')}). \n\nPor favor, añade al menos una foto o un texto a cada página antes de continuar al checkout.`
+      );
+      return;
+    }
+
+    if (onComplete) {
+      onComplete();
+    }
+  };
+
   // STEP: EDITOR (Vertical List)
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-12">
@@ -377,7 +424,7 @@ export default function PhotoOrganizer({
           <p className="text-gray-500">{photos.length} pages • {photos.flat().length} photos</p>
         </div>
         <button
-          onClick={onComplete}
+          onClick={handleComplete}
           className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium"
         >
           {t('organizer.complete') || 'Continue to Checkout'}
