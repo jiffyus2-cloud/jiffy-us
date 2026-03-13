@@ -4,6 +4,7 @@ import Creator from './components/Creator';
 import UserDashboard from './components/UserDashboard';
 import Checkout from './components/Checkout';
 import Success from './components/Success';
+import OwnerDashboard from './components/OwnerDashboard';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Header } from './components/navigation/Header';
@@ -62,5 +63,9 @@ export const router = createBrowserRouter([
   {
     path: '/success',
     element: <Success />,
+  },
+  {
+    path: '/owner-dashboard',
+    element: <OwnerDashboard />,
   },
 ]);
