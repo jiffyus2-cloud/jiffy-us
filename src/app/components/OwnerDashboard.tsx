@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 
 interface Order {
@@ -54,6 +56,7 @@ const OwnerDashboard: React.FC = () => {
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isZipping, setIsZipping] = useState<string | null>(null);
 
   const ownerKey = import.meta.env.VITE_OWNER_KEY || 'admin123';
 
@@ -145,14 +148,26 @@ const OwnerDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDownloadJSON = (order: Order) => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(order, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `pedido_${order.id}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+  const handleDownloadZIP = async (order: Order) => {
+    if (isZipping === order.id) return;
+    setIsZipping(order.id);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`pedido_${order.id}`);
+
+      if (!folder) {
+        throw new Error("No se pudo crear la carpeta en el ZIP.");
+      }
+
+      folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `pedido_${order.id}.zip`);
+    } catch (error) {
+      console.error("Error al crear el archivo ZIP:", error);
+    } finally {
+      setIsZipping(null);
+    }
   };
 
   if (!isAuthenticated) {
@@ -305,10 +320,12 @@ const OwnerDashboard: React.FC = () => {
                             <Eye className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => handleDownloadJSON(order)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors title='Descargar JSON'"
+                            onClick={() => handleDownloadZIP(order)}
+                            disabled={isZipping === order.id}
+                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title='Descargar ZIP'
                           >
-                            <Download className="w-5 h-5" />
+                            {isZipping === order.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                           </button>
                         </div>
                       </td>
