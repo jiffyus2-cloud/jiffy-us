@@ -56,7 +56,7 @@ const OwnerDashboard: React.FC = () => {
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isZipping, setIsZipping] = useState<string | null>(null);
+  const [isDownloadingId, setIsDownloadingId] = useState<string | null>(null);
 
   const ownerKey = import.meta.env.VITE_OWNER_KEY || 'admin123';
 
@@ -149,8 +149,8 @@ const OwnerDashboard: React.FC = () => {
   };
 
   const handleDownloadZIP = async (order: Order) => {
-    if (isZipping === order.id) return;
-    setIsZipping(order.id);
+    if (isDownloadingId === order.id) return;
+    setIsDownloadingId(order.id);
     try {
       const zip = new JSZip();
       const folder = zip.folder(`pedido_${order.id}`);
@@ -159,14 +159,70 @@ const OwnerDashboard: React.FC = () => {
         throw new Error("No se pudo crear la carpeta en el ZIP.");
       }
 
+      // Guardar el JSON crudo
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
+
+      // Crear subcarpeta para imágenes
+      const imgFolder = folder.folder('imagenes');
+      if (!imgFolder) {
+        throw new Error("No se pudo crear la subcarpeta de imágenes.");
+      }
+
+      // Función auxiliar para descargar imágenes como blob
+      const fetchImageAsBlob = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Error al descargar la imagen: ${url} (estado: ${res.status})`);
+        }
+        return res.blob();
+      };
+
+      const imagePromises: Promise<void>[] = [];
+
+      // Añadir promesa para la portada
+      if (order.coverData?.image) {
+        imagePromises.push(
+          fetchImageAsBlob(order.coverData.image).then(blob => {
+            imgFolder.file('portada.jpg', blob);
+          }).catch(e => console.error(`Error descargando portada para pedido ${order.id}:`, e))
+        );
+      }
+
+      // Añadir promesas para las páginas
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          
+          // Ahora sabemos que tus fotos viven dentro del array page.images
+          if (page.images && Array.isArray(page.images) && page.images.length > 0) {
+            
+            // Recorremos cada imagen dentro de esa página
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
+                imagePromises.push(
+                  fetchImageAsBlob(imgUrl).then(blob => {
+                    // Guardamos la foto indicando su página y su orden. Ej: pagina_01_foto_1.jpg
+                    imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob);
+                  }).catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e))
+                );
+              }
+            });
+
+          } else {
+            // Si la página se guardó sin fotos, es normal, pero lo dejamos en consola por si acaso
+            console.log(`La página ${pageIndex + 1} no tiene fotos en su arreglo 'images'.`);
+          }
+        });
+      }
+
+      await Promise.all(imagePromises);
 
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `pedido_${order.id}.zip`);
-    } catch (error) {
-      console.error("Error al crear el archivo ZIP:", error);
+    } catch (error: any) {
+      console.error("Error al descargar el ZIP:", error);
+      alert("Hubo un problema al empaquetar las imágenes: " + (error.message || 'Error desconocido'));
     } finally {
-      setIsZipping(null);
+      setIsDownloadingId(null);
     }
   };
 
@@ -321,11 +377,11 @@ const OwnerDashboard: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleDownloadZIP(order)}
-                            disabled={isZipping === order.id}
+                            disabled={isDownloadingId === order.id}
                             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title='Descargar ZIP'
                           >
-                            {isZipping === order.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                            {isDownloadingId === order.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                           </button>
                         </div>
                       </td>
