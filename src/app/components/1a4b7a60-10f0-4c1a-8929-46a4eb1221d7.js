@@ -1,25 +1,22 @@
 import { useEffect, useState } from 'react';
-// IMPORTACIÓN CLAVE: Estrictamente desde 'react-router' para evitar conflictos
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 
 export default function Success() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isVerifying, setIsVerifying] = useState(true);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState(null);
 
   useEffect(() => {
-    // Leemos la URL con JavaScript nativo, a prueba de fallos
-    const searchParams = new URLSearchParams(window.location.search);
     const sessionId = searchParams.get('session_id');
     const orderId = localStorage.getItem('pending_order_id');
 
+    // Solo intentamos confirmar si tenemos ambos IDs.
     if (sessionId && orderId) {
       const confirmPayment = async () => {
         try {
-          // Llamada a tu backend en la nube
+          // Llamada al backend para verificar la sesión de Stripe y actualizar Firebase.
           const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/confirm-payment', {
             method: 'POST',
             headers: {
@@ -33,27 +30,17 @@ export default function Success() {
             throw new Error(errorData.message || 'No se pudo verificar el pago.');
           }
 
-          // El pago fue verificado por el backend. Ahora actualizamos Firestore.
-          try {
-            const orderRef = doc(db, 'orders', orderId);
-            await updateDoc(orderRef, { 
-              status: 'paid',
-              updatedAt: new Date().toISOString() 
-            });
-          } catch (firestoreError) {
-            console.error(
-              `El pago para la orden ${orderId} fue validado, pero la actualización en Firestore falló.`,
-              firestoreError
-            );
-            // No bloqueamos al usuario, ya que el pago está confirmado.
-          }
-
-          // Si todo va bien, limpiamos el ID del localStorage
+          // Si todo va bien, limpiamos el ID del localStorage.
           localStorage.removeItem('pending_order_id');
           setVerificationError(null);
-        } catch (error: any) {
+        } catch (error) {
           console.error('Error confirming payment:', error);
-          setVerificationError(error.message || 'Ocurrió un error al confirmar tu pedido.');
+          let message = 'Ocurrió un error al confirmar tu pedido.';
+          if (error instanceof Error) {
+            message = error.message;
+          }
+          setVerificationError(message);
+          // Limpiamos el ID también en caso de error para evitar reintentos en cada recarga.
           localStorage.removeItem('pending_order_id');
         } finally {
           setIsVerifying(false);
@@ -62,43 +49,31 @@ export default function Success() {
 
       confirmPayment();
     } else {
+      // Si no hay IDs en la URL/localStorage, no hay nada que verificar.
       setIsVerifying(false);
     }
-  }, []);
+  }, [searchParams]);
 
   const VerificationStatus = () => {
     if (isVerifying) {
       return (
-        <div className="flex items-center justify-center gap-3 text-lg text-gray-600 mb-8">
+        <div className="flex items-center gap-3 text-lg text-gray-600">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Verificando tu pago con Stripe...</span>
+          <span>Verificando tu pago...</span>
         </div>
       );
     }
-    return null; 
+    return null; // No mostramos nada si la verificación fue exitosa o no fue necesaria.
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
       <CheckCircle className="w-20 h-20 text-green-500 mb-6" />
       <h1 className="text-4xl font-bold mb-4">¡Pedido realizado con éxito!</h1>
       <p className="text-xl text-gray-600 mb-8 max-w-md">
         Tu pedido ha sido guardado y estamos procesando tu creación. 
         Recibirás un correo de confirmación en breve.
       </p>
-
-      <VerificationStatus />
-
-      {verificationError && (
-        <div className="mt-4 mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left">
-          <AlertTriangle className="w-8 h-8 flex-shrink-0" />
-          <div>
-            <p className="font-bold">¡Atención!</p>
-            <p className="text-sm">{verificationError} Tu pedido fue guardado, pero no pudimos actualizar el estado del pago automáticamente. Por favor, contacta a soporte.</p>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col sm:flex-row gap-4">
         <button
           onClick={() => navigate('/dashboard')}
@@ -112,6 +87,19 @@ export default function Success() {
         >
           Volver al inicio
         </button>
+      </div>
+
+      <div className="mt-12">
+        <VerificationStatus />
+        {verificationError && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left">
+            <AlertTriangle className="w-8 h-8 flex-shrink-0" />
+            <div>
+              <p className="font-bold">¡Atención!</p>
+              <p className="text-sm">{verificationError} Tu pedido fue guardado, pero no pudimos actualizar el estado del pago automáticamente. Por favor, contacta a soporte si el problema persiste.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

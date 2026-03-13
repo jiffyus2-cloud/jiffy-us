@@ -368,7 +368,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block flex items-center gap-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2">
                     <ALargeSmall className="w-4 h-4" /> Size
                   </label>
                   <select

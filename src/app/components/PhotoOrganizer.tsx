@@ -61,7 +61,7 @@ export default function PhotoOrganizer({
     return allowedPhotosPerPage.find(opt => opt >= count) || allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
   };
 
-  const getGridLayout = (count: number, layout?: 'row' | 'column') => {
+  const getGridLayout = (count: number, layout?: 'row' | 'column' | 'grid') => {
     if (count === 1) return 'grid-cols-1';
     if (count === 2) {
       if (layout === 'column') return 'grid-cols-1 grid-rows-2';
@@ -740,7 +740,7 @@ export default function PhotoOrganizer({
               {/* Typography Options */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block flex items-center gap-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2">
                     <ALargeSmall className="w-4 h-4" /> {t('organizer.size') || 'Size'}
                   </label>
                   <select

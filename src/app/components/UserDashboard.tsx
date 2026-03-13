@@ -201,7 +201,7 @@ const UserDashboard: React.FC = () => {
                 <CardFooter className="p-5 pt-0">
                   <button 
                     onClick={() => handleViewDetails(order)}
-                    className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium transition-colors shadow-sm hover:shadow-md active:scale-95 transition-all"
+                    className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 "
                   >
                     Ver Detalles
                   </button>
