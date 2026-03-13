@@ -217,33 +217,38 @@ export default function Checkout() {
       localStorage.setItem('pending_order_id', orderId);
 
       // 4. Llamada a tu Backend en Google Cloud (con la corrección matemática de centavos)
-      const response = await fetch('https://jiffy-us-938778636106.europe-west1.run.app/stripe/create-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: Math.round(total * 100), // Solución del error 400 de Stripe
-          productName: product.name,
-          orderId: orderId,
-        }),
-      });
+      // ... tu código fetch anterior ...
+     // 4. Llamada a tu Backend en Google Cloud
+     const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/create-checkout', {
+      method: 'POST', // <-- ¡Esto es lo que nos faltaba en el intento anterior!
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: Math.round(total * 100), 
+        title: product.name || 'Álbum Jiffy', 
+        orderId: orderId,
+      }),
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al crear la sesión de pago');
-      }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Error al crear la sesión de pago');
+    }
 
-      const { sessionId } = await response.json();
+    // Extraemos la respuesta completa del Backend
+    const sessionData = await response.json();
 
-      // 5. Redirección a Stripe Checkout
-      const stripe: any = await stripePromise;
-      if (!stripe) throw new Error('No se pudo cargar Stripe');
-      
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      if (error) throw error;
+    // El objeto que devuelve Stripe desde el Backend contiene la 'url' directa
+    if (sessionData && sessionData.url) {
+      // ¡Viaje directo a Stripe usando JavaScript nativo!
+      window.location.href = sessionData.url;
+    } else {
+      throw new Error('El servidor no devolvió la URL de pago de Stripe.');
+    }
 
     } catch (error: any) {
+      // ... tu código catch anterior ...
       console.error('Error en el proceso de pago:', error);
       setErrorMessage(error.message || 'Hubo un error al procesar el pago. Por favor intenta de nuevo.');
       setIsProcessing(false);
