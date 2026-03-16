@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2 } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -13,6 +13,7 @@ import PhotoPackOrganizer from './PhotoPackOrganizer';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
+import { createDraftOrder } from '../../services/orderService';
 
 type Step = 'product' | 'customization' | 'organize' | 'checkout';
 
@@ -22,8 +23,9 @@ export default function Creator() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
+  const [isSaving, setIsSaving] = useState(false); // <-- NUEVO ESTADO DE CARGA
 
-  const handleCheckoutRedirect = (finalData?: { 
+  const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
     mugItems?: MugItem[], 
     textBoxSlots?: Record<number, Record<number, any>> 
@@ -33,64 +35,79 @@ export default function Creator() {
       return;
     }
 
-    const activeProduct = getActiveProduct();
-    const activeCustomization = getActiveCustomization();
-    
-    // Determine which photos to use (passed data or current state)
-    let currentPhotosRaw = finalData?.photos || getActivePhotos();
-    
-    // Normalize photos to string[][] for the backend/checkout
-    let photos: string[][] = [];
-    if (Array.isArray(currentPhotosRaw)) {
-      if (currentPhotosRaw.length > 0 && typeof currentPhotosRaw[0] === 'string') {
-        // Flat array (Calendar, PhotoPack) -> convert to nested
-        photos = (currentPhotosRaw as string[]).map(p => [p]);
-      } else {
-        // Already nested or empty
-        photos = currentPhotosRaw as string[][];
+    setIsSaving(true); // <-- ENCENDEMOS EL SPINNER
+
+    try {
+      const activeProduct = getActiveProduct();
+      const activeCustomization = getActiveCustomization();
+      
+      let currentPhotosRaw = finalData?.photos || getActivePhotos();
+      
+      let photos: string[][] = [];
+      if (Array.isArray(currentPhotosRaw)) {
+        if (currentPhotosRaw.length > 0 && typeof currentPhotosRaw[0] === 'string') {
+          photos = (currentPhotosRaw as string[]).map(p => [p]);
+        } else {
+          photos = currentPhotosRaw as string[][];
+        }
       }
-    }
 
-    let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
-    let currentTextBoxSlots = finalData?.textBoxSlots || (selectedProduct === 'mug' ? textBoxSlots : {});
+      let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
+      let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; // <-- FIX TEXTOS
 
-    // Prepare coverData for Checkout preview
-    let coverData = { image: '', title: '' };
-    if (selectedProduct === 'album' && (customization as any)?.coverContent) {
-      coverData = {
-        image: (customization as any).coverContent.coverImage,
-        title: (customization as any).coverContent.coverTitle
+      // Preparamos coverData asegurando TODOS los datos (crop, año, layout)
+      let coverData: any = { image: '', title: '' };
+      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
+        const content = (activeCustomization as any).coverContent;
+        coverData = {
+          image: content.coverImage || '',
+          title: content.coverTitle || '',
+          subtitle: content.coverSubtitle || '',
+          year: content.coverYear || '',
+          layout: content.selectedLayout || 1,
+          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
+        };
+      } else if (activeProduct) {
+        coverData = {
+          image: '', 
+          title: activeProduct.name
+        };
+      }
+
+      const activePhotoCrops = selectedProduct === 'album' ? photoCrops 
+                             : selectedProduct === 'calendar' ? calendarPhotoCrops
+                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
+                             : {};
+
+      const designData = {
+        photos,
+        pageLayouts,
+        pageLayoutVariants,
+        textBoxSlots: currentTextBoxSlots,
+        customization: activeCustomization,
+        coverData,
+        photoCrops: activePhotoCrops,
+        mugItems: currentMugItems
       };
-    } else if (activeProduct) {
-      coverData = {
-        image: '', // Default or placeholder
-        title: activeProduct.name
-      };
+
+      // 1. LLAMADA A FIREBASE (Guarda json y sube las fotos)
+      const orderId = await createDraftOrder(user.uid, designData, activeProduct);
+
+      // 2. VIAJAMOS AL CHECKOUT SOLO CON EL ID
+      navigate('/checkout', { 
+        state: { 
+          orderId,
+          product: activeProduct,
+          productType: selectedProduct
+        } 
+      });
+
+    } catch (error) {
+      console.error("Error al guardar el diseño:", error);
+      alert("Hubo un problema al procesar tus imágenes. Por favor intenta de nuevo.");
+    } finally {
+      setIsSaving(false); // <-- APAGAMOS EL SPINNER
     }
-
-    const activePhotoCrops = selectedProduct === 'album' ? photoCrops 
-                           : selectedProduct === 'calendar' ? calendarPhotoCrops
-                           : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
-                           : {};
-
-    const designData = {
-      photos,
-      pageLayouts,
-      pageLayoutVariants,
-      textBoxSlots: currentTextBoxSlots,
-      customization: activeCustomization,
-      coverData,
-      photoCrops: activePhotoCrops,
-      mugItems: currentMugItems
-    };
-
-    navigate('/checkout', { 
-      state: { 
-        designData,
-        product: activeProduct,
-        productType: selectedProduct
-      } 
-    });
   };
 
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
@@ -144,11 +161,6 @@ export default function Creator() {
   const handlePhotoPackCustomizationComplete = (options: PhotoPackCustomizationOptions) => {
     setPhotoPackCustomization(options);
     setCurrentStep('organize');
-  };
-
-  const handlePhotosComplete = (uploadedPhotos: string[][]) => {
-    setPhotos(uploadedPhotos);
-    handleCheckoutRedirect({ photos: uploadedPhotos });
   };
 
   const handleCalendarPhotosComplete = (uploadedPhotos: string[]) => {
@@ -330,7 +342,7 @@ export default function Creator() {
           onPageLayoutsChange={setPageLayouts}
           pageLayoutVariants={pageLayoutVariants}
           onPageLayoutVariantsChange={setPageLayoutVariants}
-          onComplete={() => handlePhotosComplete(photos)}
+          onComplete={() => handleCheckoutRedirect()}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
@@ -487,6 +499,19 @@ export default function Creator() {
       {currentStep === 'customization' && renderCustomization()}
       
       {currentStep === 'organize' && renderOrganizer()}
+
+      {/* Loading Overlay */}
+      {isSaving && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white px-4">
+          <div className="bg-white/10 p-8 rounded-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <Loader2 className="w-12 h-12 animate-spin text-white" />
+            <div className="text-center">
+              <h3 className="text-xl font-bold mb-1">Guardando tu diseño...</h3>
+              <p className="text-white/70">Estamos preparando todo para el pago. No cierres esta ventana.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

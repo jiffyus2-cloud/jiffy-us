@@ -45,7 +45,7 @@ export default function PhotoOrganizer({
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [numPages, setNumPages] = useState(customization.pages || 40);
+  const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   

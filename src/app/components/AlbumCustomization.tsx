@@ -11,7 +11,6 @@ export interface CustomizationOptions {
   coverColor: string;
   typographyColor: string;
   paperType: 'Mate' | 'Brillante';
-  pages: number;
   coverContent: {
     coverImage: string;
     coverTitle: string;
@@ -81,7 +80,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   };
 
   const [paperType, setPaperType] = useState<'Mate' | 'Brillante'>('Mate');
-  const [pages, setPages] = useState(album.pages || 40);
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
     coverTitle: t('album.defaultTitle'),
@@ -99,7 +97,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
       coverColor,
       typographyColor,
       paperType,
-      pages,
       coverContent,
     });
   };
@@ -293,33 +290,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           </div>
         </div>
 
-        {/* Número de Páginas */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.numPages')}</h3>
-          <div className="max-w-md space-y-4">
-            <div className="flex justify-between items-center bg-gray-50 p-6 rounded-lg border-2 border-gray-100">
-              <span className="text-xl font-medium">{t('album.pagesCount')}</span>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setPages(Math.max(40, pages - 2))}
-                  className="w-10 h-10 rounded-full border-2 border-black flex items-center justify-center hover:bg-black hover:text-white transition-all text-xl font-bold"
-                >
-                  -
-                </button>
-                <span className="text-2xl font-bold w-12 text-center">{pages}</span>
-                <button
-                  onClick={() => setPages(Math.min(100, pages + 2))}
-                  className="w-10 h-10 rounded-full border-2 border-black flex items-center justify-center hover:bg-black hover:text-white transition-all text-xl font-bold"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 italic">
-              {t('album.pagesLimitDesc') || 'Mínimo 40 páginas, máximo 100 páginas (incrementos de 2)'}
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* Continue Button */}

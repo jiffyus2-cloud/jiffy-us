@@ -1,18 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
-import { saveCompleteOrder } from '../../services/orderService';
+import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
-import type { Album, Calendar, MugProduct, PhotoPack } from '../types/products';
-
-// Configuración de Stripe y Backend mediante variables de entorno con fallbacks
-const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_51T9a093Pe5TEvfZ9b4qRxjsXCyTqa4TJBrpg0W8XBvGRx8vTiOzmGeBebqhK1Q3asgg3e9RNXkieH2RmTUfkxvY500R14E9ytM';
-const API_URL = import.meta.env.VITE_API_URL || 'https://jiffy-us-938778636106.europe-west1.run.app';
-
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
-
-type Product = Album | Calendar | MugProduct | PhotoPack;
 
 export default function Checkout() {
   const { state } = useLocation();
@@ -21,46 +11,9 @@ export default function Checkout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // designData incluye customization, coverData, photos, pageLayouts, textBoxSlots, photoCrops
-  const [designData, setDesignData] = useState(state?.designData || null);
-  const [product, setProduct] = useState<Product | null>(state?.product || null);
-
-  // Persistencia en sessionStorage para evitar pérdida de datos al refrescar
-  useEffect(() => {
-    if (state?.designData && state?.product) {
-      try {
-        // Intenta guardar los datos del diseño y producto en sessionStorage.
-        // Esto puede fallar si los datos (especialmente imágenes en base64) son demasiado grandes.
-        sessionStorage.setItem('pending_checkout_design', JSON.stringify(state.designData));
-        sessionStorage.setItem('pending_checkout_product', JSON.stringify(state.product));
-      } catch (error) {
-        if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
-          // Si se excede la cuota, la app no se romperá, pero los datos no persistirán si se refresca la página.
-          // Se muestra una advertencia en la consola para el desarrollador, sin interrumpir al usuario.
-          console.warn(
-            "Advertencia: No se pudieron guardar los datos del pedido en sessionStorage porque exceden el límite de tamaño. " +
-            "Si el usuario refresca la página, se perderán los datos del checkout."
-          );
-        } else {
-          console.error("Error inesperado al guardar en sessionStorage:", error);
-        }
-      }
-    } else {
-      const savedDesign = sessionStorage.getItem('pending_checkout_design');
-      const savedProduct = sessionStorage.getItem('pending_checkout_product');
-      if (savedDesign && savedProduct) {
-        try {
-          setDesignData(JSON.parse(savedDesign));
-          setProduct(JSON.parse(savedProduct));
-        } catch (parseError) {
-          console.error("Error al parsear los datos de sessionStorage:", parseError);
-          // Limpiar datos corruptos para evitar futuros errores
-          sessionStorage.removeItem('pending_checkout_design');
-          sessionStorage.removeItem('pending_checkout_product');
-        }
-      }
-    }
-  }, [state]);
+  // Nuevos estados para el flujo en dos pasos
+  const [orderData, setOrderData] = useState<any>(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -68,7 +21,6 @@ export default function Checkout() {
     address: '',
     city: '',
     zipCode: '',
-    // Billing
     billingName: '',
     billingAddress: '',
     billingCity: '',
@@ -83,7 +35,37 @@ export default function Checkout() {
     }
   }, [user, formData.email]);
 
-  if (!designData || !product) {
+  // Efecto que busca los datos del pedido en Firebase al entrar
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      if (!state?.orderId) {
+        setIsLoadingOrder(false);
+        return;
+      }
+      try {
+        const data = await getOrder(state.orderId);
+        setOrderData(data);
+      } catch (error) {
+        console.error("Error fetching order:", error);
+      } finally {
+        setIsLoadingOrder(false);
+      }
+    };
+    
+    fetchOrderDetails();
+  }, [state?.orderId]);
+
+  if (isLoadingOrder) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+        <Loader2 className="w-12 h-12 animate-spin text-gray-400 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-700">Recuperando tu diseño...</h2>
+        <p className="text-gray-500 mt-2">Estamos preparando tu resumen de compra.</p>
+      </div>
+    );
+  }
+
+  if (!orderData || !state?.orderId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <AlertCircle className="w-16 h-16 text-gray-400 mb-4" />
@@ -101,45 +83,21 @@ export default function Checkout() {
     );
   }
 
+  // Ahora todo se lee de orderData (lo que vino de Firebase)
+  const product = orderData.product;
+
   const calculateTotal = () => {
-    if (!product || !designData) {
-      return 0;
-    }
-
-    const basePrice = (product as any).basePrice || 0;
-
-    // El objeto 'product' del estado debe tener una propiedad 'type'.
-    switch ((product as any).type) {
-      case 'album':
-        // El precio podría depender del tamaño o las páginas, pero asumimos el precio base por ahora.
-        // Esta lógica se puede expandir.
-        return basePrice;
-
-      case 'calendar':
-        // El precio del calendario es probablemente fijo.
-        return basePrice;
-
+    const basePrice = product?.basePrice || product?.price || 0;
+    switch (product?.type) {
       case 'mug': {
-        const material = designData.customization?.material;
-        let materialSurcharge = 0;
-        // Esta lógica se basa en MugCustomization.tsx y debe mantenerse sincronizada.
-        if (material === 'porcelain') materialSurcharge = 3;
-        else if (material === 'stainless-steel') materialSurcharge = 4;
-        
-        const pricePerMug = basePrice + materialSurcharge;
-        const numberOfMugs = designData.mugItems?.length || 0;
-        return pricePerMug * numberOfMugs;
+        const material = orderData.customization?.material;
+        let materialSurcharge = material === 'porcelain' ? 3 : (material === 'stainless-steel' ? 4 : 0);
+        return (basePrice + materialSurcharge) * (orderData.items?.length || 1);
       }
-
-      case 'photo-pack': {
-        // Para los paquetes de fotos, el precio base es por foto.
-        const numberOfPhotos = designData.photos?.length || 0;
-        return basePrice * numberOfPhotos;
-      }
-
+      case 'photo-pack':
+        return basePrice * (orderData.photos?.length || 0);
       default:
-        // Fallback para tipos desconocidos o productos con un campo 'price' simple.
-        return (product as any).price || basePrice;
+        return basePrice;
     }
   };
 
@@ -155,20 +113,6 @@ export default function Checkout() {
     if (!user) {
       setErrorMessage('Debes iniciar sesión para completar tu pedido.');
       return;
-    }
-
-    // Validar que no haya páginas vacías en el álbum antes de proceder.
-    // Esto asegura que se cumpla la regla de negocio de tener al menos una foto por página.
-    if ((product as any)?.type === 'album' && Array.isArray(designData?.photos)) {
-      const hasEmptyPages = designData.photos.some(
-        (page: unknown[]) => Array.isArray(page) && page.length === 0
-      );
-      if (hasEmptyPages) {
-        setErrorMessage(
-          'Tu álbum contiene páginas vacías. Por favor, vuelve a la edición y asegúrate de que cada página tenga al menos una foto.'
-        );
-        return;
-      }
     }
 
     setIsProcessing(true);
@@ -190,65 +134,34 @@ export default function Checkout() {
         zipCode: formData.billingZipCode,
       };
 
-      // 1. EL FILTRO ESTRICTO: Reconstruimos 'customization' solo con texto puro
-      const cleanCustomization = {
-        size: designData?.customization?.size ? String(designData.customization.size) : '',
-        material: designData?.customization?.material ? String(designData.customization.material) : '',
-        // Se ignoran clases de React, objetos File o arrays anidados que causan el error
-      };
+      // 1. Actualizamos las direcciones y el total en Firestore
+      await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
 
-      // Clonamos el diseño, pero le inyectamos nuestra versión desinfectada
-      const cleanDesignData = {
-        ...designData,
-        customization: cleanCustomization
-      };
+      // 2. Llamada directa a tu Backend de Stripe en Cloud Run
+      const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Math.round(total * 100), 
+          title: product.name || 'Álbum Jiffy', 
+          orderId: state.orderId,
+        }),
+      });
 
-      // 2. Guardar el pedido completo en Firestore con la data limpia
-      const orderId = await saveCompleteOrder(
-        user.uid,
-        cleanDesignData,
-        { shippingAddress, billingAddress },
-        product,
-        total,
-        'pending_payment'
-      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al crear la sesión de pago');
+      }
 
-      // 3. Guardar el ID en localStorage
-      localStorage.setItem('pending_order_id', orderId);
+      const sessionData = await response.json();
 
-      // 4. Llamada a tu Backend en Google Cloud (con la corrección matemática de centavos)
-      // ... tu código fetch anterior ...
-     // 4. Llamada a tu Backend en Google Cloud
-     const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/create-checkout', {
-      method: 'POST', // <-- ¡Esto es lo que nos faltaba en el intento anterior!
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: Math.round(total * 100), 
-        title: product.name || 'Álbum Jiffy', 
-        orderId: orderId,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Error al crear la sesión de pago');
-    }
-
-    // Extraemos la respuesta completa del Backend
-    const sessionData = await response.json();
-
-    // El objeto que devuelve Stripe desde el Backend contiene la 'url' directa
-    if (sessionData && sessionData.url) {
-      // ¡Viaje directo a Stripe usando JavaScript nativo!
-      window.location.href = sessionData.url;
-    } else {
-      throw new Error('El servidor no devolvió la URL de pago de Stripe.');
-    }
+      if (sessionData && sessionData.url) {
+        window.location.href = sessionData.url;
+      } else {
+        throw new Error('El servidor no devolvió la URL de pago de Stripe.');
+      }
 
     } catch (error: any) {
-      // ... tu código catch anterior ...
       console.error('Error en el proceso de pago:', error);
       setErrorMessage(error.message || 'Hubo un error al procesar el pago. Por favor intenta de nuevo.');
       setIsProcessing(false);
@@ -267,11 +180,11 @@ export default function Checkout() {
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
       <div className="flex items-center gap-4 mb-8">
         <button 
-          onClick={() => navigate('/create', { state: { designData, product } })}
+          onClick={() => navigate('/create')}
           className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black"
         >
           <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Volver a la edición</span>
+          <span className="font-medium">Volver</span>
         </button>
       </div>
 
@@ -295,10 +208,10 @@ export default function Checkout() {
                 <span className="text-gray-600">Producto</span>
                 <span className="font-medium text-right">{product.name}</span>
               </div>
-              {designData.customization?.size && (
+              {orderData.customization?.size && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tamaño</span>
-                  <span>{designData.customization.size}</span>
+                  <span>{orderData.customization.size}</span>
                 </div>
               )}
             </div>
@@ -325,22 +238,25 @@ export default function Checkout() {
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">Vista previa de la portada</p>
-              <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100">
-                {designData.coverData.image && (
+            {/* Vista previa segura, solo si existe coverData o product image */}
+            {(orderData.coverData?.image || product?.image) && (
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">Vista previa</p>
+                <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100">
                   <img
-                    src={designData.coverData.image}
-                    alt="Portada del álbum"
+                    src={orderData.coverData?.image || product.image}
+                    alt="Vista previa"
                     className="w-full h-full object-cover"
                   />
+                </div>
+                {orderData.coverData?.title && (
+                  <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>
+                )}
+                {orderData.coverData?.subtitle && (
+                  <p className="text-center text-sm text-gray-500">{orderData.coverData.subtitle}</p>
                 )}
               </div>
-              <p className="text-center mt-3 font-semibold text-gray-800">{designData.coverData.title}</p>
-              {designData.coverData.subtitle && (
-                <p className="text-center text-sm text-gray-500">{designData.coverData.subtitle}</p>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
