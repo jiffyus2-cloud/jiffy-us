@@ -36,6 +36,11 @@ interface Order {
     subtitle?: string;
     year?: string;
     layout?: number | string;
+    crop?: {
+      x?: number;
+      y?: number;
+      zoom?: number;
+    };
   };
   customization?: any;
   pages?: any[];
@@ -185,7 +190,7 @@ const OwnerDashboard: React.FC = () => {
       const wsResumen = XLSX.utils.json_to_sheet(resumenData);
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
-      // HOJA 2: Configuración del Producto (Portada y Materiales)
+      // HOJA 2: Configuración del Producto
       const configData = [{
         'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
         'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
@@ -198,10 +203,9 @@ const OwnerDashboard: React.FC = () => {
       const wsConfig = XLSX.utils.json_to_sheet(configData);
       XLSX.utils.book_append_sheet(wb, wsConfig, "Configuración");
 
-      // HOJA 3: Detalles Internos (Páginas o Tazas)
+      // HOJA 3: Detalles Internos (Textos y Layouts)
       let detallesData: any[] = [];
       if (order.pages && Array.isArray(order.pages)) {
-        // Formato Álbum
         detallesData = order.pages.map((page, i) => ({
           'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
           'Layout (Filas/Cols)': page.layout || 'N/A',
@@ -211,7 +215,6 @@ const OwnerDashboard: React.FC = () => {
             : 'Sin textos'
         }));
       } else if (order.items && Array.isArray(order.items)) {
-        // Formato Tazas/Mugs
         detallesData = order.items.map((item, i) => ({
           'Taza Número': i + 1,
           'Texto Impreso': item.text || 'Sin texto',
@@ -226,19 +229,76 @@ const OwnerDashboard: React.FC = () => {
         XLSX.utils.book_append_sheet(wb, wsDetalles, "Detalles del Diseño");
       }
 
+      // HOJA 4: Reporte Exacto de Imágenes y Crops (NUEVO)
+      const imagenesData: any[] = [];
+
+      // Extraer datos de la Portada
+      if (order.coverData?.image) {
+        imagenesData.push({
+          'Ubicación': 'Portada',
+          'Nombre de Archivo en ZIP': 'portada.jpg',
+          'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00',
+          'Posición X (%)': order.coverData.crop?.x?.toFixed(2) || '50.00',
+          'Posición Y (%)': order.coverData.crop?.y?.toFixed(2) || '50.00',
+          'URL Original': order.coverData.image
+        });
+      }
+
+      // Extraer datos de las páginas del álbum
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          if (page.images && Array.isArray(page.images)) {
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              // Lógica robusta para buscar el crop ya sea en la página o en la raíz (pedidos viejos)
+              const crop = page.crops?.[imgIndex] || order.photoCrops?.[`${pageIndex}-${imgIndex}`] || { x: 50, y: 50, zoom: 1 };
+              imagenesData.push({
+                'Ubicación': `Página ${pageIndex + 1}`,
+                'Nombre de Archivo en ZIP': `pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
+                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00',
+                'Posición X (%)': crop.x?.toFixed(2) || '50.00',
+                'Posición Y (%)': crop.y?.toFixed(2) || '50.00',
+                'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
+              });
+            });
+          }
+        });
+      } 
+      // Extraer datos si es una taza u otro producto
+      else if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item, itemIndex) => {
+          if (item.photos && Array.isArray(item.photos)) {
+            item.photos.forEach((imgUrl: any, imgIndex: number) => {
+              const crop = item.photoCrops?.[imgIndex] || item.crop || { x: 50, y: 50, zoom: 1 };
+              imagenesData.push({
+                'Ubicación': `Taza ${itemIndex + 1}`,
+                'Nombre de Archivo en ZIP': `taza_${String(itemIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
+                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00',
+                'Posición X (%)': crop.x?.toFixed(2) || '50.00',
+                'Posición Y (%)': crop.y?.toFixed(2) || '50.00',
+                'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
+              });
+            });
+          }
+        });
+      }
+
+      if (imagenesData.length > 0) {
+        const wsImagenes = XLSX.utils.json_to_sheet(imagenesData);
+        XLSX.utils.book_append_sheet(wb, wsImagenes, "Reporte de Imágenes");
+      }
+
       // Generar el archivo en buffer e inyectarlo en el ZIP
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       folder.file('resumen_pedido.xlsx', excelBuffer);
       // ==========================================
 
 
-      // 3. Crear subcarpeta para imágenes
+      // 3. Crear subcarpeta para imágenes físicas
       const imgFolder = folder.folder('imagenes');
       if (!imgFolder) {
         throw new Error("No se pudo crear la subcarpeta de imágenes.");
       }
 
-      // Función auxiliar para descargar imágenes como blob
       const fetchImageAsBlob = async (url: string) => {
         const res = await fetch(url);
         if (!res.ok) {
@@ -249,16 +309,16 @@ const OwnerDashboard: React.FC = () => {
 
       const imagePromises: Promise<void>[] = [];
 
-      // Añadir promesa para la portada
+      // Descargar Portada
       if (order.coverData?.image) {
         imagePromises.push(
           fetchImageAsBlob(order.coverData.image).then(blob => {
             imgFolder.file('portada.jpg', blob);
-          }).catch(e => console.error(`Error descargando portada para pedido ${order.id}:`, e))
+          }).catch(e => console.error(`Error descargando portada:`, e))
         );
       }
 
-      // Añadir promesas para las páginas
+      // Descargar Páginas
       if (order.pages && Array.isArray(order.pages)) {
         order.pages.forEach((page, pageIndex) => {
           if (page.images && Array.isArray(page.images) && page.images.length > 0) {
