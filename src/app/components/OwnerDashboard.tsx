@@ -8,6 +8,7 @@ import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
 import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
+import * as XLSX from 'xlsx';
 
 interface Order {
   id: string;
@@ -33,6 +34,8 @@ interface Order {
     image?: string;
     title?: string;
     subtitle?: string;
+    year?: string;
+    layout?: number | string;
   };
   customization?: any;
   pages?: any[];
@@ -159,10 +162,77 @@ const OwnerDashboard: React.FC = () => {
         throw new Error("No se pudo crear la carpeta en el ZIP.");
       }
 
-      // Guardar el JSON crudo
+      // 1. Guardar el JSON crudo (Para respaldo técnico)
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
-      // Crear subcarpeta para imágenes
+      // ==========================================
+      // 2. CREAR EL ARCHIVO EXCEL (.xlsx) LEGIBLE
+      // ==========================================
+      const wb = XLSX.utils.book_new();
+
+      // HOJA 1: Información General y Cliente
+      const resumenData = [{
+        'ID del Pedido': order.id,
+        'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
+        'Estado': order.status === 'paid' || order.status === 'mock_paid' ? 'Pagado' : order.status,
+        'Total Pagado ($)': order.total?.toFixed(2),
+        'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
+        'Email': order.shippingAddress?.email || 'N/A',
+        'Dirección de Envío': order.shippingAddress?.address || 'N/A',
+        'Ciudad': order.shippingAddress?.city || 'N/A',
+        'Código Postal': order.shippingAddress?.zipCode || 'N/A'
+      }];
+      const wsResumen = XLSX.utils.json_to_sheet(resumenData);
+      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
+
+      // HOJA 2: Configuración del Producto (Portada y Materiales)
+      const configData = [{
+        'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
+        'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
+        'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
+        'Título de Portada': order.coverData?.title || 'N/A',
+        'Subtítulo': order.coverData?.subtitle || 'N/A',
+        'Año': order.coverData?.year || 'N/A',
+        'Layout Portada': order.coverData?.layout || 'N/A'
+      }];
+      const wsConfig = XLSX.utils.json_to_sheet(configData);
+      XLSX.utils.book_append_sheet(wb, wsConfig, "Configuración");
+
+      // HOJA 3: Detalles Internos (Páginas o Tazas)
+      let detallesData: any[] = [];
+      if (order.pages && Array.isArray(order.pages)) {
+        // Formato Álbum
+        detallesData = order.pages.map((page, i) => ({
+          'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
+          'Layout (Filas/Cols)': page.layout || 'N/A',
+          'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
+          'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 
+            ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') 
+            : 'Sin textos'
+        }));
+      } else if (order.items && Array.isArray(order.items)) {
+        // Formato Tazas/Mugs
+        detallesData = order.items.map((item, i) => ({
+          'Taza Número': i + 1,
+          'Texto Impreso': item.text || 'Sin texto',
+          'Fuente': item.fontFamily || 'N/A',
+          'Tamaño Fuente': item.fontSize || 'N/A',
+          'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
+        }));
+      }
+      
+      if (detallesData.length > 0) {
+        const wsDetalles = XLSX.utils.json_to_sheet(detallesData);
+        XLSX.utils.book_append_sheet(wb, wsDetalles, "Detalles del Diseño");
+      }
+
+      // Generar el archivo en buffer e inyectarlo en el ZIP
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      folder.file('resumen_pedido.xlsx', excelBuffer);
+      // ==========================================
+
+
+      // 3. Crear subcarpeta para imágenes
       const imgFolder = folder.folder('imagenes');
       if (!imgFolder) {
         throw new Error("No se pudo crear la subcarpeta de imágenes.");
@@ -191,25 +261,16 @@ const OwnerDashboard: React.FC = () => {
       // Añadir promesas para las páginas
       if (order.pages && Array.isArray(order.pages)) {
         order.pages.forEach((page, pageIndex) => {
-          
-          // Ahora sabemos que tus fotos viven dentro del array page.images
           if (page.images && Array.isArray(page.images) && page.images.length > 0) {
-            
-            // Recorremos cada imagen dentro de esa página
             page.images.forEach((imgUrl: any, imgIndex: number) => {
               if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
                 imagePromises.push(
                   fetchImageAsBlob(imgUrl).then(blob => {
-                    // Guardamos la foto indicando su página y su orden. Ej: pagina_01_foto_1.jpg
                     imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob);
                   }).catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e))
                 );
               }
             });
-
-          } else {
-            // Si la página se guardó sin fotos, es normal, pero lo dejamos en consola por si acaso
-            console.log(`La página ${pageIndex + 1} no tiene fotos en su arreglo 'images'.`);
           }
         });
       }
