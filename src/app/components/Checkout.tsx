@@ -137,6 +137,12 @@ export default function Checkout() {
       // 1. Actualizamos las direcciones y el total en Firestore
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
 
+      // -------------------------------------------------------------
+      // AQUÍ ESTÁ LA LÍNEA CLAVE QUE FALTABA:
+      // Guardamos el ID del pedido para que Success.tsx sepa qué validar
+      // -------------------------------------------------------------
+      localStorage.setItem('pending_order_id', state.orderId);
+
       // 2. Llamada directa a tu Backend de Stripe en Cloud Run
       const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/create-checkout', {
         method: 'POST',
