@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2 } from 'lucide-react';
+// IMPORTANTE: Añadimos 'Upload' a los iconos de lucide-react
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -23,7 +24,8 @@ export default function Creator() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
-  const [isSaving, setIsSaving] = useState(false); // <-- NUEVO ESTADO DE CARGA
+  const [isSaving, setIsSaving] = useState(false); 
+  const [uploadProgress, setUploadProgress] = useState(0); // <-- NUEVO ESTADO DE PROGRESO
 
   const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
@@ -35,7 +37,8 @@ export default function Creator() {
       return;
     }
 
-    setIsSaving(true); // <-- ENCENDEMOS EL SPINNER
+    setIsSaving(true); 
+    setUploadProgress(0); // <-- Reiniciamos el progreso a 0
 
     try {
       const activeProduct = getActiveProduct();
@@ -53,9 +56,8 @@ export default function Creator() {
       }
 
       let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
-      let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; // <-- FIX TEXTOS
+      let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; 
 
-      // Preparamos coverData asegurando TODOS los datos (crop, año, layout)
       let coverData: any = { image: '', title: '' };
       if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
         const content = (activeCustomization as any).coverContent;
@@ -90,8 +92,10 @@ export default function Creator() {
         mugItems: currentMugItems
       };
 
-      // 1. LLAMADA A FIREBASE (Guarda json y sube las fotos)
-      const orderId = await createDraftOrder(user.uid, designData, activeProduct);
+      // 1. LLAMADA A FIREBASE (Añadido el callback del progreso)
+      const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
+        setUploadProgress(progress);
+      });
 
       // 2. VIAJAMOS AL CHECKOUT SOLO CON EL ID
       navigate('/checkout', { 
@@ -106,7 +110,7 @@ export default function Creator() {
       console.error("Error al guardar el diseño:", error);
       alert("Hubo un problema al procesar tus imágenes. Por favor intenta de nuevo.");
     } finally {
-      setIsSaving(false); // <-- APAGAMOS EL SPINNER
+      setIsSaving(false); 
     }
   };
 
@@ -500,15 +504,35 @@ export default function Creator() {
       
       {currentStep === 'organize' && renderOrganizer()}
 
-      {/* Loading Overlay */}
+      {/* OVERLAY DE CARGA (BARRA DE PROGRESO) */}
       {isSaving && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white px-4">
-          <div className="bg-white/10 p-8 rounded-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
-            <Loader2 className="w-12 h-12 animate-spin text-white" />
-            <div className="text-center">
-              <h3 className="text-xl font-bold mb-1">Guardando tu diseño...</h3>
-              <p className="text-white/70">Estamos preparando todo para el pago. No cierres esta ventana.</p>
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center px-4">
+          <div className="bg-white p-8 rounded-3xl max-w-md w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-300">
+            
+            <div className="bg-gray-50 p-4 rounded-full">
+              <Upload className="w-8 h-8 text-black animate-bounce" />
             </div>
+            
+            <div className="text-center w-full">
+              <h3 className="text-2xl font-black text-gray-900 mb-2">Guardando Diseño</h3>
+              <p className="text-gray-500 text-sm mb-6">
+                Procesando imágenes en alta calidad. Por favor no cierres esta ventana.
+              </p>
+              
+              {/* Barra Visual */}
+              <div className="w-full bg-gray-100 rounded-full h-3 mb-3 overflow-hidden shadow-inner">
+                <div 
+                  className="bg-black h-full rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              
+              <div className="flex justify-between w-full text-xs font-bold text-gray-400 uppercase tracking-widest">
+                <span>Subiendo archivos</span>
+                <span>{uploadProgress}%</span>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

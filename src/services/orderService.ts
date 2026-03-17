@@ -47,48 +47,89 @@ async function uploadImage(path: string, imageData: string): Promise<string> {
 /**
  * FASE 1: Sube las imágenes y crea el borrador del pedido en Firebase
  */
+/**
+ * FASE 1: Sube las imágenes y crea el borrador del pedido en Firebase
+ * (Ahora con soporte para barra de progreso)
+ */
 export async function createDraftOrder(
   userId: string,
   designData: any,
-  product: any
+  product: any,
+  onProgress?: (progress: number) => void // <-- NUEVO: Función callback para el progreso
 ) {
-  // 1. Generamos el ID del pedido PRIMERO para usarlo en las carpetas de Storage
   const orderRef = doc(collection(db, 'orders'));
   const orderId = orderRef.id;
   const folderPath = `orders/${userId}/${orderId}`;
   
-  // Detección "a prueba de balas" del tipo de producto
   const productString = String(product.type || product.id || product.name || '').toLowerCase();
 
-  // 2. Subir imagen de portada si existe
+  // ==========================================
+  // NUEVO: SISTEMA DE CONTEO Y PROGRESO
+  // ==========================================
+  let totalUploads = 0;
+  let completedUploads = 0;
+
+  const updateProgress = () => {
+    completedUploads++;
+    if (onProgress && totalUploads > 0) {
+      // Evitamos que llegue a 100% antes de guardar en Firestore
+      onProgress(Math.min(95, Math.round((completedUploads / totalUploads) * 100)));
+    }
+  };
+
+  // 1. Pre-escanear para saber cuántas imágenes hay que subir
   let coverData = { ...designData.coverData };
+  if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) totalUploads++;
+
+  if (productString.includes('album') || productString.includes('photobook') || designData.pageLayouts) {
+    (designData.photos || []).forEach((pagePhotos: any[]) => {
+      (pagePhotos || []).forEach((photoUrl: string) => {
+        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
+      });
+    });
+  } else if (productString.includes('mug') || productString.includes('taza') || designData.mugItems) {
+    (designData.mugItems || []).forEach((item: any) => {
+      (item.photos || []).forEach((photoUrl: string) => {
+        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
+      });
+    });
+  } else if (productString.includes('calendar') || productString.includes('calendario') || productString.includes('pack')) {
+    (designData.photos || []).forEach((photo: any) => {
+      let photoUrl = Array.isArray(photo) ? photo[0] : photo;
+      if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
+    });
+  }
+
+  // Si no hay fotos nuevas por subir, adelantamos la barra para que el usuario vea movimiento
+  if (totalUploads === 0 && onProgress) onProgress(50);
+  // ==========================================
+
+  // 2. Subir imagen de portada si existe
   if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) {
     coverData.image = await uploadImage(`${folderPath}/cover_image`, coverData.image);
+    updateProgress(); // <-- Reportamos progreso
   }
 
   let finalPages: any[] = [];
   let finalItems: any[] = [];
   let finalPhotos: string[] = [];
 
-  // 3. Procesar las imágenes según el tipo de producto
+  // 3. Procesar las imágenes
   if (productString.includes('album') || productString.includes('photobook') || designData.pageLayouts) {
-    
-    // AQUÍ ESTÁ EL CAMBIO: Extraemos photoCrops de designData
     const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
 
     for (let i = 0; i < photos.length; i++) {
       const pagePhotos = photos[i] || [];
       const uploadedPhotos: string[] = [];
-      const pageCrops: any = {}; // Objeto para guardar los recortes de esta página
+      const pageCrops: any = {};
 
       for (let j = 0; j < pagePhotos.length; j++) {
         let photoUrl = pagePhotos[j];
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
           photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
+          updateProgress(); // <-- Reportamos progreso
         }
         uploadedPhotos.push(photoUrl);
-
-        // AQUÍ ESTÁ EL CAMBIO: Asignamos el recorte exacto (X, Y, Zoom) para esta foto
         pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
       }
 
@@ -98,7 +139,7 @@ export async function createDraftOrder(
         layout: pageLayouts[i] || 1,
         variant: pageLayoutVariants[i] || null,
         texts: textBoxSlots[i] || {},
-        crops: pageCrops // AQUÍ ESTÁ EL CAMBIO: Inyectamos los recortes en la página
+        crops: pageCrops
       });
     }
   } 
@@ -112,6 +153,7 @@ export async function createDraftOrder(
         let photoUrl = item.photos[j];
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
           photoUrl = await uploadImage(`${folderPath}/mugs/mug${i}_photo${j}`, photoUrl);
+          updateProgress(); // <-- Reportamos progreso
         }
         uploadedItemPhotos.push(photoUrl);
       }
@@ -128,12 +170,12 @@ export async function createDraftOrder(
       let photoUrl = Array.isArray(photos[i]) ? photos[i][0] : photos[i];
       if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
         photoUrl = await uploadImage(`${folderPath}/loose_photos/photo${i}`, photoUrl);
+        updateProgress(); // <-- Reportamos progreso
       }
       finalPhotos.push(photoUrl);
     }
   }
 
-  // Limpieza de datos: Quitamos la imagen en base64 de customization para no duplicar el peso en la base de datos
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
     cleanCustomization.coverContent.coverImage = "uploaded"; 
@@ -150,12 +192,10 @@ export async function createDraftOrder(
     updatedAt: new Date().toISOString(),
     customization: cleanCustomization,
     coverData,
-    
     photoCrops: designData.photoCrops || {},
     textBoxSlots: designData.textBoxSlots || {},
     pageLayouts: designData.pageLayouts || {},
     pageLayoutVariants: designData.pageLayoutVariants || {},
-    
     pages: finalPages,
     items: finalItems,
     photos: finalPhotos,
@@ -163,9 +203,12 @@ export async function createDraftOrder(
 
   const finalPayload = sanitizeForFirestore(JSON.parse(JSON.stringify(orderPayload)));
   
-  // 5. Guardar el documento usando setDoc con el ID que ya generamos
+  // 5. Guardar el documento
   await setDoc(orderRef, finalPayload);
   
+  // ¡Completado al 100%!
+  if (onProgress) onProgress(100);
+
   return orderId;
 }
 
