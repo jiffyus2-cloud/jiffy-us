@@ -1,18 +1,29 @@
-import { useEffect, useState } from 'react';
-// IMPORTACIÓN CLAVE: Estrictamente desde 'react-router' para evitar conflictos
-import { useNavigate } from 'react-router';
+import { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../hooks/useAuth'; // IMPORTANTE: Traemos el hook de Auth
 
 export default function Success() {
   const navigate = useNavigate();
+  const location = useLocation(); // Usamos useLocation en lugar de window.location
+  const { user } = useAuth();
+  
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const hasAttempted = useRef(false);
 
   useEffect(() => {
-    // Leemos la URL con JavaScript nativo, a prueba de fallos
-    const searchParams = new URLSearchParams(window.location.search);
+    // 1. ESPERAR A FIREBASE AUTH: Si la sesión aún no ha cargado al regresar, pausamos aquí.
+    if (!user) return;
+
+    // 2. EVITAR DOBLE EJECUCIÓN: React Strict Mode dispara useEffect 2 veces. Esto lo evita.
+    if (hasAttempted.current) return;
+    hasAttempted.current = true;
+
+    // 3. LEER URL DE FORMA SEGURA:
+    const searchParams = new URLSearchParams(location.search);
     const sessionId = searchParams.get('session_id');
     const orderId = localStorage.getItem('pending_order_id');
 
@@ -30,7 +41,7 @@ export default function Success() {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'No se pudo verificar el pago.');
+            throw new Error(errorData.message || 'No se pudo verificar el pago con el servidor.');
           }
 
           // El pago fue verificado por el backend. Ahora actualizamos Firestore.
@@ -40,19 +51,17 @@ export default function Success() {
               status: 'paid',
               updatedAt: new Date().toISOString() 
             });
+            // Si llega a esta línea, Firebase se actualizó exitosamente
           } catch (firestoreError) {
-            console.error(
-              `El pago para la orden ${orderId} fue validado, pero la actualización en Firestore falló.`,
-              firestoreError
-            );
-            // No bloqueamos al usuario, ya que el pago está confirmado.
+            console.error("Error de permisos en Firestore:", firestoreError);
+            throw new Error("El pago se validó, pero falló la conexión con tu cuenta. Contacta a soporte.");
           }
 
           // Si todo va bien, limpiamos el ID del localStorage
           localStorage.removeItem('pending_order_id');
           setVerificationError(null);
         } catch (error: any) {
-          console.error('Error confirming payment:', error);
+          console.error('Error al confirmar pago:', error);
           setVerificationError(error.message || 'Ocurrió un error al confirmar tu pedido.');
           localStorage.removeItem('pending_order_id');
         } finally {
@@ -64,7 +73,7 @@ export default function Success() {
     } else {
       setIsVerifying(false);
     }
-  }, []);
+  }, [user, location.search]); // Dependencias clave para re-ejecutar cuando el 'user' cargue
 
   const VerificationStatus = () => {
     if (isVerifying) {
@@ -90,11 +99,11 @@ export default function Success() {
       <VerificationStatus />
 
       {verificationError && (
-        <div className="mt-4 mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left">
+        <div className="mt-4 mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left animate-in zoom-in-95">
           <AlertTriangle className="w-8 h-8 flex-shrink-0" />
           <div>
             <p className="font-bold">¡Atención!</p>
-            <p className="text-sm">{verificationError} Tu pedido fue guardado, pero no pudimos actualizar el estado del pago automáticamente. Por favor, contacta a soporte.</p>
+            <p className="text-sm">{verificationError}</p>
           </div>
         </div>
       )}
@@ -102,13 +111,15 @@ export default function Success() {
       <div className="flex flex-col sm:flex-row gap-4">
         <button
           onClick={() => navigate('/dashboard')}
-          className="bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 transition-colors"
+          disabled={isVerifying}
+          className="bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
         >
           Ir a mis pedidos
         </button>
         <button
           onClick={() => navigate('/')}
-          className="bg-white border border-gray-300 text-black px-8 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isVerifying}
+          className="bg-white border border-gray-300 text-black px-8 py-3 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           Volver al inicio
         </button>
