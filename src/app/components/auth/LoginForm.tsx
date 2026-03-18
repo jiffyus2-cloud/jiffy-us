@@ -24,8 +24,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       await login(email, password);
       onSuccess?.();
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true, state: (location.state as any)?.from?.state });
+      
+      // --- CORRECCIÓN DE ENRUTAMIENTO ---
+      // Verificamos si 'from' es un texto simple (ej. '/create') o un objeto
+      const stateFrom = (location.state as any)?.from;
+      const from = typeof stateFrom === 'string' ? stateFrom : (stateFrom?.pathname || '/dashboard');
+      
+      navigate(from, { replace: true, state: typeof stateFrom === 'object' ? stateFrom?.state : undefined });
     } catch (err) {
       // Error handled by useAuth
     }
@@ -76,7 +81,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           </Button>
           <div className="text-center text-sm">
             ¿No tienes una cuenta?{' '}
-            <Link to="/registro" className="text-primary font-medium hover:underline">
+            {/* CORRECCIÓN: Pasamos el estado al Link para no perder la memoria de dónde venimos */}
+            <Link 
+              to="/registro" 
+              state={{ from: (location.state as any)?.from }} 
+              className="text-primary font-medium hover:underline"
+            >
               Regístrate aquí
             </Link>
           </div>

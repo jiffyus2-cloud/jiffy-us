@@ -34,8 +34,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     try {
       await register(email, password, name);
       onSuccess?.();
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true, state: (location.state as any)?.from?.state });
+      
+      // --- CORRECCIÓN DE ENRUTAMIENTO ---
+      const stateFrom = (location.state as any)?.from;
+      const from = typeof stateFrom === 'string' ? stateFrom : (stateFrom?.pathname || '/dashboard');
+      
+      navigate(from, { replace: true, state: typeof stateFrom === 'object' ? stateFrom?.state : undefined });
     } catch (err) {
       // Error handled by useAuth
     }
@@ -107,7 +111,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           </Button>
           <div className="text-center text-sm">
             ¿Ya tienes una cuenta?{' '}
-            <Link to="/login" className="text-primary font-medium hover:underline">
+            {/* CORRECCIÓN: Pasamos el estado al Link */}
+            <Link 
+              to="/login" 
+              state={{ from: (location.state as any)?.from }} 
+              className="text-primary font-medium hover:underline"
+            >
               Inicia sesión aquí
             </Link>
           </div>
