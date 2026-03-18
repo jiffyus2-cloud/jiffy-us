@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-// IMPORTANTE: Añadimos 'Upload' a los iconos de lucide-react
 import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
@@ -16,6 +15,58 @@ import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
 import { createDraftOrder } from '../../services/orderService';
 
+// =========================================================================
+// MOTOR DE AUTOGUARDADO (IndexedDB) - A prueba de recargas y archivos grandes
+// =========================================================================
+const DB_NAME = 'JiffyAppDB';
+const STORE_NAME = 'drafts';
+
+const saveDraftToDB = (data: any): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(data, 'pending_checkout');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const loadDraftFromDB = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const getReq = tx.objectStore(STORE_NAME).get('pending_checkout');
+      getReq.onsuccess = () => resolve(getReq.result);
+      getReq.onerror = () => reject(getReq.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const clearDraftFromDB = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete('pending_checkout');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+// =========================================================================
+
 type Step = 'product' | 'customization' | 'organize' | 'checkout';
 
 export default function Creator() {
@@ -25,20 +76,15 @@ export default function Creator() {
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
   const [isSaving, setIsSaving] = useState(false); 
-  const [uploadProgress, setUploadProgress] = useState(0); // <-- NUEVO ESTADO DE PROGRESO
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
     mugItems?: MugItem[], 
     textBoxSlots?: Record<number, Record<number, any>> 
   }) => {
-    if (!user) {
-      navigate('/login', { state: { from: location } });
-      return;
-    }
-
     setIsSaving(true); 
-    setUploadProgress(0); // <-- Reiniciamos el progreso a 0
+    setUploadProgress(0);
 
     try {
       const activeProduct = getActiveProduct();
@@ -92,7 +138,16 @@ export default function Creator() {
         mugItems: currentMugItems
       };
 
-      // 1. LLAMADA A FIREBASE (Añadido el callback del progreso)
+      // ====== MAGIA: SI NO HAY USUARIO, GUARDAMOS LOCALMENTE Y LO MANDAMOS AL LOGIN ======
+      if (!user) {
+        const draftData = { designData, product: activeProduct, productType: selectedProduct };
+        await saveDraftToDB(draftData); 
+        navigate('/login', { state: { from: location.pathname } }); 
+        return;
+      }
+      // =================================================================================
+
+      // 1. LLAMADA A FIREBASE
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
       });
@@ -137,6 +192,69 @@ export default function Creator() {
   const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, number>>({});
   const progressRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Función auxiliar para reconstruir el estado
+  const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
+    setSelectedProduct(productType);
+    setCurrentStep('organize');
+
+    if (productType === 'album') {
+      setSelectedAlbum(product);
+      setCustomization(designData.customization);
+      setPhotos(designData.photos);
+      setPhotoCrops(designData.photoCrops || {});
+      setTextBoxSlots(designData.textBoxSlots || {});
+      setPageLayouts(designData.pageLayouts || {});
+      setPageLayoutVariants(designData.pageLayoutVariants || {});
+    } else if (productType === 'calendar') {
+      setSelectedCalendar(product);
+      setCalendarCustomization(designData.customization);
+      setCalendarPhotos(designData.photos.map((p: string[]) => p[0]));
+      setCalendarPhotoCrops(designData.photoCrops || {});
+    } else if (productType === 'mug') {
+      setSelectedMug(product);
+      setMugCustomization(designData.customization);
+      setMugItems(designData.mugItems || []);
+      setTextBoxSlots(designData.textBoxSlots || {});
+    } else if (productType === 'photo-pack') {
+      setSelectedPhotoPack(product);
+      setPhotoPackCustomization(designData.customization);
+      setPhotoPackPhotos(designData.photos.map((p: string[]) => p[0]));
+      setPhotoPackPhotoCrops(designData.photoCrops || {});
+    }
+  };
+
+  // Motor de Restauración Automática
+  useEffect(() => {
+    const restoreState = async () => {
+      const state = location.state as any;
+      
+      // 1. Restaurar desde el router (Checkout fallback)
+      if (state?.designData && !selectedProduct) {
+        restoreDesignToState(state.designData, state.product, state.productType);
+      } 
+      // 2. Restaurar desde la Base de Datos Local (Regreso exitoso del Login)
+      else if (user && !selectedProduct) {
+        try {
+          const draft = await loadDraftFromDB();
+          if (draft) {
+            restoreDesignToState(draft.designData, draft.product, draft.productType);
+            await clearDraftFromDB(); // Limpiamos el borrador para que no afecte futuros diseños
+          } else if (state?.startProduct) {
+            handleSelectProduct(state.startProduct);
+          }
+        } catch (e) {
+          console.error("Error al cargar el borrador de IndexedDB", e);
+        }
+      }
+      // 3. Inicio directo desde modal
+      else if (state?.startProduct && !selectedProduct) {
+        handleSelectProduct(state.startProduct);
+      }
+    };
+
+    restoreState();
+  }, [location.state, selectedProduct, user]);
 
   const handleSelectProduct = (product: ProductType) => {
     setSelectedProduct(product);
@@ -205,7 +323,6 @@ export default function Creator() {
     }
   };
 
-  // Progress steps configuration
   const getProgressSteps = () => {
     const commonSteps = [
       { id: 'product', label: t('step.product'), active: true },
@@ -228,49 +345,6 @@ export default function Creator() {
   const progressSteps = getProgressSteps();
   const activeStepIndex = progressSteps.findIndex(step => step.id === currentStep);
 
-  // Handle direct navigation from modal or state restoration from checkout
-  useEffect(() => {
-    const state = location.state as any;
-    
-    // Restoration from checkout
-    if (state?.designData && !selectedProduct) {
-      const { designData, product, productType } = state;
-      
-      setSelectedProduct(productType);
-      setCurrentStep('organize');
-
-      if (productType === 'album') {
-        setSelectedAlbum(product);
-        setCustomization(designData.customization);
-        setPhotos(designData.photos);
-        setPhotoCrops(designData.photoCrops || {});
-        setTextBoxSlots(designData.textBoxSlots || {});
-        setPageLayouts(designData.pageLayouts || {});
-        setPageLayoutVariants(designData.pageLayoutVariants || {});
-      } else if (productType === 'calendar') {
-        setSelectedCalendar(product);
-        setCalendarCustomization(designData.customization);
-        setCalendarPhotos(designData.photos.map((p: string[]) => p[0]));
-        setCalendarPhotoCrops(designData.photoCrops || {});
-      } else if (productType === 'mug') {
-        setSelectedMug(product);
-        setMugCustomization(designData.customization);
-        setMugItems(designData.mugItems || []);
-        setTextBoxSlots(designData.textBoxSlots || {});
-      } else if (productType === 'photo-pack') {
-        setSelectedPhotoPack(product);
-        setPhotoPackCustomization(designData.customization);
-        setPhotoPackPhotos(designData.photos.map((p: string[]) => p[0]));
-        setPhotoPackPhotoCrops(designData.photoCrops || {});
-      }
-    } 
-    // Handle direct navigation from modal
-    else if (state?.startProduct && !selectedProduct) {
-      handleSelectProduct(state.startProduct);
-    }
-  }, [location.state, selectedProduct]);
-
-  // Auto-scroll progress bar
   useEffect(() => {
     if (progressRef.current && stepRefs.current[activeStepIndex]) {
       const stepElement = stepRefs.current[activeStepIndex];
@@ -288,14 +362,12 @@ export default function Creator() {
     }
   }, [currentStep, activeStepIndex]);
 
-  // Render product selection
   const renderProductSelection = () => (
     <ProductSelection 
       onSelectProduct={handleSelectProduct}
     />
   );
 
-  // Render customization based on product
   const renderCustomization = () => {
     if (selectedProduct === 'album' && selectedAlbum) {
       return (
@@ -329,7 +401,6 @@ export default function Creator() {
     return null;
   };
 
-  // Render organizer based on product
   const renderOrganizer = () => {
     if (selectedProduct === 'album' && customization) {
       return (
@@ -412,7 +483,6 @@ export default function Creator() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header with Home Button */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-200">
         <div className="max-w-6xl auto px-4 py-3 flex items-center justify-between">
           <button
@@ -431,7 +501,6 @@ export default function Creator() {
         </div>
       </div>
 
-      {/* Progress Bar */}
       {currentStep !== 'product' && (
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-4">
@@ -441,7 +510,6 @@ export default function Creator() {
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {progressSteps.map((step, index) => {
-                // Get icon for each step
                 const getStepIcon = () => {
                   switch(step.id) {
                     case 'product': return <ShoppingBag className="w-5 h-5" />;
@@ -484,7 +552,6 @@ export default function Creator() {
         </div>
       )}
 
-      {/* Back Button */}
       {currentStep !== 'product' && (
         <div className="max-w-6xl mx-auto px-4 py-4">
           <button
@@ -497,11 +564,8 @@ export default function Creator() {
         </div>
       )}
 
-      {/* Step Content */}
       {currentStep === 'product' && renderProductSelection()}
-      
       {currentStep === 'customization' && renderCustomization()}
-      
       {currentStep === 'organize' && renderOrganizer()}
 
       {/* OVERLAY DE CARGA (BARRA DE PROGRESO) */}
@@ -516,10 +580,9 @@ export default function Creator() {
             <div className="text-center w-full">
               <h3 className="text-2xl font-black text-gray-900 mb-2">Guardando Diseño</h3>
               <p className="text-gray-500 text-sm mb-6">
-                Procesando imágenes en alta calidad. Por favor no cierres esta ventana.
+                {user ? 'Procesando imágenes en alta calidad...' : 'Asegurando tu diseño antes de iniciar sesión...'} 
               </p>
               
-              {/* Barra Visual */}
               <div className="w-full bg-gray-100 rounded-full h-3 mb-3 overflow-hidden shadow-inner">
                 <div 
                   className="bg-black h-full rounded-full transition-all duration-300 ease-out"
