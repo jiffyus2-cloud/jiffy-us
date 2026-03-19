@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth'; // IMPORTANTE: Traemos el hook de
 export default function Success() {
   const navigate = useNavigate();
   const location = useLocation(); // Usamos useLocation en lugar de window.location
-  const { user } = useAuth();
+  const { isLoading: isAuthLoading } = useAuth();
   
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationError, setVerificationError] = useState<string | null>(null);
@@ -16,8 +16,8 @@ export default function Success() {
 
   useEffect(() => {
     // 1. ESPERAR A FIREBASE AUTH: Si la sesión aún no ha cargado al regresar, pausamos aquí.
-    if (!user) return;
-
+    if (isAuthLoading) return;
+    
     // 2. EVITAR DOBLE EJECUCIÓN: React Strict Mode dispara useEffect 2 veces. Esto lo evita.
     if (hasAttempted.current) return;
     hasAttempted.current = true;
@@ -73,7 +73,7 @@ export default function Success() {
     } else {
       setIsVerifying(false);
     }
-  }, [user, location.search]); // Dependencias clave para re-ejecutar cuando el 'user' cargue
+  }, [isAuthLoading, location.search]); // La dependencia ahora es el estado de carga, no el usuario.
 
   const VerificationStatus = () => {
     if (isVerifying) {

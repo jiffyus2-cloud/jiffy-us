@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2, 
   Image as ImageIcon, Grid3x3, Edit3, Move, Check, 
@@ -26,6 +26,131 @@ interface PhotoOrganizerProps {
 }
 
 type Step = 'upload' | 'pages' | 'editor';
+
+const AlbumEditorPhotoSlot: React.FC<{
+  photo: string | null;
+  textBox: any;
+  crop: { x: number; y: number; zoom: number };
+  isHalfHeightLayout: boolean;
+  pageIndex: number;
+  photoIndex: number;
+  editingPageIndex: number | null;
+  handleCropChange: (pageIndex: number, photoIndex: number, crop: { x: number, y: number, zoom: number }) => void;
+  handleMovePhotoWithinPage: (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => void;
+  handleRemovePhotoFromPage: (pageIndex: number, photoIndex: number) => void;
+  setEditingTextSlot: (slot: { pageIndex: number, photoIndex: number } | null) => void;
+  handleRemoveTextBox: (pageIndex: number, photoIndex: number) => void;
+  handleAddPhotoToPage: (pageIndex: number, file: File) => void;
+  handleAddTextBox: (pageIndex: number, photoIndex: number) => void;
+  t: (key: string) => string;
+}> = ({
+  photo,
+  textBox,
+  crop,
+  isHalfHeightLayout,
+  pageIndex,
+  photoIndex,
+  editingPageIndex,
+  handleCropChange,
+  handleMovePhotoWithinPage,
+  handleRemovePhotoFromPage,
+  setEditingTextSlot,
+  handleRemoveTextBox,
+  handleAddPhotoToPage,
+  handleAddTextBox,
+  t
+}) => {
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (photo) {
+      const img = new Image();
+      img.onload = () => setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      img.src = photo;
+    } else {
+      setImageDimensions(null);
+    }
+  }, [photo]);
+
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      setContainerDimensions({ width: element.offsetWidth, height: element.offsetHeight });
+    });
+
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  let calculatedCrop = crop;
+  if (isHalfHeightLayout && imageDimensions && containerDimensions && imageDimensions.width >= imageDimensions.height && crop.zoom === 1) {
+    const { width: imageW, height: imageH } = imageDimensions;
+    const { width: containerW, height: containerH } = containerDimensions;
+    if (imageH > 0 && containerH > 0 && imageW > 0 && containerW > 0) {
+      const imageAspectRatio = imageW / imageH;
+      const containerAspectRatio = containerW / containerH;
+      if (imageAspectRatio > containerAspectRatio) {
+        const newZoom = imageAspectRatio / containerAspectRatio;
+        if (newZoom > 1.01) { // Apply a small tolerance
+          calculatedCrop = { ...crop, zoom: newZoom };
+        }
+      }
+    }
+  }
+
+  return (
+    <div className={`relative group/photo overflow-hidden rounded-lg bg-white ${editingPageIndex === pageIndex ? 'border border-gray-300' : ''} flex items-center justify-center`}>
+      {photo ? (
+        <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
+            <ImageCropper 
+              src={photo} 
+              defaultPosition={calculatedCrop}
+              defaultZoom={calculatedCrop.zoom}
+              onCropChange={(newCrop) => handleCropChange(pageIndex, photoIndex, newCrop)}
+              isEditable={editingPageIndex === pageIndex}
+            />
+            {editingPageIndex === pageIndex && (
+              <div className="absolute top-2 right-2 flex gap-1 transition-opacity z-10">
+                <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm" title="Move left"><ArrowLeft className="w-3.5 h-3.5" /></button>
+                <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm" title="Delete photo"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm" title="Move right"><ArrowRight className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+        </div>
+      ) : textBox ? (
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white relative">
+          <div style={{ fontSize: `${textBox.fontSize}px`, fontFamily: textBox.fontFamily, color: textBox.color, textAlign: 'center', wordBreak: 'break-word' }} className="w-full">
+            {textBox.text || t('organizer.addText') + '...'}
+          </div>
+          {editingPageIndex === pageIndex && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center gap-2 opacity-0 group-hover/photo:opacity-100 transition-opacity">
+              <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 bg-white rounded-full hover:bg-gray-100" title={t('organizer.editText') || "Edit Text"}><Edit3 className="w-4 h-4" /></button>
+              <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600" title={t('organizer.removeText') || "Remove Text Box"}><Trash2 className="w-4 h-4" /></button>
+            </div>
+          )}
+        </div>
+      ) : (
+        editingPageIndex === pageIndex && (
+          <div className="flex flex-col gap-3">
+            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file); }; input.click(); }} className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors">
+              <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300"><ImageIcon className="w-6 h-6" /></div>
+              <span className="text-[10px] font-bold uppercase">{t('organizer.addPhoto')}</span>
+            </button>
+            <div className="h-px bg-gray-200 w-12 mx-auto" />
+            <button onClick={() => handleAddTextBox(pageIndex, photoIndex)} className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors">
+              <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300"><Type className="w-6 h-6" /></div>
+              <span className="text-[10px] font-bold uppercase">{t('organizer.addText')}</span>
+            </button>
+          </div>
+        )
+      )}
+    </div>
+  );
+};
 
 export default function PhotoOrganizer({ 
   album, 
@@ -479,113 +604,27 @@ export default function PhotoOrganizer({
                     {slots.map((photo, photoIndex) => {
                       const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                       const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
+                      const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && pageLayouts[pageIndex] !== 'column';
                       
                       return (
-                        <div key={photoIndex} className="relative group/photo overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center border border-gray-100">
-                          {photo ? (
-                            <>
-                              <ImageCropper 
-                                src={photo} 
-                                defaultPosition={crop}
-                                defaultZoom={crop.zoom}
-                                onCropChange={(newCrop) => handleCropChange(pageIndex, photoIndex, newCrop)}
-                                isEditable={editingPageIndex === pageIndex}
-                              />
-                              {/* Photo Actions (when editing page) */}
-                              {editingPageIndex === pageIndex && (
-                                <div className="absolute top-2 right-2 flex gap-1 transition-opacity z-10">
-                                  <button 
-                                    onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')}
-                                    className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm"
-                                    title="Move left"
-                                  >
-                                    <ArrowLeft className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)}
-                                    className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm"
-                                    title="Delete photo"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')}
-                                    className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm"
-                                    title="Move right"
-                                  >
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </>
-                          ) : textBox ? (
-                            <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white relative">
-                              <div 
-                                style={{
-                                  fontSize: `${textBox.fontSize}px`,
-                                  fontFamily: textBox.fontFamily,
-                                  color: textBox.color,
-                                  textAlign: 'center',
-                                  wordBreak: 'break-word'
-                                }}
-                                className="w-full"
-                              >
-                                {textBox.text || t('organizer.addText') + '...'}
-                              </div>
-                              {editingPageIndex === pageIndex && (
-                                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center gap-2 opacity-0 group-hover/photo:opacity-100 transition-opacity">
-                                  <button 
-                                    onClick={() => setEditingTextSlot({ pageIndex, photoIndex })}
-                                    className="p-2 bg-white rounded-full hover:bg-gray-100"
-                                    title={t('organizer.editText') || "Edit Text"}
-                                  >
-                                    <Edit3 className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleRemoveTextBox(pageIndex, photoIndex)}
-                                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
-                                    title={t('organizer.removeText') || "Remove Text Box"}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            editingPageIndex === pageIndex && (
-                              <div className="flex flex-col gap-3">
-                                <button
-                                  onClick={() => {
-                                    const input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.accept = 'image/*';
-                                    input.onchange = (e: any) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) handleAddPhotoToPage(pageIndex, file);
-                                    };
-                                    input.click();
-                                  }}
-                                  className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors"
-                                >
-                                  <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300">
-                                    <ImageIcon className="w-6 h-6" />
-                                  </div>
-                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addPhoto')}</span>
-                                </button>
-                                <div className="h-px bg-gray-200 w-12 mx-auto" />
-                                <button
-                                  onClick={() => handleAddTextBox(pageIndex, photoIndex)}
-                                  className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors"
-                                >
-                                  <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300">
-                                    <Type className="w-6 h-6" />
-                                  </div>
-                                  <span className="text-[10px] font-bold uppercase">{t('organizer.addText')}</span>
-                                </button>
-                              </div>
-                            )
-                          )}
-                        </div>
+                        <AlbumEditorPhotoSlot
+                          key={photoIndex}
+                          photo={photo}
+                          textBox={textBox}
+                          crop={crop}
+                          isHalfHeightLayout={isHalfHeightLayout}
+                          pageIndex={pageIndex}
+                          photoIndex={photoIndex}
+                          editingPageIndex={editingPageIndex}
+                          handleCropChange={handleCropChange}
+                          handleMovePhotoWithinPage={handleMovePhotoWithinPage}
+                          handleRemovePhotoFromPage={handleRemovePhotoFromPage}
+                          setEditingTextSlot={setEditingTextSlot}
+                          handleRemoveTextBox={handleRemoveTextBox}
+                          handleAddPhotoToPage={handleAddPhotoToPage}
+                          handleAddTextBox={handleAddTextBox}
+                          t={t}
+                        />
                       );
                     })}
                   </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -84,6 +84,89 @@ const getGridLayout = (count: number, layout: any, size: string) => {
   return 'grid-cols-2 grid-rows-2';
 };
 
+const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21' => {
+  if (!size) return '20x20';
+  if (size.includes('20x20')) return '20x20';
+  if (size.includes('30x30')) return '30x30';
+  if (size.includes('21x28')) return '21x28';
+  if (size.includes('28x21')) return '28x21';
+  return '20x20';
+};
+
+const AlbumPagePhoto: React.FC<{
+  photo: string | null;
+  textBox: any;
+  crop: { x: number; y: number; zoom: number } | undefined;
+  isHalfHeightLayout: boolean;
+  photoIndex: number;
+}> = ({ photo, textBox, crop, isHalfHeightLayout, photoIndex }) => {
+  // State to store image dimensions for conditional cropping
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (photo) {
+      const img = new Image();
+      img.onload = () => setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      img.src = photo;
+    } else {
+      setImageDimensions(null);
+    }
+  }, [photo]);
+
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      setContainerDimensions({ width: element.offsetWidth, height: element.offsetHeight });
+    });
+
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  let calculatedCrop = crop;
+  if (isHalfHeightLayout && imageDimensions && containerDimensions && imageDimensions.width >= imageDimensions.height && (!crop || crop.zoom === 1)) {
+    const { width: imageW, height: imageH } = imageDimensions;
+    const { width: containerW, height: containerH } = containerDimensions;
+
+    if (imageH > 0 && containerH > 0 && imageW > 0 && containerW > 0) {
+      const imageAspectRatio = imageW / imageH;
+      const containerAspectRatio = containerW / containerH;
+      
+      if (imageAspectRatio > containerAspectRatio) {
+        const newZoom = imageAspectRatio / containerAspectRatio;
+        if (newZoom > 1.01) { // Apply a small tolerance
+          calculatedCrop = { x: crop?.x ?? 50, y: crop?.y ?? 50, zoom: newZoom };
+        }
+      }
+    }
+  }
+
+  return (
+    <div className={`relative overflow-hidden rounded-lg bg-white flex items-center justify-center`}>
+      {photo ? (
+        <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
+          <ReadOnlyImage src={photo} crop={calculatedCrop} alt={`Foto ${photoIndex + 1}`} />
+        </div>
+      ) : textBox ? (
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
+          <div
+            style={{ fontSize: `${textBox.fontSize}px`, fontFamily: textBox.fontFamily, color: textBox.color, wordBreak: 'break-word' }}
+            className="w-full"
+          >
+            {textBox.text}
+          </div>
+        </div>
+      ) : (
+        <div className="text-gray-300"><BookOpen className="w-8 h-8 opacity-20" /></div>
+      )}
+    </div>
+  );
+};
+
 const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const size = order.customization?.size || '';
   const isHorizontal = size.includes('Horizontal');
@@ -99,7 +182,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
       <div className="max-w-md mx-auto">
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Portada</p>
         <CoverPreview
-          coverSize={order.customization?.size || '20x20'}
+          coverSize={mapSizeToCoverSize(order.customization?.size)}
           coverImage={order.coverData?.image || ''}
           coverTitle={order.coverData?.title || ''}
           coverSubtitle={order.coverData?.subtitle || ''}
@@ -133,31 +216,17 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
                     const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
                     // Lee el crop del nuevo objeto `page` o del antiguo `photoCrops` para retrocompatibilidad
                     const crop = (pageObj as any)?.crops?.[photoIndex] || order.photoCrops?.[`${pageIndex}-${photoIndex}`];
+                    const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
 
                     return (
-                      <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-gray-50 flex items-center justify-center border border-gray-100">
-                        {photo ? (
-                          <ReadOnlyImage src={photo} crop={crop} alt={`Foto ${photoIndex + 1}`} />
-                        ) : textBox ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
-                            <div
-                              style={{
-                                fontSize: `${textBox.fontSize}px`,
-                                fontFamily: textBox.fontFamily,
-                                color: textBox.color,
-                                wordBreak: 'break-word',
-                              }}
-                              className="w-full"
-                            >
-                              {textBox.text}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-gray-300">
-                            <BookOpen className="w-8 h-8 opacity-20" />
-                          </div>
-                        )}
-                      </div>
+                      <AlbumPagePhoto
+                        key={photoIndex}
+                        photo={photo}
+                        textBox={textBox}
+                        crop={crop}
+                        isHalfHeightLayout={isHalfHeightLayout}
+                        photoIndex={photoIndex}
+                      />
                     );
                   })}
                 </div>
