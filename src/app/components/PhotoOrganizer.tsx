@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles // <-- Añadido Sparkles
+  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -173,7 +173,7 @@ export default function PhotoOrganizer({
   const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
-  // <-- NUEVO: Estado para la IA -->
+  // <-- Estado para la IA -->
   const [isSortingWithAI, setIsSortingWithAI] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
@@ -219,7 +219,7 @@ export default function PhotoOrganizer({
   }, [uploadedPhotos.length]);
 
   // =========================================================
-  // 1. CARGA CON IA Y OPTIMIZACIÓN DE MEMORIA BLOB (0 RAM)
+  // 1. CARGA CON IA A TRAVÉS DEL BACKEND PROXY (FIXED)
   // =========================================================
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -241,41 +241,50 @@ export default function PhotoOrganizer({
         }
       }));
 
-      // 2. Llamada a la IA para organizar las fotos
+      // 2. Llamada a TU PROPIO BACKEND (NestJS)
       let finalUrls: string[] = [];
       
       try {
-        // [IMPORTANTE]: Cambia esta URL por el endpoint REST API directo que te dé 1clic.ai
-        // La URL de '/embed/' es solo para cargar el Iframe visual. Necesitas el endpoint de su API.
-        const aiResponse = await fetch('https://app.1clic.ai/api/v1/run', {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
+
+        const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_1CLIC_API_KEY}`
           },
           body: JSON.stringify({
-            action: 'sort_photos',
             photos: filesWithData.map(f => ({ id: f.id, ...f.metadata }))
           })
         });
 
-        if (!aiResponse.ok) throw new Error('Error contactando a la IA');
+        if (!aiResponse.ok) throw new Error('Error contactando a nuestro propio backend de IA');
         const responseData = await aiResponse.json();
 
-        // 3. Asignar el nuevo orden basado en lo que dice la IA
-        // Se asume que la IA devuelve { orderedIds: ["2", "0", "1", "3"...] }
-        if (responseData && responseData.orderedIds) {
-          finalUrls = responseData.orderedIds.map((id: string) => {
+        // 3. MAGIA NUEVA: Leer la estructura compleja de tu IA ("Albums")
+        if (responseData && responseData.Albums && Array.isArray(responseData.Albums)) {
+          const orderedIdsFromAI: string[] = [];
+          
+          // Recorremos los grupos (álbumes) que hizo la IA y ponemos las fotos en fila
+          responseData.Albums.forEach((album: any) => {
+            if (album.photo_ids && Array.isArray(album.photo_ids)) {
+              orderedIdsFromAI.push(...album.photo_ids);
+            }
+          });
+
+          // Convertimos esos IDs ordenados de vuelta a nuestras imágenes (Blob URLs)
+          finalUrls = orderedIdsFromAI.map((id: string) => {
             const matchedFile = filesWithData.find(f => f.id === id);
             return matchedFile ? matchedFile.url : '';
           }).filter(Boolean);
+
         } else {
+          console.warn("La IA no devolvió el formato 'Albums' esperado.", responseData);
           finalUrls = filesWithData.map(f => f.url);
         }
 
       } catch (aiError) {
-        console.warn("La IA de 1clic no respondió correctamente, usando orden original.", aiError);
-        // Fallback: Si la IA falla, usamos el orden en que se subieron
+        console.warn("El Backend o la IA no respondieron correctamente, usando orden original.", aiError);
+        // Fallback: Si el servidor falla, usamos el orden original para no bloquear al usuario
         finalUrls = filesWithData.map(f => f.url);
       }
 

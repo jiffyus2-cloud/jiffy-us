@@ -139,7 +139,9 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       : 'bg-white text-gray-400 border-gray-100 hover:border-black hover:text-black'
                   }`}
                 >
-                  <span className="relative z-10">DISEÑO 0{layout}</span>
+                  <span className="relative z-10">
+                    {layout === 1 ? 'Diseño 1' : `DISEÑO 0${layout}`}
+                  </span>
                   {selectedLayout === layout && (
                     <div className="absolute top-1 right-1">
                       <Check size={12} className="text-white" />

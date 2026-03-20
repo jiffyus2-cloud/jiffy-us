@@ -34,13 +34,6 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
 
     if (isSquare) {
       switch (selectedLayout) {
-        case 1:
-          return (
-            <div className="absolute inset-x-0 bottom-[12cqw] flex flex-col items-center text-center px-[6cqw]">
-              <h2 className="text-white text-[9cqw] font-bold uppercase tracking-widest" style={textShadow}>{coverTitle}</h2>
-              <p className="text-white text-[5cqw] mt-[2cqw] font-medium" style={textShadow}>{coverSubtitle}</p>
-            </div>
-          );
         case 2:
           return (
             <div className="absolute inset-x-0 bottom-0 p-[8cqw]">
@@ -168,6 +161,58 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     return null;
   };
 
+  // NUEVO LAYOUT: Diseño 1 en formato cuadrado (Basado en la estructura CoverV1)
+  if (isSquare && selectedLayout === 1) {
+    return (
+      <div 
+        className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        style={{ 
+          width: '100%',
+          aspectRatio: '1 / 1',
+          containerType: 'inline-size'
+        }}
+      >
+        {/* Contenedor de la Imagen (80% superior con padding visual) */}
+        <div className="relative w-full h-[70%] bg-white">
+          <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
+            {coverImage ? (
+              <img 
+                src={coverImage} 
+                alt="Portada del Álbum" 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700" 
+                style={{
+                  objectPosition: '50% 50%',
+                  transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)`
+                }}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
+                  <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
+                     <span className="text-[3cqw] font-black">IMAGE</span>
+                  </div>
+                  <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Frame 4 (El bloque inferior con los textos, max 20% de alto) */}
+        <div className="h-[30%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
+          <div className="text-[5cqw] font-bold tracking-wide text-black text-center leading-none">
+            {coverTitle}
+          </div>
+          {/* Frame 3 (Línea separadora) */}
+          <div className="w-[85%] h-[0.5cqw] bg-black my-[2cqw]"></div>
+          <div className="text-[3cqw] text-gray-600 text-center font-medium tracking-widest">
+            {coverSubtitle}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
@@ -193,7 +238,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
                <span className="text-[3cqw] font-black">IMAGE</span>
             </div>
-            <span className="font-black uppercase tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
+            <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
           </div>
         </div>
       )}
