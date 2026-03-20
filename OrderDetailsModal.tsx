@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, User, Mail, Home, BookImage, FileImage } from 'lucide-react';
+import CoverPreview from './src/app/components/CoverPreview';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -11,6 +12,7 @@ interface Order {
   updatedAt?: string;
   status: string;
   total: number;
+  coverSize?: '20x20' | '30x30' | '21x28' | '28x21';
   shippingAddress?: {
     email?: string;
     name?: string;
@@ -22,6 +24,9 @@ interface Order {
     image?: string;
     title?: string;
     subtitle?: string;
+    year?: string;
+    selectedLayout?: number;
+    coverCrop?: { x: number; y: number; zoom: number };
   };
   pages?: { image: string }[]; // Asumimos que cada página tiene al menos una propiedad 'image'
   [key: string]: any;
@@ -100,20 +105,25 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, order, on
                 <BookImage className="w-5 h-5 text-primary" />
                 Diseño de Portada
               </h4>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                {order.coverData?.image ? (
-                  <div className="aspect-[4/3] rounded-lg overflow-hidden bg-gray-100">
-                    <img src={order.coverData.image} alt="Portada" className="w-full h-full object-cover" />
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-center">
+                {order.coverData && order.coverSize && order.coverData.selectedLayout ? (
+                  <div className="w-full max-w-xs">
+                    <CoverPreview
+                      coverSize={order.coverSize}
+                      coverImage={order.coverData.image || ''}
+                      coverTitle={order.coverData.title || ''}
+                      coverSubtitle={order.coverData.subtitle || ''}
+                      coverYear={order.coverData.year || ''}
+                      selectedLayout={order.coverData.selectedLayout}
+                      coverCrop={order.coverData.coverCrop}
+                    />
                   </div>
                 ) : (
-                  <div className="aspect-[4/3] rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
-                    <span>Sin imagen de portada</span>
+                  // Fallback si no hay suficientes datos para la previsualización completa
+                  <div className="aspect-[4/3] w-full rounded-lg bg-gray-100 flex items-center justify-center text-center text-gray-400 p-4">
+                    <span>No hay suficientes datos para mostrar la previsualización del diseño.</span>
                   </div>
                 )}
-                <div className="mt-4 text-center">
-                  <p className="text-xl font-bold">{order.coverData?.title || 'Sin Título'}</p>
-                  <p className="text-gray-500">{order.coverData?.subtitle || 'Sin Subtítulo'}</p>
-                </div>
               </div>
             </div>
 

@@ -2,22 +2,32 @@ import React, { useMemo } from 'react';
 
 interface CoverPreviewProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
-  coverImage: string;
-  coverTitle: string;
-  coverSubtitle: string;
-  coverYear: string;
+  coverImage?: string;
+  coverTitle?: string;
+  coverSubtitle?: string;
+  coverYear?: string;
   selectedLayout: number;
   coverCrop?: { x: number; y: number; zoom: number };
+  
+  // --- AÑADIDO PARA SOLUCIONAR EL ERROR DE TYPESCRIPT ---
+  customization?: any;
+  photos?: (string | null)[];
+  photoCrops?: Record<string, { x: number; y: number; zoom: number }>;
 }
 
 const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverSize,
-  coverImage,
-  coverTitle,
-  coverSubtitle,
-  coverYear,
+  coverImage = '',
+  coverTitle = '',
+  coverSubtitle = '',
+  coverYear = '',
   selectedLayout,
-  coverCrop = { x: 50, y: 50, zoom: 1 }
+  coverCrop = { x: 50, y: 50, zoom: 1 },
+  
+  // --- VALORES POR DEFECTO PARA LAS NUEVAS PROPS ---
+  customization = {},
+  photos = [],
+  photoCrops = {}
 }) => {
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -121,7 +131,8 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     }
     return null;
   };
-  if(isSquare){
+
+  if (isSquare) {
     if (selectedLayout === 1) {
       return (
         <div 
@@ -171,6 +182,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       );
     }
+    
     if (selectedLayout === 2) {
       return (
         <div 
@@ -221,6 +233,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       );
     }
+    
     if (selectedLayout === 3) {
       return (
         <div 
@@ -259,13 +272,11 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           <div className="absolute inset-[10%] z-10 overflow-hidden pointer-events-none">
             
             {/* Recuadro de textos - TAMAÑO REDUCIDO */}
-            {/* Se cambió: w-[85%] a w-[65%], p-[6cqw] a p-[4cqw], ring-[3cqw] a ring-[2cqw] */}
             <div 
               className="absolute left-1/2 -translate-x-1/2 bottom-[25cqh] bg-white border border-black shadow-2xl p-[4cqw] text-center w-[65%] ring-white ring-[2cqw]"
             >
               
               {/* Título - alineado al centro */}
-              {/* Se redujo el tamaño de texto de 7.5 a 6cqw para encajar mejor */}
               <div className="w-full mb-[1.5cqw]">
                 <h2 
                   className="text-black text-[6cqw] font-black tracking-tight leading-none" 
@@ -278,7 +289,6 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="w-[85%] h-[0.25cqw] bg-black mx-auto my-[2.5cqw]"></div>
 
               {/* Subtítulo - alineado al centro */}
-              {/* Se redujo de 4cqw a 3.5cqw */}
               <div className="w-full">
                 <p 
                   className="text-gray-600 text-[3.5cqw] font-medium tracking-widest leading-tight" 
@@ -348,6 +358,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       );
     }
+    
     if (selectedLayout === 5) {
       return (
         <div 
@@ -370,47 +381,46 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)`
                 }}
             />
-    ) : (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-          <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
-            <span className="text-[3cqw] font-black">IMAGE</span>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
+                  <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
+                    <span className="text-[3cqw] font-black">IMAGE</span>
+                  </div>
+                  <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
+                </div>
+              </div>
+            )}
           </div>
-          <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
+
+          {/* pointer-events-none permite que los clics pasen a través del texto para interactuar con la imagen */}
+          <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
+            
+            {/* Título en la parte superior izquierda del área de la imagen */}
+            <div className="w-full text-left">
+              <h2 
+                className="text-black text-[8cqw] font-bold leading-none" 
+              >
+                {coverTitle}
+              </h2>
+            </div>
+            
+            {/* Subtítulo en la parte inferior derecha del área de la imagen */}
+            <div className="w-full flex justify-end items-end">
+              <p 
+                className="text-black text-[5cqw] font-medium leading-none" 
+              >
+                {coverSubtitle}
+              </p>
+            </div>
+
+          </div>
         </div>
-      </div>
-    )}
-  </div>
-
-  {/* pointer-events-none permite que los clics pasen a través del texto para interactuar con la imagen */}
-  <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
-    
-    {/* Título en la parte superior izquierda del área de la imagen */}
-    <div className="w-full text-left">
-      <h2 
-        className="text-black text-[8cqw] font-bold leading-none" 
-      >
-        {coverTitle}
-      </h2>
-    </div>
-    
-    {/* Subtítulo en la parte inferior derecha del área de la imagen */}
-    <div className="w-full flex justify-end items-end">
-      <p 
-        className="text-black text-[5cqw] font-medium leading-none" 
-      >
-        {coverSubtitle}
-      </p>
-    </div>
-
-  </div>
-</div>
       );
     }
-  
   }
-  // NUEVO LAYOUT: Diseños de bloque para formato cuadrado
   
+  // NUEVO LAYOUT: Diseños de bloque para formato cuadrado
   return (
     <div 
       className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"

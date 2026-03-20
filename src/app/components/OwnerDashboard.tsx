@@ -10,47 +10,132 @@ import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2 } fro
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
+// --- NUEVAS DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
+import jsPDF from 'jspdf';
+import * as htmlToImage from 'html-to-image';
+import { createRoot } from 'react-dom/client';
+import CoverPreview from './CoverPreview'; 
+
 interface Order {
   id: string;
   createdAt: string;
   updatedAt?: string;
   status: string;
   total: number;
-  shippingAddress?: {
-    email?: string;
-    name?: string;
-    address?: string;
-    city?: string;
-    zipCode?: string;
-  };
-  billingAddress?: {
-    email?: string;
-    name?: string;
-    address?: string;
-    city?: string;
-    zipCode?: string;
-  };
+  shippingAddress?: { email?: string; name?: string; address?: string; city?: string; zipCode?: string; };
+  billingAddress?: { email?: string; name?: string; address?: string; city?: string; zipCode?: string; };
   coverData?: {
-    image?: string;
-    title?: string;
-    subtitle?: string;
-    year?: string;
-    layout?: number | string;
-    crop?: {
-      x?: number;
-      y?: number;
-      zoom?: number;
-    };
+    image?: string; title?: string; subtitle?: string; year?: string; layout?: number | string;
+    crop?: { x?: number; y?: number; zoom?: number; };
   };
   customization?: any;
   pages?: any[];
   [key: string]: any;
 }
 
+// ============================================================================
+// FUNCIONES HELPERS IDÉNTICAS A LAS DE OrderDetailsModal PARA EL LAYOUT
+// ============================================================================
+const getClosestAllowed = (count: number, size: string) => {
+  const isSquare = size?.includes('Cuadrado');
+  const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
+  return allowedPhotosPerPage.find(opt => opt >= count) || allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+};
+
+const getGridLayout = (count: number, layout: any, size: string) => {
+  const isHorizontal = size?.includes('Horizontal');
+  const isVertical = size?.includes('Vertical');
+  if (count === 1) return 'grid-cols-1';
+  if (count === 2) {
+    if (layout === 'column') return 'grid-cols-1 grid-rows-2';
+    return 'grid-cols-2';
+  }
+  if (count === 3) {
+    if (isHorizontal) return 'grid-cols-3 grid-rows-1';
+    if (isVertical) return 'grid-cols-1 grid-rows-3';
+    return 'grid-cols-3';
+  }
+  if (count === 4) return 'grid-cols-2 grid-rows-2';
+  if (count === 6) {
+    if (isHorizontal) return 'grid-cols-3 grid-rows-2';
+    if (isVertical) return 'grid-cols-2 grid-rows-3';
+    return 'grid-cols-3 grid-rows-2';
+  }
+  if (count === 9) return 'grid-cols-3 grid-rows-3';
+  return 'grid-cols-2 grid-rows-2';
+};
+
+// ============================================================================
+// COMPONENTE AUXILIAR PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF (ACTUALIZADO)
+// ============================================================================
+const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
+  const size = customization?.size || '';
+  
+  // 1. Extraer los datos con la misma lógica robusta de retrocompatibilidad
+  const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
+  const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
+  const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
+  
+  // 2. Determinar la cuadrícula exacta
+  const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
+  const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
+  const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
+
+  const gridClass = getGridLayout(currentPhotosPerPage, layout, size);
+  
+  // Escala de fuentes para alta resolución
+  const textScale = Math.max(1, Math.round(pxWidth / 800)); 
+
+  return (
+    <div className={`w-full h-full bg-white grid gap-[2%] p-[4%] ${gridClass}`}>
+      {slots.map((photo: string | null, photoIndex: number) => {
+        const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
+        const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
+        const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
+        
+        // Logica para centrado de fotos apaisadas en layouts anchos
+        const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
+
+        return (
+          <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-white flex items-center justify-center w-full h-full border border-gray-100/50">
+            {photo ? (
+              <div className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto bg-gray-100" : "w-full h-full relative bg-gray-100"}>
+                <img 
+                  src={photo} 
+                  crossOrigin="anonymous"
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  style={{
+                    objectPosition: '50% 50%',
+                    transform: `scale(${crop.zoom || 1}) translate(${(50 - (crop.x || 50))}%, ${(50 - (crop.y || 50))}%)`,
+                    transformOrigin: 'center center'
+                  }}
+                />
+              </div>
+            ) : textBox ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
+                <div style={{ 
+                  fontSize: `${(textBox.fontSize || 24) * textScale}px`, 
+                  fontFamily: textBox.fontFamily || 'Arial', 
+                  color: textBox.color || '#000', 
+                  wordBreak: 'break-word' 
+                }}>
+                  {textBox.text}
+                </div>
+              </div>
+            ) : (
+              // Hueco vacío (si el layout tiene 4 huecos pero solo 3 fotos)
+              <div className="bg-gray-50 w-full h-full" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+// ============================================================================
+
 const OwnerDashboard: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('owner_authenticated') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('owner_authenticated') === 'true');
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -64,9 +149,139 @@ const OwnerDashboard: React.FC = () => {
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDownloadingId, setIsDownloadingId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
 
   const ownerKey = import.meta.env.VITE_OWNER_KEY || 'admin123';
+
+  // ============================================================================
+  // MOTOR DE GENERACIÓN DEL PDF DE ALTA RESOLUCIÓN (300 DPI)
+  // ============================================================================
+  const generateAlbumPDF = async (order: Order, onProgress: (progress: number) => void): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // 1. Deducir las dimensiones en CM
+        const parseSize = (sizeStr: string) => {
+          const match = sizeStr.match(/(\d+)\s*x\s*(\d+)/i);
+          if (match) return [parseInt(match[1], 10), parseInt(match[2], 10)];
+          return [20, 20]; // Default Cuadrado
+        };
+        const [wCm, hCm] = parseSize(order.customization?.size || '20x20');
+        
+        // 2. Calcular los píxeles necesarios para 300 DPI (ppp)
+        const pxWidth = Math.round((wCm / 2.54) * 300);
+        const pxHeight = Math.round((hCm / 2.54) * 300);
+
+        const totalItems = 1 + (order.pages?.length || 0);
+        let itemsProcessed = 0;
+
+        const pdf = new jsPDF({
+          orientation: wCm > hCm ? 'landscape' : wCm < hCm ? 'portrait' : 'portrait',
+          unit: 'cm',
+          format: [wCm, hCm]
+        });
+
+        // 3. Crear un "Laboratorio de Renderizado" fuera de la pantalla
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '-99999px'; // Totalmente oculto al usuario
+        container.style.width = `${pxWidth}px`;
+        container.style.height = `${pxHeight}px`;
+        document.body.appendChild(container); 
+        
+        const root = createRoot(container);
+
+        // Función fotográfica: Monta el componente, espera y le toma foto.
+        const renderAndCapture = async (element: React.ReactNode) => {
+          return new Promise<string>((res, rej) => {
+            root.render(
+              <div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>
+                {element}
+              </div>
+            );
+            // Damos 1.5s por página para que las imágenes terminen de descargar desde la web
+            setTimeout(async () => {
+              try {
+                const node = container.firstChild as HTMLElement;
+                const dataUrl = await htmlToImage.toJpeg(node, {
+                  quality: 0.95,
+                  pixelRatio: 1, // El nodo ya tiene tamaño gigante, ratio 1 es suficiente.
+                });
+                res(dataUrl);
+              } catch (e) {
+                rej(e);
+              }
+            }, 1500); 
+          });
+        };
+
+        console.log("Iniciando renderizado de Portada...");
+        // 4. Renderizar y estampar la Portada
+        const coverDataUrl = await renderAndCapture(
+          <CoverPreview
+            coverSize={`${wCm}x${hCm}` as any}
+            coverImage={order.coverData?.image || ''}
+            coverTitle={order.coverData?.title || ''}
+            coverSubtitle={order.coverData?.subtitle || ''}
+            coverYear={order.coverData?.year || ''}
+            
+            // CORRECCIÓN DE TYPESCRIPT
+            selectedLayout={Number(order.coverData?.layout) || 1}
+            coverCrop={{ 
+              x: order.coverData?.crop?.x ?? 50, 
+              y: order.coverData?.crop?.y ?? 50, 
+              zoom: order.coverData?.crop?.zoom ?? 1 
+            }}
+            
+            customization={order.customization}
+            photos={[order.coverData?.image || null, null]} 
+            
+            photoCrops={{ 
+              'cover-0': { 
+                x: order.coverData?.crop?.x ?? 50, 
+                y: order.coverData?.crop?.y ?? 50, 
+                zoom: order.coverData?.crop?.zoom ?? 1 
+              } 
+            }}
+          />
+        );
+        pdf.addImage(coverDataUrl, 'JPEG', 0, 0, wCm, hCm);
+        itemsProcessed++;
+        onProgress(Math.round((itemsProcessed / totalItems) * 100));
+
+        // 5. Renderizar y estampar Páginas Internas
+        if (order.pages && order.pages.length > 0) {
+          for (let i = 0; i < order.pages.length; i++) {
+            console.log(`Renderizando página ${i + 1}/${order.pages.length}...`);
+            pdf.addPage();
+            const pageDataUrl = await renderAndCapture(
+              <AlbumPagePrintView 
+                pageObj={order.pages[i]} 
+                customization={order.customization} 
+                pageIndex={i}
+                order={order}
+                pxWidth={pxWidth}
+              />
+            );
+            pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
+            itemsProcessed++;
+            onProgress(Math.round((itemsProcessed / totalItems) * 100));
+          }
+        }
+
+        // 6. Limpieza y exportación
+        root.unmount();
+        document.body.removeChild(container);
+        onProgress(100);
+        resolve(pdf.output('blob'));
+
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+  // ============================================================================
+
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +302,6 @@ const OwnerDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-
     const fetchOrders = async () => {
       try {
         setIsLoading(true);
@@ -95,8 +309,6 @@ const OwnerDashboard: React.FC = () => {
         const orderSnapshot = await getDocs(ordersCollection);
         const ordersList = orderSnapshot.docs.map(doc => {
           const data = doc.data();
-          
-          // Helper to normalize dates
           const normalizeDate = (dateVal: any) => {
             if (dateVal instanceof Timestamp) return dateVal.toDate().toISOString();
             if (dateVal && typeof dateVal === 'object' && dateVal.seconds) {
@@ -104,7 +316,6 @@ const OwnerDashboard: React.FC = () => {
             }
             return dateVal;
           };
-
           return {
             id: doc.id,
             ...data,
@@ -128,13 +339,11 @@ const OwnerDashboard: React.FC = () => {
         setIsLoading(false);
       }
     };
-
     fetchOrders();
   }, [isAuthenticated]);
 
   useEffect(() => {
     let result = orders;
-
     if (searchTerm) {
       const lowSearch = searchTerm.toLowerCase();
       result = result.filter(order => 
@@ -143,11 +352,9 @@ const OwnerDashboard: React.FC = () => {
         (order.shippingAddress?.name?.toLowerCase().includes(lowSearch))
       );
     }
-
     if (statusFilter !== 'all') {
       result = result.filter(order => order.status === statusFilter);
     }
-
     setFilteredOrders(result);
   }, [searchTerm, statusFilter, orders]);
 
@@ -157,25 +364,20 @@ const OwnerDashboard: React.FC = () => {
   };
 
   const handleDownloadZIP = async (order: Order) => {
-    if (isDownloadingId === order.id) return;
-    setIsDownloadingId(order.id);
+    if (downloadProgress.orderId) return;
+    setDownloadProgress({ orderId: order.id, progress: 0 });
     try {
       const zip = new JSZip();
       const folder = zip.folder(`pedido_${order.id}`);
 
-      if (!folder) {
-        throw new Error("No se pudo crear la carpeta en el ZIP.");
-      }
+      if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
 
-      // 1. Guardar el JSON crudo (Para respaldo técnico)
+      // 1. Guardar el JSON crudo
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
-      // ==========================================
       // 2. CREAR EL ARCHIVO EXCEL (.xlsx) LEGIBLE
-      // ==========================================
       const wb = XLSX.utils.book_new();
-
-      // HOJA 1: Información General y Cliente
+      
       const resumenData = [{
         'ID del Pedido': order.id,
         'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
@@ -187,10 +389,8 @@ const OwnerDashboard: React.FC = () => {
         'Ciudad': order.shippingAddress?.city || 'N/A',
         'Código Postal': order.shippingAddress?.zipCode || 'N/A'
       }];
-      const wsResumen = XLSX.utils.json_to_sheet(resumenData);
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenData), "Resumen General");
 
-      // HOJA 2: Configuración del Producto
       const configData = [{
         'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
         'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
@@ -200,10 +400,8 @@ const OwnerDashboard: React.FC = () => {
         'Año': order.coverData?.year || 'N/A',
         'Layout Portada': order.coverData?.layout || 'N/A'
       }];
-      const wsConfig = XLSX.utils.json_to_sheet(configData);
-      XLSX.utils.book_append_sheet(wb, wsConfig, "Configuración");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(configData), "Configuración");
 
-      // HOJA 3: Detalles Internos (Textos y Layouts)
       let detallesData: any[] = [];
       if (order.pages && Array.isArray(order.pages)) {
         detallesData = order.pages.map((page, i) => ({
@@ -223,127 +421,98 @@ const OwnerDashboard: React.FC = () => {
           'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
         }));
       }
-      
       if (detallesData.length > 0) {
-        const wsDetalles = XLSX.utils.json_to_sheet(detallesData);
-        XLSX.utils.book_append_sheet(wb, wsDetalles, "Detalles del Diseño");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
       }
 
-      // HOJA 4: Reporte Exacto de Imágenes y Crops (NUEVO)
       const imagenesData: any[] = [];
-
-      // Extraer datos de la Portada
       if (order.coverData?.image) {
         imagenesData.push({
-          'Ubicación': 'Portada',
-          'Nombre de Archivo en ZIP': 'portada.jpg',
+          'Ubicación': 'Portada', 'Nombre de Archivo en ZIP': 'portada.jpg',
           'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00',
           'Posición X (%)': order.coverData.crop?.x?.toFixed(2) || '50.00',
           'Posición Y (%)': order.coverData.crop?.y?.toFixed(2) || '50.00',
           'URL Original': order.coverData.image
         });
       }
-
-      // Extraer datos de las páginas del álbum
       if (order.pages && Array.isArray(order.pages)) {
         order.pages.forEach((page, pageIndex) => {
           if (page.images && Array.isArray(page.images)) {
             page.images.forEach((imgUrl: any, imgIndex: number) => {
-              // Lógica robusta para buscar el crop ya sea en la página o en la raíz (pedidos viejos)
               const crop = page.crops?.[imgIndex] || order.photoCrops?.[`${pageIndex}-${imgIndex}`] || { x: 50, y: 50, zoom: 1 };
               imagenesData.push({
-                'Ubicación': `Página ${pageIndex + 1}`,
-                'Nombre de Archivo en ZIP': `pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
-                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00',
-                'Posición X (%)': crop.x?.toFixed(2) || '50.00',
-                'Posición Y (%)': crop.y?.toFixed(2) || '50.00',
-                'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
-              });
-            });
-          }
-        });
-      } 
-      // Extraer datos si es una taza u otro producto
-      else if (order.items && Array.isArray(order.items)) {
-        order.items.forEach((item, itemIndex) => {
-          if (item.photos && Array.isArray(item.photos)) {
-            item.photos.forEach((imgUrl: any, imgIndex: number) => {
-              const crop = item.photoCrops?.[imgIndex] || item.crop || { x: 50, y: 50, zoom: 1 };
-              imagenesData.push({
-                'Ubicación': `Taza ${itemIndex + 1}`,
-                'Nombre de Archivo en ZIP': `taza_${String(itemIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
-                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00',
-                'Posición X (%)': crop.x?.toFixed(2) || '50.00',
-                'Posición Y (%)': crop.y?.toFixed(2) || '50.00',
-                'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
+                'Ubicación': `Página ${pageIndex + 1}`, 'Nombre de Archivo en ZIP': `pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
+                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00', 'Posición X (%)': crop.x?.toFixed(2) || '50.00',
+                'Posición Y (%)': crop.y?.toFixed(2) || '50.00', 'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
               });
             });
           }
         });
       }
-
       if (imagenesData.length > 0) {
-        const wsImagenes = XLSX.utils.json_to_sheet(imagenesData);
-        XLSX.utils.book_append_sheet(wb, wsImagenes, "Reporte de Imágenes");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(imagenesData), "Reporte de Imágenes");
       }
-
-      // Generar el archivo en buffer e inyectarlo en el ZIP
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       folder.file('resumen_pedido.xlsx', excelBuffer);
-      // ==========================================
 
-
-      // 3. Crear subcarpeta para imágenes físicas
+      // 3. Descarga de Archivos de Imagen
       const imgFolder = folder.folder('imagenes');
-      if (!imgFolder) {
-        throw new Error("No se pudo crear la subcarpeta de imágenes.");
-      }
+      if (!imgFolder) throw new Error("No se pudo crear la subcarpeta de imágenes.");
 
       const fetchImageAsBlob = async (url: string) => {
         const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`Error al descargar la imagen: ${url} (estado: ${res.status})`);
-        }
+        if (!res.ok) throw new Error(`Error al descargar la imagen: ${url}`);
         return res.blob();
       };
 
       const imagePromises: Promise<void>[] = [];
-
-      // Descargar Portada
       if (order.coverData?.image) {
         imagePromises.push(
-          fetchImageAsBlob(order.coverData.image).then(blob => {
-            imgFolder.file('portada.jpg', blob);
-          }).catch(e => console.error(`Error descargando portada:`, e))
+          fetchImageAsBlob(order.coverData.image).then(blob => { imgFolder.file('portada.jpg', blob); })
+          .catch(e => console.error(`Error descargando portada:`, e))
         );
       }
-
-      // Descargar Páginas
       if (order.pages && Array.isArray(order.pages)) {
         order.pages.forEach((page, pageIndex) => {
           if (page.images && Array.isArray(page.images) && page.images.length > 0) {
             page.images.forEach((imgUrl: any, imgIndex: number) => {
               if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
                 imagePromises.push(
-                  fetchImageAsBlob(imgUrl).then(blob => {
-                    imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob);
-                  }).catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e))
+                  fetchImageAsBlob(imgUrl).then(blob => { imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob); })
+                  .catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e))
                 );
               }
             });
           }
         });
       }
-
       await Promise.all(imagePromises);
 
+      // ============================================================================
+      // 4. INYECTAR EL PDF DE ALTA RESOLUCIÓN AL ARCHIVO ZIP
+      // ============================================================================
+      try {
+        const pdfBlob = await generateAlbumPDF(order, (progress) => {
+          setDownloadProgress({ orderId: order.id, progress });
+        });
+        folder.file(`Impresion_Album_${order.id}_300DPI.pdf`, pdfBlob);
+      } catch (pdfError) {
+        console.error("Error al generar PDF de alta resolución:", pdfError);
+        alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");
+      }
+      // ============================================================================
+      
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `pedido_${order.id}.zip`);
+
+      // Success: wait a bit before resetting
+      setTimeout(() => {
+        setDownloadProgress({ orderId: null, progress: 0 });
+      }, 2000);
     } catch (error: any) {
       console.error("Error al descargar el ZIP:", error);
-      alert("Hubo un problema al empaquetar las imágenes: " + (error.message || 'Error desconocido'));
-    } finally {
-      setIsDownloadingId(null);
+      alert("Hubo un problema al empaquetar el pedido: " + (error.message || 'Error desconocido'));
+      setDownloadProgress({ orderId: null, progress: 0 });
     }
   };
 
@@ -496,14 +665,24 @@ const OwnerDashboard: React.FC = () => {
                           >
                             <Eye className="w-5 h-5" />
                           </button>
-                          <button
-                            onClick={() => handleDownloadZIP(order)}
-                            disabled={isDownloadingId === order.id}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title='Descargar ZIP'
-                          >
-                            {isDownloadingId === order.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                          </button>
+                          {/* BOTON DE DESCARGA */}
+                          {downloadProgress.orderId === order.id ? (
+                            <div className="w-28 flex items-center gap-2" title={`Renderizando... ${downloadProgress.progress}%`}>
+                              <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
+                                <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${downloadProgress.progress}%` }}></div>
+                              </div>
+                              <span className="text-xs font-mono font-bold text-emerald-600 w-8 text-right">{downloadProgress.progress}%</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleDownloadZIP(order)}
+                              disabled={downloadProgress.orderId !== null}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={'Descargar ZIP con PDF'}
+                            >
+                              <Download className="w-5 h-5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
