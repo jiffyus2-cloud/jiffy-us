@@ -192,7 +192,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-12 mt-12">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-16 mt-12">
         {order.pages?.map((pageObj, pageIndex) => {
           // Lógica robusta que lee tu JSON a la perfección
           const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);

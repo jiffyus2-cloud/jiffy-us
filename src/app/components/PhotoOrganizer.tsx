@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
-  Upload, X, ChevronUp, ChevronDown, Plus, Trash2, 
-  Image as ImageIcon, Grid3x3, Edit3, Move, Check, 
+  Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
+  Image as ImageIcon, Grid3x3, Edit3, Check, 
   ArrowLeft, ArrowRight, Layers, Type, ALargeSmall
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -172,6 +172,9 @@ export default function PhotoOrganizer({
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalFilesToProcess, setTotalFilesToProcess] = useState(0);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -207,7 +210,6 @@ export default function PhotoOrganizer({
     return 'grid-cols-2 grid-rows-2';
   };
 
-  // Update numPages when uploadedPhotos changes to ensure it's within bounds
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
       const minPages = 40;
@@ -217,29 +219,30 @@ export default function PhotoOrganizer({
     }
   }, [uploadedPhotos.length]);
 
-  // 1. Initial Batch Upload
-  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // =========================================================
+  // 1. Initial Batch Upload (OPTIMIZADO CON BLOB URLs)
+  // =========================================================
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const filesArray = Array.from(files);
-    const loadedPhotos: string[] = [];
-    let loadedCount = 0;
+    setTotalFilesToProcess(filesArray.length);
+    setProcessedCount(0);
+    setIsProcessingUpload(true);
+    
+    const newUploadedPhotos: string[] = [];
 
-    filesArray.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (result) {
-          loadedPhotos.push(result);
-          loadedCount++;
-          if (loadedCount === filesArray.length) {
-            setUploadedPhotos(prev => [...prev, ...loadedPhotos]);
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of filesArray) {
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => { newUploadedPhotos.push(e.target?.result as string); setProcessedCount(prev => prev + 1); resolve(); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    setUploadedPhotos(prev => [...prev, ...newUploadedPhotos]);
+    setIsProcessingUpload(false);
   };
 
   // 2. Distribute photos into pages
@@ -248,14 +251,12 @@ export default function PhotoOrganizer({
     const photosToDistribute = [...uploadedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
-    // First round: ensure every page has at least one photo
     for (let i = 0; i < totalPages; i++) {
       if (photosToDistribute.length > 0) {
         newPhotos[i].push(photosToDistribute.shift()!);
       }
     }
 
-    // Subsequent rounds: distribute remaining photos respecting allowed counts
     let pageIndex = 0;
     let consecutiveFullPages = 0;
     
@@ -269,7 +270,7 @@ export default function PhotoOrganizer({
         const toAdd = Math.min(canAdd, photosToDistribute.length);
         if (toAdd > 0) {
           currentPagePhotos.push(...photosToDistribute.splice(0, toAdd));
-          consecutiveFullPages = 0; // Reset as we successfully added to a page
+          consecutiveFullPages = 0;
         } else {
           consecutiveFullPages++;
         }
@@ -288,7 +289,6 @@ export default function PhotoOrganizer({
   const handleAddPage = (index: number) => {
     if (photos.length >= uploadedPhotos.length && uploadedPhotos.length > 0) {
       alert(t('organizer.maxPagesReached') || 'You cannot have more pages than total photos.');
-      // Remove alert for now to allow adding empty pages if user wants
     }
     const newPhotos = [...photos];
     newPhotos.splice(index + 1, 0, []);
@@ -317,15 +317,15 @@ export default function PhotoOrganizer({
     setEditingPageIndex(targetIndex);
   };
 
+  // =========================================================
+  // 3. Añadir imagen individual (OPTIMIZADO CON BLOB URLs)
+  // =========================================================
   const handleAddPhotoToPage = (pageIndex: number, file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        const newPhotos = [...photos];
-        newPhotos[pageIndex] = [...newPhotos[pageIndex], result];
-        onPhotosChange(newPhotos);
-      }
+    reader.onload = (e: any) => {
+      const newPhotos = [...photos];
+      newPhotos[pageIndex] = [...newPhotos[pageIndex], e.target.result as string];
+      onPhotosChange(newPhotos);
     };
     reader.readAsDataURL(file);
   };
@@ -347,7 +347,6 @@ export default function PhotoOrganizer({
     newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
 
-    // Also move crops
     const currentCrop = photoCrops[`${pageIndex}-${photoIndex}`];
     const targetCrop = photoCrops[`${pageIndex}-${targetIndex}`];
     const newCrops = { ...photoCrops };
@@ -399,7 +398,6 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
-  // STEP: UPLOAD
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
@@ -414,16 +412,27 @@ export default function PhotoOrganizer({
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
-          >
-            <ImageIcon className="w-16 h-16 text-gray-400" />
-            <div className="text-center">
-              <p className="text-xl mb-2">{t('organizer.clickToSelect') || 'Click to select photos'}</p>
-              <p className="text-sm text-gray-500">{t('organizer.selectMultiple') || 'You can select multiple files at once'}</p>
+          {isProcessingUpload ? (
+            <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
+              <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
+              <p className="text-xl mb-2">Processing photos...</p>
+              <p className="text-sm text-gray-500">{processedCount} of {totalFilesToProcess} files processed</p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-black h-2.5 rounded-full" style={{ width: `${(processedCount / totalFilesToProcess) * 100}%` }}></div>
+              </div>
             </div>
-          </button>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <ImageIcon className="w-16 h-16 text-gray-400" />
+              <div className="text-center">
+                <p className="text-xl mb-2">{t('organizer.clickToSelect') || 'Click to select photos'}</p>
+                <p className="text-sm text-gray-500">{t('organizer.selectMultiple') || 'You can select multiple files at once'}</p>
+              </div>
+            </button>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -431,6 +440,7 @@ export default function PhotoOrganizer({
             accept="image/*"
             onChange={handleBatchUpload}
             className="hidden"
+            disabled={isProcessingUpload}
           />
 
           <div className="mt-8 flex flex-col gap-4">
@@ -442,7 +452,7 @@ export default function PhotoOrganizer({
             )}
 
             <button
-              disabled={uploadedPhotos.length < 40}
+              disabled={uploadedPhotos.length < 40 || isProcessingUpload}
               onClick={() => setStep('pages')}
               className={`w-full py-4 rounded-lg text-lg font-medium transition-all ${
                 uploadedPhotos.length >= 40
@@ -460,7 +470,6 @@ export default function PhotoOrganizer({
     );
   }
 
-  // STEP: PAGES
   if (step === 'pages') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
@@ -517,7 +526,6 @@ export default function PhotoOrganizer({
   }
 
   const handleComplete = () => {
-    // Validar que todas las páginas tengan al menos una imagen o un cuadro de texto
     const emptyPageIndices = photos.reduce((acc, pagePhotos, index) => {
       const hasPhotos = pagePhotos.length > 0;
       const hasText = textBoxSlots[index] && Object.keys(textBoxSlots[index]).length > 0;
@@ -540,26 +548,24 @@ export default function PhotoOrganizer({
     }
   };
 
-  // STEP: EDITOR (Vertical List)
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-12">
-      <div className="flex items-center justify-between mb-8 sticky top-24 bg-white/95 backdrop-blur-sm z-40 py-4 border-b">
+      <div className="flex items-center justify-between mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
         <div>
-          <h2 className="text-2xl font-bold">{album.name} Editor</h2>
-          <p className="text-gray-500">{photos.length} pages • {photos.flat().length} photos</p>
+          <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
+          <p className="text-sm text-gray-500">{photos.length} pages • {photos.flat().length} photos</p>
         </div>
         <button
           onClick={handleComplete}
-          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium"
+          className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base"
         >
           {t('organizer.complete') || 'Continue to Checkout'}
         </button>
       </div>
 
-      <div className="space-y-12">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-16">
         {photos.map((pagePhotos, pageIndex) => (
           <div key={pageIndex} className="relative group">
-            {/* Page Header / Number */}
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">
                 Page {pageIndex + 1}
@@ -588,7 +594,6 @@ export default function PhotoOrganizer({
               </button>
             </div>
 
-            {/* Page Content */}
             <div 
               className={`bg-white rounded-xl shadow-sm border-2 transition-all overflow-hidden ${
                 editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'
@@ -632,36 +637,34 @@ export default function PhotoOrganizer({
               })()}
             </div>
 
-            {/* Page Actions (when editing page) */}
             {editingPageIndex === pageIndex && (
-              <div className="absolute -right-2 sm:right-2 xl:-right-24 top-1/2 -translate-y-1/2 flex flex-col gap-1 md:gap-2 p-1 md:p-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 animate-in slide-in-from-right-4 w-14 md:w-20">
+              <div className="absolute -right-6 sm:right-2 xl:-right-24 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 animate-in slide-in-from-right-4 w-20">
                 <button
                   onClick={() => handleMovePage(pageIndex, 'up')}
                   disabled={pageIndex === 0}
-                  className="p-2 md:p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
                   title="Move Page Up"
                 >
-                  <ChevronUp className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
+                  <ChevronUp className="w-5 h-5 mx-auto" />
                 </button>
                 <button
                   onClick={() => handleMovePage(pageIndex, 'down')}
                   disabled={pageIndex === photos.length - 1}
-                  className="p-2 md:p-3 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
                   title="Move Page Down"
                 >
-                  <ChevronDown className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
+                  <ChevronDown className="w-5 h-5 mx-auto" />
                 </button>
                 <div className="h-px bg-gray-100 my-1" />
                 
-                {/* Photos Per Page Selection */}
-                <div className="flex flex-col gap-1 px-1">
-                  <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 md:mb-1 leading-tight">Fotos Pág</span>
-                  <div className="grid grid-cols-2 gap-1">
+                <div className="flex flex-col gap-1.5 px-1">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 leading-tight">Fotos Pág</span>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {allowedPhotosPerPage.map(opt => (
                       <button
                         key={opt}
                         onClick={() => onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: opt })}
-                        className={`p-1 md:p-1.5 rounded text-[9px] md:text-[10px] font-bold ${
+                        className={`p-2 rounded-md text-xs font-bold ${
                           (pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === opt 
                             ? 'bg-black text-white' 
                             : 'bg-gray-50 hover:bg-gray-200'
@@ -673,21 +676,20 @@ export default function PhotoOrganizer({
                   </div>
                 </div>
 
-                {/* Layout Selection (Enabled only when 2 photos) */}
                 {(pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === 2 && (
                   <>
                     <div className="h-px bg-gray-100 my-1" />
-                    <div className="flex flex-col gap-1 px-1">
-                      <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 md:mb-1">Layout</span>
+                    <div className="flex flex-col gap-1.5 px-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-1">Layout</span>
                       <button
                         onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })}
-                        className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'row' || !pageLayouts[pageIndex] ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
+                    className={`p-2 rounded-md text-xs font-medium ${pageLayouts[pageIndex] === 'row' || pageLayouts[pageIndex] === undefined ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Fila
                       </button>
                       <button
                         onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })}
-                        className={`p-1 md:p-2 rounded text-[9px] md:text-[10px] font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
+                        className={`p-2 rounded-md text-xs font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
                       >
                         Col
                       </button>
@@ -707,31 +709,21 @@ export default function PhotoOrganizer({
                     };
                     input.click();
                   }}
-                  className="p-2 md:p-3 hover:bg-blue-50 text-blue-600 rounded-lg"
+                  className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg"
                   title={t('organizer.addPhoto')}
                 >
-                  <ImageIcon className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
+                  <ImageIcon className="w-5 h-5 mx-auto" />
                 </button>
                 <button
                   onClick={() => handleDeletePage(pageIndex)}
-                  className="p-2 md:p-3 hover:bg-red-50 text-red-600 rounded-lg"
+                  className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
                   title="Delete Page"
                 >
-                  <Trash2 className="w-5 h-5 md:w-6 md:h-6 mx-auto" />
+                  <Trash2 className="w-5 h-5 mx-auto" />
                 </button>
               </div>
             )}
 
-            {/* Add Page Button (Between Pages) */}
-            <div className="flex justify-center my-6 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => handleAddPage(pageIndex)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-black hover:text-white rounded-full text-sm font-medium transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Insert Page After
-              </button>
-            </div>
           </div>
         ))}
       </div>
@@ -746,7 +738,6 @@ export default function PhotoOrganizer({
         </button>
       </div>
 
-      {/* Text Editor Modal */}
       {editingTextSlot && currentEditingText && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -764,7 +755,6 @@ export default function PhotoOrganizer({
             </div>
 
             <div className="space-y-6">
-              {/* Text Content */}
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.content') || 'Content'}</label>
                 <textarea
@@ -776,7 +766,6 @@ export default function PhotoOrganizer({
                 />
               </div>
 
-              {/* Typography Options */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2">
@@ -808,7 +797,6 @@ export default function PhotoOrganizer({
                 </div>
               </div>
 
-              {/* Color Selection */}
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color') || 'Color'}</label>
                 <div className="flex gap-2">
