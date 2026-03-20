@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall
+  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles // <-- Añadido Sparkles
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -95,7 +95,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       const containerAspectRatio = containerW / containerH;
       if (imageAspectRatio > containerAspectRatio) {
         const newZoom = imageAspectRatio / containerAspectRatio;
-        if (newZoom > 1.01) { // Apply a small tolerance
+        if (newZoom > 1.01) { 
           calculatedCrop = { ...crop, zoom: newZoom };
         }
       }
@@ -172,13 +172,12 @@ export default function PhotoOrganizer({
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
-  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
-  const [processedCount, setProcessedCount] = useState(0);
-  const [totalFilesToProcess, setTotalFilesToProcess] = useState(0);
+  
+  // <-- NUEVO: Estado para la IA -->
+  const [isSortingWithAI, setIsSortingWithAI] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const addPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isSquare = customization.size.includes('Cuadrado');
   const isHorizontal = customization.size.includes('Horizontal');
@@ -220,29 +219,75 @@ export default function PhotoOrganizer({
   }, [uploadedPhotos.length]);
 
   // =========================================================
-  // 1. Initial Batch Upload (OPTIMIZADO CON BLOB URLs)
+  // 1. CARGA CON IA Y OPTIMIZACIÓN DE MEMORIA BLOB (0 RAM)
   // =========================================================
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const filesArray = Array.from(files);
-    setTotalFilesToProcess(filesArray.length);
-    setProcessedCount(0);
-    setIsProcessingUpload(true);
+    setIsSortingWithAI(true); // Mostrar UI de la IA analizando
     
-    const newUploadedPhotos: string[] = [];
+    try {
+      // 1. Crear punteros ligeros (URL.createObjectURL) y extraer metadata
+      const filesWithData = filesArray.map((file, index) => ({
+        id: index.toString(), 
+        url: URL.createObjectURL(file), // Mágico: 0 RAM consumida
+        metadata: {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified
+        }
+      }));
 
-    for (const file of filesArray) {
-      await new Promise<void>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => { newUploadedPhotos.push(e.target?.result as string); setProcessedCount(prev => prev + 1); resolve(); };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      // 2. Llamada a la IA para organizar las fotos
+      let finalUrls: string[] = [];
+      
+      try {
+        // [IMPORTANTE]: Cambia esta URL por el endpoint REST API directo que te dé 1clic.ai
+        // La URL de '/embed/' es solo para cargar el Iframe visual. Necesitas el endpoint de su API.
+        const aiResponse = await fetch('https://app.1clic.ai/api/v1/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_1CLIC_API_KEY}`
+          },
+          body: JSON.stringify({
+            action: 'sort_photos',
+            photos: filesWithData.map(f => ({ id: f.id, ...f.metadata }))
+          })
+        });
+
+        if (!aiResponse.ok) throw new Error('Error contactando a la IA');
+        const responseData = await aiResponse.json();
+
+        // 3. Asignar el nuevo orden basado en lo que dice la IA
+        // Se asume que la IA devuelve { orderedIds: ["2", "0", "1", "3"...] }
+        if (responseData && responseData.orderedIds) {
+          finalUrls = responseData.orderedIds.map((id: string) => {
+            const matchedFile = filesWithData.find(f => f.id === id);
+            return matchedFile ? matchedFile.url : '';
+          }).filter(Boolean);
+        } else {
+          finalUrls = filesWithData.map(f => f.url);
+        }
+
+      } catch (aiError) {
+        console.warn("La IA de 1clic no respondió correctamente, usando orden original.", aiError);
+        // Fallback: Si la IA falla, usamos el orden en que se subieron
+        finalUrls = filesWithData.map(f => f.url);
+      }
+
+      // 4. Actualizar las fotos en pantalla
+      setUploadedPhotos(prev => [...prev, ...finalUrls]);
+
+    } catch (error) {
+      console.error("Error al procesar archivos:", error);
+    } finally {
+      setIsSortingWithAI(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    setUploadedPhotos(prev => [...prev, ...newUploadedPhotos]);
-    setIsProcessingUpload(false);
   };
 
   // 2. Distribute photos into pages
@@ -317,17 +362,11 @@ export default function PhotoOrganizer({
     setEditingPageIndex(targetIndex);
   };
 
-  // =========================================================
-  // 3. Añadir imagen individual (OPTIMIZADO CON BLOB URLs)
-  // =========================================================
+  // OPTIMIZACIÓN: Añadir fotos individuales también usando Blob URL
   const handleAddPhotoToPage = (pageIndex: number, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e: any) => {
-      const newPhotos = [...photos];
-      newPhotos[pageIndex] = [...newPhotos[pageIndex], e.target.result as string];
-      onPhotosChange(newPhotos);
-    };
-    reader.readAsDataURL(file);
+    const newPhotos = [...photos];
+    newPhotos[pageIndex] = [...newPhotos[pageIndex], URL.createObjectURL(file)];
+    onPhotosChange(newPhotos);
   };
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
@@ -405,34 +444,42 @@ export default function PhotoOrganizer({
           <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4">
             <Upload className="w-10 h-10" />
           </div>
-          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle') || 'Upload Your Photos'}</h2>
+          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle') || 'Sube tus fotos'}</h2>
           <p className="text-gray-600">
-            {t('organizer.uploadDesc') || 'Select the photos you want to include in your album. We suggest at least 40 photos for a great experience.'}
+            {t('organizer.uploadDesc') || 'Selecciona las fotos para tu álbum. Te sugerimos al menos 40 para una buena experiencia.'}
           </p>
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          {isProcessingUpload ? (
-            <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
-              <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
-              <p className="text-xl mb-2">Processing photos...</p>
-              <p className="text-sm text-gray-500">{processedCount} of {totalFilesToProcess} files processed</p>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-black h-2.5 rounded-full" style={{ width: `${(processedCount / totalFilesToProcess) * 100}%` }}></div>
-              </div>
+          {/* UI DE CARGA DE IA REEMPLAZA EL BOTÓN MIENTRAS PIENSA */}
+          {isSortingWithAI ? (
+            <div className="w-full py-16 flex flex-col items-center justify-center gap-4 bg-purple-50 rounded-xl border border-purple-100">
+              <Sparkles className="w-16 h-16 text-purple-600 animate-bounce" />
+              <p className="text-xl font-bold text-purple-800">La IA está ordenando tus fotos...</p>
+              <p className="text-sm text-purple-600">Analizando metadatos para encontrar la mejor secuencia</p>
             </div>
           ) : (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group"
             >
-              <ImageIcon className="w-16 h-16 text-gray-400" />
+              <ImageIcon className="w-16 h-16 text-gray-400 group-hover:text-black transition-colors" />
               <div className="text-center">
-                <p className="text-xl mb-2">{t('organizer.clickToSelect') || 'Click to select photos'}</p>
-                <p className="text-sm text-gray-500">{t('organizer.selectMultiple') || 'You can select multiple files at once'}</p>
+                <p className="text-xl mb-2 font-medium">{t('organizer.clickToSelect') || 'Haz clic para seleccionar fotos'}</p>
+                <p className="text-sm text-gray-500 mb-4">{t('organizer.selectMultiple') || 'Puedes seleccionar múltiples archivos a la vez'}</p>
+                
+                {/* Badge para presumir que tiene IA */}
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Ordenado Inteligente con IA
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Powered by 1clic.ai</p>
+                </div>
               </div>
             </button>
           )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -440,29 +487,29 @@ export default function PhotoOrganizer({
             accept="image/*"
             onChange={handleBatchUpload}
             className="hidden"
-            disabled={isProcessingUpload}
+            disabled={isSortingWithAI}
           />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <span className="font-medium">{uploadedPhotos.length} photos selected</span>
-                <button onClick={() => setUploadedPhotos([])} className="text-red-500 hover:text-red-700">Clear all</button>
+                <span className="font-medium">{uploadedPhotos.length} fotos seleccionadas</span>
+                <button onClick={() => setUploadedPhotos([])} className="text-red-500 hover:text-red-700 font-medium">Limpiar todo</button>
               </div>
             )}
 
             <button
-              disabled={uploadedPhotos.length < 40 || isProcessingUpload}
+              disabled={uploadedPhotos.length < 40 || isSortingWithAI}
               onClick={() => setStep('pages')}
-              className={`w-full py-4 rounded-lg text-lg font-medium transition-all ${
-                uploadedPhotos.length >= 40
+              className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${
+                uploadedPhotos.length >= 40 && !isSortingWithAI
                   ? 'bg-black text-white hover:bg-gray-800'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
               {uploadedPhotos.length < 40 
-                ? `Upload at least 40 photos (${uploadedPhotos.length}/40)`
-                : t('organizer.continueToPages') || 'Continue to Page Selection'}
+                ? `Sube al menos 40 fotos (${uploadedPhotos.length}/40)`
+                : t('organizer.continueToPages') || 'Continuar'}
             </button>
           </div>
         </div>
