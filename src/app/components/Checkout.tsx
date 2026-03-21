@@ -83,27 +83,62 @@ export default function Checkout() {
     );
   }
 
-  // Ahora todo se lee de orderData (lo que vino de Firebase)
   const product = orderData.product;
 
   const calculateTotal = () => {
-    const basePrice = product?.basePrice || product?.price || 0;
-    switch (product?.type) {
-      case 'mug': {
-        const material = orderData.customization?.material;
-        let materialSurcharge = material === 'porcelain' ? 3 : (material === 'stainless-steel' ? 4 : 0);
-        return (basePrice + materialSurcharge) * (orderData.items?.length || 1);
-      }
-      case 'photo-pack':
-        return basePrice * (orderData.photos?.length || 0);
-      default:
-        return basePrice;
+    if (!product || !orderData) {
+      return 0;
     }
+
+    // MAGIA AQUÍ: Forzamos minúsculas. Si la BD dice "Album", "ALBUM" o lo que sea, no se romperá.
+    const productType = String(product.type || product.name || '').toLowerCase();
+
+    if (productType.includes('album') || productType.includes('photobook')) {
+      const size = orderData.customization?.size || '';
+      const pageCount = orderData.pages?.length || 0;
+      const basePages = 40;
+      let basePrice = 0;
+      let additionalPagePrice = 0;
+
+      // LÓGICA DE PRECIOS EXACTA PARA COLOMBIA (Añadido 2x2 por retrocompatibilidad)
+      if (size.includes('20x20') || size.includes('2x2')) {
+        basePrice = 150000;
+        additionalPagePrice = 3750;
+      } else if (size.includes('30x30')) {
+        basePrice = 190000;
+        additionalPagePrice = 4750;
+      } else if (size.includes('28x21') || size.includes('21x28')) {
+        basePrice = 180000;
+        additionalPagePrice = 4500;
+      } else {
+        // Fallback de seguridad
+        basePrice = 150000;
+        additionalPagePrice = 3750;
+      }
+
+      if (pageCount > basePages) {
+        return basePrice + ((pageCount - basePages) * additionalPagePrice);
+      }
+      return basePrice;
+    } 
+    
+    if (productType.includes('mug') || productType.includes('taza')) {
+      const mugCount = orderData.items?.length || 1;
+      return 45000 * mugCount;
+    } 
+    
+    if (productType.includes('photo') || productType.includes('foto')) {
+      const basePrice = product.basePrice || product.price || 0;
+      return basePrice * (orderData.photos?.length || 0);
+    }
+
+    // Fallback por si venden un producto nuevo no contemplado arriba
+    return product.basePrice || product.price || 0;
   };
 
   const subtotal = calculateTotal();
-  const shipping = 9.99;
-  const tax = subtotal * 0.08;
+  const shipping = 0; // El envío se calculará en un futuro
+  const tax = 0; // Los impuestos se calcularán en un futuro
   const total = subtotal + shipping + tax;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,17 +172,16 @@ export default function Checkout() {
       // 1. Actualizamos las direcciones y el total en Firestore
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
 
-      // -------------------------------------------------------------
-      // AQUÍ ESTÁ LA LÍNEA CLAVE QUE FALTABA:
       // Guardamos el ID del pedido para que Success.tsx sepa qué validar
-      // -------------------------------------------------------------
       localStorage.setItem('pending_order_id', state.orderId);
 
       // 2. Llamada directa a tu Backend de Stripe en Cloud Run
-      const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/create-checkout', {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://jiffy-backend-938778636106.europe-west1.run.app';
+      const response = await fetch(`${backendUrl}/stripe/create-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // CORRECCIÓN: Volvemos a mandar el número entero exacto, Stripe cobra COP sin decimales.
           amount: Math.round(total * 100), 
           title: product.name || 'Álbum Jiffy', 
           orderId: state.orderId,
@@ -220,31 +254,37 @@ export default function Checkout() {
                   <span>{orderData.customization.size}</span>
                 </div>
               )}
+              {product.type === 'album' && orderData.pages && (
+                 <div className="flex justify-between text-sm">
+                   <span className="text-gray-600">Páginas Totales</span>
+                   <span className="font-medium">{orderData.pages.length} ({orderData.pages.length > 40 ? `+${orderData.pages.length - 40} extra` : 'Base'})</span>
+                 </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Envío</span>
-                <span>${shipping.toFixed(2)}</span>
+                <span>${shipping.toLocaleString('es-CO')} COP</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Impuestos (8%)</span>
-                <span>${tax.toFixed(2)}</span>
+                <span className="text-gray-600">Impuestos</span>
+                <span>${tax.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
 
             <div className="border-t-2 border-gray-200 mt-4 pt-4">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Total</span>
-                <span className="text-2xl font-bold">${total.toFixed(2)}</span>
+                <span className="text-2xl font-bold">${total.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
 
-            {/* Vista previa segura, solo si existe coverData o product image */}
+            {/* Vista previa segura */}
             {(orderData.coverData?.image || product?.image) && (
               <div className="mt-8 pt-6 border-t border-gray-200">
                 <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">Vista previa</p>
@@ -420,7 +460,7 @@ export default function Checkout() {
                 </>
               ) : (
                 <>
-                  Pagar Ahora - ${total.toFixed(2)}
+                  Pagar Ahora - ${total.toLocaleString('es-CO')} COP
                 </>
               )}
             </button>
