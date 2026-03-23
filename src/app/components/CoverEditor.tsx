@@ -140,7 +140,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   }`}
                 >
                   <span className="relative z-10">
-                    {layout === 1 ? 'Diseño 1' : `DISEÑO 0${layout}`}
+                    {layout === 1 ? 'DISEÑO 1' : `DISEÑO 0${layout}`}
                   </span>
                   {selectedLayout === layout && (
                     <div className="absolute top-1 right-1">
