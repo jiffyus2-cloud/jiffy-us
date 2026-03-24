@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged, 
+  sendPasswordResetEmail,
   User 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -17,6 +18,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<User>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>; // ✨ Nueva función
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,8 +104,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // ✨ Función nativa de Firebase para recuperar contraseña
+  const resetPassword = async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userData, error, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, userData, error, isLoading, login, register, logout, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

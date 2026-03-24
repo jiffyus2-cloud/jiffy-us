@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
+import { Eye, EyeOff, ArrowLeft, MailCheck } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -14,19 +15,22 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
-  const { login, isLoading, error } = useAuth();
+  // ✨ Nuevos estados para el flujo de recuperación de contraseña
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  
+  const { login, resetPassword, isLoading, error } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await login(email, password);
       onSuccess?.();
       
-      // --- CORRECCIÓN DE ENRUTAMIENTO ---
-      // Verificamos si 'from' es un texto simple (ej. '/create') o un objeto
       const stateFrom = (location.state as any)?.from;
       const from = typeof stateFrom === 'string' ? stateFrom : (stateFrom?.pathname || '/dashboard');
       
@@ -36,15 +40,102 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     }
   };
 
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await resetPassword(email);
+      setResetSuccess(true);
+    } catch (err) {
+      // Error handled by useAuth
+    }
+  };
+
+  // ✨ VISTA DE RECUPERACIÓN DE CONTRASEÑA
+  if (isResetMode) {
+    return (
+      <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">Recuperar contraseña</CardTitle>
+          <CardDescription className="text-center">
+            {resetSuccess 
+              ? "Revisa tu bandeja de entrada" 
+              : "Ingresa tu correo y te enviaremos un enlace seguro para restablecerla."}
+          </CardDescription>
+        </CardHeader>
+        
+        {resetSuccess ? (
+          <>
+            <CardContent className="flex flex-col items-center py-6">
+              <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                <MailCheck size={32} />
+              </div>
+              <p className="text-center text-sm text-gray-600 px-4">
+                Hemos enviado un enlace a <strong>{email}</strong>. Haz clic en él para crear una nueva contraseña.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  setIsResetMode(false);
+                  setResetSuccess(false);
+                  setPassword('');
+                }}
+              >
+                Volver al inicio de sesión
+              </Button>
+            </CardFooter>
+          </>
+        ) : (
+          <form onSubmit={handleResetSubmit}>
+            <CardContent className="space-y-4 py-2.5">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Correo electrónico</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="nombre@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-4 pt-4">
+              <Button type="submit" className="w-full bg-primary" disabled={isLoading || !email}>
+                {isLoading ? 'Enviando...' : 'Enviar enlace'}
+              </Button>
+              <button 
+                type="button"
+                onClick={() => setIsResetMode(false)}
+                className="flex items-center justify-center text-sm text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft size={16} className="mr-1" />
+                Volver atrás
+              </button>
+            </CardFooter>
+          </form>
+        )}
+      </Card>
+    );
+  }
+
+  // ✨ VISTA NORMAL DE INICIO DE SESIÓN
   return (
-    <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100">
+    <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100 animate-in fade-in zoom-in-95 duration-200">
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl font-bold text-center">Bienvenido de nuevo</CardTitle>
         <CardDescription className="text-center">
           Ingresa tus credenciales para acceder a tu cuenta
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleLoginSubmit}>
         <CardContent className="space-y-4 py-2.5">
           {error && (
             <Alert variant="destructive">
@@ -65,14 +156,32 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Contraseña</Label>
+              {/* ✨ Botón para abrir recuperación de contraseña */}
+              <button 
+                type="button"
+                onClick={() => setIsResetMode(true)}
+                className="text-xs font-medium text-primary hover:underline focus:outline-none"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
             </div>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
@@ -81,7 +190,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           </Button>
           <div className="text-center text-sm">
             ¿No tienes una cuenta?{' '}
-            {/* CORRECCIÓN: Pasamos el estado al Link para no perder la memoria de dónde venimos */}
             <Link 
               to="/registro" 
               state={{ from: (location.state as any)?.from }} 
