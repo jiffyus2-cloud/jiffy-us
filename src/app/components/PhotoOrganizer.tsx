@@ -242,6 +242,7 @@ export default function PhotoOrganizer({
       }));
 
       // 2. Llamada a TU PROPIO BACKEND (NestJS)
+      // 2. Llamada a TU PROPIO BACKEND (NestJS)
       let finalUrls: string[] = [];
       
       try {
@@ -253,7 +254,13 @@ export default function PhotoOrganizer({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            photos: filesWithData.map(f => ({ id: f.id, ...f.metadata }))
+            photos_data: filesWithData.map(f => ({ id: f.id, ...f.metadata })),
+            page_count: numPages,
+            layout_preferences: {
+              isSquare,
+              isHorizontal,
+              isVertical
+            }
           })
         });
 
@@ -261,7 +268,8 @@ export default function PhotoOrganizer({
         const responseData = await aiResponse.json();
 
         // 3. MAGIA NUEVA: Leer la estructura compleja de tu IA ("Albums")
-        if (responseData && responseData.Albums && Array.isArray(responseData.Albums)) {
+        // Ahora responseData incluye directamente { success: true, Albums: [...], Layout_recommendations: {...} }
+        if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
           const orderedIdsFromAI: string[] = [];
           
           // Recorremos los grupos (álbumes) que hizo la IA y ponemos las fotos en fila
@@ -277,14 +285,23 @@ export default function PhotoOrganizer({
             return matchedFile ? matchedFile.url : '';
           }).filter(Boolean);
 
+          // Opcional: Podrías guardar responseData.Layout_recommendations en un estado 
+          // si quieres mostrar tips de diseño en la interfaz en el futuro.
+
         } else {
           console.warn("La IA no devolvió el formato 'Albums' esperado.", responseData);
           finalUrls = filesWithData.map(f => f.url);
         }
 
-      } catch (aiError) {
-        console.warn("El Backend o la IA no respondieron correctamente, usando orden original.", aiError);
-        // Fallback: Si el servidor falla, usamos el orden original para no bloquear al usuario
+      } catch (aiError: any) {
+        // Logueamos el error para nosotros, pero no rompemos la app
+        console.warn("El Backend o la IA fallaron, usando orden original.", aiError);
+        
+        // Aquí puedes lanzar un Toast/Notificación visual si usas alguna librería como react-hot-toast:
+        // toast.error("La organización inteligente no está disponible en este momento. Usando orden original.");
+        alert("La organización con IA tuvo un pequeño contratiempo. Hemos cargado tus fotos en su orden original para que no pierdas tiempo.");
+        
+        // Fallback: Si el servidor falla, usamos el orden original de subida
         finalUrls = filesWithData.map(f => f.url);
       }
 
