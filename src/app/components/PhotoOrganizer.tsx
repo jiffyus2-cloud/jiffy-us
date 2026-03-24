@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles
+  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles, Settings
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -103,7 +103,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   }
 
   return (
-    <div className={`relative group/photo overflow-hidden rounded-lg bg-white ${editingPageIndex === pageIndex ? 'border border-gray-300' : ''} flex items-center justify-center`}>
+    <div className={`relative group/photo overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
       {photo ? (
         <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
             <ImageCropper 
@@ -154,34 +154,39 @@ const AlbumEditorPhotoSlot: React.FC<{
 
 export default function PhotoOrganizer({ 
   album, 
-  customization, 
-  photos, 
+  customization = {} as CustomizationOptions, 
+  photos = [], 
   onPhotosChange, 
-  photoCrops,
+  photoCrops = {},
   onPhotoCropsChange,
-  textBoxSlots,
+  textBoxSlots = {},
   onTextBoxSlotsChange,
-  pageLayouts,
+  pageLayouts = {},
   onPageLayoutsChange,
-  pageLayoutVariants,
+  pageLayoutVariants = {},
   onPageLayoutVariantsChange,
   onComplete 
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
-  const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
+  
+  const safePhotos = photos || [];
+  const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
+  
+  const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [numPages, setNumPages] = useState(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
-  // <-- Estado para la IA -->
+  const [advancedSettingsModal, setAdvancedSettingsModal] = useState<number | null>(null);
+  
   const [isSortingWithAI, setIsSortingWithAI] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isSquare = customization.size.includes('Cuadrado');
-  const isHorizontal = customization.size.includes('Horizontal');
-  const isVertical = customization.size.includes('Vertical');
+  const isSquare = sizeStr.includes('Cuadrado');
+  const isHorizontal = sizeStr.includes('Horizontal');
+  const isVertical = sizeStr.includes('Vertical');
   const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
 
   const getClosestAllowed = (count: number) => {
@@ -218,21 +223,17 @@ export default function PhotoOrganizer({
     }
   }, [uploadedPhotos.length]);
 
-  // =========================================================
-  // 1. CARGA CON IA A TRAVÉS DEL BACKEND PROXY (FIXED)
-  // =========================================================
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const filesArray = Array.from(files);
-    setIsSortingWithAI(true); // Mostrar UI de la IA analizando
+    setIsSortingWithAI(true); 
     
     try {
-      // 1. Crear punteros ligeros (URL.createObjectURL) y extraer metadata
       const filesWithData = filesArray.map((file, index) => ({
         id: index.toString(), 
-        url: URL.createObjectURL(file), // Mágico: 0 RAM consumida
+        url: URL.createObjectURL(file),
         metadata: {
           name: file.name,
           size: file.size,
@@ -241,8 +242,6 @@ export default function PhotoOrganizer({
         }
       }));
 
-      // 2. Llamada a TU PROPIO BACKEND (NestJS)
-      // 2. Llamada a TU PROPIO BACKEND (NestJS)
       let finalUrls: string[] = [];
       
       try {
@@ -267,45 +266,29 @@ export default function PhotoOrganizer({
         if (!aiResponse.ok) throw new Error('Error contactando a nuestro propio backend de IA');
         const responseData = await aiResponse.json();
 
-        // 3. MAGIA NUEVA: Leer la estructura compleja de tu IA ("Albums")
-        // Ahora responseData incluye directamente { success: true, Albums: [...], Layout_recommendations: {...} }
         if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
           const orderedIdsFromAI: string[] = [];
-          
-          // Recorremos los grupos (álbumes) que hizo la IA y ponemos las fotos en fila
           responseData.Albums.forEach((album: any) => {
             if (album.photo_ids && Array.isArray(album.photo_ids)) {
               orderedIdsFromAI.push(...album.photo_ids);
             }
           });
 
-          // Convertimos esos IDs ordenados de vuelta a nuestras imágenes (Blob URLs)
           finalUrls = orderedIdsFromAI.map((id: string) => {
             const matchedFile = filesWithData.find(f => f.id === id);
             return matchedFile ? matchedFile.url : '';
           }).filter(Boolean);
-
-          // Opcional: Podrías guardar responseData.Layout_recommendations en un estado 
-          // si quieres mostrar tips de diseño en la interfaz en el futuro.
-
         } else {
           console.warn("La IA no devolvió el formato 'Albums' esperado.", responseData);
           finalUrls = filesWithData.map(f => f.url);
         }
 
       } catch (aiError: any) {
-        // Logueamos el error para nosotros, pero no rompemos la app
         console.warn("El Backend o la IA fallaron, usando orden original.", aiError);
-        
-        // Aquí puedes lanzar un Toast/Notificación visual si usas alguna librería como react-hot-toast:
-        // toast.error("La organización inteligente no está disponible en este momento. Usando orden original.");
         alert("La organización con IA tuvo un pequeño contratiempo. Hemos cargado tus fotos en su orden original para que no pierdas tiempo.");
-        
-        // Fallback: Si el servidor falla, usamos el orden original de subida
         finalUrls = filesWithData.map(f => f.url);
       }
 
-      // 4. Actualizar las fotos en pantalla
       setUploadedPhotos(prev => [...prev, ...finalUrls]);
 
     } catch (error) {
@@ -316,7 +299,6 @@ export default function PhotoOrganizer({
     }
   };
 
-  // 2. Distribute photos into pages
   const handleFinalizeSetup = () => {
     const totalPages = Math.max(40, numPages);
     const photosToDistribute = [...uploadedPhotos];
@@ -356,7 +338,6 @@ export default function PhotoOrganizer({
     setStep('editor');
   };
 
-  // Editor Actions
   const handleAddPage = (index: number) => {
     if (photos.length >= uploadedPhotos.length && uploadedPhotos.length > 0) {
       alert(t('organizer.maxPagesReached') || 'You cannot have more pages than total photos.');
@@ -388,7 +369,6 @@ export default function PhotoOrganizer({
     setEditingPageIndex(targetIndex);
   };
 
-  // OPTIMIZACIÓN: Añadir fotos individuales también usando Blob URL
   const handleAddPhotoToPage = (pageIndex: number, file: File) => {
     const newPhotos = [...photos];
     newPhotos[pageIndex] = [...newPhotos[pageIndex], URL.createObjectURL(file)];
@@ -463,6 +443,191 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
+  // ✨ MODAL DE AJUSTES AVANZADOS E INTERACTIVOS DE PÁGINA ✨
+  const renderAdvancedSettingsModal = () => {
+    if (advancedSettingsModal === null) return null;
+    const pageIndex = advancedSettingsModal;
+    if (!photos || !photos[pageIndex]) return null;
+
+    const pagePhotos = photos[pageIndex];
+    const currentVariant = pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length);
+    const currentLayout = pageLayouts[pageIndex] || 'grid';
+    
+    const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
+
+    return (
+      <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full p-4 sm:p-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+          <div className="flex justify-between items-center mb-4 sm:mb-6 border-b border-gray-100 pb-3 sm:pb-4">
+            <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><Settings className="w-5 h-5 sm:w-6 sm:h-6"/> Ajustes de la Página {pageIndex + 1}</h3>
+            <button 
+              onClick={() => {
+                setAdvancedSettingsModal(null);
+                setEditingPageIndex(null);
+              }} 
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5 sm:w-6 sm:h-6"/>
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+            
+            {/* COLUMNA IZQUIERDA: VISTA PREVIA INTERACTIVA */}
+            <div className="bg-gray-50 rounded-2xl p-4 sm:p-6 border border-gray-200 flex flex-col items-center justify-center shadow-inner">
+              <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Previsualización Interactiva
+              </p>
+              
+              <div 
+                className="bg-white rounded-[3%] shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all"
+                style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+              >
+                <div className={`grid gap-2 p-3 sm:p-4 h-full ${getGridLayout(currentVariant, currentLayout)}`}>
+                  {slots.map((photo, photoIndex) => {
+                    const textBox = textBoxSlots[pageIndex]?.[photoIndex];
+                    const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
+                    const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && currentLayout !== 'column';
+                    
+                    return (
+                      <AlbumEditorPhotoSlot
+                        key={photoIndex}
+                        photo={photo}
+                        textBox={textBox}
+                        crop={crop}
+                        isHalfHeightLayout={isHalfHeightLayout}
+                        pageIndex={pageIndex}
+                        photoIndex={photoIndex}
+                        editingPageIndex={pageIndex} // Habilita el modo editable
+                        handleCropChange={handleCropChange}
+                        handleMovePhotoWithinPage={handleMovePhotoWithinPage}
+                        handleRemovePhotoFromPage={handleRemovePhotoFromPage}
+                        setEditingTextSlot={setEditingTextSlot}
+                        handleRemoveTextBox={handleRemoveTextBox}
+                        handleAddPhotoToPage={handleAddPhotoToPage}
+                        handleAddTextBox={handleAddTextBox}
+                        t={t}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div className="mt-4 sm:mt-6 text-center max-w-xs space-y-1">
+                <p className="text-xs font-medium text-gray-600">
+                  Ajusta el zoom o arrastra la foto directamente aquí.
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  También puedes eliminar fotos o añadir textos.
+                </p>
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA: AJUSTES Y CONTROLES */}
+            <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
+              <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Diseño y Distribución</h4>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Elementos en página</label>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {allowedPhotosPerPage.map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: opt })}
+                          className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg border-2 text-xs font-bold transition-all ${currentVariant === opt ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {currentVariant === 2 && (
+                    <div className="pt-2 border-t border-gray-50">
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">Orientación del Layout</label>
+                      <div className="flex gap-1.5 sm:gap-2">
+                        <button
+                          onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })}
+                          className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout !== 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}
+                        >
+                          En Fila
+                        </button>
+                        <button
+                          onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })}
+                          className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout === 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}
+                        >
+                          En Columna
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Acciones de Página</h4>
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                  <button
+                    onClick={() => { handleMovePage(pageIndex, 'up'); setAdvancedSettingsModal(pageIndex - 1); }}
+                    disabled={pageIndex === 0}
+                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300 font-medium disabled:opacity-50 disabled:hover:bg-gray-50 transition-colors text-xs"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5"/> Arriba
+                  </button>
+                  <button
+                    onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }}
+                    disabled={pageIndex === safePhotos.length - 1}
+                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300 font-medium disabled:opacity-50 disabled:hover:bg-gray-50 transition-colors text-xs"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5"/> Abajo
+                  </button>
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAddPhotoToPage(pageIndex, file);
+                      };
+                      input.click();
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 font-medium transition-colors text-xs"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5"/> Añadir Foto
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleDeletePage(pageIndex);
+                      setAdvancedSettingsModal(null);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300 font-medium transition-colors text-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5"/> Eliminar
+                  </button>
+                </div>
+              </div>
+              
+              <div className="pt-2 flex justify-end w-full">
+                <button 
+                  onClick={() => {
+                    setAdvancedSettingsModal(null);
+                    setEditingPageIndex(null);
+                  }}
+                  className="px-6 py-2.5 sm:py-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors w-full shadow-md text-sm"
+                >
+                  Guardar y Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
@@ -477,7 +642,6 @@ export default function PhotoOrganizer({
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          {/* UI DE CARGA DE IA REEMPLAZA EL BOTÓN MIENTRAS PIENSA */}
           {isSortingWithAI ? (
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4 bg-purple-50 rounded-xl border border-purple-100">
               <Sparkles className="w-16 h-16 text-purple-600 animate-bounce" />
@@ -494,7 +658,6 @@ export default function PhotoOrganizer({
                 <p className="text-xl mb-2 font-medium">{t('organizer.clickToSelect') || 'Haz clic para seleccionar fotos'}</p>
                 <p className="text-sm text-gray-500 mb-4">{t('organizer.selectMultiple') || 'Puedes seleccionar múltiples archivos a la vez'}</p>
                 
-                {/* Badge para presumir que tiene IA */}
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">
                     <Sparkles className="w-3.5 h-3.5" />
@@ -599,7 +762,7 @@ export default function PhotoOrganizer({
   }
 
   const handleComplete = () => {
-    const emptyPageIndices = photos.reduce((acc, pagePhotos, index) => {
+    const emptyPageIndices = safePhotos.reduce((acc, pagePhotos, index) => {
       const hasPhotos = pagePhotos.length > 0;
       const hasText = textBoxSlots[index] && Object.keys(textBoxSlots[index]).length > 0;
       
@@ -623,10 +786,13 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-12">
+      {/* RENDERIZADO DEL MODAL */}
+      {renderAdvancedSettingsModal()}
+
       <div className="flex items-center justify-between mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
-          <p className="text-sm text-gray-500">{photos.length} pages • {photos.flat().length} photos</p>
+          <p className="text-sm text-gray-500">{safePhotos.length} pages • {safePhotos.flat().length} photos</p>
         </div>
         <button
           onClick={handleComplete}
@@ -636,39 +802,60 @@ export default function PhotoOrganizer({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-16">
-        {photos.map((pagePhotos, pageIndex) => (
+      {/* Grid del álbum */}
+      <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16">
+        {safePhotos.map((pagePhotos, pageIndex) => (
           <div key={pageIndex} className="relative group">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">
                 Page {pageIndex + 1}
               </span>
-              <button
-                onClick={() => setEditingPageIndex(editingPageIndex === pageIndex ? null : pageIndex)}
-                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${
-                  editingPageIndex === pageIndex
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-gray-200 hover:border-black'
-                }`}
-              >
-                {editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Edit3 className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                <span className="text-xs md:text-sm font-bold uppercase tracking-tight">
-                  {editingPageIndex === pageIndex ? (
-                    <span className="hidden sm:inline">Finalizar Edición</span>
-                  ) : (
-                    <span className="hidden sm:inline">Habilitar Edición</span>
-                  )}
-                  {editingPageIndex === pageIndex ? (
-                    <span className="sm:hidden">LISTO</span>
-                  ) : (
-                    <span className="sm:hidden">EDITAR</span>
-                  )}
-                </span>
-              </button>
+              
+              <div className="flex gap-2">
+                {editingPageIndex === pageIndex && (
+                  <button
+                    onClick={() => setAdvancedSettingsModal(pageIndex)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
+                  >
+                    <Settings className="w-4 h-4"/>
+                    <span className="text-xs font-bold uppercase hidden sm:inline">Ajustes de Página</span>
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => {
+                    if (editingPageIndex === pageIndex) {
+                      setEditingPageIndex(null);
+                    } else {
+                      setEditingPageIndex(pageIndex);
+                      setAdvancedSettingsModal(pageIndex); 
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${
+                    editingPageIndex === pageIndex
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-black border-gray-200 hover:border-black'
+                  }`}
+                >
+                  {editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Edit3 className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                  <span className="text-xs md:text-sm font-bold uppercase tracking-tight">
+                    {editingPageIndex === pageIndex ? (
+                      <span className="hidden lg:inline">Finalizar Edición</span>
+                    ) : (
+                      <span className="hidden lg:inline">Habilitar Edición</span>
+                    )}
+                    {editingPageIndex === pageIndex ? (
+                      <span className="lg:hidden">LISTO</span>
+                    ) : (
+                      <span className="lg:hidden">EDITAR</span>
+                    )}
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div 
-              className={`bg-white rounded-xl shadow-sm border-2 transition-all overflow-hidden ${
+              className={`bg-white rounded-[3%] shadow-sm border-2 transition-all overflow-hidden ${
                 editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'
               }`}
               style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
@@ -710,109 +897,22 @@ export default function PhotoOrganizer({
               })()}
             </div>
 
-            {editingPageIndex === pageIndex && (
-              <div className="absolute -right-6 sm:right-2 xl:-right-24 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 animate-in slide-in-from-right-4 w-20">
-                <button
-                  onClick={() => handleMovePage(pageIndex, 'up')}
-                  disabled={pageIndex === 0}
-                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-                  title="Move Page Up"
-                >
-                  <ChevronUp className="w-5 h-5 mx-auto" />
-                </button>
-                <button
-                  onClick={() => handleMovePage(pageIndex, 'down')}
-                  disabled={pageIndex === photos.length - 1}
-                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-                  title="Move Page Down"
-                >
-                  <ChevronDown className="w-5 h-5 mx-auto" />
-                </button>
-                <div className="h-px bg-gray-100 my-1" />
-                
-                <div className="flex flex-col gap-1.5 px-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-0.5 leading-tight">Fotos Pág</span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {allowedPhotosPerPage.map(opt => (
-                      <button
-                        key={opt}
-                        onClick={() => onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: opt })}
-                        className={`p-2 rounded-md text-xs font-bold ${
-                          (pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === opt 
-                            ? 'bg-black text-white' 
-                            : 'bg-gray-50 hover:bg-gray-200'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {(pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length)) === 2 && (
-                  <>
-                    <div className="h-px bg-gray-100 my-1" />
-                    <div className="flex flex-col gap-1.5 px-1">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center mb-1">Layout</span>
-                      <button
-                        onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })}
-                    className={`p-2 rounded-md text-xs font-medium ${pageLayouts[pageIndex] === 'row' || pageLayouts[pageIndex] === undefined ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
-                      >
-                        Fila
-                      </button>
-                      <button
-                        onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })}
-                        className={`p-2 rounded-md text-xs font-medium ${pageLayouts[pageIndex] === 'column' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
-                      >
-                        Col
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                <div className="h-px bg-gray-100 my-1" />
-                <button
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e: any) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleAddPhotoToPage(pageIndex, file);
-                    };
-                    input.click();
-                  }}
-                  className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg"
-                  title={t('organizer.addPhoto')}
-                >
-                  <ImageIcon className="w-5 h-5 mx-auto" />
-                </button>
-                <button
-                  onClick={() => handleDeletePage(pageIndex)}
-                  className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
-                  title="Delete Page"
-                >
-                  <Trash2 className="w-5 h-5 mx-auto" />
-                </button>
-              </div>
-            )}
-
           </div>
         ))}
       </div>
 
       <div className="mt-20 text-center pb-20">
         <button
-          onClick={() => handleAddPage(photos.length - 1)}
+          onClick={() => handleAddPage(safePhotos.length - 1)}
           className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"
         >
           <Layers className="w-6 h-6" />
-          <span className="text-lg font-medium">Add New Page to the End</span>
+          <span className="text-lg font-medium">Añadir nueva página al final</span>
         </button>
       </div>
 
       {editingTextSlot && currentEditingText && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
