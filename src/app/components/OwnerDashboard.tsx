@@ -15,6 +15,7 @@ import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
+import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 interface Order {
   id: string;
@@ -32,6 +33,11 @@ interface Order {
   pages?: any[];
   [key: string]: any;
 }
+
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
 
 // ============================================================================
 // FUNCIONES HELPERS IDÉNTICAS A LAS DE OrderDetailsModal PARA EL LAYOUT
@@ -66,24 +72,20 @@ const getGridLayout = (count: number, layout: any, size: string) => {
 };
 
 // ============================================================================
-// COMPONENTE AUXILIAR PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
+// COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
 const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
   const size = customization?.size || '';
   
-  // 1. Extraer los datos con la misma lógica robusta de retrocompatibilidad
   const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
   const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
   const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
   
-  // 2. Determinar la cuadrícula exacta
   const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
   const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
   const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
 
   const gridClass = getGridLayout(currentPhotosPerPage, layout, size);
-  
-  // Escala de fuentes para alta resolución
   const textScale = Math.max(1, Math.round(pxWidth / 800)); 
 
   return (
@@ -93,7 +95,6 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
         const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
         const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
         
-        // Logica para centrado de fotos apaisadas en layouts anchos
         const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
 
         return (
@@ -123,12 +124,123 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                 </div>
               </div>
             ) : (
-              // Hueco vacío (si el layout tiene 4 huecos pero solo 3 fotos)
               <div className="bg-gray-50 w-full h-full" />
             )}
           </div>
         );
       })}
+    </div>
+  );
+};
+
+const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number }> = ({ order, monthIndex, pxWidth }) => {
+  const year = order.customization?.year || new Date().getFullYear();
+  const orientation = order.customization?.orientation || 'vertical';
+  const type = order.customization?.type || 'desk';
+  const imagesPerMonth = order.customization?.imagesPerMonth || 1;
+  const holidays = getColombianHolidays(year);
+  const month = MONTHS_ES[monthIndex];
+
+  const generateCalendarGrid = (y: number, m: number) => {
+    const date = new Date(y, m, 1);
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const firstDayOfWeek = date.getDay();
+    const days = [];
+    for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
+    for (let day = 1; day <= daysInMonth; day++) days.push(day);
+    return days;
+  };
+
+  // Escala matemática precisa para mantener las proporciones intactas en 300DPI
+  const baseSize = pxWidth / 100;
+  const titleSize = orientation === 'horizontal' ? baseSize * 2.5 : baseSize * 3.5;
+  const headerSize = orientation === 'horizontal' ? baseSize * 1.3 : baseSize * 1.8;
+  const daySize = orientation === 'horizontal' ? baseSize * 1.5 : baseSize * 2;
+  const padding = baseSize * 3;
+  const gap = baseSize * 0.5;
+
+  // Lógica de extracción de fotos súper segura
+  let photosForMonth: string[] = [];
+  const pageData = order.pages?.[monthIndex];
+  if (pageData && Array.isArray(pageData.images)) {
+    photosForMonth = pageData.images;
+  } else if (pageData && pageData.image) {
+    photosForMonth = [pageData.image];
+  }
+  
+  const photoData = order.photos?.[monthIndex];
+  if (photosForMonth.length === 0 && photoData) {
+    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
+    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: orientation === 'horizontal' ? 'row' : 'column', backgroundColor: 'white', boxSizing: 'border-box' }}>
+      {/* Sección de Fotografía */}
+      <div style={{ position: 'relative', backgroundColor: '#f9fafb', borderRight: orientation === 'horizontal' ? '2px solid #f3f4f6' : 'none', borderBottom: orientation === 'horizontal' ? 'none' : '2px solid #f3f4f6', width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
+        {(() => {
+          if (photosForMonth.length > 0 && photosForMonth[0]) {
+            if (type === 'wall' && imagesPerMonth === 4) {
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: `${gap}px`, width: '100%', height: '100%', padding: `${gap}px`, boxSizing: 'border-box' }}>
+                  {Array.from({ length: 4 }).map((_, photoIdx) => {
+                    const photo = photosForMonth[photoIdx];
+                    const crop = order.photoCrops?.[`${monthIndex}-${photoIdx}`];
+                    return (
+                      <div key={photoIdx} style={{ position: 'relative', backgroundColor: '#e5e7eb', borderRadius: `${baseSize*0.5}px`, overflow: 'hidden' }}>
+                        {photo && (
+                          <img 
+                            src={photo} crossOrigin="anonymous" alt="Preview"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${crop?.zoom || 1}) translate(${50 - (crop?.x || 50)}%, ${50 - (crop?.y || 50)}%)`, transformOrigin: 'center center' }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            } else {
+              const photo = photosForMonth[0];
+              const crop = order.photoCrops?.[monthIndex] || order.photoCrops?.[`${monthIndex}-0`];
+              return (
+                <img 
+                  src={photo} crossOrigin="anonymous" alt="Preview"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${crop?.zoom || 1}) translate(${50 - (crop?.x || 50)}%, ${50 - (crop?.y || 50)}%)`, transformOrigin: 'center center' }}
+                />
+              );
+            }
+          }
+          return <div style={{ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }} />;
+        })()}
+      </div>
+      
+      {/* Sección Cuadrícula del Calendario */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: 'rgba(249, 250, 251, 0.5)', padding: `${padding}px`, width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
+        <div style={{ textAlign: 'center', marginBottom: `${padding * 0.8}px` }}>
+          <span style={{ fontSize: `${titleSize}px`, fontWeight: 'bold', color: '#111827', fontFamily: 'sans-serif' }}>{month} {year}</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: `${gap}px`, flex: 1, minHeight: 0 }}>
+          {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
+            <div key={i} style={{ textAlign: 'center', fontSize: `${headerSize}px`, fontWeight: 'bold', color: '#9ca3af', fontFamily: 'sans-serif' }}>{day}</div>
+          ))}
+          {generateCalendarGrid(year, monthIndex).map((day, i) => {
+            if (!day) return <div key={i} style={{ height: '100%', minHeight: `${baseSize * 4}px` }} />;
+            const date = new Date(year, monthIndex, day);
+            const holiday = isHoliday(date, holidays);
+            return (
+              <div key={i} style={{ 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                fontSize: `${daySize}px`, borderRadius: `${baseSize * 0.5}px`, height: '100%', minHeight: `${baseSize * 4}px`, fontFamily: 'sans-serif',
+                ...(holiday 
+                   ? { backgroundColor: '#fef2f2', color: '#dc2626', fontWeight: 'bold', border: `${baseSize*0.1}px solid #fee2e2` } 
+                   : { backgroundColor: 'white', border: `${baseSize*0.1}px solid #f3f4f6`, color: '#374151' })
+              }}>
+                {day}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   );
 };
@@ -159,24 +271,28 @@ const OwnerDashboard: React.FC = () => {
   const generateAlbumPDF = async (order: Order, onProgress: (progress: number) => void): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
       try {
+        const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+        const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+
         // 1. Deducir las dimensiones exactas y la orientación
         const sizeStr = order.customization?.size || '20x20';
-        const isVert = sizeStr.toLowerCase().includes('vertical');
-        const isHoriz = sizeStr.toLowerCase().includes('horizontal');
+        const orientation = order.customization?.orientation || 'vertical';
+        
+        const isVert = sizeStr.toLowerCase().includes('vertical') || (isCalendar && orientation === 'vertical');
+        const isHoriz = sizeStr.toLowerCase().includes('horizontal') || (isCalendar && orientation === 'horizontal');
         
         let wCm = 20;
         let hCm = 20;
         let coverSizeProp = '20x20';
 
-        // MAGIA AQUÍ: Obligamos a que el PDF y el CoverPreview se entiendan
         if (isVert) {
           wCm = 21;
           hCm = 28;
-          coverSizeProp = '28x21'; // CoverPreview maneja 28x21 como Vertical internamente
+          coverSizeProp = '28x21'; 
         } else if (isHoriz) {
           wCm = 28;
           hCm = 21;
-          coverSizeProp = '21x28'; // CoverPreview maneja 21x28 como Horizontal internamente
+          coverSizeProp = '21x28'; 
         } else {
           const match = sizeStr.match(/(\d+)\s*x\s*(\d+)/i);
           if (match) {
@@ -186,11 +302,12 @@ const OwnerDashboard: React.FC = () => {
           }
         }
         
-        // 2. Calcular los píxeles necesarios para 300 DPI (ppp)
+        // 2. Calcular los píxeles necesarios para 300 DPI
         const pxWidth = Math.round((wCm / 2.54) * 300);
         const pxHeight = Math.round((hCm / 2.54) * 300);
 
-        const totalItems = 1 + (order.pages?.length || 0);
+        // Si es calendario solo son 12 meses (sin portada). Si es álbum, portada + páginas
+        const totalItems = isCalendar ? 12 : (1 + (order.pages?.length || 0));
         let itemsProcessed = 0;
 
         const pdf = new jsPDF({
@@ -199,18 +316,17 @@ const OwnerDashboard: React.FC = () => {
           format: [wCm, hCm]
         });
 
-        // 3. Crear un "Laboratorio de Renderizado" fuera de la pantalla
+        // 3. Crear Laboratorio de Renderizado Oculto
         const container = document.createElement('div');
         container.style.position = 'fixed';
         container.style.top = '0';
-        container.style.left = '-99999px'; // Totalmente oculto al usuario
+        container.style.left = '-99999px'; 
         container.style.width = `${pxWidth}px`;
         container.style.height = `${pxHeight}px`;
         document.body.appendChild(container); 
         
         const root = createRoot(container);
 
-        // Función fotográfica: Monta el componente, espera y le toma foto.
         const renderAndCapture = async (element: React.ReactNode) => {
           return new Promise<string>((res, rej) => {
             root.render(
@@ -218,13 +334,12 @@ const OwnerDashboard: React.FC = () => {
                 {element}
               </div>
             );
-            // Damos 1.5s por página para que las imágenes terminen de descargar desde la web
             setTimeout(async () => {
               try {
                 const node = container.firstChild as HTMLElement;
                 const dataUrl = await htmlToImage.toJpeg(node, {
                   quality: 0.95,
-                  pixelRatio: 1, // El nodo ya tiene tamaño gigante, ratio 1 es suficiente.
+                  pixelRatio: 1, 
                 });
                 res(dataUrl);
               } catch (e) {
@@ -234,41 +349,51 @@ const OwnerDashboard: React.FC = () => {
           });
         };
 
-        console.log("Iniciando renderizado de Portada...");
-        // 4. Renderizar y estampar la Portada
-        const coverDataUrl = await renderAndCapture(
-          <CoverPreview
-            coverSize={coverSizeProp as any} // <-- Usamos la propiedad mapeada para no romper la portada
-            coverImage={order.coverData?.image || ''}
-            coverTitle={order.coverData?.title || ''}
-            coverSubtitle={order.coverData?.subtitle || ''}
-            coverYear={order.coverData?.year || ''}
-            
-            selectedLayout={Number(order.coverData?.layout) || 1}
-            coverCrop={{ 
-              x: order.coverData?.crop?.x ?? 50, 
-              y: order.coverData?.crop?.y ?? 50, 
-              zoom: order.coverData?.crop?.zoom ?? 1 
-            }}
-            
-            customization={order.customization}
-            photos={[order.coverData?.image || null, null]} 
-            
-            photoCrops={{ 
-              'cover-0': { 
-                x: order.coverData?.crop?.x ?? 50, 
-                y: order.coverData?.crop?.y ?? 50, 
-                zoom: order.coverData?.crop?.zoom ?? 1 
-              } 
-            }}
-          />
-        );
-        pdf.addImage(coverDataUrl, 'JPEG', 0, 0, wCm, hCm);
-        itemsProcessed++;
-        onProgress(Math.round((itemsProcessed / totalItems) * 100));
+        // 4. Renderizar y estampar la Portada (SOLO PARA ÁLBUMES)
+        if (!isCalendar) {
+          let coverImageForPdf = order.coverData?.image || '';
+          let coverTitleForPdf = order.coverData?.title || '';
+          
+          console.log("Iniciando renderizado de Portada...");
+          const coverDataUrl = await renderAndCapture(
+            <CoverPreview
+              coverSize={coverSizeProp as any}
+              coverImage={coverImageForPdf}
+              coverTitle={coverTitleForPdf}
+              coverSubtitle={order.coverData?.subtitle || ''}
+              coverYear={order.coverData?.year || ''}
+              selectedLayout={Number(order.coverData?.layout) || 1}
+              coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
+              customization={order.customization}
+              photos={[coverImageForPdf, null]} 
+              photoCrops={{ 'cover-0': { x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 } }}
+            />
+          );
+          pdf.addImage(coverDataUrl, 'JPEG', 0, 0, wCm, hCm);
+          itemsProcessed++;
+          onProgress(Math.round((itemsProcessed / totalItems) * 100));
+        }
 
         // 5. Renderizar y estampar Páginas Internas
-        if (order.pages && order.pages.length > 0) {
+        if (isCalendar) {
+          for (let i = 0; i < 12; i++) {
+            console.log(`Renderizando mes ${i + 1}/12...`);
+            
+            // La página 1 ya existe por defecto en jsPDF. Solo añadimos páginas nuevas a partir de febrero.
+            if (i > 0) pdf.addPage(); 
+            
+            const pageDataUrl = await renderAndCapture(
+              <CalendarPagePrintView 
+                order={order} 
+                monthIndex={i}
+                pxWidth={pxWidth}
+              />
+            );
+            pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
+            itemsProcessed++;
+            onProgress(Math.round((itemsProcessed / totalItems) * 100));
+          }
+        } else if (order.pages && order.pages.length > 0) {
           for (let i = 0; i < order.pages.length; i++) {
             console.log(`Renderizando página ${i + 1}/${order.pages.length}...`);
             pdf.addPage();
@@ -403,6 +528,10 @@ const OwnerDashboard: React.FC = () => {
 
       if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
 
+      // Identificar si es calendario para nombrar los archivos correctamente
+      const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+      const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+
       // 1. Guardar el JSON crudo
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
@@ -457,7 +586,7 @@ const OwnerDashboard: React.FC = () => {
       }
 
       const imagenesData: any[] = [];
-      if (order.coverData?.image) {
+      if (!isCalendar && order.coverData?.image) {
         imagenesData.push({
           'Ubicación': 'Portada', 'Nombre de Archivo en ZIP': 'portada.jpg',
           'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00',
@@ -497,7 +626,7 @@ const OwnerDashboard: React.FC = () => {
       };
 
       const imagePromises: Promise<void>[] = [];
-      if (order.coverData?.image) {
+      if (!isCalendar && order.coverData?.image) {
         imagePromises.push(
           fetchImageAsBlob(order.coverData.image).then(blob => { imgFolder.file('portada.jpg', blob); })
           .catch(e => console.error(`Error descargando portada:`, e))
@@ -526,7 +655,13 @@ const OwnerDashboard: React.FC = () => {
         const pdfBlob = await generateAlbumPDF(order, (progress) => {
           setDownloadProgress({ orderId: order.id, progress });
         });
-        folder.file(`Impresion_Album_${order.id}_300DPI.pdf`, pdfBlob);
+        
+        // Asignación de nombre dinámico al archivo PDF
+        const pdfFileName = isCalendar 
+          ? `Impresion_Calendario_${order.id}_300DPI.pdf` 
+          : `Impresion_Album_${order.id}_300DPI.pdf`;
+
+        folder.file(pdfFileName, pdfBlob);
       } catch (pdfError) {
         console.error("Error al generar PDF de alta resolución:", pdfError);
         alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");
