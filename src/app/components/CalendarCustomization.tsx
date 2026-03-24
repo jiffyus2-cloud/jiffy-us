@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
-import { ImageIcon, RectangleVertical, RectangleHorizontal } from 'lucide-react';
+import { ImageIcon, RectangleVertical } from 'lucide-react';
 
 export interface CalendarCustomizationOptions {
-  size: string;
   paperType: string;
   year: number;
-  orientation: 'vertical' | 'horizontal';
+  type: 'desk' | 'wall';
+  imagesPerMonth: 1 | 4;
 }
 
 interface CalendarCustomizationProps {
@@ -17,31 +17,24 @@ interface CalendarCustomizationProps {
 
 export default function CalendarCustomization({ calendar, onCustomizationComplete }: CalendarCustomizationProps) {
   const { t } = useLanguage();
-  const [size, setSize] = useState('8x10');
   const [paperType] = useState('Opalina'); // Fixed option
   const [year, setYear] = useState(2026);
-  const [orientation, setOrientation] = useState<'vertical' | 'horizontal'>('vertical');
+  const [type, setType] = useState<'desk' | 'wall'>('desk');
+  const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
 
-  const sizes = [
-    { id: '8x10', name: '8" x 10"', description: t('calendar.size.standard') || 'Standard size' },
-    { id: '11x14', name: '11" x 14"', description: t('calendar.size.large') || 'Large' },
-    { id: '12x12', name: '12" x 12"', description: t('calendar.size.square') || 'Square' },
-  ];
-
-  const orientations = [
-    { id: 'vertical', name: t('calendar.orientation.vertical') || 'Vertical', icon: <RectangleVertical className="w-6 h-6" /> },
-    { id: 'horizontal', name: t('calendar.orientation.horizontal') || 'Horizontal', icon: <RectangleHorizontal className="w-6 h-6" /> },
-  ];
-
-  // Generate years from 2026 to 2041
-  const years = Array.from({ length: 16 }, (_, i) => 2026 + i);
+  // Reset images per month if type is switched to desk
+  useEffect(() => {
+    if (type === 'desk') {
+      setImagesPerMonth(1);
+    }
+  }, [type]);
 
   const handleContinue = () => {
     onCustomizationComplete({
-      size,
       paperType,
       year,
-      orientation,
+      type,
+      imagesPerMonth: type === 'wall' ? imagesPerMonth : 1,
     });
   };
 
@@ -50,14 +43,23 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       {/* Calendar Preview */}
       <div className="mb-12">
         <h3 className="text-xl font-medium mb-4 text-center text-gray-400">{t('calendar.preview') || 'Vista Previa'}</h3>
-        <div className="w-full max-w-[600px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center overflow-hidden border-2 border-gray-100 shadow-sm transition-all duration-500">
-          <div className={`bg-white shadow-2xl rounded-sm overflow-hidden flex transition-all duration-500 ${
-            orientation === 'vertical' ? 'flex-col aspect-[21/28] w-[300px]' : 'flex-row aspect-[28/21] w-[450px]'
+        <div className="w-full max-w-[600px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center border-2 border-gray-100 shadow-sm">
+          <div className={`bg-white shadow-2xl rounded-sm overflow-hidden flex flex-col transition-all duration-500 ${
+            type === 'desk' ? 'aspect-[21/28] w-[300px]' : 'aspect-[30/44] w-[300px]'
           }`}>
-             <div className={`bg-gray-100 flex items-center justify-center transition-all duration-500 ${
-                orientation === 'vertical' ? 'w-full h-1/2 border-b' : 'w-1/2 h-full border-r'
-             } border-gray-200`}>
-                <ImageIcon className="w-16 h-16 text-gray-300" />
+             <div className={`bg-gray-100 flex items-center justify-center transition-all duration-500 border-b border-gray-200 ${
+                type === 'desk' ? 'h-[70%]' : 'h-1/2'
+             }`}>
+                {type === 'wall' && imagesPerMonth === 4 ? (
+                  <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full p-1">
+                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
+                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
+                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
+                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
+                  </div>
+                ) : (
+                  <ImageIcon className="w-16 h-16 text-gray-300" />
+                )}
              </div>
              <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1 h-full w-full`}>
                 <div className="text-2xl font-bold">{year}</div>
@@ -74,92 +76,80 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       </div>
 
       <div className="space-y-10">
-        {/* Orientación */}
+        {/* Tipo de Calendario */}
         <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('calendar.orientation') || 'Orientación'}</h3>
+          <h3 className="text-2xl mb-4 font-bold">{t('calendar.type') || 'Tipo de Calendario'}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {orientations.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setOrientation(opt.id as 'vertical' | 'horizontal')}
-                className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
-                  orientation === opt.id
-                    ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
-                    : 'bg-white text-black border-gray-200 hover:border-black'
-                }`}
-              >
-                <div className={`p-2 rounded-lg ${orientation === opt.id ? 'bg-white/20' : 'bg-gray-100'}`}>
-                  {opt.icon}
-                </div>
-                <div className="text-lg font-bold">{opt.name}</div>
-              </button>
-            ))}
+            <button
+              onClick={() => setType('desk')}
+              className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
+                type === 'desk'
+                  ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
+                  : 'bg-white text-black border-gray-200 hover:border-black'
+              }`}
+            >
+              <div className={`p-2 rounded-lg ${type === 'desk' ? 'bg-white/20' : 'bg-gray-100'}`}>
+                <RectangleVertical className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-lg font-bold">De Escritorio</div>
+                <p className={`text-sm ${type === 'desk' ? 'text-gray-300' : 'text-gray-500'}`}>Formato vertical compacto</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setType('wall')}
+              className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
+                type === 'wall'
+                  ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
+                  : 'bg-white text-black border-gray-200 hover:border-black'
+              }`}
+            >
+              <div className={`p-2 rounded-lg ${type === 'wall' ? 'bg-white/20' : 'bg-gray-100'}`}>
+                <RectangleVertical className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-lg font-bold">De Pared</div>
+                <p className={`text-sm ${type === 'wall' ? 'text-gray-300' : 'text-gray-500'}`}>Formato grande (30x44 cm)</p>
+              </div>
+            </button>
           </div>
         </div>
 
-        {/* Tamaño */}
-        <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('album.size')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {sizes.map((sizeOption) => (
+        {/* Imágenes por Mes (condicional) */}
+        {type === 'wall' && (
+          <div>
+            <h3 className="text-2xl mb-4 font-bold">{t('calendar.imagesPerMonth') || 'Imágenes por Mes'}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
-                key={sizeOption.id}
-                onClick={() => setSize(sizeOption.id)}
-                className={`py-6 rounded-lg border-4 transition-all ${
-                  size === sizeOption.id
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-black hover:bg-gray-50'
-                }`}
+                onClick={() => setImagesPerMonth(1)}
+                className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 1 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
               >
-                <div className="text-xl font-bold">{sizeOption.name}</div>
-                <div className={`text-sm ${size === sizeOption.id ? 'text-gray-300' : 'text-gray-500'}`}>{sizeOption.description}</div>
+                <div className="text-xl font-bold">1 Foto</div>
+                <div className={`text-sm ${imagesPerMonth === 1 ? 'text-gray-300' : 'text-gray-500'}`}>Una imagen grande por mes</div>
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Paper Type - Standardized Style */}
-        <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('album.paperType')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md">
-            <div className="py-6 px-4 bg-black text-white border-4 border-black rounded-lg flex flex-col items-center">
-              <span className="text-xl font-bold">{paperType}</span>
-              <span className="text-sm text-gray-300">Premium high-quality paper</span>
+              <button
+                onClick={() => setImagesPerMonth(4)}
+                className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 4 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
+              >
+                <div className="text-xl font-bold">4 Fotos</div>
+                <div className={`text-sm ${imagesPerMonth === 4 ? 'text-gray-300' : 'text-gray-500'}`}>Un collage de 4 imágenes</div>
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Year Selection */}
         <div>
           <h3 className="text-2xl mb-4 font-bold">{t('calendar.year') || 'Año'}</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {years.slice(0, 8).map((yearOption) => (
-              <button
-                key={yearOption}
-                onClick={() => setYear(yearOption)}
-                className={`py-4 rounded-lg border-4 transition-all text-xl ${
-                  year === yearOption
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-black hover:bg-gray-50'
-                }`}
-              >
-                {yearOption}
-              </button>
-            ))}
-            <div className="col-span-full mt-2">
-               <select
-                value={year > 2033 ? year : ''}
-                onChange={(e) => e.target.value && setYear(parseInt(e.target.value))}
-                className="w-full p-4 border-4 border-black rounded-lg text-lg focus:outline-none bg-white font-bold"
-              >
-                <option value="">{t('calendar.moreYears') || 'Más años...'}</option>
-                {years.slice(8).map((yearOption) => (
-                  <option key={yearOption} value={yearOption}>
-                    {yearOption}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="max-w-xs">
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
+              className="w-full p-4 border-4 border-black rounded-lg text-2xl font-bold focus:outline-none text-center"
+              min="2024"
+              max="2050"
+            />
           </div>
         </div>
       </div>

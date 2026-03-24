@@ -1,14 +1,20 @@
 import { X, BookImage, Calendar, Coffee, Check, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   productType: ProductType;
 }
+
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
 
 export default function ProductDetailsModal({ isOpen, onClose, productType }: ProductDetailsModalProps) {
   const navigate = useNavigate();
@@ -21,6 +27,67 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
     // Navigate to creator and start at product customization for this product
     navigate('/create', { state: { startProduct: productType } });
   };
+
+  const CalendarPreview = useMemo(() => {
+    const year = new Date().getFullYear() + 1;
+    const holidays = getColombianHolidays(year);
+
+    const generateCalendarGrid = (year: number, monthIndex: number) => {
+        const date = new Date(year, monthIndex, 1);
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        const firstDayOfWeek = date.getDay();
+        const days = [];
+        for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
+        for (let day = 1; day <= daysInMonth; day++) days.push(day);
+        return days;
+    };
+
+    return (
+        <div>
+            <h3 className="text-2xl mb-4">Ejemplo de Diseño Interior</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {MONTHS_ES.slice(0, 3).map((month, index) => (
+                    <div key={index} className="space-y-3">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
+                        <div
+                            className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mx-auto"
+                            style={{ aspectRatio: '21/28' }}
+                        >
+                            <div className="flex h-full flex-col">
+                                <div className="bg-gray-100 relative h-1/2 border-b border-gray-200 flex items-center justify-center">
+                                    <ImageIcon className="w-12 h-12 text-gray-300" />
+                                </div>
+                                <div className="p-6 flex flex-col justify-center bg-white flex-1">
+                                    <div className="text-center mb-2">
+                                        <span className="text-lg font-bold text-gray-900">{month}</span>
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-1">
+                                        {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
+                                            <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
+                                        ))}
+                                        {generateCalendarGrid(year, index).map((day, i) => {
+                                            if (!day) return <div key={i} className="aspect-square" />;
+                                            const date = new Date(year, index, day);
+                                            const holiday = isHoliday(date, holidays);
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className={`aspect-square flex items-center justify-center text-xs rounded ${holiday ? 'bg-red-50 text-red-600 font-bold' : 'bg-gray-50 text-gray-700'}`}
+                                                >
+                                                    {day}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+  }, []);
 
   // Product-specific data
   const getProductData = () => {
@@ -70,28 +137,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           title: t('product.calendar'),
           icon: <Calendar className="w-12 h-12" />,
           description: t('product.calendarDesc'),
-          styles: [
-            { 
-              name: 'Wall Calendar', 
-              description: 'Large format for wall display',
-              image: 'https://images.unsplash.com/photo-1742144897660-872dfc637217?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3YWxsJTIwY2FsZW5kYXIlMjBsYXJnZSUyMGZvcm1hdCUyMGRpc3BsYXl8ZW58MXx8fHwxNzcxNjE4MDU2fDA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Desk Calendar', 
-              description: 'Compact design for your desk',
-              image: 'https://images.unsplash.com/photo-1722506724411-9d3ea21702c9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkZXNrJTIwY2FsZW5kYXIlMjBvZmZpY2UlMjB3b3Jrc3BhY2V8ZW58MXx8fHwxNzcxNjE4MDYyfDA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Poster Calendar', 
-              description: 'Extra large with photo focus',
-              image: 'https://images.unsplash.com/photo-1763356844645-34a2be49d754?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3N0ZXIlMjBjYWxlbmRhciUyMGxhcmdlJTIwcGhvdG98ZW58MXx8fHwxNzcxNjE4MDU3fDA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Spiral Calendar', 
-              description: 'Easy-flip spiral binding',
-              image: 'https://images.unsplash.com/photo-1686563636216-02d5c3674816?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGlyYWwlMjBjYWxlbmRhciUyMGZsaXAlMjBiaW5kaW5nfGVufDF8fHx8MTc3MTYxODA1N3ww&ixlib=rb-4.1.0&q=80&w=1080'
-            }
-          ],
+          styles: [],
           specifications: [
             { label: 'Format', value: '12 months with custom photos' },
             { label: 'Size Options', value: '11x8.5", 12x12", 18x24"' },
@@ -197,32 +243,36 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
 
         <div className="p-6 space-y-8">
           {/* Available Styles */}
-          <div>
-            <h3 className="text-2xl mb-4">{t('details.availableStyles')}</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {productData.styles.map((style, index) => (
-                <div
-                  key={index}
-                  className="border-2 border-gray-200 rounded-lg overflow-hidden"
-                >
-                  {/* Image */}
-                  <div className="aspect-video overflow-hidden bg-gray-100">
-                    <img
-                      src={style.image}
-                      alt={style.name}
-                      className="w-full h-full object-cover"
-                    />
+          {productType === 'calendar' ? (
+            CalendarPreview
+          ) : (
+            <div>
+              <h3 className="text-2xl mb-4">{t('details.availableStyles')}</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {productData.styles.map((style, index) => (
+                  <div
+                    key={index}
+                    className="border-2 border-gray-200 rounded-lg overflow-hidden"
+                  >
+                    {/* Image */}
+                    <div className="aspect-video overflow-hidden bg-gray-100">
+                      <img
+                        src={style.image}
+                        alt={style.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="p-3">
+                      <h4 className="text-sm font-medium mb-1">{style.name}</h4>
+                      <p className="text-xs text-gray-600">{style.description}</p>
+                    </div>
                   </div>
-                  
-                  {/* Content */}
-                  <div className="p-3">
-                    <h4 className="text-sm font-medium mb-1">{style.name}</h4>
-                    <p className="text-xs text-gray-600">{style.description}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Specifications */}
           <div>

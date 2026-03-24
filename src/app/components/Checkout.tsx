@@ -90,9 +90,9 @@ export default function Checkout() {
       return 0;
     }
 
-    // MAGIA AQUÍ: Forzamos minúsculas. Si la BD dice "Album", "ALBUM" o lo que sea, no se romperá.
-    const productType = String(product.type || product.name || '').toLowerCase();
+    const productType = String(orderData.productType || product.type || product.id || product.name || '').toLowerCase();
 
+    // 1. ÁLBUMES
     if (productType.includes('album') || productType.includes('photobook')) {
       const size = orderData.customization?.size || '';
       const pageCount = orderData.pages?.length || 0;
@@ -100,7 +100,6 @@ export default function Checkout() {
       let basePrice = 0;
       let additionalPagePrice = 0;
 
-      // LÓGICA DE PRECIOS EXACTA PARA COLOMBIA (Añadido 2x2 por retrocompatibilidad)
       if (size.includes('20x20') || size.includes('2x2')) {
         basePrice = 150000;
         additionalPagePrice = 3750;
@@ -111,7 +110,6 @@ export default function Checkout() {
         basePrice = 180000;
         additionalPagePrice = 4500;
       } else {
-        // Fallback de seguridad
         basePrice = 150000;
         additionalPagePrice = 3750;
       }
@@ -122,23 +120,48 @@ export default function Checkout() {
       return basePrice;
     } 
     
+    // 2. TAZAS
     if (productType.includes('mug') || productType.includes('taza')) {
       const mugCount = orderData.items?.length || 1;
       return 45000 * mugCount;
     } 
     
+    // ✨ 3. CALENDARIOS (A PRUEBA DE FALLOS) ✨
+    // Si la personalización incluye 'year' o 'imagesPerMonth', ES un calendario sí o sí.
+    const isCalendar = 
+      productType.includes('calendar') || 
+      productType.includes('calendario') || 
+      orderData.customization?.year !== undefined || 
+      orderData.customization?.imagesPerMonth !== undefined;
+
+    if (isCalendar) {
+      const calendarFormat = String(
+        orderData.customization?.type || 
+        orderData.customization?.format || 
+        orderData.customization?.size || 
+        ''
+      ).toLowerCase();
+
+      if (calendarFormat.includes('wall') || calendarFormat.includes('pared')) {
+        return 80000; // Calendario de Pared
+      }
+      
+      return 60000; // Calendario de Escritorio
+    }
+    
+    // 4. FOTOS
     if (productType.includes('photo') || productType.includes('foto')) {
-      const basePrice = product.basePrice || product.price || 0;
+      const basePrice = Number(product.basePrice || product.price || 0);
       return basePrice * (orderData.photos?.length || 0);
     }
 
-    // Fallback por si venden un producto nuevo no contemplado arriba
-    return product.basePrice || product.price || 0;
+    // 5. FALLBACK (Si es un producto distinto)
+    return Number(product.basePrice || product.price || 0);
   };
 
   const subtotal = calculateTotal();
-  const shipping = 0; // El envío se calculará en un futuro
-  const tax = 0; // Los impuestos se calcularán en un futuro
+  const shipping = 0; 
+  const tax = 0; 
   const total = subtotal + shipping + tax;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -169,21 +192,17 @@ export default function Checkout() {
         zipCode: formData.billingZipCode,
       };
 
-      // 1. Actualizamos las direcciones y el total en Firestore
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
-
-      // Guardamos el ID del pedido para que Success.tsx sepa qué validar
       localStorage.setItem('pending_order_id', state.orderId);
 
-      // 2. Llamada directa a tu Backend de Stripe en Cloud Run
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://jiffy-backend-938778636106.europe-west1.run.app';
       const response = await fetch(`${backendUrl}/stripe/create-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // CORRECCIÓN: Volvemos a mandar el número entero exacto, Stripe cobra COP sin decimales.
+          // Multiplicamos por 100 para ajustarlo a Stripe COP (Centavos)
           amount: Math.round(total * 100), 
-          title: product.name || 'Álbum Jiffy', 
+          title: product.name || 'Pedido Jiffy', 
           orderId: state.orderId,
         }),
       });
@@ -309,7 +328,6 @@ export default function Checkout() {
         {/* Formulario de Checkout */}
         <div className="lg:col-span-2 lg:order-1">
           <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Información de Contacto */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">1</span>
@@ -337,7 +355,6 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Dirección de Envío */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>
@@ -374,7 +391,6 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Dirección de Facturación */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">3</span>
@@ -430,7 +446,6 @@ export default function Checkout() {
               )}
             </div>
 
-            {/* Información de Pago Seguro */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee } from 'lucide-react';
+import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import CoverPreview from './CoverPreview';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
@@ -22,7 +23,7 @@ interface Order {
   pageLayoutVariants?: any;
   textBoxSlots?: any;
   photoCrops?: any;
-  photos?: string[];
+  photos?: string[] | string[][];
   items?: any[];
 }
 
@@ -100,7 +101,6 @@ const AlbumPagePhoto: React.FC<{
   isHalfHeightLayout: boolean;
   photoIndex: number;
 }> = ({ photo, textBox, crop, isHalfHeightLayout, photoIndex }) => {
-  // State to store image dimensions for conditional cropping
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -138,7 +138,7 @@ const AlbumPagePhoto: React.FC<{
       
       if (imageAspectRatio > containerAspectRatio) {
         const newZoom = imageAspectRatio / containerAspectRatio;
-        if (newZoom > 1.01) { // Apply a small tolerance
+        if (newZoom > 1.01) { 
           calculatedCrop = { x: crop?.x ?? 50, y: crop?.y ?? 50, zoom: newZoom };
         }
       }
@@ -194,7 +194,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
 
       <div className="grid grid-cols-2 gap-x-8 gap-y-16 mt-12">
         {order.pages?.map((pageObj, pageIndex) => {
-          // Lógica robusta que lee tu JSON a la perfección
           const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
           const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
           const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
@@ -214,7 +213,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
                   {slots.map((photo, photoIndex) => {
                     const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
                     const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
-                    // Lee el crop del nuevo objeto `page` o del antiguo `photoCrops` para retrocompatibilidad
                     const crop = (pageObj as any)?.crops?.[photoIndex] || order.photoCrops?.[`${pageIndex}-${photoIndex}`];
                     const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
 
@@ -248,7 +246,6 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
       {order.items?.map((item, index) => {
-        // Lógica para compatibilidad con estructuras de datos antiguas y nuevas
         const photo = item.photo || item.photos?.[0];
         const crop = item.crop || item.photoCrops?.[0];
         return (<div key={item.id || index} className="space-y-3">
@@ -286,7 +283,9 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
 // --- Calendar Viewer ---
 const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
   const year = order.customization?.year || new Date().getFullYear();
-  const orientation = order.customization?.orientation || 'horizontal';
+  const orientation = order.customization?.orientation || 'vertical';
+  const type = order.customization?.type || 'desk';
+  const imagesPerMonth = order.customization?.imagesPerMonth || 1;
   const holidays = getColombianHolidays(year);
 
   const generateCalendarGrid = (year: number, monthIndex: number) => {
@@ -303,65 +302,114 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
         <CalendarIcon className="w-5 h-5 text-primary" />
-        <h4>Meses del Calendario</h4>
+        <h4>Meses del Calendario ({year})</h4>
       </div>
-      <div className="space-y-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {MONTHS_ES.map((month, index) => (
           <div key={index} className="space-y-4">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
+            
             <div
-              className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mx-auto"
+              className="bg-white rounded-xl shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md"
               style={{
-                aspectRatio: orientation === 'horizontal' ? '28/21' : '21/28',
-                maxWidth: orientation === 'horizontal' ? '100%' : '500px'
+                aspectRatio: orientation === 'horizontal' ? '28/21' : '21/28'
               }}
             >
               <div className={`flex h-full ${orientation === 'horizontal' ? 'flex-row' : 'flex-col'}`}>
-                <div className={`bg-gray-50 relative ${orientation === 'horizontal' ? 'w-1/2 border-r' : 'h-1/2 border-b'} border-gray-100`}>
+                {/* Photo Section */}
+                <div className={`bg-gray-50 relative ${orientation === 'horizontal' ? 'w-1/2 border-r border-gray-100' : 'h-1/2 border-b border-gray-100'}`}>
                   {(() => {
-                    // Lógica de retrocompatibilidad para calendarios
-                    const pageData = (order.pages as any)?.[index]; // Nueva estructura: { image, crop }
-                    const oldPhotoData = (order.photos as any)?.[index]; // Antigua estructura: string
+                    let photosForMonth: string[] = [];
+                    
+                    const pageData = order.pages?.[index];
+                    if (pageData && Array.isArray(pageData.images)) {
+                      photosForMonth = pageData.images;
+                    } else if (pageData && pageData.image) {
+                      photosForMonth = [pageData.image];
+                    }
+                    
+                    const photoData = order.photos?.[index];
+                    if (photosForMonth.length === 0 && photoData) {
+                      if (Array.isArray(photoData)) {
+                        photosForMonth = photoData as string[];
+                      } else if (typeof photoData === 'string') {
+                        photosForMonth = [photoData as string];
+                      }
+                    }
 
-                    const photo = pageData?.image || oldPhotoData;
-                    const crop = pageData?.crop || order.photoCrops?.[index]; // Fallback para crops antiguos
-
-                    if (photo) {
-                      return <ReadOnlyImage src={photo} crop={crop} alt={`Foto para ${month}`} />;
+                    if (photosForMonth.length > 0 && photosForMonth[0]) {
+                      if (type === 'wall' && imagesPerMonth === 4) {
+                        return (
+                          <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full p-1">
+                            {Array.from({ length: 4 }).map((_, photoIdx) => {
+                              const photo = photosForMonth[photoIdx];
+                              const crop = order.photoCrops?.[`${index}-${photoIdx}`];
+                              return (
+                                <div key={photoIdx} className="relative bg-gray-200 rounded-sm overflow-hidden">
+                                  {photo ? (
+                                    <ReadOnlyImage src={photo} crop={crop} alt={`Foto ${photoIdx + 1} para ${month}`} />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                      <ImageIcon className="w-8 h-8 opacity-20" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      } else {
+                        const photo = photosForMonth[0];
+                        const crop = order.photoCrops?.[index] || order.photoCrops?.[`${index}-0`];
+                        return <ReadOnlyImage src={photo} crop={crop} alt={`Foto para ${month}`} />;
+                      }
                     }
                     
                     return (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <BookOpen className="w-12 h-12 opacity-20" />
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-gray-300 bg-gray-50">
+                        <ImageIcon className="w-12 h-12" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sin Imagen</span>
                       </div>
                     );
                   })()}
                 </div>
-                <div className={`p-4 flex flex-col justify-center bg-white ${orientation === 'horizontal' ? 'w-1/2' : 'flex-1'}`}>
+                
+                {/* Calendar Grid Section */}
+                <div className={`p-4 sm:p-6 flex flex-col justify-center bg-gray-50/50 ${orientation === 'horizontal' ? 'w-1/2' : 'flex-1'}`}>
                   <div className="text-center mb-2">
-                    <span className="text-sm font-bold text-gray-900">{month}</span>
+                    <span className="text-lg font-bold text-gray-900">{month} {year}</span>
                   </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-                      <div key={i} className="text-center text-[8px] font-bold text-gray-400">{day}</div>
-                    ))}
-                    {generateCalendarGrid(year, index).map((day, i) => {
-                      if (!day) return <div key={i} className="aspect-square" />;
-                      const date = new Date(year, index, day);
-                      const holiday = isHoliday(date, holidays);
-                      return (
-                        <div
-                          key={i}
-                          className={`aspect-square flex items-center justify-center text-[8px] rounded ${holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100' : 'bg-gray-50 border border-gray-100 text-gray-700'}`}
-                        >
-                          {day}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <TooltipProvider>
+                    <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
+                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
+                        <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
+                      ))}
+                      {generateCalendarGrid(year, index).map((day, i) => {
+                        if (!day) return <div key={i} className="h-full min-h-[24px] sm:min-h-[30px]" />;
+                        const date = new Date(year, index, day);
+                        const holiday = isHoliday(date, holidays);
+                        const content = (
+                          <div
+                            className={`h-full min-h-[24px] sm:min-h-[30px] flex items-center justify-center text-[10px] sm:text-xs rounded ${
+                              holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100' : 'bg-white border border-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {day}
+                          </div>
+                        );
+                        return holiday ? (
+                          <Tooltip key={i}>
+                            <TooltipTrigger asChild className="h-full w-full">{content}</TooltipTrigger>
+                            <TooltipContent><p>{holiday.name}</p></TooltipContent>
+                          </Tooltip>
+                        ) : <div key={i} className="h-full w-full">{content}</div>;
+                      })}
+                    </div>
+                  </TooltipProvider>
                 </div>
               </div>
             </div>
+
           </div>
         ))}
       </div>
@@ -401,32 +449,85 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     }
   };
 
+  // DETECCIÓN INTELIGENTE DEL TIPO DE PRODUCTO
+  const productString = String(order.product?.type || order.product?.id || order.product?.name || (order as any).productType || '').toLowerCase();
+  const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+  const isMug = productString.includes('mug') || productString.includes('taza');
+  const isAlbum = productString.includes('album') || productString.includes('photobook');
+
+  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Encabezado)
+  let displayImage = order.coverData?.image;
+  let ProductIcon = isCalendar ? CalendarIcon : isMug ? Coffee : BookOpen;
+
+  if (isCalendar) {
+    const januaryPage = order.pages?.[0];
+    if (januaryPage) {
+      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) {
+        displayImage = januaryPage.images[0];
+      } else if (januaryPage.image) {
+        displayImage = januaryPage.image;
+      }
+    }
+    if (!displayImage && order.photos && order.photos.length > 0) {
+      const firstPhoto = order.photos[0];
+      if (Array.isArray(firstPhoto) && firstPhoto.length > 0) {
+        displayImage = firstPhoto[0];
+      } else if (typeof firstPhoto === 'string') {
+        displayImage = firstPhoto as string;
+      }
+    }
+  } else if (isMug) {
+    if (order.items && order.items.length > 0) {
+      displayImage = order.items[0].photo || order.items[0].photos?.[0];
+    }
+  }
+
+  if (!displayImage) {
+    displayImage = order.product?.image;
+  }
+
+  // TÍTULO ADAPTATIVO
+  let titleText = order.coverData?.title || order.product?.name || 'Pedido Personalizado';
+  if (isCalendar && !order.coverData?.title) {
+      titleText = `Calendario ${order.customization?.year || ''}`;
+  }
+
+  // TEXTOS DE CONFIGURACIÓN ADAPTATIVOS
+  let formatText = 'N/A';
+  if (isCalendar) {
+    formatText = order.customization?.type === 'wall' ? 'De Pared' : order.customization?.type === 'desk' ? 'De Escritorio' : (order.customization?.orientation || 'Escritorio');
+  } else if (isAlbum) {
+    formatText = order.customization?.size || 'N/A';
+  } else {
+    formatText = order.customization?.size || order.customization?.format || 'Standard';
+  }
+
+  let extraText = 'N/A';
+  if (isCalendar) {
+    extraText = order.customization?.year ? `Año ${order.customization.year}` : 'N/A';
+  } else {
+    extraText = order.customization?.paper || order.customization?.material || 'N/A';
+  }
+
+  let elementsText = 'N/A';
+  if (isCalendar) {
+    elementsText = '12 Meses';
+  } else if (isAlbum) {
+    elementsText = order.pages ? `${order.pages.length} Páginas` : 'N/A';
+  } else if (isMug) {
+    elementsText = order.items ? `${order.items.length} Tazas` : 'N/A';
+  } else if (order.photos?.length) {
+    elementsText = `${order.photos.length} Fotos`;
+  }
+
   const renderPagesPreview = () => {
-    // Motor de deducción inteligente: Revisa el tipo, el ID, el nombre o la estructura de datos
-    const productString = String(order.product?.type || order.product?.id || order.product?.name || (order as any).productType || '').toLowerCase();
+    if (isAlbum) return <AlbumViewer order={order} />;
+    if (isMug) return <MugViewer order={order} />;
+    if (isCalendar) return <CalendarViewer order={order} />;
+    if (order.pages && Array.isArray(order.pages)) return <AlbumViewer order={order} />;
+    if (order.items && Array.isArray(order.items)) return <MugViewer order={order} />;
 
-    // Lógica de renderizado por prioridad para evitar conflictos
-    if (productString.includes('album') || productString.includes('photobook')) {
-      return <AlbumViewer order={order} />;
-    }
-    
-    if (productString.includes('mug') || productString.includes('taza')) {
-      return <MugViewer order={order} />;
-    }
-    
-    if (productString.includes('calendar') || productString.includes('calendario')) {
-      return <CalendarViewer order={order} />;
-    }
-    
-    // Fallbacks basados en la estructura de datos si el tipo de producto no es claro
-    if (order.pages && Array.isArray(order.pages)) {
-      return <AlbumViewer order={order} />;
-    }
-    if (order.items && Array.isArray(order.items)) {
-      return <MugViewer order={order} />;
-    }
-
-    return ( // Si no se puede determinar el tipo
+    return (
       <div className="text-center py-10 text-gray-500">
         <p>No hay una vista previa disponible para este tipo de producto.</p>
         <p className="text-xs mt-2 opacity-50">Tipo detectado: {productString || 'Desconocido'}</p>
@@ -463,17 +564,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
         </div>
 
         <div className="overflow-y-auto p-6 space-y-8">
-          {/* Main Info Section */}
+          {/* Main Info Section (NOW DYNAMIC) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
               <div className="aspect-square rounded-xl overflow-hidden shadow-inner bg-white border border-gray-100 p-2">
-                {order.coverData?.image ? (
-                  <img src={order.coverData.image} alt="Portada" className="w-full h-full object-cover rounded-lg" />
-                ) : order.product?.image ? (
-                  <img src={order.product.image} alt="Producto" className="w-full h-full object-cover rounded-lg" />
+                {displayImage ? (
+                  <img src={displayImage} alt="Producto" className="w-full h-full object-cover rounded-lg" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-300">
-                    <BookOpen className="w-16 h-16" />
+                    <ProductIcon className="w-16 h-16" />
                   </div>
                 )}
               </div>
@@ -482,9 +581,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
             <div className="md:col-span-2 space-y-6">
               <div>
                 <h3 className="text-2xl font-bold text-gray-900 leading-tight">
-                  {order.coverData?.title || order.product?.name || 'Pedido Personalizado'}
+                  {titleText}
                 </h3>
-                {order.coverData?.subtitle && (
+                {order.coverData?.subtitle && !isCalendar && (
                   <p className="text-lg text-gray-600 mt-1">{order.coverData.subtitle}</p>
                 )}
                 <div className="flex items-center text-gray-500 mt-3 text-sm font-medium">
@@ -499,11 +598,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500 font-medium">Formato:</span>
-                      <span className="font-bold text-gray-900">{order.customization?.size || order.customization?.orientation || 'N/A'}</span>
+                      <span className="font-bold text-gray-900">{formatText}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500 font-medium">Extra:</span>
-                      <span className="font-bold text-gray-900">{order.customization?.paper || order.customization?.year || 'N/A'}</span>
+                      <span className="font-bold text-gray-900">{extraText}</span>
                     </div>
                   </div>
                 </div>
@@ -514,7 +613,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500 font-medium">Elementos:</span>
                       <span className="font-bold text-gray-900 capitalize">
-                        {order.pages?.length || order.items?.length || (order.photos?.length ? '12 Meses' : 'N/A')}
+                        {elementsText}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">

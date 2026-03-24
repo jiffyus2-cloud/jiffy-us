@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2 } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2, Trash2 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
@@ -66,7 +66,7 @@ const getGridLayout = (count: number, layout: any, size: string) => {
 };
 
 // ============================================================================
-// COMPONENTE AUXILIAR PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF (ACTUALIZADO)
+// COMPONENTE AUXILIAR PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
 const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
   const size = customization?.size || '';
@@ -159,13 +159,32 @@ const OwnerDashboard: React.FC = () => {
   const generateAlbumPDF = async (order: Order, onProgress: (progress: number) => void): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
       try {
-        // 1. Deducir las dimensiones en CM
-        const parseSize = (sizeStr: string) => {
+        // 1. Deducir las dimensiones exactas y la orientación
+        const sizeStr = order.customization?.size || '20x20';
+        const isVert = sizeStr.toLowerCase().includes('vertical');
+        const isHoriz = sizeStr.toLowerCase().includes('horizontal');
+        
+        let wCm = 20;
+        let hCm = 20;
+        let coverSizeProp = '20x20';
+
+        // MAGIA AQUÍ: Obligamos a que el PDF y el CoverPreview se entiendan
+        if (isVert) {
+          wCm = 21;
+          hCm = 28;
+          coverSizeProp = '28x21'; // CoverPreview maneja 28x21 como Vertical internamente
+        } else if (isHoriz) {
+          wCm = 28;
+          hCm = 21;
+          coverSizeProp = '21x28'; // CoverPreview maneja 21x28 como Horizontal internamente
+        } else {
           const match = sizeStr.match(/(\d+)\s*x\s*(\d+)/i);
-          if (match) return [parseInt(match[1], 10), parseInt(match[2], 10)];
-          return [20, 20]; // Default Cuadrado
-        };
-        const [wCm, hCm] = parseSize(order.customization?.size || '20x20');
+          if (match) {
+            wCm = parseInt(match[1], 10);
+            hCm = parseInt(match[2], 10);
+            coverSizeProp = `${wCm}x${hCm}`;
+          }
+        }
         
         // 2. Calcular los píxeles necesarios para 300 DPI (ppp)
         const pxWidth = Math.round((wCm / 2.54) * 300);
@@ -175,7 +194,7 @@ const OwnerDashboard: React.FC = () => {
         let itemsProcessed = 0;
 
         const pdf = new jsPDF({
-          orientation: wCm > hCm ? 'landscape' : wCm < hCm ? 'portrait' : 'portrait',
+          orientation: wCm > hCm ? 'landscape' : 'portrait',
           unit: 'cm',
           format: [wCm, hCm]
         });
@@ -219,13 +238,12 @@ const OwnerDashboard: React.FC = () => {
         // 4. Renderizar y estampar la Portada
         const coverDataUrl = await renderAndCapture(
           <CoverPreview
-            coverSize={`${wCm}x${hCm}` as any}
+            coverSize={coverSizeProp as any} // <-- Usamos la propiedad mapeada para no romper la portada
             coverImage={order.coverData?.image || ''}
             coverTitle={order.coverData?.title || ''}
             coverSubtitle={order.coverData?.subtitle || ''}
             coverYear={order.coverData?.year || ''}
             
-            // CORRECCIÓN DE TYPESCRIPT
             selectedLayout={Number(order.coverData?.layout) || 1}
             coverCrop={{ 
               x: order.coverData?.crop?.x ?? 50, 
@@ -298,6 +316,19 @@ const OwnerDashboard: React.FC = () => {
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('owner_authenticated');
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este pedido? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'orders', orderId));
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+    } catch (error) {
+      console.error("Error deleting order: ", error);
+      alert('No se pudo eliminar el pedido. Por favor, inténtalo de nuevo.');
+    }
   };
 
   useEffect(() => {
@@ -592,6 +623,7 @@ const OwnerDashboard: React.FC = () => {
               <option value="paid">Pagado</option>
               <option value="mock_paid">Mock Paid</option>
               <option value="pending_payment">Pendiente</option>
+              <option value="draft">Borrador</option>
             </select>
           </div>
         </div>
@@ -681,6 +713,15 @@ const OwnerDashboard: React.FC = () => {
                               title={'Descargar ZIP con PDF'}
                             >
                               <Download className="w-5 h-5" />
+                            </button>
+                          )}
+                          {(order.status === 'pending_payment' || order.status === 'draft') && (
+                            <button
+                              onClick={() => handleDeleteOrder(order.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Eliminar Pedido"
+                            >
+                              <Trash2 className="w-5 h-5" />
                             </button>
                           )}
                         </div>

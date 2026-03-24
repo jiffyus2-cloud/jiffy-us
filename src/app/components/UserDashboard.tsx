@@ -24,12 +24,17 @@ interface Order {
   customization?: {
     size?: string;
     paper?: string;
+    year?: number;
   };
-  pages?: unknown[];
+  pages?: Array<{ images?: string[]; image?: string }>; 
+  photos?: string[] | string[][]; 
+  items?: any[];
   product?: {
-    name: string;
-    type: 'album' | 'calendar' | 'mug' | 'photo-pack';
+    id?: string;
+    name?: string;
+    type?: string;
   };
+  productType?: string;
 }
 
 const getStatusBadge = (status: string) => {
@@ -132,26 +137,79 @@ const UserDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {orders.map((order) => {
             const statusInfo = getStatusBadge(order.status);
-            const ProductIcon =
-              order.product?.type === 'calendar' ? Calendar :
-              order.product?.type === 'mug' ? Coffee :
-              ImageIcon;
+            
+            // Lógica ultra-robusta para detectar el tipo de producto
+            const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+            const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+            const isMug = productString.includes('mug') || productString.includes('taza');
+            const isAlbum = productString.includes('album') || productString.includes('photobook');
+
+            const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
 
             return (
               <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">
                 <div className="relative overflow-hidden">
                   <AspectRatio ratio={1 / 1}>
-                    {order.coverData?.image ? (
-                      <img
-                        src={order.coverData.image}
-                        alt={order.coverData.title || 'Portada del pedido'}
-                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                        <ProductIcon className="h-12 w-12 text-gray-300" />
-                      </div>
-                    )}
+                    {(() => {
+                      let imageUrl: string | null | undefined = null;
+
+                      // 1. SI ES CALENDARIO -> Forzamos a buscar la foto de ENERO
+                      if (isCalendar) {
+                        const januaryPage = order.pages?.[0];
+                        if (januaryPage) {
+                          if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) {
+                            imageUrl = januaryPage.images[0];
+                          } else if (januaryPage.image) {
+                            imageUrl = januaryPage.image;
+                          }
+                        }
+                        
+                        if (!imageUrl && order.photos && order.photos.length > 0) {
+                          const firstPhoto = order.photos[0];
+                          if (Array.isArray(firstPhoto) && firstPhoto.length > 0) {
+                            imageUrl = firstPhoto[0];
+                          } else if (typeof firstPhoto === 'string') {
+                            imageUrl = firstPhoto;
+                          }
+                        }
+                      } 
+                      // 2. SI ES TAZA -> Buscamos la foto del primer item
+                      else if (isMug) {
+                        if (order.items && order.items.length > 0) {
+                          imageUrl = order.items[0].photo || order.items[0].photos?.[0];
+                        }
+                      } 
+                      // 3. SI ES ÁLBUM O CUALQUIER OTRA COSA -> Priorizamos la portada
+                      else {
+                        imageUrl = order.coverData?.image;
+                        if (!imageUrl && order.photos && order.photos.length > 0) {
+                          const firstPhoto = order.photos[0];
+                          imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
+                        }
+                      }
+
+                      // Fallback final: Si falló la extracción específica, intentamos con la portada genérica
+                      if (!imageUrl) {
+                        imageUrl = order.coverData?.image;
+                      }
+
+                      // RENDERIZADO DE LA IMAGEN
+                      if (imageUrl) {
+                        return (
+                          <img
+                            src={imageUrl}
+                            alt={order.coverData?.title || order.product?.name || 'Vista previa'}
+                            className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                          />
+                        );
+                      } else {
+                        return (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <ProductIcon className="h-12 w-12 text-gray-300" />
+                          </div>
+                        );
+                      }
+                    })()}
                   </AspectRatio>
                   <div className="absolute top-4 right-4">
                     <Badge className={`${statusInfo.className} border-none font-medium px-3 py-1`}>
@@ -187,7 +245,7 @@ const UserDashboard: React.FC = () => {
                     </div>
                   </div>
                   
-                  {order.product?.type === 'album' && order.pages && (
+                  {isAlbum && order.pages && (
                     <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                       <div className="flex items-center text-sm text-gray-600">
                         <FileText className="h-4 w-4 mr-2 text-primary" />
