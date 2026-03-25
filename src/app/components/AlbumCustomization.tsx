@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Settings, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Settings, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
@@ -9,7 +9,7 @@ export interface CustomizationOptions {
   coverType: 'Tela' | 'Papel';
   size: 'Cuadrado 20x20 cm' | 'Cuadrado 30x30 cm' | 'Horizontal 21x28 cm' | 'Vertical 28x21 cm';
   coverColor: string;
-  typographyColor: string;
+  typographyColor: string; // Se mantiene en la raíz para compatibilidad con la base de datos
   paperType: 'Mate' | 'Brillante';
   coverContent: {
     coverImage: string;
@@ -17,6 +17,7 @@ export interface CustomizationOptions {
     coverSubtitle: string;
     coverYear: string;
     selectedLayout: number;
+    typographyColor: string;
     coverCrop?: { x: number; y: number; zoom: number };
   };
 }
@@ -31,71 +32,63 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Tela');
   const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
   
-  // Dynamic color options based on coverType
+  // Estado para obligar al usuario a editar la portada antes de continuar
+  const [isCoverEdited, setIsCoverEdited] = useState(false);
+  
+  // Mantenemos el paperType internamente para no romper la interfaz, pero sin UI
+  const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
+  
+  // Opciones de color según el tipo de carátula
   const getCoverColors = () => {
     if (coverType === 'Tela') {
       return [
-        { name: t('album.tela'), color: '#E8DCC4', isPhoto: true }, // Using Beige as placeholder for texture
+        { name: t('album.tela'), color: '#E8DCC4', isPhoto: true },
         { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
       ];
     } else {
       return [
-        { name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, // Slightly off-white for photo option
+        { name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true },
         { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
-      ];
-    }
-  };
-
-  const getTypographyColors = () => {
-    if (coverType === 'Tela') {
-      return [
-        { name: t('album.color.gold'), color: '#D4AF37' },
-        { name: t('album.color.silver'), color: '#C0C0C0' },
-        { name: t('album.color.black'), color: '#000000' },
-      ];
-    } else {
-      return [
-        { name: t('album.color.black'), color: '#000000' },
       ];
     }
   };
 
   const currentCoverColors = getCoverColors();
-  const currentTypographyColors = getTypographyColors();
-
   const [coverColor, setCoverColor] = useState(currentCoverColors[0].color);
-  const [typographyColor, setTypographyColor] = useState(currentTypographyColors[0].color);
+
+  const [showCoverEditor, setShowCoverEditor] = useState(false);
+  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
+    coverTitle: t('album.defaultTitle') || 'Mi Álbum',
+    coverSubtitle: t('album.defaultSubtitle') || 'Un recuerdo especial',
+    coverYear: new Date().getFullYear().toString(),
+    coverImage: '',
+    selectedLayout: 1,
+    typographyColor: '#D4AF37', // Dorado por defecto
+    coverCrop: { x: 50, y: 50, zoom: 1 }
+  });
 
   const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
     setCoverType(type);
     const newCoverColors = type === 'Tela' 
       ? [{ name: t('album.tela'), color: '#E8DCC4', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }]
       : [{ name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }];
-    const newTypoColors = type === 'Tela'
-      ? [{ name: t('album.color.gold'), color: '#D4AF37' }, { name: t('album.color.silver'), color: '#C0C0C0' }, { name: t('album.color.black'), color: '#000000' }]
-      : [{ name: t('album.color.black'), color: '#000000' }];
     
     setCoverColor(newCoverColors[0].color);
-    setTypographyColor(newTypoColors[0].color);
+    
+    // Si cambia a papel, forzamos que la tipografía sea negra
+    setCoverContent(prev => ({
+      ...prev,
+      typographyColor: type === 'Papel' ? '#000000' : prev.typographyColor
+    }));
   };
 
-  const [paperType, setPaperType] = useState<'Mate' | 'Brillante'>('Mate');
-  const [showCoverEditor, setShowCoverEditor] = useState(false);
-  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
-    coverTitle: t('album.defaultTitle'),
-    coverSubtitle: t('album.defaultSubtitle'),
-    coverYear: '2024',
-    coverImage: '',
-    selectedLayout: 1,
-    coverCrop: { x: 50, y: 50, zoom: 1 }
-  });
-
   const handleContinue = () => {
+    if (!isCoverEdited) return;
     onCustomizationComplete({
       coverType,
       size,
       coverColor,
-      typographyColor,
+      typographyColor: coverContent.typographyColor, // Lo extraemos de coverContent
       paperType,
       coverContent,
     });
@@ -110,17 +103,135 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-12">
-      {/* Album Cover Preview - Clickeable */}
-      <div className="mb-12" style={{ color: 'rgba(10, 10, 10, 0.45)' }}>
-        <h3 className="text-xl font-medium mb-4 text-center">{t('album.caratula')}</h3>
+    <div className="w-full max-w-4xl mx-auto px-4 py-8">
+      
+      {/* 1. PANEL COMPACTO DE AJUSTES INICIALES */}
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-10 space-y-8">
+        <div className="border-b border-gray-100 pb-4 mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Configuración Básica del Álbum</h2>
+          <p className="text-sm text-gray-500">Ajusta los materiales y dimensiones antes de diseñar la portada.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          {/* Tipo de Carátula */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverType')}</h3>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleCoverTypeChange('Tela')}
+                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                  coverType === 'Tela'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                {t('album.tela')}
+              </button>
+              <button
+                onClick={() => handleCoverTypeChange('Papel')}
+                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                  coverType === 'Papel'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                {t('album.papel')}
+              </button>
+            </div>
+          </div>
+
+          {/* Tamaño */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.size')}</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setSize('Cuadrado 20x20 cm')}
+                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                  size === 'Cuadrado 20x20 cm'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                20x20 cm
+              </button>
+              <button
+                onClick={() => setSize('Cuadrado 30x30 cm')}
+                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                  size === 'Cuadrado 30x30 cm'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                30x30 cm
+              </button>
+              <button
+                onClick={() => setSize('Horizontal 21x28 cm')}
+                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                  size === 'Horizontal 21x28 cm'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                21x28 cm (H)
+              </button>
+              <button
+                onClick={() => setSize('Vertical 28x21 cm')}
+                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                  size === 'Vertical 28x21 cm'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                28x21 cm (V)
+              </button>
+            </div>
+          </div>
+
+          {/* Color de Carátula */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverColor')}</h3>
+            <div className="flex flex-wrap gap-4">
+              {currentCoverColors.map((colorOption: any) => (
+                <div key={colorOption.color} className="flex flex-col items-center gap-1.5">
+                  <button
+                    onClick={() => setCoverColor(colorOption.color)}
+                    className={`w-12 h-12 rounded-full border-2 transition-all flex items-center justify-center ${
+                      coverColor === colorOption.color
+                        ? 'border-black ring-2 ring-offset-2 ring-black scale-105'
+                        : 'border-gray-200 hover:border-gray-400'
+                    }`}
+                    style={{ backgroundColor: colorOption.color }}
+                  >
+                    {colorOption.isPhoto && (
+                      <ImageIcon className="w-5 h-5 text-gray-500/50" />
+                    )}
+                  </button>
+                  <span className="text-[10px] font-medium text-center">{colorOption.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. EDITOR DE PORTADA (Ubicado abajo) */}
+      <div className="mb-10">
+        <div className="text-center mb-6">
+          <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {!isCoverEdited ? 'Es necesario configurar la portada para continuar.' : 'Haz clic en la imagen si deseas hacer más cambios.'}
+          </p>
+        </div>
+
         <button
           onClick={() => setShowCoverEditor(true)}
-          className="w-full relative bg-gray-50 rounded-lg p-4 md:p-12 flex items-center justify-center hover:bg-gray-100 transition-colors group overflow-hidden"
-          style={{ color: 'rgba(10, 10, 10, 1)' }}
+          className={`w-full relative rounded-2xl p-6 md:p-12 flex items-center justify-center transition-all group overflow-hidden border-2 ${
+            !isCoverEdited ? 'bg-amber-50 border-dashed border-amber-300 hover:bg-amber-100 hover:border-amber-400' : 'bg-gray-50 border-solid border-gray-200 hover:border-gray-300'
+          }`}
         >
           {/* Front Cover Preview */}
-          <div className="w-full max-w-[400px]">
+          <div className="w-full max-w-[400px] shadow-2xl rounded-sm transition-transform duration-300 group-hover:scale-[1.02]">
             <CoverPreview
               coverSize={mapSizeToCoverSize(size)}
               coverImage={coverContent.coverImage}
@@ -129,176 +240,35 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
               coverYear={coverContent.coverYear}
               selectedLayout={coverContent.selectedLayout}
               coverCrop={coverContent.coverCrop}
+              typographyColor={coverContent.typographyColor}
             />
           </div>
 
           {/* Hover Overlay */}
-          <div className="absolute inset-0 bg-transparent group-hover:bg-black group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              <span className="font-medium">{t('album.clickToCustomize')}</span>
+          <div className="absolute inset-0 bg-transparent group-hover:bg-black/5 transition-all flex items-center justify-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2">
+              <Settings className="w-5 h-5 text-primary" />
+              <span className="font-bold text-sm">
+                {!isCoverEdited ? 'Haz clic para diseñar portada' : 'Modificar portada'}
+              </span>
             </div>
           </div>
         </button>
       </div>
 
-      <div className="space-y-10">
-        {/* Tipo de Carátula */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.coverType')}</h3>
-          <div className="grid grid-cols-2 gap-4 max-w-md">
-            <button
-              onClick={() => handleCoverTypeChange('Tela')}
-              className={`py-6 text-xl rounded-lg border-4 transition-all ${
-                coverType === 'Tela'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.tela')}
-            </button>
-            <button
-              onClick={() => handleCoverTypeChange('Papel')}
-              className={`py-6 text-xl rounded-lg border-4 transition-all ${
-                coverType === 'Papel'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.papel')}
-            </button>
-          </div>
-        </div>
-
-        {/* Tamaño */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.size')}</h3>
-          <div className="grid grid-cols-2 gap-4 max-w-md">
-            <button
-              onClick={() => setSize('Cuadrado 20x20 cm')}
-              className={`py-6 rounded-lg border-4 transition-all ${
-                size === 'Cuadrado 20x20 cm'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.size.sq20')}
-            </button>
-            <button
-              onClick={() => setSize('Cuadrado 30x30 cm')}
-              className={`py-6 rounded-lg border-4 transition-all ${
-                size === 'Cuadrado 30x30 cm'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.size.sq30')}
-            </button>
-            <button
-              onClick={() => setSize('Horizontal 21x28 cm')}
-              className={`py-6 rounded-lg border-4 transition-all ${
-                size === 'Horizontal 21x28 cm'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.size.hor21')}
-            </button>
-            <button
-              onClick={() => setSize('Vertical 28x21 cm')}
-              className={`py-6 rounded-lg border-4 transition-all ${
-                size === 'Vertical 28x21 cm'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.size.ver28')}
-            </button>
-          </div>
-        </div>
-
-        {/* Color de Carátula */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.coverColor')}</h3>
-          <div className="flex flex-wrap gap-4">
-            {currentCoverColors.map((colorOption: any) => (
-              <div key={colorOption.color} className="flex flex-col items-center gap-2">
-                <button
-                  onClick={() => setCoverColor(colorOption.color)}
-                  className={`w-16 h-16 rounded-full border-4 transition-all flex items-center justify-center ${
-                    coverColor === colorOption.color
-                      ? 'border-black scale-110'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  style={{ backgroundColor: colorOption.color }}
-                >
-                  {colorOption.isPhoto && (
-                    <ImageIcon className="w-8 h-8 text-gray-500" />
-                  )}
-                </button>
-                <span className="text-xs text-center max-w-[80px]">{colorOption.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Color de Tipografía */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.typographyColor')}</h3>
-          <div className="flex flex-wrap gap-4">
-            {currentTypographyColors.map((colorOption) => (
-              <div key={colorOption.color} className="flex flex-col items-center gap-2">
-                <button
-                  onClick={() => setTypographyColor(colorOption.color)}
-                  className={`w-16 h-16 rounded-full border-4 transition-all ${
-                    typographyColor === colorOption.color
-                      ? 'border-black scale-110'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  style={{ backgroundColor: colorOption.color }}
-                />
-                <span className="text-xs text-center">{colorOption.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Tipo de Papel */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.paperType')}</h3>
-          <div className="grid grid-cols-2 gap-4 max-w-md">
-            <button
-              onClick={() => setPaperType('Mate')}
-              className={`py-6 text-xl rounded-lg border-4 transition-all ${
-                paperType === 'Mate'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.mate')}
-            </button>
-            <button
-              onClick={() => setPaperType('Brillante')}
-              className={`py-6 text-xl rounded-lg border-4 transition-all ${
-                paperType === 'Brillante'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black'
-              }`}
-            >
-              {t('album.brillante')}
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Continue Button */}
-      <div className="mt-12">
+      {/* 3. BOTÓN CONTINUAR (Con validación) */}
+      <div className="mt-8">
         <button
           onClick={handleContinue}
-          className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
+          disabled={!isCoverEdited}
+          className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-md flex items-center justify-center gap-2 ${
+            isCoverEdited 
+              ? 'bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5' 
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }`}
         >
-          {t('album.continue')}
+          {!isCoverEdited && <AlertCircle className="w-5 h-5" />}
+          {!isCoverEdited ? 'Diseña tu portada para continuar' : t('album.continue') || 'Continuar al organizador de fotos'}
         </button>
       </div>
 
@@ -306,10 +276,12 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
       {showCoverEditor && (
         <CoverEditor
           coverSize={mapSizeToCoverSize(size)}
+          coverType={coverType}
           onClose={() => setShowCoverEditor(false)}
           initialData={coverContent}
           onSave={(data) => {
             setCoverContent(data);
+            setIsCoverEdited(true); // Marca la portada como editada para desbloquear el botón
             setShowCoverEditor(false);
           }}
         />
