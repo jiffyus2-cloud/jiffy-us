@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
   coverType: 'Tela' | 'Papel';
+  hidePhoto?: boolean;
   onClose: () => void;
   onSave: (data: {
     coverImage: string;
@@ -31,13 +32,13 @@ interface CoverEditorProps {
 const CoverEditor: React.FC<CoverEditorProps> = ({ 
   coverSize, 
   coverType,
+  hidePhoto = false,
   onClose, 
   onSave,
   initialData 
 }) => {
   const { t } = useLanguage();
   
-  // Estados Locales
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || 'NUESTRA HISTORIA');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || 'Un viaje inolvidable');
@@ -46,7 +47,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1 });
   const [typographyColor, setTypographyColor] = useState(initialData?.typographyColor || '#000000');
 
-  // Derivados de Formato
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
   const isHorizontal = coverSize === '21x28';
@@ -71,7 +71,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     }
   };
 
-  // Determinar colores disponibles según material
   const getTypographyColors = () => {
     if (coverType === 'Tela') {
       return [
@@ -90,7 +89,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-screen animate-in fade-in duration-300 overflow-hidden">
-      {/* Area de Previsualización */}
       <div className="h-[35vh] md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 relative order-1 md:order-2 border-b md:border-b-0 border-gray-200 shrink-0">
         <button 
           onClick={onClose} 
@@ -99,13 +97,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           <X size={24} className="group-hover:rotate-90 transition-transform" />
         </button>
 
-        {/* Contenedor que limita el tamaño de la portada en móviles para que no se salga */}
         <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
           <div 
             className="w-full"
-            style={{ 
-              maxWidth: isVertical ? '180px' : isHorizontal ? '260px' : '200px', // Tamaños móviles
-            }}
+            style={{ maxWidth: isVertical ? '180px' : isHorizontal ? '260px' : '200px' }}
           >
             <div className="md:hidden">
               <CoverPreview
@@ -119,7 +114,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 typographyColor={typographyColor}
               />
             </div>
-            {/* Tamaños en escritorio manejados ocultando/mostrando contenedores */}
             <div 
               className="hidden md:block w-full"
               style={{ maxWidth: isVertical ? '350px' : isHorizontal ? '500px' : '400px' }}
@@ -138,7 +132,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           </div>
         </div>
 
-        {/* Cuadro flotante Ratio/Formato (OCULTO EN MÓVILES, VISIBLE EN ESCRITORIO) */}
         <div className="hidden md:flex absolute right-10 bottom-10 bg-black/10 backdrop-blur-md px-5 py-2.5 rounded-full items-center gap-4">
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase text-black/50 leading-none">Formato</span>
@@ -152,7 +145,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </div>
       </div>
 
-      {/* Menu de Personalización */}
       <div className="flex-1 w-full md:w-[400px] md:h-full border-r border-gray-200 flex flex-col bg-white shadow-xl z-10 order-2 md:order-1 overflow-hidden">
         <div className="p-3 md:p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 className="text-lg md:text-xl font-black tracking-tighter">EDITOR DE PORTADA</h2>
@@ -162,8 +154,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8">
-          
-          {/* Selector de Layouts */}
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
               <Layout size={16} />
@@ -193,7 +183,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* Color de Tipografía */}
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
               <Palette size={16} />
@@ -217,7 +206,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* Inputs de Texto Dinámicos */}
           <section className="space-y-4 md:space-y-5">
             <div className="flex items-center gap-1.5 mb-2 text-gray-400">
               <Type size={16} />
@@ -264,46 +252,46 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* Carga de Imagen */}
-          <section className="pb-4">
-             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
-              <ImageIcon size={16} />
-              <h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Imagen de Portada</h3>
-            </div>
-             {coverImage ? (
-                <div 
-                  className="relative group rounded-xl md:rounded-2xl overflow-hidden shadow-md w-full max-w-[200px] md:max-w-none mx-auto"
-                  style={{ aspectRatio: aspectRatio }}
-                >
-                  <ImageCropper 
-                    src={coverImage} 
-                    defaultPosition={coverCrop} 
-                    defaultZoom={coverCrop.zoom}
-                    onCropChange={setCoverCrop}
-                    isEditable={true}
-                  />
-                  <div className="absolute top-1.5 right-1.5 md:top-2 md:right-2 z-10">
-                    <button 
-                      onClick={() => setCoverImage('')}
-                      className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white"
-                    >
-                      <X size={14} className="md:w-4 md:h-4" />
-                    </button>
+          {!hidePhoto && (
+            <section className="pb-4">
+               <div className="flex items-center gap-1.5 mb-3 text-gray-400">
+                <ImageIcon size={16} />
+                <h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Imagen de Portada</h3>
+              </div>
+               {coverImage ? (
+                  <div 
+                    className="relative group rounded-xl md:rounded-2xl overflow-hidden shadow-md w-full max-w-[200px] md:max-w-none mx-auto"
+                    style={{ aspectRatio: aspectRatio }}
+                  >
+                    <ImageCropper 
+                      src={coverImage} 
+                      defaultPosition={coverCrop} 
+                      defaultZoom={coverCrop.zoom}
+                      onCropChange={setCoverCrop}
+                      isEditable={true}
+                    />
+                    <div className="absolute top-1.5 right-1.5 md:top-2 md:right-2 z-10">
+                      <button 
+                        onClick={() => setCoverImage('')}
+                        className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white"
+                      >
+                        <X size={14} className="md:w-4 md:h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-             ) : (
-                <label className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group">
-                  <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors">
-                    <Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" />
-                  </div>
-                  <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
-                  <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
-                </label>
-             )}
-          </section>
+               ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group">
+                    <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors">
+                      <Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" />
+                    </div>
+                    <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                  </label>
+               )}
+            </section>
+          )}
         </div>
 
-        {/* Footer de Acciones */}
         <div className="p-3 md:p-6 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0">
           <button 
             onClick={onClose}

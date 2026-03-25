@@ -8,8 +8,8 @@ interface CoverPreviewProps {
   coverYear?: string;
   selectedLayout: number;
   coverCrop?: { x: number; y: number; zoom: number };
-  typographyColor?: string; // <-- AÑADIDO A LA INTERFAZ
-  
+  typographyColor?: string;
+
   customization?: any;
   photos?: (string | null)[];
   photoCrops?: Record<string, { x: number; y: number; zoom: number }>;
@@ -23,11 +23,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverYear = '',
   selectedLayout,
   coverCrop = { x: 50, y: 50, zoom: 1 },
-  typographyColor = '#000000', // <-- VALOR POR DEFECTO
-  
-  customization = {},
-  photos = [],
-  photoCrops = {}
+  typographyColor = '#000000',
 }) => {
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -38,6 +34,32 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     if (isHorizontal) return '28 / 21';
     return '1 / 1';
   }, [isVertical, isHorizontal]);
+
+  const renderImageSlot = () => {
+    if (coverImage) {
+      return (
+        <img 
+          src={coverImage} 
+          alt="Portada" 
+          className="absolute inset-0 w-full h-full object-cover" 
+          style={{ 
+            objectPosition: '50% 50%', 
+            transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` 
+          }} 
+        />
+      );
+    }
+    return (
+      <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
+          <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
+            <span className="text-[3cqw] font-black">IMAGE</span>
+          </div>
+          <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
+        </div>
+      </div>
+    );
+  };
 
   const renderPreviewContent = () => {
     if (isVertical) {
@@ -58,16 +80,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="relative w-full h-[80%] bg-white">
                 <div className="absolute top-[0%] left-[10%] right-[10%] bottom-[10%] overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
             </div>
@@ -80,16 +93,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             >
               <div className="relative w-full h-[75%] bg-white">
                 <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[25%] flex-shrink-0 flex flex-col items-center justify-center p-[8cqw] bg-white z-10">
@@ -111,16 +115,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                {coverImage ? (
-                  <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                      <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                      <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                    </div>
-                  </div>
-                )}
+                {renderImageSlot()}
               </div>
               <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                 <div 
@@ -153,16 +148,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="relative w-full h-[80%] bg-white">
                 <div className="absolute top-0 left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[10%] flex-shrink-0 flex flex-col items-center justify-center p-[8cqw] bg-white z-10">
@@ -178,19 +164,9 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           return (
             <div 
               className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
-              style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
-            >
+              style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                {coverImage ? (
-                  <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                      <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                      <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                    </div>
-                  </div>
-                )}
+                {renderImageSlot()}
               </div>
               <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
                 <div className="w-full text-left">
@@ -222,16 +198,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="relative w-full h-[75%] bg-white">
                 <div className="absolute top-[0%] left-[10%] right-[10%] bottom-[10%] overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
             </div>
@@ -244,16 +211,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             >
               <div className="relative w-full h-[75%] bg-white">
                 <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[25%] flex-shrink-0 flex flex-col items-center justify-center p-[8cqw] bg-white z-10">
@@ -275,16 +233,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                {coverImage ? (
-                  <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                      <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                      <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                    </div>
-                  </div>
-                )}
+                {renderImageSlot()}
               </div>
               <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                 <div 
@@ -317,16 +266,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="relative w-full h-[90%] bg-white">
                 <div className="absolute top-0 left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[5%] flex-shrink-0 flex flex-col items-center justify-center p-[5cqw] bg-white z-10">
@@ -344,16 +284,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                {coverImage ? (
-                  <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                      <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                      <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                    </div>
-                  </div>
-                )}
+                {renderImageSlot()}
               </div>
               <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
                 <div className="w-full text-left">
@@ -379,16 +310,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             >
               <div className="relative w-full h-[70%] bg-white">
                 <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[30%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
@@ -406,16 +328,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             >
               <div className="relative w-full h-[75%] bg-white">
                 <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[25%] flex-shrink-0 flex flex-col items-center justify-center p-[8cqw] bg-white z-10">
@@ -437,16 +350,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
               >
                 <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
                 <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                   <div 
@@ -479,16 +383,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="relative w-full h-[80%] bg-white">
                 <div className="absolute top-0 left-[10%] right-[10%] bottom-0 overflow-hidden">
-                  {coverImage ? (
-                    <img src={coverImage} alt="Portada" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                        <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                        <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderImageSlot()}
                 </div>
               </div>
               <div className="h-[10%] flex-shrink-0 flex flex-col items-center justify-center p-[5cqw] bg-white z-10">
@@ -506,16 +401,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
-                {coverImage ? (
-                  <img src={coverImage} alt="Portada" className="w-full h-full object-cover" style={{ objectPosition: '50% 50%', transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-                      <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center"><span className="text-[3cqw] font-black">IMAGE</span></div>
-                      <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-                    </div>
-                  </div>
-                )}
+                {renderImageSlot()}
               </div>
               <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
                 <div className="w-full text-left">
@@ -527,48 +413,16 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
             </div>
           );
+        default: return null;
       }
     }
     return null;
   };
 
-  if (isSquare) {
-    return (
-      <React.Fragment>
-        {renderPreviewContent()}
-      </React.Fragment>
-    );
-  }
-
   return (
-    <div 
-      className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
-      style={{ width: '100%', aspectRatio: aspectRatio, containerType: 'inline-size' }}
-    >
-      {coverImage ? (
-        <img 
-          src={coverImage} 
-          alt="Portada del Álbum" 
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700" 
-          style={{
-            objectPosition: '50% 50%',
-            transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)`
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-[4cqw] text-gray-300">
-            <div className="w-[16cqw] h-[16cqw] border-[0.5cqw] border-gray-300 rounded-[2cqw] flex items-center justify-center">
-               <span className="text-[3cqw] font-black">IMAGE</span>
-            </div>
-            <span className="font-black tracking-[0.3em] text-[5cqw]">Sin Imagen</span>
-          </div>
-        </div>
-      )}
-      <div className="absolute inset-0 pointer-events-none select-none">
-         {renderPreviewContent()}
-      </div>
-    </div>
+    <React.Fragment>
+      {renderPreviewContent()}
+    </React.Fragment>
   );
 };
 

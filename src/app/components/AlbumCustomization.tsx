@@ -5,11 +5,14 @@ import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
 import CoverPreview from './CoverPreview';
 
+// Importación de la imagen blanca local
+import justWhiteImg from '../../assets/justwhite.png';
+
 export interface CustomizationOptions {
   coverType: 'Tela' | 'Papel';
   size: 'Cuadrado 20x20 cm' | 'Cuadrado 30x30 cm' | 'Horizontal 21x28 cm' | 'Vertical 28x21 cm';
   coverColor: string;
-  typographyColor: string; // Se mantiene en la raíz para compatibilidad con la base de datos
+  typographyColor: string;
   paperType: 'Mate' | 'Brillante';
   coverContent: {
     coverImage: string;
@@ -29,32 +32,29 @@ interface AlbumCustomizationProps {
 
 export default function AlbumCustomization({ album, onCustomizationComplete }: AlbumCustomizationProps) {
   const { t } = useLanguage();
-  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Tela');
+  
+  // 1. Opciones por defecto: Papel y Blanco (Foto)
+  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Papel');
   const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
+  const [coverColor, setCoverColor] = useState('#F5F5F5'); // #F5F5F5 es el color de 'Blanco (Foto)'
   
-  // Estado para obligar al usuario a editar la portada antes de continuar
   const [isCoverEdited, setIsCoverEdited] = useState(false);
-  
-  // Mantenemos el paperType internamente para no romper la interfaz, pero sin UI
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
   
-  // Opciones de color según el tipo de carátula
   const getCoverColors = () => {
     if (coverType === 'Tela') {
       return [
-        { name: t('album.tela'), color: '#E8DCC4', isPhoto: true },
-        { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
+        { name: t('album.tela') || 'Tela', color: '#E8DCC4', isPhoto: false },
       ];
     } else {
       return [
-        { name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true },
-        { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false },
+        { name: t('album.color.whitePhoto') || 'Blanco (Foto)', color: '#F5F5F5', isPhoto: true },
+        { name: t('album.color.white') || 'Blanco', color: '#FFFFFF', isPhoto: false },
       ];
     }
   };
 
   const currentCoverColors = getCoverColors();
-  const [coverColor, setCoverColor] = useState(currentCoverColors[0].color);
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
@@ -63,22 +63,36 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     coverYear: new Date().getFullYear().toString(),
     coverImage: '',
     selectedLayout: 1,
-    typographyColor: '#D4AF37', // Dorado por defecto
+    typographyColor: '#000000', // Negro por defecto para Papel
     coverCrop: { x: 50, y: 50, zoom: 1 }
   });
 
   const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
     setCoverType(type);
     const newCoverColors = type === 'Tela' 
-      ? [{ name: t('album.tela'), color: '#E8DCC4', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }]
+      ? [{ name: t('album.tela'), color: '#E8DCC4', isPhoto: false }]
       : [{ name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }];
     
-    setCoverColor(newCoverColors[0].color);
+    const newColor = newCoverColors[0].color;
+    setCoverColor(newColor);
     
-    // Si cambia a papel, forzamos que la tipografía sea negra
+    const isNoPhoto = type === 'Tela' || (type === 'Papel' && newColor === '#FFFFFF');
+    
     setCoverContent(prev => ({
       ...prev,
-      typographyColor: type === 'Papel' ? '#000000' : prev.typographyColor
+      typographyColor: type === 'Papel' ? '#000000' : '#D4AF37',
+      coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
+    }));
+  };
+
+  const handleColorChange = (color: string) => {
+    setCoverColor(color);
+    const isNoPhoto = coverType === 'Tela' || (coverType === 'Papel' && color === '#FFFFFF');
+    
+    setCoverContent(prev => ({
+      ...prev,
+      // Inyectamos la imagen blanca si la opción no requiere foto, si vuelve a foto, la limpiamos.
+      coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
     }));
   };
 
@@ -88,7 +102,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
       coverType,
       size,
       coverColor,
-      typographyColor: coverContent.typographyColor, // Lo extraemos de coverContent
+      typographyColor: coverContent.typographyColor,
       paperType,
       coverContent,
     });
@@ -102,10 +116,12 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     return '20x20';
   };
 
+  // Variable de apoyo para ocultar el editor de imágenes
+  const hidePhoto = coverType === 'Tela' || (coverType === 'Papel' && coverColor === '#FFFFFF');
+
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8">
       
-      {/* 1. PANEL COMPACTO DE AJUSTES INICIALES */}
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-10 space-y-8">
         <div className="border-b border-gray-100 pb-4 mb-6">
           <h2 className="text-xl font-bold text-gray-900">Configuración Básica del Álbum</h2>
@@ -114,20 +130,9 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
-          {/* Tipo de Carátula */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverType')}</h3>
             <div className="flex gap-3">
-              <button
-                onClick={() => handleCoverTypeChange('Tela')}
-                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
-                  coverType === 'Tela'
-                    ? 'bg-black text-white border-black shadow-md'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
-                }`}
-              >
-                {t('album.tela')}
-              </button>
               <button
                 onClick={() => handleCoverTypeChange('Papel')}
                 className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
@@ -136,12 +141,21 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
                     : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
                 }`}
               >
-                {t('album.papel')}
+                {t('album.papel') || 'Papel'}
+              </button>
+              <button
+                onClick={() => handleCoverTypeChange('Tela')}
+                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                  coverType === 'Tela'
+                    ? 'bg-black text-white border-black shadow-md'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                {t('album.tela') || 'Tela'}
               </button>
             </div>
           </div>
 
-          {/* Tamaño */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.size')}</h3>
             <div className="grid grid-cols-2 gap-2">
@@ -188,34 +202,34 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             </div>
           </div>
 
-          {/* Color de Carátula */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverColor')}</h3>
-            <div className="flex flex-wrap gap-4">
-              {currentCoverColors.map((colorOption: any) => (
-                <div key={colorOption.color} className="flex flex-col items-center gap-1.5">
-                  <button
-                    onClick={() => setCoverColor(colorOption.color)}
-                    className={`w-12 h-12 rounded-full border-2 transition-all flex items-center justify-center ${
-                      coverColor === colorOption.color
-                        ? 'border-black ring-2 ring-offset-2 ring-black scale-105'
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
-                    style={{ backgroundColor: colorOption.color }}
-                  >
-                    {colorOption.isPhoto && (
-                      <ImageIcon className="w-5 h-5 text-gray-500/50" />
-                    )}
-                  </button>
-                  <span className="text-[10px] font-medium text-center">{colorOption.name}</span>
-                </div>
-              ))}
+          {coverType !== 'Tela' && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverColor')}</h3>
+              <div className="flex flex-wrap gap-4">
+                {currentCoverColors.map((colorOption: any) => (
+                  <div key={colorOption.color} className="flex flex-col items-center gap-1.5">
+                    <button
+                      onClick={() => handleColorChange(colorOption.color)}
+                      className={`w-12 h-12 rounded-full border-2 transition-all flex items-center justify-center ${
+                        coverColor === colorOption.color
+                          ? 'border-black ring-2 ring-offset-2 ring-black scale-105'
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: colorOption.color }}
+                    >
+                      {colorOption.isPhoto && (
+                        <ImageIcon className="w-5 h-5 text-gray-500/50" />
+                      )}
+                    </button>
+                    <span className="text-[10px] font-medium text-center">{colorOption.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* 2. EDITOR DE PORTADA (Ubicado abajo) */}
       <div className="mb-10">
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
@@ -230,7 +244,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             !isCoverEdited ? 'bg-amber-50 border-dashed border-amber-300 hover:bg-amber-100 hover:border-amber-400' : 'bg-gray-50 border-solid border-gray-200 hover:border-gray-300'
           }`}
         >
-          {/* Front Cover Preview */}
           <div className="w-full max-w-[400px] shadow-2xl rounded-sm transition-transform duration-300 group-hover:scale-[1.02]">
             <CoverPreview
               coverSize={mapSizeToCoverSize(size)}
@@ -244,7 +257,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             />
           </div>
 
-          {/* Hover Overlay */}
           <div className="absolute inset-0 bg-transparent group-hover:bg-black/5 transition-all flex items-center justify-center">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2">
               <Settings className="w-5 h-5 text-primary" />
@@ -256,7 +268,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         </button>
       </div>
 
-      {/* 3. BOTÓN CONTINUAR (Con validación) */}
       <div className="mt-8">
         <button
           onClick={handleContinue}
@@ -272,16 +283,16 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         </button>
       </div>
 
-      {/* Cover Editor Modal */}
       {showCoverEditor && (
         <CoverEditor
           coverSize={mapSizeToCoverSize(size)}
           coverType={coverType}
+          hidePhoto={hidePhoto}
           onClose={() => setShowCoverEditor(false)}
           initialData={coverContent}
           onSave={(data) => {
             setCoverContent(data);
-            setIsCoverEdited(true); // Marca la portada como editada para desbloquear el botón
+            setIsCoverEdited(true); 
             setShowCoverEditor(false);
           }}
         />
