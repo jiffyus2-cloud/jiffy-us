@@ -86,18 +86,21 @@ export default function Checkout() {
   }
 
   const product = orderData.product;
+  const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
+  const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
+  
+  const getMugCount = () => {
+    const arr = orderData.items || orderData.designData?.items || orderData.mugItems || orderData.designData?.mugItems || [];
+    return Array.isArray(arr) && arr.length > 0 ? arr.length : 1;
+  };
 
   const calculateTotal = () => {
-    if (!product || !orderData) {
-      return 0;
-    }
-
-    const productType = String(orderData.productType || product.type || product.id || product.name || '').toLowerCase();
+    if (!product || !orderData) return 0;
 
     // 1. ÁLBUMES
-    if (productType.includes('album') || productType.includes('photobook')) {
+    if (productTypeStr.includes('album') || productTypeStr.includes('photobook')) {
       const size = orderData.customization?.size || '';
-      const pageCount = orderData.pages?.length || 0;
+      const pageCount = orderData.designData?.photos?.length || 0; 
       const basePages = 40;
       let basePrice = 0;
       let additionalPagePrice = 0;
@@ -122,24 +125,23 @@ export default function Checkout() {
       return basePrice;
     } 
     
-    // 2. TAZAS
-    if (productType.includes('mug') || productType.includes('taza')) {
-      const mugCount = orderData.items?.length || 1;
-      return 45000 * mugCount;
+    // 2. TAZAS 
+    if (isMugType) {
+      return 45000 * getMugCount(); 
     } 
     
-    // ✨ 3. CALENDARIOS (A PRUEBA DE FALLOS) ✨
+    // 3. CALENDARIOS
     const isCalendar = 
-      productType.includes('calendar') || 
-      productType.includes('calendario') || 
-      orderData.customization?.year !== undefined || 
-      orderData.customization?.imagesPerMonth !== undefined;
+      productTypeStr.includes('calendar') || 
+      productTypeStr.includes('calendario') || 
+      orderData.designData?.customization?.year !== undefined || 
+      orderData.designData?.customization?.imagesPerMonth !== undefined;
 
     if (isCalendar) {
       const calendarFormat = String(
-        orderData.customization?.type || 
-        orderData.customization?.format || 
-        orderData.customization?.size || 
+        orderData.designData?.customization?.type || 
+        orderData.designData?.customization?.format || 
+        orderData.designData?.customization?.size || 
         ''
       ).toLowerCase();
 
@@ -151,9 +153,9 @@ export default function Checkout() {
     }
     
     // 4. FOTOS
-    if (productType.includes('photo') || productType.includes('foto')) {
+    if (productTypeStr.includes('photo') || productTypeStr.includes('foto')) {
       const basePrice = Number(product.basePrice || product.price || 0);
-      return basePrice * (orderData.photos?.length || 0);
+      return basePrice * (orderData.designData?.photos?.length || 0);
     }
 
     // 5. FALLBACK
@@ -267,16 +269,23 @@ export default function Checkout() {
                 <span className="text-gray-600">{t('dashboard.product')}</span>
                 <span className="font-medium text-right">{product.name}</span>
               </div>
-              {orderData.customization?.size && (
+              {orderData.designData?.customization?.size && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">{t('album.size')}</span>
-                  <span>{orderData.customization.size}</span>
+                  <span>{orderData.designData.customization.size}</span>
                 </div>
               )}
-              {product.type === 'album' && orderData.pages && (
+              {product.type === 'album' && orderData.designData?.photos && (
                  <div className="flex justify-between text-sm">
                    <span className="text-gray-600">{t('dashboard.totalPages')}</span>
-                   <span className="font-medium">{orderData.pages.length} ({orderData.pages.length > 40 ? `+${orderData.pages.length - 40} extra` : 'Base'})</span>
+                   <span className="font-medium">{orderData.designData.photos.length} ({orderData.designData.photos.length > 40 ? `+${orderData.designData.photos.length - 40} extra` : 'Base'})</span>
+                 </div>
+              )}
+              {/* Información visual para el usuario cuando compra tazas */}
+              {isMugType && (
+                 <div className="flex justify-between text-sm border-t border-gray-200 pt-3">
+                   <span className="text-gray-600">Cantidad Tazas</span>
+                   <span className="font-medium">{getMugCount()} x $45.000 COP</span>
                  </div>
               )}
             </div>
@@ -304,21 +313,21 @@ export default function Checkout() {
             </div>
 
             {/* Vista previa segura */}
-            {(orderData.coverData?.image || product?.image) && (
+            {(orderData.designData?.coverData?.image || product?.image) && !isMugType && (
               <div className="mt-8 pt-6 border-t border-gray-200">
                 <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">{t('checkout.preview')}</p>
                 <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100">
                   <img
-                    src={orderData.coverData?.image || product.image}
+                    src={orderData.designData?.coverData?.image || product.image}
                     alt="Preview"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                {orderData.coverData?.title && (
-                  <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>
+                {orderData.designData?.coverData?.title && (
+                  <p className="text-center mt-3 font-semibold text-gray-800">{orderData.designData.coverData.title}</p>
                 )}
-                {orderData.coverData?.subtitle && (
-                  <p className="text-center text-sm text-gray-500">{orderData.coverData.subtitle}</p>
+                {orderData.designData?.coverData?.subtitle && (
+                  <p className="text-center text-sm text-gray-500">{orderData.designData.coverData.subtitle}</p>
                 )}
               </div>
             )}

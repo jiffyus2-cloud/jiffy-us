@@ -1,13 +1,9 @@
-import { useState } from 'react';
-import { Type, Image as ImageIcon } from 'lucide-react';
+import { Coffee } from 'lucide-react';
 import { MugProduct } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 
 export interface MugCustomizationOptions {
-  size: string;
-  capacity: string;
-  material: string;
-  textImageRelation: 'separate' | 'text-cutout';
+  // Las opciones se movieron a nivel individual en cada taza
 }
 
 interface MugCustomizationProps {
@@ -17,161 +13,29 @@ interface MugCustomizationProps {
 
 export default function MugCustomization({ product, onCustomizationComplete }: MugCustomizationProps) {
   const { t } = useLanguage();
-  const [size, setSize] = useState('standard');
-  const [capacity, setCapacity] = useState('350ml');
-  const [material, setMaterial] = useState('ceramic');
-  const [textImageRelation, setTextImageRelation] = useState<'separate' | 'text-cutout'>('separate');
-
-  const sizes = [
-    { id: 'standard', name: t('mug.size.standard') || 'Standard', description: '11 oz / 325ml' },
-    { id: 'large', name: t('mug.size.large') || 'Large', description: '15 oz / 450ml' },
-  ];
-
-  const capacities = ['300ml', '350ml', '450ml'];
-
-  const materials = [
-    { id: 'ceramic', name: t('mug.material.ceramic') || 'Ceramic', price: 0, description: t('mug.material.ceramicDesc') || 'Classic and microwave safe' },
-    { id: 'porcelain', name: t('mug.material.porcelain') || 'Porcelain', price: 3, description: t('mug.material.porcelainDesc') || 'Premium quality and elegant' },
-    { id: 'stainless-steel', name: t('mug.material.steel') || 'Stainless Steel', price: 4, description: t('mug.material.steelDesc') || 'Durable and travel-friendly' },
-  ];
-
-  const calculatePrice = () => {
-    const materialPrice = materials.find(m => m.id === material)?.price || 0;
-    return product.basePrice + materialPrice;
-  };
 
   const handleContinue = () => {
-    onCustomizationComplete({
-      size,
-      capacity,
-      material,
-      textImageRelation,
-    });
+    onCustomizationComplete({});
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-12">
-      <div className="space-y-10">
-        {/* Size Selection */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('album.size')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-            {sizes.map((sizeOption) => (
-              <button
-                key={sizeOption.id}
-                onClick={() => setSize(sizeOption.id)}
-                className={`py-6 px-6 rounded-lg border-4 transition-all text-left ${
-                  size === sizeOption.id
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-black hover:bg-gray-50'
-                }`}
-              >
-                <div className="text-xl font-bold">{sizeOption.name}</div>
-                <div className={`text-sm ${size === sizeOption.id ? 'text-gray-300' : 'text-gray-500'}`}>{sizeOption.description}</div>
-              </button>
-            ))}
-          </div>
+    <div className="w-full max-w-3xl mx-auto px-4 py-16 text-center animate-in fade-in zoom-in-95 duration-300">
+      <div className="bg-white p-10 md:p-16 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+        <div className="mx-auto w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+          <Coffee className="w-12 h-12 text-gray-900" />
         </div>
-
-        {/* Capacity Selection */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('mug.capacity') || 'Capacidad'}</h3>
-          <div className="flex flex-wrap gap-3">
-            {capacities.map((cap) => (
-              <button
-                key={cap}
-                onClick={() => setCapacity(cap)}
-                className={`py-4 px-8 rounded-lg border-4 transition-all font-bold ${
-                  capacity === cap
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-black hover:bg-gray-50'
-                }`}
-              >
-                {cap}
-              </button>
-            ))}
-          </div>
+        <h2 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight">Diseña tus Tazas</h2>
+        <p className="text-gray-500 max-w-lg mx-auto text-lg leading-relaxed">
+          En el siguiente paso podrás subir tus fotos, añadir textos personalizados y seleccionar el estilo visual de forma <strong>independiente para cada taza</strong> que desees crear.
+        </p>
+        <div className="pt-8 max-w-sm mx-auto">
+          <button
+            onClick={handleContinue}
+            className="w-full py-4 px-8 bg-black text-white rounded-2xl hover:bg-gray-800 transition-all text-lg font-bold shadow-xl shadow-black/10 hover:-translate-y-0.5"
+          >
+            {t('album.continue') || 'Comenzar a Diseñar'}
+          </button>
         </div>
-
-        {/* Material Selection */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('mug.material') || 'Material'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {materials.map((mat) => (
-              <button
-                key={mat.id}
-                onClick={() => setMaterial(mat.id)}
-                className={`py-6 px-4 rounded-lg border-4 transition-all text-center ${
-                  material === mat.id
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-black border-black hover:bg-gray-50'
-                }`}
-              >
-                <div className="text-lg font-bold mb-1">{mat.name}</div>
-                {mat.price > 0 && (
-                  <div className={`text-sm mb-2 ${material === mat.id ? 'text-gray-300' : 'text-gray-500'}`}>+${mat.price.toFixed(2)}</div>
-                )}
-                <div className={`text-xs ${material === mat.id ? 'text-gray-400' : 'text-gray-500'}`}>{mat.description}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Text Image Relation Selection */}
-        <div>
-          <h3 className="text-2xl mb-4">{t('mug.style') || 'Estilo de Diseño'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-            {/* Separate Option */}
-            <button
-              onClick={() => setTextImageRelation('separate')}
-              className={`p-6 rounded-lg border-4 transition-all text-left ${
-                textImageRelation === 'separate'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`p-3 rounded-lg ${textImageRelation === 'separate' ? 'bg-white text-black' : 'bg-black text-white'}`}>
-                  <ImageIcon className="w-6 h-6" />
-                </div>
-                <div className="text-xl font-bold">{t('mug.style.separate') || 'Imagen y Texto'}</div>
-              </div>
-              <p className={`text-sm ${textImageRelation === 'separate' ? 'text-gray-300' : 'text-gray-600'}`}>
-                {t('mug.style.separateDesc') || 'La imagen y el texto se muestran por separado en la taza.'}
-              </p>
-            </button>
-
-            {/* Text Cutout Option */}
-            <button
-              onClick={() => setTextImageRelation('text-cutout')}
-              className={`p-6 rounded-lg border-4 transition-all text-left ${
-                textImageRelation === 'text-cutout'
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-black border-black hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`p-3 rounded-lg ${textImageRelation === 'text-cutout' ? 'bg-white text-black' : 'bg-black text-white'}`}>
-                  <Type className="w-6 h-6" />
-                </div>
-                <div className="text-xl font-bold">{t('mug.style.cutout') || 'Texto con Foto'}</div>
-              </div>
-              <p className={`text-sm ${textImageRelation === 'text-cutout' ? 'text-gray-300' : 'text-gray-600'}`}>
-                {t('mug.style.cutoutDesc') || 'Tu foto aparece dentro de las letras de un texto grande.'}
-              </p>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Continue Button */}
-      <div className="mt-12">
-        <button
-          onClick={handleContinue}
-          className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg font-bold"
-        >
-          {t('album.continue')}
-        </button>
       </div>
     </div>
   );

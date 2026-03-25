@@ -2,10 +2,20 @@ import { db, storage } from '../lib/firebase';
 import { collection, addDoc, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
+// Función recursiva para aplanar arreglos 2D o 3D a 1D
+const flattenDeep = (arr: any[]): any[] => {
+  return arr.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), []);
+};
+
 export const sanitizeForFirestore = (obj: any): any => {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== 'object' || obj instanceof Date) return obj;
-  if (Array.isArray(obj)) return obj.map(item => sanitizeForFirestore(item));
+  
+  if (Array.isArray(obj)) {
+    // EL ESCUDO: Si detecta un array, lo aplana completamente para evitar el error de "invalid nested entity"
+    const flattened = flattenDeep(obj);
+    return flattened.map(item => sanitizeForFirestore(item));
+  }
   
   return Object.entries(obj).reduce((acc, [key, value]) => {
     if (value !== undefined) {
@@ -41,30 +51,24 @@ async function uploadImage(path: string, imageData: string): Promise<string> {
     return await getDownloadURL(result.ref);
   }
   
-  return imageData; // Asume que ya es una URL web válida
+  return imageData; 
 }
 
-/**
- * FASE 1: Sube las imágenes y crea el borrador del pedido en Firebase
- */
-/**
- * FASE 1: Sube las imágenes y crea el borrador del pedido en Firebase
- * (Ahora con soporte para barra de progreso)
- */
 export async function createDraftOrder(
   userId: string,
   designData: any,
   product: any,
-  onProgress?: (progress: number) => void // <-- NUEVO: Función callback para el progreso
+  onProgress?: (progress: number) => void
 ) {
   const orderRef = doc(collection(db, 'orders'));
   const orderId = orderRef.id;
   const folderPath = `orders/${userId}/${orderId}`;
   
   const productString = String(product.type || product.id || product.name || '').toLowerCase();
+  const isMugType = productString.includes('mug') || productString.includes('taza');
 
   // ==========================================
-  // NUEVO: SISTEMA DE CONTEO Y PROGRESO
+  // 1. SISTEMA DE CONTEO Y PROGRESO
   // ==========================================
   let totalUploads = 0;
   let completedUploads = 0;
@@ -72,12 +76,10 @@ export async function createDraftOrder(
   const updateProgress = () => {
     completedUploads++;
     if (onProgress && totalUploads > 0) {
-      // Evitamos que llegue a 100% antes de guardar en Firestore
       onProgress(Math.min(95, Math.round((completedUploads / totalUploads) * 100)));
     }
   };
 
-  // 1. Pre-escanear para saber cuántas imágenes hay que subir
   let coverData = { ...designData.coverData };
   if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) totalUploads++;
 
@@ -87,8 +89,9 @@ export async function createDraftOrder(
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
       });
     });
-  } else if (productString.includes('mug') || productString.includes('taza') || designData.mugItems) {
-    (designData.mugItems || []).forEach((item: any) => {
+  } else if (isMugType) {
+    const itemsToProcess = designData.items || designData.mugItems || [];
+    itemsToProcess.forEach((item: any) => {
       (item.photos || []).forEach((photoUrl: string) => {
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
       });
@@ -100,21 +103,21 @@ export async function createDraftOrder(
     });
   }
 
-  // Si no hay fotos nuevas por subir, adelantamos la barra para que el usuario vea movimiento
   if (totalUploads === 0 && onProgress) onProgress(50);
-  // ==========================================
 
-  // 2. Subir imagen de portada si existe
+  // ==========================================
+  // 2. SUBIDA DE IMÁGENES AL STORAGE
+  // ==========================================
   if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) {
     coverData.image = await uploadImage(`${folderPath}/cover_image`, coverData.image);
-    updateProgress(); // <-- Reportamos progreso
+    updateProgress(); 
   }
 
   let finalPages: any[] = [];
   let finalItems: any[] = [];
   let finalPhotos: string[] = [];
 
-  // 3. Procesar las imágenes
+  // ALBUM
   if (productString.includes('album') || productString.includes('photobook') || designData.pageLayouts) {
     const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
 
@@ -127,7 +130,7 @@ export async function createDraftOrder(
         let photoUrl = pagePhotos[j];
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
           photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
-          updateProgress(); // <-- Reportamos progreso
+          updateProgress();
         }
         uploadedPhotos.push(photoUrl);
         pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
@@ -143,45 +146,56 @@ export async function createDraftOrder(
       });
     }
   } 
-  else if (productString.includes('mug') || productString.includes('taza') || designData.mugItems) {
-    const { mugItems = [] } = designData;
-    for (let i = 0; i < mugItems.length; i++) {
-      const item = mugItems[i];
+  // TAZAS
+  else if (isMugType) {
+    const itemsToProcess = designData.items || designData.mugItems || [];
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      const item = itemsToProcess[i];
       const uploadedItemPhotos: string[] = [];
       
       for (let j = 0; j < (item.photos?.length || 0); j++) {
         let photoUrl = item.photos[j];
-        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
+        if (photoUrl && (isBase64(photoUrl) || isBlobUrl(photoUrl))) {
           photoUrl = await uploadImage(`${folderPath}/mugs/mug${i}_photo${j}`, photoUrl);
-          updateProgress(); // <-- Reportamos progreso
+          updateProgress();
         }
-        uploadedItemPhotos.push(photoUrl);
+        if (photoUrl) uploadedItemPhotos.push(photoUrl);
       }
       
       finalItems.push({
         ...item,
-        photos: uploadedItemPhotos,
+        photos: uploadedItemPhotos, 
       });
     }
   } 
+  // CALENDARIOS Y PACKS
   else if (productString.includes('calendar') || productString.includes('calendario') || productString.includes('pack')) {
     const { photos = [] } = designData;
     for (let i = 0; i < photos.length; i++) {
       let photoUrl = Array.isArray(photos[i]) ? photos[i][0] : photos[i];
       if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
         photoUrl = await uploadImage(`${folderPath}/loose_photos/photo${i}`, photoUrl);
-        updateProgress(); // <-- Reportamos progreso
+        updateProgress();
       }
       finalPhotos.push(photoUrl);
     }
   }
 
+  // ==========================================
+  // 3. ESTRUCTURA DEL PAYLOAD PARA FIRESTORE
+  // ==========================================
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
     cleanCustomization.coverContent.coverImage = "uploaded"; 
   }
 
-  // 4. Estructurar el payload final para Firestore
+  let safePhotosToSave: any[] = [];
+  if (finalPhotos.length > 0) {
+     safePhotosToSave = finalPhotos;
+  } else if (designData.photos) {
+     safePhotosToSave = designData.photos; 
+  }
+
   const orderPayload = {
     id: orderId,
     userId,
@@ -197,16 +211,16 @@ export async function createDraftOrder(
     pageLayouts: designData.pageLayouts || {},
     pageLayoutVariants: designData.pageLayoutVariants || {},
     pages: finalPages,
-    items: finalItems,
-    photos: finalPhotos,
+    items: finalItems.length > 0 ? finalItems : (designData.items || []), 
+    mugItems: finalItems.length > 0 ? finalItems : (designData.mugItems || []), 
+    photos: safePhotosToSave, 
   };
 
+  // La función sanitizeForFirestore ahora aplanará cualquier arreglo problemático antes de convertir a JSON
   const finalPayload = sanitizeForFirestore(JSON.parse(JSON.stringify(orderPayload)));
   
-  // 5. Guardar el documento
   await setDoc(orderRef, finalPayload);
   
-  // ¡Completado al 100%!
   if (onProgress) onProgress(100);
 
   return orderId;
@@ -221,9 +235,6 @@ export async function getOrder(orderId: string) {
   return null;
 }
 
-/**
- * FASE 2: Actualiza el pedido con las direcciones y el Total real calculado
- */
 export async function updateOrderAddresses(
   orderId: string,
   addresses: { shippingAddress: any, billingAddress: any },

@@ -15,9 +15,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
 import { createDraftOrder } from '../../services/orderService';
 
-// =========================================================================
-// MOTOR DE AUTOGUARDADO (IndexedDB) - A prueba de recargas y archivos grandes
-// =========================================================================
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
 
@@ -65,7 +62,6 @@ const clearDraftFromDB = (): Promise<void> => {
     request.onerror = () => reject(request.error);
   });
 };
-// =========================================================================
 
 type Step = 'product' | 'customization' | 'organize' | 'checkout';
 
@@ -92,15 +88,6 @@ export default function Creator() {
       
       let currentPhotosRaw = finalData?.photos || getActivePhotos();
       
-      let photos: string[][] = [];
-      if (Array.isArray(currentPhotosRaw)) {
-        if (currentPhotosRaw.length > 0 && typeof currentPhotosRaw[0] === 'string') {
-          photos = (currentPhotosRaw as string[]).map(p => [p]);
-        } else {
-          photos = currentPhotosRaw as string[][];
-        }
-      }
-
       let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
       let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; 
 
@@ -116,10 +103,7 @@ export default function Creator() {
           crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
         };
       } else if (activeProduct) {
-        coverData = {
-          image: '', 
-          title: activeProduct.name
-        };
+        coverData = { image: '', title: activeProduct.name };
       }
 
       const activePhotoCrops = selectedProduct === 'album' ? photoCrops 
@@ -128,31 +112,28 @@ export default function Creator() {
                              : {};
 
       const designData = {
-        photos,
+        photos: currentPhotosRaw, // Pasamos el array limpio y dejamos que orderService decida
         pageLayouts,
         pageLayoutVariants,
         textBoxSlots: currentTextBoxSlots,
         customization: activeCustomization,
         coverData,
         photoCrops: activePhotoCrops,
+        items: currentMugItems, 
         mugItems: currentMugItems
       };
 
-      // ====== MAGIA: SI NO HAY USUARIO, GUARDAMOS LOCALMENTE Y LO MANDAMOS AL LOGIN ======
       if (!user) {
         const draftData = { designData, product: activeProduct, productType: selectedProduct };
         await saveDraftToDB(draftData); 
         navigate('/login', { state: { from: location.pathname } }); 
         return;
       }
-      // =================================================================================
 
-      // 1. LLAMADA A FIREBASE
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
       });
 
-      // 2. VIAJAMOS AL CHECKOUT SOLO CON EL ID
       navigate('/checkout', { 
         state: { 
           orderId,
@@ -193,7 +174,6 @@ export default function Creator() {
   const progressRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Función auxiliar para reconstruir el estado
   const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
     setSelectedProduct(productType);
     setCurrentStep('organize');
@@ -214,7 +194,7 @@ export default function Creator() {
     } else if (productType === 'mug') {
       setSelectedMug(product);
       setMugCustomization(designData.customization);
-      setMugItems(designData.mugItems || []);
+      setMugItems(designData.items || designData.mugItems || []);
       setTextBoxSlots(designData.textBoxSlots || {});
     } else if (productType === 'photo-pack') {
       setSelectedPhotoPack(product);
@@ -224,22 +204,19 @@ export default function Creator() {
     }
   };
 
-  // Motor de Restauración Automática
   useEffect(() => {
     const restoreState = async () => {
       const state = location.state as any;
       
-      // 1. Restaurar desde el router (Checkout fallback)
       if (state?.designData && !selectedProduct) {
         restoreDesignToState(state.designData, state.product, state.productType);
       } 
-      // 2. Restaurar desde la Base de Datos Local (Regreso exitoso del Login)
       else if (user && !selectedProduct) {
         try {
           const draft = await loadDraftFromDB();
           if (draft) {
             restoreDesignToState(draft.designData, draft.product, draft.productType);
-            await clearDraftFromDB(); // Limpiamos el borrador para que no afecte futuros diseños
+            await clearDraftFromDB(); 
           } else if (state?.startProduct) {
             handleSelectProduct(state.startProduct);
           }
@@ -247,7 +224,6 @@ export default function Creator() {
           console.error("Error al cargar el borrador de IndexedDB", e);
         }
       }
-      // 3. Inicio directo desde modal
       else if (state?.startProduct && !selectedProduct) {
         handleSelectProduct(state.startProduct);
       }
@@ -568,7 +544,6 @@ export default function Creator() {
       {currentStep === 'customization' && renderCustomization()}
       {currentStep === 'organize' && renderOrganizer()}
 
-      {/* OVERLAY DE CARGA (BARRA DE PROGRESO) */}
       {isSaving && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center px-4">
           <div className="bg-white p-8 rounded-3xl max-w-md w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-300">
