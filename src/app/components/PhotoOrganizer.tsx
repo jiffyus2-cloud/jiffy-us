@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
-  Image as ImageIcon, Grid3x3, Edit3, Check, Move, ZoomIn, ZoomOut,
+  Image as ImageIcon, Grid3x3, Edit3, Check, 
   ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles, Settings
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -28,16 +28,14 @@ interface PhotoOrganizerProps {
 
 type Step = 'upload' | 'pages' | 'editor';
 
-interface AlbumEditorPhotoSlotProps {
-  photo: string | null; 
-  textBox: any; 
-  crop: { x: number; y: number; zoom: number }; 
-  isHalfHeightLayout: boolean; 
+const AlbumEditorPhotoSlot: React.FC<{
+  photo: string | null;
+  textBox: any;
+  crop: { x: number; y: number; zoom: number };
+  isHalfHeightLayout: boolean;
   pageIndex: number;
   photoIndex: number;
   editingPageIndex: number | null;
-  isDragMode?: boolean;
-  onDragModeChange?: (pageIndex: number, photoIndex: number, mode: boolean) => void;
   handleCropChange: (pageIndex: number, photoIndex: number, crop: { x: number, y: number, zoom: number }) => void;
   handleMovePhotoWithinPage: (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => void;
   handleRemovePhotoFromPage: (pageIndex: number, photoIndex: number) => void;
@@ -46,9 +44,7 @@ interface AlbumEditorPhotoSlotProps {
   handleAddPhotoToPage: (pageIndex: number, file: File) => void;
   handleAddTextBox: (pageIndex: number, photoIndex: number) => void;
   t: (key: string) => string;
-}
-
-const AlbumEditorPhotoSlot: React.FC<AlbumEditorPhotoSlotProps> = ({
+}> = ({
   photo,
   textBox,
   crop,
@@ -56,8 +52,6 @@ const AlbumEditorPhotoSlot: React.FC<AlbumEditorPhotoSlotProps> = ({
   pageIndex,
   photoIndex,
   editingPageIndex,
-  isDragMode,
-  onDragModeChange,
   handleCropChange,
   handleMovePhotoWithinPage,
   handleRemovePhotoFromPage,
@@ -179,13 +173,13 @@ export default function PhotoOrganizer({
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
   
-  const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload'); 
+  const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [numPages, setNumPages] = useState(40);
+  // Cambiado de number a number | string para permitir campos vacíos temporalmente
+  const [numPages, setNumPages] = useState<number | string>(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
   const [advancedSettingsModal, setAdvancedSettingsModal] = useState<number | null>(null);
-  const [dragModeActive, setDragModeActive] = useState<Record<string, boolean>>({}); 
   
   const [isSortingWithAI, setIsSortingWithAI] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
@@ -226,8 +220,10 @@ export default function PhotoOrganizer({
     if (uploadedPhotos.length > 0) {
       const minPages = 40;
       const maxPages = uploadedPhotos.length;
-      if (numPages < minPages) setNumPages(minPages);
-      if (numPages > maxPages) setNumPages(maxPages);
+      if (typeof numPages === 'number') {
+        if (numPages < minPages) setNumPages(minPages);
+        if (numPages > maxPages) setNumPages(maxPages);
+      }
     }
   }, [uploadedPhotos.length]);
 
@@ -262,7 +258,7 @@ export default function PhotoOrganizer({
           },
           body: JSON.stringify({
             photos_data: filesWithData.map(f => ({ id: f.id, ...f.metadata })),
-            page_count: numPages,
+            page_count: typeof numPages === 'number' ? numPages : 40,
             layout_preferences: {
               isSquare,
               isHorizontal,
@@ -271,7 +267,7 @@ export default function PhotoOrganizer({
           })
         });
 
-        if (!aiResponse.ok) throw new Error(t('error.iaBackend'));
+        if (!aiResponse.ok) throw new Error('Error contactando a nuestro propio backend de IA');
         const responseData = await aiResponse.json();
 
         if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
@@ -293,7 +289,7 @@ export default function PhotoOrganizer({
 
       } catch (aiError: any) {
         console.warn("El Backend o la IA fallaron, usando orden original.", aiError);
-        alert(t('error.iaBackend'));
+        alert("La organización con IA tuvo un pequeño contratiempo. Hemos cargado tus fotos en su orden original para que no pierdas tiempo.");
         finalUrls = filesWithData.map(f => f.url);
       }
 
@@ -308,7 +304,12 @@ export default function PhotoOrganizer({
   };
 
   const handleFinalizeSetup = () => {
-    const totalPages = Math.max(40, numPages);
+    // Aplicamos validación estricta al continuar, para asegurar que siempre haya entre 40 y el total de fotos
+    let safeVal = typeof numPages === 'number' ? numPages : 40;
+    safeVal = Math.min(Math.max(safeVal, 40), uploadedPhotos.length);
+    setNumPages(safeVal);
+
+    const totalPages = safeVal;
     const photosToDistribute = [...uploadedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
@@ -348,7 +349,7 @@ export default function PhotoOrganizer({
 
   const handleAddPage = (index: number) => {
     if (photos.length >= uploadedPhotos.length && uploadedPhotos.length > 0) {
-      alert(t('organizer.maxPagesReached'));
+      alert(t('organizer.maxPagesReached') || 'You cannot have more pages than total photos.');
     }
     const newPhotos = [...photos];
     newPhotos.splice(index + 1, 0, []);
@@ -357,7 +358,7 @@ export default function PhotoOrganizer({
 
   const handleDeletePage = (index: number) => {
     if (photos.length <= 40) {
-      alert(t('organizer.minPagesReached'));
+      alert(t('organizer.minPagesReached') || 'Minimum of 40 pages required.');
       return;
     }
     const newPhotos = [...photos];
@@ -451,6 +452,7 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
+  // ✨ MODAL DE AJUSTES AVANZADOS E INTERACTIVOS DE PÁGINA ✨
   const renderAdvancedSettingsModal = () => {
     if (advancedSettingsModal === null) return null;
     const pageIndex = advancedSettingsModal;
@@ -466,7 +468,7 @@ export default function PhotoOrganizer({
       <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full p-4 sm:p-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
           <div className="flex justify-between items-center mb-4 sm:mb-6 border-b border-gray-100 pb-3 sm:pb-4">
-            <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><Settings className="w-5 h-5 sm:w-6 sm:h-6"/> {t('organizer.pageSettings')} {pageIndex + 1}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><Settings className="w-5 h-5 sm:w-6 sm:h-6"/> Ajustes de la Página {pageIndex + 1}</h3>
             <button 
               onClick={() => {
                 setAdvancedSettingsModal(null);
@@ -480,7 +482,6 @@ export default function PhotoOrganizer({
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
             
-            {/* COLUMNA IZQUIERDA: VISTA PREVIA INTERACTIVA */}
             <div className="bg-gray-50 rounded-2xl p-4 sm:p-6 border border-gray-200 flex flex-col items-center justify-center shadow-inner">
               <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-500" />
@@ -506,8 +507,7 @@ export default function PhotoOrganizer({
                         isHalfHeightLayout={isHalfHeightLayout}
                         pageIndex={pageIndex}
                         photoIndex={photoIndex}
-                        editingPageIndex={pageIndex}
-                        isDragMode={dragModeActive[`${pageIndex}-${photoIndex}`] || false}
+                        editingPageIndex={pageIndex} // Habilita el modo editable
                         handleCropChange={handleCropChange}
                         handleMovePhotoWithinPage={handleMovePhotoWithinPage}
                         handleRemovePhotoFromPage={handleRemovePhotoFromPage}
@@ -515,7 +515,6 @@ export default function PhotoOrganizer({
                         handleRemoveTextBox={handleRemoveTextBox}
                         handleAddPhotoToPage={handleAddPhotoToPage}
                         handleAddTextBox={handleAddTextBox}
-                        onDragModeChange={(pIdx, phIdx, mode) => setDragModeActive(prev => ({ ...prev, [`${pIdx}-${phIdx}`]: mode }))}
                         t={t}
                       />
                     );
@@ -525,7 +524,7 @@ export default function PhotoOrganizer({
               
               <div className="mt-4 sm:mt-6 text-center max-w-xs space-y-1">
                 <p className="text-xs font-medium text-gray-600">
-                  Ajuste el zoom o arrastra la foto directamente aquí.
+                  Ajusta el zoom o arrastra la foto directamente aquí.
                 </p>
                 <p className="text-[10px] text-gray-400">
                   También puedes eliminar fotos o añadir textos.
@@ -533,7 +532,6 @@ export default function PhotoOrganizer({
               </div>
             </div>
 
-            {/* COLUMNA DERECHA: AJUSTES Y CONTROLES */}
             <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
               <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
                 <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Diseño y Distribución</h4>
@@ -627,7 +625,7 @@ export default function PhotoOrganizer({
                   }}
                   className="px-6 py-2.5 sm:py-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors w-full shadow-md text-sm"
                 >
-                  {t('organizer.saveChanges')}
+                  Guardar y Cerrar
                 </button>
               </div>
             </div>
@@ -737,7 +735,14 @@ export default function PhotoOrganizer({
                 min={40}
                 max={Math.max(uploadedPhotos.length, 40)}
                 value={numPages}
-                onChange={(e) => setNumPages(Math.min(Math.max(parseInt(e.target.value) || 40, 40), uploadedPhotos.length))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNumPages(val === '' ? '' : parseInt(val, 10));
+                }}
+                onBlur={() => {
+                  let val = typeof numPages === 'number' ? numPages : 40;
+                  setNumPages(Math.min(Math.max(val, 40), uploadedPhotos.length));
+                }}
                 className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right"
               />
             </div>
@@ -745,8 +750,8 @@ export default function PhotoOrganizer({
               type="range"
               min={40}
               max={Math.max(uploadedPhotos.length, 40)}
-              value={numPages}
-              onChange={(e) => setNumPages(parseInt(e.target.value))}
+              value={numPages === '' ? 40 : numPages}
+              onChange={(e) => setNumPages(parseInt(e.target.value, 10))}
               className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
             />
           </div>
@@ -901,77 +906,6 @@ export default function PhotoOrganizer({
                 );
               })()}
             </div>
-            
-            {editingPageIndex === pageIndex && (
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 right-full mr-4 w-[260px] bg-white/95 backdrop-blur-sm p-3 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-right-2 z-20 border border-gray-100/50`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Zoom Control */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center px-0.5">
-                    <span className="text-[9px] font-black text-black/40 uppercase tracking-tighter">Zoom</span>
-                    <span className="text-[9px] font-mono font-bold text-black">{
-                      (photoCrops[`${pageIndex}-0`]?.zoom || 1).toFixed(1)
-                    }x</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ZoomOut size={12} className="text-gray-400" />
-                    <Slider
-                      value={[photoCrops[`${pageIndex}-0`]?.zoom || 1]}
-                      min={1}
-                      max={3}
-                      step={0.1}
-                      onValueChange={(val) => handleCropChange(pageIndex, 0, { ...photoCrops[`${pageIndex}-0`], zoom: val[0] })}
-                      className="flex-1"
-                    />
-                    <ZoomIn size={12} className="text-gray-400" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Paneo Eje X */}
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between items-center px-0.5">
-                      <span className="text-[9px] font-black text-black/40 uppercase tracking-tighter">Eje X</span>
-                      <span className="text-[9px] font-mono font-bold text-black">{
-                        Math.round(photoCrops[`${pageIndex}-0`]?.x || 50)
-                      }%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Slider
-                        value={[photoCrops[`${pageIndex}-0`]?.x || 50]}
-                        min={0}
-                        max={100}
-                        step={1}
-                        onValueChange={(val) => handleCropChange(pageIndex, 0, { ...photoCrops[`${pageIndex}-0`], x: val[0] })}
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Paneo Eje Y */}
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between items-center px-0.5">
-                      <span className="text-[9px] font-black text-black/40 uppercase tracking-tighter">Eje Y</span>
-                      <span className="text-[9px] font-mono font-bold text-black">{
-                        Math.round(photoCrops[`${pageIndex}-0`]?.y || 50)
-                      }%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Slider
-                        value={[photoCrops[`${pageIndex}-0`]?.y || 50]}
-                        min={0}
-                        max={100}
-                        step={1}
-                        onValueChange={(val) => handleCropChange(pageIndex, 0, { ...photoCrops[`${pageIndex}-0`], y: val[0] })}
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>
