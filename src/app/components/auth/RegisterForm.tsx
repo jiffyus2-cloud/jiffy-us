@@ -7,6 +7,8 @@ import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useAuth } from '../../../hooks/useAuth';
+import { useLanguage } from '../../context/LanguageContext';
+import { mapAuthErrorToKey } from '../../utils/errorMapping';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -22,6 +24,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   
   const { register, isLoading, error: authError } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -30,7 +33,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     setLocalError(null);
 
     if (password !== confirmPassword) {
-      setLocalError('Las contraseñas no coinciden');
+      setLocalError('error.passwordsDontMatch');
       return;
     }
 
@@ -48,34 +51,36 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     }
   };
 
+  const displayError = localError ? t(localError) : (authError ? t(mapAuthErrorToKey(authError)) : null);
+
   return (
     <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">Crear una cuenta</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">{t('auth.registerTitle')}</CardTitle>
         <CardDescription className="text-center">
-          Ingresa tus datos para comenzar a crear tus álbumes
+          {t('auth.registerSubtitle')}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4 py-2.5">
-          {(localError || authError) && (
+          {displayError && (
             <Alert variant="destructive">
-              <AlertDescription>{localError || authError}</AlertDescription>
+              <AlertDescription>{displayError}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre completo</Label>
+            <Label htmlFor="name">{t('auth.nameLabel')}</Label>
             <Input
               id="name"
               type="text"
-              placeholder="Tu nombre"
+              placeholder={t('auth.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Correo electrónico</Label>
+            <Label htmlFor="email">{t('auth.emailLabel')}</Label>
             <Input
               id="email"
               type="email"
@@ -87,7 +92,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -107,7 +112,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+              <Label htmlFor="confirmPassword">{t('auth.confirmPasswordLabel')}</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"
@@ -130,17 +135,16 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
           <Button type="submit" className="w-full bg-primary" disabled={isLoading}>
-            {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
+            {isLoading ? t('auth.registering') : t('auth.registerButton')}
           </Button>
           <div className="text-center text-sm">
-            ¿Ya tienes una cuenta?{' '}
-            {/* CORRECCIÓN: Pasamos el estado al Link */}
+            {t('auth.haveAccount')}{' '}
             <Link 
               to="/login" 
               state={{ from: (location.state as any)?.from }} 
               className="text-primary font-medium hover:underline"
             >
-              Inicia sesión aquí
+              {t('auth.loginLink')}
             </Link>
           </div>
         </CardFooter>

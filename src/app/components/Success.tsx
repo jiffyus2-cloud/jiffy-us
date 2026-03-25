@@ -3,26 +3,28 @@ import { useNavigate, useLocation } from 'react-router';
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { useAuth } from '../../hooks/useAuth'; // IMPORTANTE: Traemos el hook de Auth
+import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Success() {
   const navigate = useNavigate();
-  const location = useLocation(); // Usamos useLocation en lugar de window.location
+  const location = useLocation();
   const { isLoading: isAuthLoading } = useAuth();
+  const { t } = useLanguage();
   
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const hasAttempted = useRef(false);
 
   useEffect(() => {
-    // 1. ESPERAR A FIREBASE AUTH: Si la sesión aún no ha cargado al regresar, pausamos aquí.
+    // 1. ESPERAR A FIREBASE AUTH
     if (isAuthLoading) return;
     
-    // 2. EVITAR DOBLE EJECUCIÓN: React Strict Mode dispara useEffect 2 veces. Esto lo evita.
+    // 2. EVITAR DOBLE EJECUCIÓN
     if (hasAttempted.current) return;
     hasAttempted.current = true;
 
-    // 3. LEER URL DE FORMA SEGURA:
+    // 3. LEER URL DE FORMA SEGURA
     const searchParams = new URLSearchParams(location.search);
     const sessionId = searchParams.get('session_id');
     const orderId = localStorage.getItem('pending_order_id');
@@ -41,7 +43,7 @@ export default function Success() {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'No se pudo verificar el pago con el servidor.');
+            throw new Error(errorData.message || t('error.verifyPayment'));
           }
 
           // El pago fue verificado por el backend. Ahora actualizamos Firestore.
@@ -51,18 +53,16 @@ export default function Success() {
               status: 'paid',
               updatedAt: new Date().toISOString() 
             });
-            // Si llega a esta línea, Firebase se actualizó exitosamente
           } catch (firestoreError) {
             console.error("Error de permisos en Firestore:", firestoreError);
-            throw new Error("El pago se validó, pero falló la conexión con tu cuenta. Contacta a soporte.");
+            throw new Error(t('error.firestoreConnection'));
           }
 
-          // Si todo va bien, limpiamos el ID del localStorage
           localStorage.removeItem('pending_order_id');
           setVerificationError(null);
         } catch (error: any) {
           console.error('Error al confirmar pago:', error);
-          setVerificationError(error.message || 'Ocurrió un error al confirmar tu pedido.');
+          setVerificationError(error.message || t('error.confirmOrder'));
           localStorage.removeItem('pending_order_id');
         } finally {
           setIsVerifying(false);
@@ -73,14 +73,14 @@ export default function Success() {
     } else {
       setIsVerifying(false);
     }
-  }, [isAuthLoading, location.search]); // La dependencia ahora es el estado de carga, no el usuario.
+  }, [isAuthLoading, location.search, t]);
 
   const VerificationStatus = () => {
     if (isVerifying) {
       return (
         <div className="flex items-center justify-center gap-3 text-lg text-gray-600 mb-8">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Verificando tu pago con Stripe...</span>
+          <span>{t('success.verifying')}</span>
         </div>
       );
     }
@@ -90,10 +90,9 @@ export default function Success() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
       <CheckCircle className="w-20 h-20 text-green-500 mb-6" />
-      <h1 className="text-4xl font-bold mb-4">¡Pedido realizado con éxito!</h1>
+      <h1 className="text-4xl font-bold mb-4">{t('success.title')}</h1>
       <p className="text-xl text-gray-600 mb-8 max-w-md">
-        Tu pedido ha sido guardado y estamos procesando tu creación. 
-        Recibirás un correo de confirmación en breve.
+        {t('success.subtitle')}
       </p>
 
       <VerificationStatus />
@@ -102,7 +101,7 @@ export default function Success() {
         <div className="mt-4 mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left animate-in zoom-in-95">
           <AlertTriangle className="w-8 h-8 flex-shrink-0" />
           <div>
-            <p className="font-bold">¡Atención!</p>
+            <p className="font-bold">{t('common.attention')}</p>
             <p className="text-sm">{verificationError}</p>
           </div>
         </div>
@@ -114,14 +113,14 @@ export default function Success() {
           disabled={isVerifying}
           className="bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
         >
-          Ir a mis pedidos
+          {t('success.myOrders')}
         </button>
         <button
           onClick={() => navigate('/')}
           disabled={isVerifying}
           className="bg-white border border-gray-300 text-black px-8 py-3 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
-          Volver al inicio
+          {t('success.backHome')}
         </button>
       </div>
     </div>

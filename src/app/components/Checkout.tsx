@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from 'react-router';
 import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Checkout() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -59,8 +61,8 @@ export default function Checkout() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <Loader2 className="w-12 h-12 animate-spin text-gray-400 mb-4" />
-        <h2 className="text-xl font-semibold text-gray-700">Recuperando tu diseño...</h2>
-        <p className="text-gray-500 mt-2">Estamos preparando tu resumen de compra.</p>
+        <h2 className="text-xl font-semibold text-gray-700">{t('checkout.loadingOrder')}</h2>
+        <p className="text-gray-500 mt-2">{t('checkout.preparingSummary')}</p>
       </div>
     );
   }
@@ -69,15 +71,15 @@ export default function Checkout() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <AlertCircle className="w-16 h-16 text-gray-400 mb-4" />
-        <h2 className="text-2xl mb-4 font-semibold">No se encontraron datos del pedido</h2>
+        <h2 className="text-2xl mb-4 font-semibold">{t('checkout.noOrderData')}</h2>
         <p className="text-gray-600 mb-8 text-center max-w-md">
-          Parece que la sesión de compra ha expirado o no se han proporcionado los datos necesarios.
+          {t('checkout.errorSession')}
         </p>
         <button 
           onClick={() => navigate('/')}
           className="bg-black text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors"
         >
-          Volver al inicio
+          {t('success.backHome')}
         </button>
       </div>
     );
@@ -127,7 +129,6 @@ export default function Checkout() {
     } 
     
     // ✨ 3. CALENDARIOS (A PRUEBA DE FALLOS) ✨
-    // Si la personalización incluye 'year' o 'imagesPerMonth', ES un calendario sí o sí.
     const isCalendar = 
       productType.includes('calendar') || 
       productType.includes('calendario') || 
@@ -155,7 +156,7 @@ export default function Checkout() {
       return basePrice * (orderData.photos?.length || 0);
     }
 
-    // 5. FALLBACK (Si es un producto distinto)
+    // 5. FALLBACK
     return Number(product.basePrice || product.price || 0);
   };
 
@@ -169,7 +170,7 @@ export default function Checkout() {
     setErrorMessage(null);
 
     if (!user) {
-      setErrorMessage('Debes iniciar sesión para completar tu pedido.');
+      setErrorMessage(t('checkout.loginRequired'));
       return;
     }
 
@@ -200,7 +201,6 @@ export default function Checkout() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Multiplicamos por 100 para ajustarlo a Stripe COP (Centavos)
           amount: Math.round(total * 100), 
           title: product.name || 'Pedido Jiffy', 
           orderId: state.orderId,
@@ -209,7 +209,7 @@ export default function Checkout() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al crear la sesión de pago');
+        throw new Error(errorData.message || t('checkout.errorStripe'));
       }
 
       const sessionData = await response.json();
@@ -217,12 +217,12 @@ export default function Checkout() {
       if (sessionData && sessionData.url) {
         window.location.href = sessionData.url;
       } else {
-        throw new Error('El servidor no devolvió la URL de pago de Stripe.');
+        throw new Error(t('checkout.errorStripe'));
       }
 
     } catch (error: any) {
       console.error('Error en el proceso de pago:', error);
-      setErrorMessage(error.message || 'Hubo un error al procesar el pago. Por favor intenta de nuevo.');
+      setErrorMessage(error.message || t('error.generic'));
       setIsProcessing(false);
     }
   };
@@ -243,11 +243,11 @@ export default function Checkout() {
           className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black"
         >
           <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Volver</span>
+          <span className="font-medium">{t('step.back')}</span>
         </button>
       </div>
 
-      <h2 className="text-3xl font-bold mb-8">Finalizar Compra</h2>
+      <h2 className="text-3xl font-bold mb-8">{t('checkout.title')}</h2>
 
       {errorMessage && (
         <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-3">
@@ -260,22 +260,22 @@ export default function Checkout() {
         {/* Resumen del Pedido */}
         <div className="lg:col-span-1 lg:order-2">
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 lg:sticky lg:top-8">
-            <h3 className="text-xl font-bold mb-6">Resumen del Pedido</h3>
+            <h3 className="text-xl font-bold mb-6">{t('checkout.summary')}</h3>
             
             <div className="space-y-4 mb-6">
               <div className="flex justify-between items-start gap-4">
-                <span className="text-gray-600">Producto</span>
+                <span className="text-gray-600">{t('dashboard.product')}</span>
                 <span className="font-medium text-right">{product.name}</span>
               </div>
               {orderData.customization?.size && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tamaño</span>
+                  <span className="text-gray-600">{t('album.size')}</span>
                   <span>{orderData.customization.size}</span>
                 </div>
               )}
               {product.type === 'album' && orderData.pages && (
                  <div className="flex justify-between text-sm">
-                   <span className="text-gray-600">Páginas Totales</span>
+                   <span className="text-gray-600">{t('dashboard.totalPages')}</span>
                    <span className="font-medium">{orderData.pages.length} ({orderData.pages.length > 40 ? `+${orderData.pages.length - 40} extra` : 'Base'})</span>
                  </div>
               )}
@@ -283,22 +283,22 @@ export default function Checkout() {
 
             <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal</span>
+                <span className="text-gray-600">{t('checkout.subtotal')}</span>
                 <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Envío</span>
+                <span className="text-gray-600">{t('checkout.shipping')}</span>
                 <span>${shipping.toLocaleString('es-CO')} COP</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Impuestos</span>
+                <span className="text-gray-600">{t('checkout.taxes')}</span>
                 <span>${tax.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
 
             <div className="border-t-2 border-gray-200 mt-4 pt-4">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Total</span>
+                <span className="text-lg font-bold">{t('checkout.total')}</span>
                 <span className="text-2xl font-bold">${total.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
@@ -306,11 +306,11 @@ export default function Checkout() {
             {/* Vista previa segura */}
             {(orderData.coverData?.image || product?.image) && (
               <div className="mt-8 pt-6 border-t border-gray-200">
-                <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">Vista previa</p>
+                <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">{t('checkout.preview')}</p>
                 <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100">
                   <img
                     src={orderData.coverData?.image || product.image}
-                    alt="Vista previa"
+                    alt="Preview"
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -331,11 +331,11 @@ export default function Checkout() {
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">1</span>
-                Información de Contacto
+                {t('checkout.contactInfo')}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium text-gray-700">Nombre Completo *</label>
+                  <label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label>
                   <input
                     type="text" id="name" name="name" required
                     value={formData.name} onChange={handleChange}
@@ -344,7 +344,7 @@ export default function Checkout() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-gray-700">Correo Electrónico *</label>
+                  <label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label>
                   <input
                     type="email" id="email" name="email" required
                     value={formData.email} onChange={handleChange}
@@ -358,11 +358,11 @@ export default function Checkout() {
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>
-                Dirección de Envío
+                {t('checkout.shippingAddress')}
               </h3>
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label htmlFor="address" className="text-sm font-medium text-gray-700">Dirección y Número *</label>
+                  <label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label>
                   <input
                     type="text" id="address" name="address" required
                     value={formData.address} onChange={handleChange}
@@ -372,7 +372,7 @@ export default function Checkout() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label htmlFor="city" className="text-sm font-medium text-gray-700">Ciudad *</label>
+                    <label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
                     <input
                       type="text" id="city" name="city" required
                       value={formData.city} onChange={handleChange}
@@ -380,7 +380,7 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">Código Postal *</label>
+                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
                     <input
                       type="text" id="zipCode" name="zipCode" required
                       value={formData.zipCode} onChange={handleChange}
@@ -394,7 +394,7 @@ export default function Checkout() {
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">3</span>
-                Dirección de Facturación
+                {t('checkout.billingAddress')}
               </h3>
               
               <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors">
@@ -403,13 +403,13 @@ export default function Checkout() {
                   checked={formData.sameAsShipping} onChange={handleChange}
                   className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
                 />
-                <span className="text-sm text-gray-700">Usar la misma dirección que el envío</span>
+                <span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span>
               </label>
               
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="space-y-2">
-                    <label htmlFor="billingName" className="text-sm font-medium text-gray-700">Nombre del Titular *</label>
+                    <label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label>
                     <input
                       type="text" id="billingName" name="billingName" required
                       value={formData.billingName} onChange={handleChange}
@@ -417,7 +417,7 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">Dirección de Facturación *</label>
+                    <label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label>
                     <input
                       type="text" id="billingAddress" name="billingAddress" required
                       value={formData.billingAddress} onChange={handleChange}
@@ -426,7 +426,7 @@ export default function Checkout() {
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label htmlFor="billingCity" className="text-sm font-medium text-gray-700">Ciudad *</label>
+                      <label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
                       <input
                         type="text" id="billingCity" name="billingCity" required
                         value={formData.billingCity} onChange={handleChange}
@@ -434,7 +434,7 @@ export default function Checkout() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">CP *</label>
+                      <label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
                       <input
                         type="text" id="billingZipCode" name="billingZipCode" required
                         value={formData.billingZipCode} onChange={handleChange}
@@ -451,15 +451,14 @@ export default function Checkout() {
                 <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
                   <CreditCard className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-800">Pago Seguro con Stripe</h3>
+                <h3 className="text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3>
               </div>
               <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                Para tu seguridad, serás redirigido a la plataforma oficial de Stripe. 
-                Tus datos bancarios están cifrados y nunca son almacenados en nuestros servidores.
+                {t('checkout.securePaymentDesc')}
               </p>
               <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex">
                 <Lock className="w-3.5 h-3.5" />
-                <span>CONEXIÓN CIFRADA SSL DE 256 BITS</span>
+                <span>{t('checkout.encrypted')}</span>
               </div>
             </div>
 
@@ -471,17 +470,17 @@ export default function Checkout() {
               {isProcessing ? (
                 <>
                   <Loader2 className="w-6 h-6 animate-spin" />
-                  Procesando pedido...
+                  {t('checkout.processing')}
                 </>
               ) : (
                 <>
-                  Pagar Ahora - ${total.toLocaleString('es-CO')} COP
+                  {t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}
                 </>
               )}
             </button>
             
             <p className="text-center text-xs text-gray-400">
-              Al hacer clic en "Pagar Ahora", aceptas nuestros términos y condiciones y política de privacidad.
+              {t('checkout.terms')}
             </p>
           </form>
         </div>

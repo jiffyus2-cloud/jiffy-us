@@ -7,6 +7,8 @@ import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useAuth } from '../../../hooks/useAuth';
+import { useLanguage } from '../../context/LanguageContext';
+import { mapAuthErrorToKey } from '../../utils/errorMapping';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -22,6 +24,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [resetSuccess, setResetSuccess] = useState(false);
   
   const { login, resetPassword, isLoading, error } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -55,11 +58,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     return (
       <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100 animate-in fade-in zoom-in-95 duration-200">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Recuperar contraseña</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{t('auth.resetPasswordTitle')}</CardTitle>
           <CardDescription className="text-center">
             {resetSuccess 
-              ? "Revisa tu bandeja de entrada" 
-              : "Ingresa tu correo y te enviaremos un enlace seguro para restablecerla."}
+              ? t('auth.resetSuccessTitle') 
+              : t('auth.resetPasswordSubtitle')}
           </CardDescription>
         </CardHeader>
         
@@ -70,7 +73,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 <MailCheck size={32} />
               </div>
               <p className="text-center text-sm text-gray-600 px-4">
-                Hemos enviado un enlace a <strong>{email}</strong>. Haz clic en él para crear una nueva contraseña.
+                {t('auth.resetSuccessDesc', { email })}
               </p>
             </CardContent>
             <CardFooter>
@@ -83,7 +86,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                   setPassword('');
                 }}
               >
-                Volver al inicio de sesión
+                {t('auth.backToLogin')}
               </Button>
             </CardFooter>
           </>
@@ -92,11 +95,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             <CardContent className="space-y-4 py-2.5">
               {error && (
                 <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{t(mapAuthErrorToKey(error))}</AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">
-                <Label htmlFor="reset-email">Correo electrónico</Label>
+                <Label htmlFor="reset-email">{t('auth.emailLabel')}</Label>
                 <Input
                   id="reset-email"
                   type="email"
@@ -109,7 +112,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             </CardContent>
             <CardFooter className="flex flex-col space-y-4 pt-4">
               <Button type="submit" className="w-full bg-primary" disabled={isLoading || !email}>
-                {isLoading ? 'Enviando...' : 'Enviar enlace'}
+                {isLoading ? t('auth.sendingLink') : t('auth.sendResetLink')}
               </Button>
               <button 
                 type="button"
@@ -117,7 +120,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 className="flex items-center justify-center text-sm text-gray-500 hover:text-gray-900 transition-colors"
               >
                 <ArrowLeft size={16} className="mr-1" />
-                Volver atrás
+                {t('auth.goBack')}
               </button>
             </CardFooter>
           </form>
@@ -130,20 +133,20 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <Card className="w-full max-w-md mx-auto shadow-xl border-gray-100 animate-in fade-in zoom-in-95 duration-200">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">Bienvenido de nuevo</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">{t('auth.loginTitle')}</CardTitle>
         <CardDescription className="text-center">
-          Ingresa tus credenciales para acceder a tu cuenta
+          {t('auth.loginSubtitle')}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleLoginSubmit}>
         <CardContent className="space-y-4 py-2.5">
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{t(mapAuthErrorToKey(error))}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">
-            <Label htmlFor="email">Correo electrónico</Label>
+            <Label htmlFor="email">{t('auth.emailLabel')}</Label>
             <Input
               id="email"
               type="email"
@@ -155,14 +158,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
               {/* ✨ Botón para abrir recuperación de contraseña */}
               <button 
                 type="button"
                 onClick={() => setIsResetMode(true)}
                 className="text-xs font-medium text-primary hover:underline focus:outline-none"
               >
-                ¿Olvidaste tu contraseña?
+                {t('auth.forgotPassword')}
               </button>
             </div>
             <div className="relative">
@@ -186,16 +189,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
           <Button type="submit" className="w-full bg-primary" disabled={isLoading}>
-            {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            {isLoading ? t('auth.loggingIn') : t('auth.loginButton')}
           </Button>
           <div className="text-center text-sm">
-            ¿No tienes una cuenta?{' '}
+            {t('auth.noAccount')}{' '}
             <Link 
               to="/registro" 
               state={{ from: (location.state as any)?.from }} 
               className="text-primary font-medium hover:underline"
             >
-              Regístrate aquí
+              {t('auth.registerLink')}
             </Link>
           </div>
         </CardFooter>

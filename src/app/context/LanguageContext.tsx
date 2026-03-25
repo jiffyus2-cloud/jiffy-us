@@ -5,7 +5,7 @@ type Language = 'en' | 'es';
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const translations = {
@@ -87,8 +87,8 @@ const translations = {
     'organizer.autoDistributeDesc': 'Based on your selection, we will distribute your photos automatically. You can still move them and change layouts later.',
     'organizer.createAlbum': 'Create Album',
     'organizer.complete': 'Confirm Organization',
-    'organizer.addPhoto': 'añadir Photo',
-    'organizer.addText': 'añadir texto',
+    'organizer.addPhoto': 'Add Photo',
+    'organizer.addText': 'Add Text',
     'organizer.editText': 'Edit Text Box',
     'organizer.removeText': 'Remove Text Box',
     'organizer.content': 'Content',
@@ -96,6 +96,17 @@ const translations = {
     'organizer.font': 'Font',
     'organizer.color': 'Color',
     'organizer.saveChanges': 'Save Changes',
+    'organizer.maxPagesReached': 'You cannot have more pages than total photos.',
+    'organizer.minPagesReached': 'Minimum of 40 pages required.',
+    'organizer.emptyPagesAlert': 'Your album contains empty pages (Page {pages}). Please add at least one photo or text to each page before checking out.',
+    'organizer.aiSorting': 'AI is sorting your photos...',
+    'organizer.aiSortingDesc': 'Analyzing metadata to find the best sequence',
+    'organizer.aiSmartSort': 'Smart AI Sorting',
+    'organizer.clearAll': 'Clear all',
+    'organizer.addPageEnd': 'Add new page at the end',
+    'organizer.pageSettings': 'Page Settings',
+    'organizer.finishEditing': 'Finish Editing',
+    'organizer.enableEditing': 'Enable Editing',
 
     // Product Details Modal
     'details.availableStyles': 'Available Styles',
@@ -152,7 +163,7 @@ const translations = {
     // Testimonials
     'testimonial.1.comment': 'Absolutely love my photo album! The quality is exceptional and the customization options made it truly special.',
     'testimonial.2.comment': 'The photo calendar I created is stunning! It made the perfect gift for my parents. Will definitely order again.',
-    'testimonial.3.comment': 'Easy to use and the final product exceeded my expectations. The printing quality is top-notch!',
+    'testimonial.3.comment': 'Easy to use and the final product exceeded my expectations. El printing quality is top-notch!',
     'testimonial.4.comment': 'Created a custom mug with family photos. It turned out amazing! Great quality and fast shipping.',
 
     // FAQ
@@ -206,6 +217,118 @@ const translations = {
 
     // Common
     'common.new': 'NEW',
+    'common.attention': 'Attention!',
+    'common.error': 'Error',
+    'common.success': 'Success',
+    'common.loading': 'Loading...',
+    'common.saving': 'Saving...',
+    'common.deleting': 'Deleting...',
+
+    // Auth
+    'auth.loginTitle': 'Welcome back',
+    'auth.loginSubtitle': 'Enter your credentials to access your account',
+    'auth.registerTitle': 'Create an account',
+    'auth.registerSubtitle': 'Enter your details to start creating your albums',
+    'auth.emailLabel': 'Email address',
+    'auth.passwordLabel': 'Password',
+    'auth.confirmPasswordLabel': 'Confirm Password',
+    'auth.nameLabel': 'Full Name',
+    'auth.namePlaceholder': 'Your name',
+    'auth.loginButton': 'Log In',
+    'auth.loggingIn': 'Logging in...',
+    'auth.registerButton': 'Create Account',
+    'auth.registering': 'Creating account...',
+    'auth.noAccount': "Don't have an account?",
+    'auth.haveAccount': 'Already have an account?',
+    'auth.registerLink': 'Register here',
+    'auth.loginLink': 'Log in here',
+    'auth.forgotPassword': 'Forgot your password?',
+    'auth.resetPasswordTitle': 'Recover password',
+    'auth.resetPasswordSubtitle': 'Enter your email and we will send you a secure link to reset it.',
+    'auth.resetSuccessTitle': 'Check your inbox',
+    'auth.resetSuccessDesc': 'We have sent a link to {email}. Click on it to create a new password.',
+    'auth.sendResetLink': 'Send link',
+    'auth.sendingLink': 'Sending...',
+    'auth.backToLogin': 'Back to login',
+    'auth.goBack': 'Go back',
+
+    // Errors
+    'error.generic': 'Something went wrong. Please try again.',
+    'error.invalidEmail': 'The email address is badly formatted.',
+    'error.userNotFound': 'No account found with this email.',
+    'error.wrongPassword': 'Incorrect password. Please try again.',
+    'error.emailInUse': 'An account already exists with this email.',
+    'error.weakPassword': 'Password should be at least 6 characters.',
+    'error.passwordsDontMatch': 'Passwords do not match.',
+    'error.network': 'Network error. Please check your connection.',
+    'error.fetchOrders': 'Could not load your orders. Please try again later.',
+    'error.verifyPayment': 'Could not verify payment with the server.',
+    'error.firestoreConnection': 'Payment validated, but connection with your account failed. Please contact support.',
+    'error.confirmOrder': 'An error occurred while confirming your order.',
+    'error.iaBackend': 'The AI organization had a small setback. We have loaded your photos in their original order so you don\'t waste time.',
+    'error.processingImages': 'There was a problem processing your images. Please try again.',
+
+    // Success Page
+    'success.title': 'Order placed successfully!',
+    'success.subtitle': 'Your order has been saved and we are processing your creation. You will receive a confirmation email shortly.',
+    'success.verifying': 'Verifying your payment with Stripe...',
+    'success.myOrders': 'Go to my orders',
+    'success.backHome': 'Back to home',
+
+    // Dashboard
+    'dashboard.title': 'My Projects',
+    'dashboard.subtitle': 'Manage and review the status of your creations.',
+    'dashboard.noOrders': 'You haven\'t created any projects yet.',
+    'dashboard.noOrdersDesc': 'Start creating your first album today!',
+    'dashboard.startCreating': 'Start Creating',
+    'dashboard.viewDetails': 'View Details',
+    'dashboard.orderDetails': 'Order Details',
+    'dashboard.orderDate': 'Ordered on {date}',
+    'dashboard.total': 'Total',
+    'dashboard.product': 'Product',
+    'dashboard.totalPages': 'Total Pages',
+
+    // Statuses
+    'status.paid': 'Paid / In Production',
+    'status.pending_payment': 'Pending Payment',
+    'status.shipped': 'Shipped',
+    'status.unknown': 'Unknown',
+
+    // Checkout
+    'checkout.title': 'Checkout',
+    'checkout.processing': 'Processing order...',
+    'checkout.payNow': 'Pay Now - {total}',
+    'checkout.summary': 'Order Summary',
+    'checkout.subtotal': 'Subtotal',
+    'checkout.shipping': 'Shipping',
+    'checkout.taxes': 'Taxes',
+    'checkout.total': 'Total',
+    'checkout.preview': 'Preview',
+    'checkout.contactInfo': 'Contact Information',
+    'checkout.shippingAddress': 'Shipping Address',
+    'checkout.billingAddress': 'Billing Address',
+    'checkout.sameAddress': 'Use the same address for billing',
+    'checkout.fullName': 'Full Name',
+    'checkout.address': 'Address and Number',
+    'checkout.city': 'City',
+    'checkout.zipCode': 'Zip Code',
+    'checkout.billingName': 'Cardholder Name',
+    'checkout.securePayment': 'Secure Payment with Stripe',
+    'checkout.securePaymentDesc': 'For your security, you will be redirected to the official Stripe platform. Your bank details are encrypted and are never stored on our servers.',
+    'checkout.encrypted': '256-BIT SSL ENCRYPTED CONNECTION',
+    'checkout.terms': 'By clicking "Pay Now", you agree to our terms and conditions and privacy policy.',
+    'checkout.loginRequired': 'You must log in to complete your order.',
+    'checkout.errorSession': 'It seems the shopping session has expired or the necessary data has not been provided.',
+    'checkout.errorStripe': 'The server did not return the Stripe payment URL.',
+    'checkout.loadingOrder': 'Retrieving your design...',
+    'checkout.preparingSummary': 'We are preparing your purchase summary.',
+    'checkout.noOrderData': 'Order data not found',
+
+    // Creator
+    'creator.savingTitle': 'Saving Design',
+    'creator.savingDescUser': 'Processing high quality images...',
+    'creator.savingDescGuest': 'Securing your design before logging in...',
+    'creator.uploading': 'Uploading files',
   },
   es: {
     // Header
@@ -327,8 +450,26 @@ const translations = {
     'organizer.autoDistributeDesc': 'Basándonos en tu selección, distribuiremos tus fotos automáticamente. Podrás moverlas y cambiar los diseños más tarde.',
     'organizer.createAlbum': 'Crear Álbum',
     'organizer.complete': 'Confirmar Organización',
-    'organizer.addPhoto': 'añadir Photo',
-    'organizer.addText': 'añadir texto',
+    'organizer.addPhoto': 'Añadir Foto',
+    'organizer.addText': 'Añadir Texto',
+    'organizer.editText': 'Editar Cuadro de Texto',
+    'organizer.removeText': 'Eliminar Cuadro de Texto',
+    'organizer.content': 'Contenido',
+    'organizer.size': 'Tamaño',
+    'organizer.font': 'Fuente',
+    'organizer.color': 'Color',
+    'organizer.saveChanges': 'Guardar Cambios',
+    'organizer.maxPagesReached': 'No puedes tener más páginas que fotos totales.',
+    'organizer.minPagesReached': 'Se requiere un mínimo de 40 páginas.',
+    'organizer.emptyPagesAlert': 'Tu álbum contiene páginas vacías (Página {pages}). Por favor, añade al menos una foto o un texto a cada página antes de continuar al checkout.',
+    'organizer.aiSorting': 'La IA está ordenando tus fotos...',
+    'organizer.aiSortingDesc': 'Analizando metadatos para encontrar la mejor secuencia',
+    'organizer.aiSmartSort': 'Ordenado Inteligente con IA',
+    'organizer.clearAll': 'Limpiar todo',
+    'organizer.addPageEnd': 'Añadir nueva página al final',
+    'organizer.pageSettings': 'Ajustes de Página',
+    'organizer.finishEditing': 'Finalizar Edición',
+    'organizer.enableEditing': 'Habilitar Edición',
 
     // Product Details Modal
     'details.availableStyles': 'Estilos Disponibles',
@@ -426,6 +567,118 @@ const translations = {
 
     // Common
     'common.new': 'NUEVO',
+    'common.attention': '¡Atención!',
+    'common.error': 'Error',
+    'common.success': 'Éxito',
+    'common.loading': 'Cargando...',
+    'common.saving': 'Guardando...',
+    'common.deleting': 'Eliminando...',
+
+    // Auth
+    'auth.loginTitle': 'Bienvenido de nuevo',
+    'auth.loginSubtitle': 'Ingresa tus credenciales para acceder a tu cuenta',
+    'auth.registerTitle': 'Crear una cuenta',
+    'auth.registerSubtitle': 'Ingresa tus datos para comenzar a crear tus álbumes',
+    'auth.emailLabel': 'Correo electrónico',
+    'auth.passwordLabel': 'Contraseña',
+    'auth.confirmPasswordLabel': 'Confirmar contraseña',
+    'auth.nameLabel': 'Nombre completo',
+    'auth.namePlaceholder': 'Tu nombre',
+    'auth.loginButton': 'Iniciar sesión',
+    'auth.loggingIn': 'Iniciando sesión...',
+    'auth.registerButton': 'Crear cuenta',
+    'auth.registering': 'Creando cuenta...',
+    'auth.noAccount': '¿No tienes una cuenta?',
+    'auth.haveAccount': '¿Ya tienes una cuenta?',
+    'auth.registerLink': 'Regístrate aquí',
+    'auth.loginLink': 'Inicia sesión aquí',
+    'auth.forgotPassword': '¿Olvidaste tu contraseña?',
+    'auth.resetPasswordTitle': 'Recuperar contraseña',
+    'auth.resetPasswordSubtitle': 'Ingresa tu correo y te enviaremos un enlace seguro para restablecerla.',
+    'auth.resetSuccessTitle': 'Revisa tu bandeja de entrada',
+    'auth.resetSuccessDesc': 'Hemos enviado un enlace a {email}. Haz clic en él para crear una nueva contraseña.',
+    'auth.sendResetLink': 'Enviar enlace',
+    'auth.sendingLink': 'Enviando...',
+    'auth.backToLogin': 'Volver al inicio de sesión',
+    'auth.goBack': 'Volver atrás',
+
+    // Errors
+    'error.generic': 'Algo salió mal. Por favor, inténtalo de nuevo.',
+    'error.invalidEmail': 'El formato del correo electrónico no es válido.',
+    'error.userNotFound': 'No existe ninguna cuenta con este correo.',
+    'error.wrongPassword': 'Contraseña incorrecta. Por favor, inténtalo de nuevo.',
+    'error.emailInUse': 'Ya existe una cuenta con este correo electrónico.',
+    'error.weakPassword': 'La contraseña debe tener al menos 6 caracteres.',
+    'error.passwordsDontMatch': 'Las contraseñas no coinciden.',
+    'error.network': 'Error de red. Por favor, comprueba tu conexión.',
+    'error.fetchOrders': 'No se pudieron cargar tus pedidos. Inténtalo de nuevo más tarde.',
+    'error.verifyPayment': 'No se pudo verificar el pago con el servidor.',
+    'error.firestoreConnection': 'El pago se validó, pero falló la conexión con tu cuenta. Contacta a soporte.',
+    'error.confirmOrder': 'Ocurrió un error al confirmar tu pedido.',
+    'error.iaBackend': 'La organización con IA tuvo un pequeño contratiempo. Hemos cargado tus fotos en su orden original para que no pierdas tiempo.',
+    'error.processingImages': 'Hubo un problema al procesar tus imágenes. Por favor intenta de nuevo.',
+
+    // Success Page
+    'success.title': '¡Pedido realizado con éxito!',
+    'success.subtitle': 'Tu pedido ha sido guardado y estamos procesando tu creación. Recibirás un correo de confirmación en breve.',
+    'success.verifying': 'Verificando tu pago con Stripe...',
+    'success.myOrders': 'Ir a mis pedidos',
+    'success.backHome': 'Volver al inicio',
+
+    // Dashboard
+    'dashboard.title': 'Mis Proyectos',
+    'dashboard.subtitle': 'Gestiona y revisa el estado de tus creaciones.',
+    'dashboard.noOrders': 'Aún no tienes pedidos',
+    'dashboard.noOrdersDesc': '¡Empieza a crear tu primer álbum hoy mismo!',
+    'dashboard.startCreating': 'Comenzar a Crear',
+    'dashboard.viewDetails': 'Ver Detalles',
+    'dashboard.orderDetails': 'Detalles del Pedido',
+    'dashboard.orderDate': 'Pedido el {date}',
+    'dashboard.total': 'Total',
+    'dashboard.product': 'Producto',
+    'dashboard.totalPages': 'Total Páginas',
+
+    // Statuses
+    'status.paid': 'Pagado / En Producción',
+    'status.pending_payment': 'Pendiente de Pago',
+    'status.shipped': 'Enviado',
+    'status.unknown': 'Desconocido',
+
+    // Checkout
+    'checkout.title': 'Finalizar Compra',
+    'checkout.processing': 'Procesando pedido...',
+    'checkout.payNow': 'Pagar Ahora - {total}',
+    'checkout.summary': 'Resumen del Pedido',
+    'checkout.subtotal': 'Subtotal',
+    'checkout.shipping': 'Envío',
+    'checkout.taxes': 'Impuestos',
+    'checkout.total': 'Total',
+    'checkout.preview': 'Vista previa',
+    'checkout.contactInfo': 'Información de Contacto',
+    'checkout.shippingAddress': 'Dirección de Envío',
+    'checkout.billingAddress': 'Dirección de Facturación',
+    'checkout.sameAddress': 'Usar la misma dirección que el envío',
+    'checkout.fullName': 'Nombre Completo',
+    'checkout.address': 'Dirección y Número',
+    'checkout.city': 'Ciudad',
+    'checkout.zipCode': 'Código Postal',
+    'checkout.billingName': 'Nombre del Titular',
+    'checkout.securePayment': 'Pago Seguro con Stripe',
+    'checkout.securePaymentDesc': 'Para tu seguridad, serás redirigido a la plataforma oficial de Stripe. Tus datos bancarios están cifrados y nunca son almacenados en nuestros servidores.',
+    'checkout.encrypted': 'CONEXIÓN CIFRADA SSL DE 256 BITS',
+    'checkout.terms': 'Al hacer clic en "Pagar Ahora", aceptas nuestros términos y condiciones y política de privacidad.',
+    'checkout.loginRequired': 'Debes iniciar sesión para completar tu pedido.',
+    'checkout.errorSession': 'Parece que la sesión de compra ha expirado o no se han proporcionado los datos necesarios.',
+    'checkout.errorStripe': 'El servidor no devolvió la URL de pago de Stripe.',
+    'checkout.loadingOrder': 'Recuperando tu diseño...',
+    'checkout.preparingSummary': 'Estamos preparando tu resumen de compra.',
+    'checkout.noOrderData': 'No se encontraron datos del pedido',
+
+    // Creator
+    'creator.savingTitle': 'Guardando Diseño',
+    'creator.savingDescUser': 'Procesando imágenes en alta calidad...',
+    'creator.savingDescGuest': 'Asegurando tu diseño antes de iniciar sesión...',
+    'creator.uploading': 'Subiendo archivos',
   }
 };
 
@@ -434,9 +687,17 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('es');
 
-  const t = (key: string): string => {
-    const value = (translations[language] as any)[key];
-    return value || key;
+  const t = (key: string, params?: Record<string, string | number>): string => {
+    let value = (translations[language] as any)[key];
+    if (!value) return key;
+
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        value = value.replace(`{${k}}`, String(v));
+      });
+    }
+
+    return value;
   };
 
   return (

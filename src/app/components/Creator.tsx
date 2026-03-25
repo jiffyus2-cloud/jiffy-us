@@ -163,7 +163,7 @@ export default function Creator() {
 
     } catch (error) {
       console.error("Error al guardar el diseño:", error);
-      alert("Hubo un problema al procesar tus imágenes. Por favor intenta de nuevo.");
+      alert(t('error.processingImages'));
     } finally {
       setIsSaving(false); 
     }
@@ -578,9 +578,9 @@ export default function Creator() {
             </div>
             
             <div className="text-center w-full">
-              <h3 className="text-2xl font-black text-gray-900 mb-2">Guardando Diseño</h3>
+              <h3 className="text-2xl font-black text-gray-900 mb-2">{t('creator.savingTitle')}</h3>
               <p className="text-gray-500 text-sm mb-6">
-                {user ? 'Procesando imágenes en alta calidad...' : 'Asegurando tu diseño antes de iniciar sesión...'} 
+                {user ? t('creator.savingDescUser') : t('creator.savingDescGuest')} 
               </p>
               
               <div className="w-full bg-gray-100 rounded-full h-3 mb-3 overflow-hidden shadow-inner">
@@ -591,7 +591,7 @@ export default function Creator() {
               </div>
               
               <div className="flex justify-between w-full text-xs font-bold text-gray-400 uppercase tracking-widest">
-                <span>Subiendo archivos</span>
+                <span>{t('creator.uploading')}</span>
                 <span>{uploadProgress}%</span>
               </div>
             </div>

@@ -7,9 +7,10 @@ import { Badge } from './ui/badge';
 import { AspectRatio } from './ui/aspect-ratio';
 import { Skeleton } from './ui/skeleton';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es, enUS } from 'date-fns/locale';
 import { Package, Calendar, FileText, Image as ImageIcon, AlertCircle, Coffee } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface Order {
   id: string;
@@ -37,26 +38,26 @@ interface Order {
   productType?: string;
 }
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'mock_paid':
-    case 'paid':
-      return { text: 'Pagado / En Producción', className: 'bg-green-100 text-green-800 hover:bg-green-100' };
-    case 'pending_payment':
-      return { text: 'Pendiente de Pago', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' };
-    default:
-      const formattedStatus = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      return { text: formattedStatus, className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
-  }
-};
-
 const UserDashboard: React.FC = () => {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'mock_paid':
+      case 'paid':
+        return { text: t('status.paid'), className: 'bg-green-100 text-green-800 hover:bg-green-100' };
+      case 'pending_payment':
+        return { text: t('status.pending_payment'), className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' };
+      default:
+        return { text: t('status.unknown'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
+    }
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -68,7 +69,7 @@ const UserDashboard: React.FC = () => {
         setOrders(userOrders);
       } catch (err: any) {
         console.error('Error fetching orders:', err);
-        setError('No se pudieron cargar tus pedidos. Inténtalo de nuevo más tarde.');
+        setError('error.fetchOrders');
       } finally {
         setIsLoading(false);
       }
@@ -82,12 +83,14 @@ const UserDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const dateLocale = language === 'es' ? es : enUS;
+
   if (isLoading) {
     return (
       <>
         <Header />
         <div className="container mx-auto py-10 px-4">
-          <h1 className="text-3xl font-bold mb-8">Mis Pedidos</h1>
+          <h1 className="text-3xl font-bold mb-8">{t('dashboard.title')}</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="overflow-hidden">
@@ -111,8 +114,8 @@ const UserDashboard: React.FC = () => {
         <Header />
         <div className="container mx-auto py-10 px-4 text-center">
           <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h2 className="text-2xl font-semibold mb-2">¡Ups! Algo salió mal</h2>
-          <p className="text-gray-600">{error}</p>
+          <h2 className="text-2xl font-semibold mb-2">{t('common.error')}</h2>
+          <p className="text-gray-600">{t(error)}</p>
         </div>
       </>
     );
@@ -123,15 +126,15 @@ const UserDashboard: React.FC = () => {
       <Header />
       <div className="container mx-auto py-10 px-4">
       <header className="mb-10">
-        <h1 className="text-3xl font-bold text-gray-900">Mis Pedidos</h1>
-        <p className="text-gray-500 mt-2">Gestiona y revisa el estado de tus creaciones.</p>
+        <h1 className="text-3xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+        <p className="text-gray-500 mt-2">{t('dashboard.subtitle')}</p>
       </header>
 
       {orders.length === 0 ? (
         <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
           <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900">No tienes pedidos aún</h3>
-          <p className="text-gray-500 mt-1">¡Empieza a crear tu primer álbum hoy mismo!</p>
+          <h3 className="text-lg font-medium text-gray-900">{t('dashboard.noOrders')}</h3>
+          <p className="text-gray-500 mt-1">{t('dashboard.noOrdersDesc')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -142,8 +145,7 @@ const UserDashboard: React.FC = () => {
             const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
             const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
             const isMug = productString.includes('mug') || productString.includes('taza');
-            const isAlbum = productString.includes('album') || productString.includes('photobook');
-
+            
             const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
 
             return (
@@ -198,7 +200,7 @@ const UserDashboard: React.FC = () => {
                         return (
                           <img
                             src={imageUrl}
-                            alt={order.coverData?.title || order.product?.name || 'Vista previa'}
+                            alt={order.coverData?.title || order.product?.name || 'Preview'}
                             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                           />
                         );
@@ -221,10 +223,10 @@ const UserDashboard: React.FC = () => {
                 <CardHeader className="p-5 pb-2">
                   <div className="flex items-center text-xs text-gray-500 mb-2">
                     <Calendar className="h-3 w-3 mr-1" />
-                    {order.createdAt ? format(new Date(order.createdAt), "d 'de' MMMM, yyyy", { locale: es }) : 'Fecha desconocida'}
+                    {order.createdAt ? t('dashboard.orderDate', { date: format(new Date(order.createdAt), "P", { locale: dateLocale }) }) : t('status.unknown')}
                   </div>
                   <CardTitle className="text-xl font-bold truncate leading-tight">
-                    {order.coverData?.title || order.product?.name || 'Pedido Personalizado'}
+                    {order.coverData?.title || order.product?.name || t('product.album')}
                   </CardTitle>
                   {order.coverData?.subtitle && (
                     <CardDescription className="truncate text-gray-600">
@@ -236,20 +238,20 @@ const UserDashboard: React.FC = () => {
                 <CardContent className="p-5 pt-0 space-y-4">
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Producto</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.product')}</p>
                       <p className="text-sm font-medium text-gray-700 truncate">{order.product?.name || 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total</p>
-                      <p className="text-sm font-medium text-gray-700 truncate">${order.total?.toFixed(2) || '0.00'}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.total')}</p>
+                      <p className="text-sm font-medium text-gray-700 truncate">{order.total?.toFixed(2) || '0.00'}€</p>
                     </div>
                   </div>
                   
-                  {isAlbum && order.pages && (
+                  {productString.includes('album') && order.pages && (
                     <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                       <div className="flex items-center text-sm text-gray-600">
                         <FileText className="h-4 w-4 mr-2 text-primary" />
-                        <span>Total Páginas</span>
+                        <span>{t('dashboard.totalPages')}</span>
                       </div>
                       <span className="font-bold text-gray-900">{order.pages.length}</span>
                     </div>
@@ -261,7 +263,7 @@ const UserDashboard: React.FC = () => {
                     onClick={() => handleViewDetails(order)}
                     className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 "
                   >
-                    Ver Detalles
+                    {t('dashboard.viewDetails')}
                   </button>
                 </CardFooter>
               </Card>

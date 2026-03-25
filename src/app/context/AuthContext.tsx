@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       return userCredential.user;
     } catch (err: any) {
-      setError(err.message);
+      setError(err.code || err.message);
       throw err;
     } finally {
       setIsLoading(false);
@@ -84,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return newUser;
     } catch (err: any) {
-      setError(err.message);
+      setError(err.code || err.message);
       throw err;
     } finally {
       setIsLoading(false);
@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signOut(auth);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.code || err.message);
       throw err;
     } finally {
       setIsLoading(false);
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.code || err.message);
       throw err;
     } finally {
       setIsLoading(false);

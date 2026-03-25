@@ -21,15 +21,13 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const handleMakeYourOwn = () => {
-    // Navigate to creator and start at product customization for this product
+    onClose();
     navigate('/create', { state: { startProduct: productType } });
   };
 
   const CalendarPreview = useMemo(() => {
-    const year = new Date().getFullYear() + 1;
+    const year = 2026; // Match the default in CalendarCustomization
     const holidays = getColombianHolidays(year);
 
     const generateCalendarGrid = (year: number, monthIndex: number) => {
@@ -43,8 +41,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
     };
 
     return (
-        <div>
-            <h3 className="text-2xl mb-4">Ejemplo de Diseño Interior</h3>
+        <div className="animate-in fade-in duration-500">
+            <h3 className="text-2xl font-bold mb-6">{t('calendar.preview')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {MONTHS_ES.slice(0, 3).map((month, index) => (
                     <div key={index} className="space-y-3">
@@ -57,13 +55,13 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
                                 <div className="bg-gray-100 relative h-1/2 border-b border-gray-200 flex items-center justify-center">
                                     <ImageIcon className="w-12 h-12 text-gray-300" />
                                 </div>
-                                <div className="p-6 flex flex-col justify-center bg-white flex-1">
+                                <div className="p-4 flex flex-col justify-center bg-white flex-1">
                                     <div className="text-center mb-2">
-                                        <span className="text-lg font-bold text-gray-900">{month}</span>
+                                        <span className="text-sm font-bold text-gray-900">{month}</span>
                                     </div>
                                     <div className="grid grid-cols-7 gap-1">
                                         {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-                                            <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
+                                            <div key={i} className="text-center text-[8px] font-bold text-gray-400">{day}</div>
                                         ))}
                                         {generateCalendarGrid(year, index).map((day, i) => {
                                             if (!day) return <div key={i} className="aspect-square" />;
@@ -72,7 +70,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
                                             return (
                                                 <div
                                                     key={i}
-                                                    className={`aspect-square flex items-center justify-center text-xs rounded ${holiday ? 'bg-red-50 text-red-600 font-bold' : 'bg-gray-50 text-gray-700'}`}
+                                                    className={`aspect-square flex items-center justify-center text-[9px] rounded ${holiday ? 'bg-red-50 text-red-600 font-bold' : 'bg-gray-50 text-gray-700'}`}
                                                 >
                                                     {day}
                                                 </div>
@@ -87,9 +85,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             </div>
         </div>
     );
-  }, []);
+  }, [t]);
 
-  // Product-specific data
   const getProductData = () => {
     switch (productType) {
       case 'album':
@@ -99,37 +96,27 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           description: t('product.albumDesc'),
           styles: [
             { 
-              name: 'Classic Album', 
-              description: 'Traditional binding with elegant cover',
-              image: 'https://images.unsplash.com/photo-1646645766793-25e5ffa020e9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjbGFzc2ljJTIwcGhvdG8lMjBhbGJ1bSUyMGVsZWdhbnQlMjBiaW5kaW5nfGVufDF8fHx8MTc3MTYxODA1NXww&ixlib=rb-4.1.0&q=80&w=1080'
+              name: t('album.tela'), 
+              description: 'Acabado premium con textura de lino',
+              image: 'https://images.unsplash.com/photo-1646645766793-25e5ffa020e9?w=800'
             },
             { 
-              name: 'Modern Layflat', 
-              description: 'Seamless panoramic spreads',
-              image: 'https://images.unsplash.com/photo-1754373480634-6f36092b751f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsYXlmbGF0JTIwcGhvdG8lMjBhbGJ1bSUyMHBhbm9yYW1pY3xlbnwxfHx8fDE3NzE2MTgwNTV8MA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Luxury Leather', 
-              description: 'Premium leather-bound edition',
-              image: 'https://images.unsplash.com/photo-1745305899771-efa66647787d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBsZWF0aGVyJTIwcGhvdG8lMjBhbGJ1bSUyMHByZW1pdW18ZW58MXx8fHwxNzcxNjE4MDU1fDA&ixlib=rb-4.1.0&q=80&w=1080'
-            },
-            { 
-              name: 'Minimalist Album', 
-              description: 'Clean, contemporary design',
-              image: 'https://images.unsplash.com/photo-1757573778876-9a35ba82c19e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwcGhvdG8lMjBhbGJ1bSUyMGNvbnRlbXBvcmFyeSUyMGRlc2lnbnxlbnwxfHx8fDE3NzE2MTgwNTZ8MA&ixlib=rb-4.1.0&q=80&w=1080'
+              name: t('album.papel'), 
+              description: 'Portada personalizada con tu foto favorita',
+              image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800'
             }
           ],
           specifications: [
-            { label: 'Cover Options', value: 'Linen, Leather, Wood' },
-            { label: 'Size Options', value: '8x8", 10x10", 12x12"' },
-            { label: 'Page Count', value: 'Up to 40 pages' },
-            { label: 'Paper Types', value: 'Glossy, Matte, Premium' }
+            { label: t('album.coverType'), value: `${t('album.tela')}, ${t('album.papel')}` },
+            { label: t('album.size'), value: '20x20, 30x30, 21x28, 28x21 cm' },
+            { label: t('album.pagesCount'), value: t('album.pagesLimitDesc') },
+            { label: t('album.paperType'), value: `${t('album.mate')}, ${t('album.brillante')}` }
           ],
           gallery: [
             'https://images.unsplash.com/photo-1627353802168-e8e8a81e51f6?w=800',
-            'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800',
             'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800',
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800'
+            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+            'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800'
           ]
         };
       case 'calendar':
@@ -139,10 +126,10 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           description: t('product.calendarDesc'),
           styles: [],
           specifications: [
-            { label: 'Format', value: '12 months with custom photos' },
-            { label: 'Size Options', value: '11x8.5", 12x12", 18x24"' },
-            { label: 'Starting Month', value: 'Any month you choose' },
-            { label: 'Finish', value: 'Glossy or Matte' }
+            { label: 'Formato', value: '12 meses con tus fotos' },
+            { label: 'Tipo', value: 'Escritorio o Pared (30x44 cm)' },
+            { label: 'Diseño', value: '1 o 4 fotos por mes' },
+            { label: 'Papel', value: 'Opalina premium' }
           ],
           gallery: [
             'https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=800',
@@ -158,21 +145,21 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           description: t('product.mugDesc'),
           styles: [
             { 
-              name: 'Classic Mug', 
-              description: 'Traditional ceramic coffee mug',
-              image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3aGl0ZSUyMGNlcmFtaWMlMjBjb2ZmZWUlMjBtdWclMjBjbGFzc2ljfGVufDF8fHx8MTc3MTYxODA1N3ww&ixlib=rb-4.1.0&q=80&w=1080'
+              name: 'Clásica', 
+              description: 'Taza de cerámica tradicional',
+              image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?w=800'
             },
             { 
-              name: 'Color Handle Mug', 
-              description: 'Accent color handles',
-              image: 'https://images.unsplash.com/photo-1704663198277-f3671defb217?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvcmZ1bCUyMGhhbmRsZSUyMGNvZmZlZSUyMG11ZyUyMGNlcmFtaWN8ZW58MXx8fHwxNzcxNjE4MDU5fDA&ixlib=rb-4.1.0&q=80&w=1080'
+              name: 'Premium', 
+              description: 'Porcelana de alta calidad',
+              image: 'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800'
             }
           ],
           specifications: [
-            { label: 'Materials', value: 'Ceramic, Porcelain, Stainless Steel' },
-            { label: 'Capacity', value: '11oz, 15oz' },
-            { label: 'Color Options', value: 'White, Black, Red, Blue' },
-            { label: 'Features', value: 'Dishwasher safe, Microwave safe' }
+            { label: 'Materiales', value: 'Cerámica, Porcelana, Acero Inoxidable' },
+            { label: 'Capacidad', value: '11oz, 15oz' },
+            { label: 'Estilo', value: 'Imagen y Texto o Texto con Foto' },
+            { label: 'Uso', value: 'Apto para microondas y lavavajillas' }
           ],
           gallery: [
             'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800',
@@ -188,21 +175,16 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           description: t('product.photoPackDesc'),
           styles: [
             { 
-              name: 'Standard Prints', 
-              description: 'Classic 4x6 or 5x7 prints',
-              image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800&h=1000&fit=crop'
-            },
-            { 
-              name: 'Polaroid Style', 
-              description: 'Retro white border prints',
-              image: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?w=800&h=1000&fit=crop'
+              name: 'Impresiones Estándar', 
+              description: 'Fotos clásicas en varios tamaños',
+              image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800'
             }
           ],
           specifications: [
-            { label: 'Sizes', value: '4x6", 5x7", 8x10"' },
-            { label: 'Paper', value: 'Premium Photo Paper' },
-            { label: 'Finish', value: 'Matte or Glossy' },
-            { label: 'Packaging', value: 'Beautiful storage box included' }
+            { label: 'Tamaños', value: 'Estándar, Grandes, Retratos' },
+            { label: 'Papel', value: 'Papel Fotográfico Premium' },
+            { label: 'Acabado', value: 'Mate o Brillante' },
+            { label: 'Empaque', value: 'Incluye caja de regalo' }
           ],
           gallery: [
             'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=800',
@@ -211,62 +193,70 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800'
           ]
         };
+      default:
+        return {
+          title: '',
+          icon: null,
+          description: '',
+          styles: [],
+          specifications: [],
+          gallery: []
+        };
     }
   };
+
+  if (!isOpen) return null;
 
   const productData = getProductData();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-gray-100 p-6 flex items-center justify-between z-20">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-black text-white rounded-xl">
+            <div className="p-3 bg-black text-white rounded-2xl shadow-lg">
               {productData.icon}
             </div>
             <div>
-              <h2 className="text-3xl">{productData.title}</h2>
-              <p className="text-gray-600">{productData.description}</p>
+              <h2 className="text-3xl font-black tracking-tight">{productData.title}</h2>
+              <p className="text-gray-500 font-medium">{productData.description}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6 text-gray-400 group-hover:text-black" />
           </button>
         </div>
 
-        <div className="p-6 space-y-8">
+        <div className="p-8 space-y-12">
           {/* Available Styles */}
           {productType === 'calendar' ? (
             CalendarPreview
           ) : (
             <div>
-              <h3 className="text-2xl mb-4">{t('details.availableStyles')}</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <h3 className="text-2xl font-bold mb-6">{t('details.availableStyles')}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {productData.styles.map((style, index) => (
                   <div
                     key={index}
-                    className="border-2 border-gray-200 rounded-lg overflow-hidden"
+                    className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
                   >
-                    {/* Image */}
-                    <div className="aspect-video overflow-hidden bg-gray-100">
+                    <div className="aspect-square overflow-hidden bg-gray-50">
                       <img
                         src={style.image}
                         alt={style.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                     </div>
-                    
-                    {/* Content */}
-                    <div className="p-3">
-                      <h4 className="text-sm font-medium mb-1">{style.name}</h4>
-                      <p className="text-xs text-gray-600">{style.description}</p>
+                    <div className="p-4 bg-white">
+                      <h4 className="font-bold text-gray-900 mb-1">{style.name}</h4>
+                      <p className="text-xs text-gray-500 leading-relaxed">{style.description}</p>
                     </div>
                   </div>
                 ))}
@@ -276,36 +266,36 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
 
           {/* Specifications */}
           <div>
-            <h3 className="text-2xl mb-4">{t('details.specifications')}</h3>
-            <div className="bg-gray-50 rounded-lg p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h3 className="text-2xl font-bold mb-6">{t('details.specifications')}</h3>
+            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {productData.specifications.map((spec, index) => (
                   <div key={index} className="flex flex-col">
-                    <span className="text-sm text-gray-600 mb-1">{spec.label}</span>
-                    <span className="font-medium">{spec.value}</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">{spec.label}</span>
+                    <span className="font-bold text-gray-900">{spec.value}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Gallery - Customer Examples */}
+          {/* Gallery */}
           <div>
-            <h3 className="text-2xl mb-4">{t('details.customerExamples')}</h3>
-            <p className="text-gray-600 mb-4">
+            <h3 className="text-2xl font-bold mb-2">{t('details.customerExamples')}</h3>
+            <p className="text-gray-500 font-medium mb-6">
               {t('details.customerExamplesDesc')}
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {productData.gallery.map((image, index) => (
                 <div
                   key={index}
-                  className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                  className="aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
                   onClick={() => setSelectedImage(image)}
                 >
                   <img
                     src={image}
-                    alt={`Customer example ${index + 1}`}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                    alt={`Example ${index + 1}`}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
                 </div>
               ))}
@@ -313,12 +303,12 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           </div>
 
           {/* CTA Button */}
-          <div className="sticky bottom-0 bg-white pt-6 pb-2 border-t border-gray-200">
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md pt-6 pb-2 border-t border-gray-100 z-10">
             <button
               onClick={handleMakeYourOwn}
-              className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg font-medium"
+              className="w-full py-5 bg-black text-white rounded-2xl hover:bg-gray-800 transition-all text-xl font-bold shadow-xl hover:shadow-black/20 active:scale-[0.98]"
             >
-              {t('details.makeYourOwn')} {productData.title}
+              {t('details.makeYourOwn')}
             </button>
           </div>
         </div>
@@ -327,23 +317,23 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
       {/* Image Lightbox */}
       {selectedImage && (
         <div 
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-300"
           onClick={() => setSelectedImage(null)}
         >
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
           >
-            <X className="w-8 h-8 text-white" />
+            <X className="w-6 h-6 text-white" />
           </button>
           <div 
-            className="max-w-6xl max-h-[90vh] relative"
+            className="max-w-5xl max-h-[85vh] w-full relative"
             onClick={(e) => e.stopPropagation()}
           >
             <img
               src={selectedImage}
               alt="Enlarged view"
-              className="w-full h-full object-contain rounded-lg"
+              className="w-full h-full object-contain rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300"
             />
           </div>
         </div>
