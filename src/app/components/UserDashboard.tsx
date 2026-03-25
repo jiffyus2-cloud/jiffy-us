@@ -12,6 +12,9 @@ import { Package, Calendar, FileText, Image as ImageIcon, AlertCircle, Coffee } 
 import OrderDetailsModal from './OrderDetailsModal';
 import { useLanguage } from '../context/LanguageContext';
 
+// Importación de la imagen blanca local
+import justWhiteImg from '../../assets/justwhite.png';
+
 interface Order {
   id: string;
   createdAt: string;
@@ -57,6 +60,16 @@ const UserDashboard: React.FC = () => {
       default:
         return { text: t('status.unknown'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
     }
+  };
+
+  // Función para formatear el precio a Pesos Colombianos
+  const formatPriceCOP = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
   };
 
   useEffect(() => {
@@ -141,7 +154,6 @@ const UserDashboard: React.FC = () => {
           {orders.map((order) => {
             const statusInfo = getStatusBadge(order.status);
             
-            // Lógica ultra-robusta para detectar el tipo de producto
             const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
             const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
             const isMug = productString.includes('mug') || productString.includes('taza');
@@ -155,7 +167,6 @@ const UserDashboard: React.FC = () => {
                     {(() => {
                       let imageUrl: string | null | undefined = null;
 
-                      // 1. SI ES CALENDARIO -> Forzamos a buscar la foto de ENERO
                       if (isCalendar) {
                         const januaryPage = order.pages?.[0];
                         if (januaryPage) {
@@ -175,13 +186,11 @@ const UserDashboard: React.FC = () => {
                           }
                         }
                       } 
-                      // 2. SI ES TAZA -> Buscamos la foto del primer item
                       else if (isMug) {
                         if (order.items && order.items.length > 0) {
                           imageUrl = order.items[0].photo || order.items[0].photos?.[0];
                         }
                       } 
-                      // 3. SI ES ÁLBUM O CUALQUIER OTRA COSA -> Priorizamos la portada
                       else {
                         imageUrl = order.coverData?.image;
                         if (!imageUrl && order.photos && order.photos.length > 0) {
@@ -190,12 +199,15 @@ const UserDashboard: React.FC = () => {
                         }
                       }
 
-                      // Fallback final: Si falló la extracción específica, intentamos con la portada genérica
                       if (!imageUrl) {
                         imageUrl = order.coverData?.image;
                       }
 
-                      // RENDERIZADO DE LA IMAGEN
+                      // Mapeo a imagen local si es blanco (justwhite)
+                      if (imageUrl && typeof imageUrl === 'string' && imageUrl.includes('justwhite')) {
+                        imageUrl = justWhiteImg;
+                      }
+
                       if (imageUrl) {
                         return (
                           <img
@@ -243,7 +255,10 @@ const UserDashboard: React.FC = () => {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.total')}</p>
-                      <p className="text-sm font-medium text-gray-700 truncate">{order.total?.toFixed(2) || '0.00'}€</p>
+                      {/* Aquí se aplica el nuevo formato de Pesos Colombianos */}
+                      <p className="text-sm font-medium text-gray-700 truncate">
+                        {formatPriceCOP(order.total)}
+                      </p>
                     </div>
                   </div>
                   

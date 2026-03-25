@@ -7,6 +7,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import CoverPreview from './CoverPreview';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
+// Importación de la imagen blanca local
+import justWhiteImg from '../../assets/justwhite.png';
+
 // --- START: Refactored Interfaces and Helpers ---
 interface Order {
   id: string;
@@ -146,7 +149,7 @@ const AlbumPagePhoto: React.FC<{
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-lg bg-white flex items-center justify-center`}>
+    <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
       {photo ? (
         <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
           <ReadOnlyImage src={photo} crop={calculatedCrop} alt={`Foto ${photoIndex + 1}`} />
@@ -172,6 +175,11 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const isHorizontal = size.includes('Horizontal');
   const isVertical = size.includes('Vertical');
 
+  // Lógica para detectar la imagen blanca
+  const coverImageFixed = order.coverData?.image && typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') 
+    ? justWhiteImg 
+    : (order.coverData?.image || '');
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
@@ -183,16 +191,17 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Portada</p>
         <CoverPreview
           coverSize={mapSizeToCoverSize(order.customization?.size)}
-          coverImage={order.coverData?.image || ''}
+          coverImage={coverImageFixed}
           coverTitle={order.coverData?.title || ''}
           coverSubtitle={order.coverData?.subtitle || ''}
           coverYear={order.coverData?.year || ''}
           selectedLayout={order.coverData?.layout || 1}
           coverCrop={order.coverData?.crop}
+          typographyColor={order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000'}
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-16 mt-12">
+      <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16 mt-12">
         {order.pages?.map((pageObj, pageIndex) => {
           const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
           const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
@@ -206,7 +215,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
             <div key={pageIndex} className="space-y-4">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página {pageIndex + 1}</p>
               <div
-                className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mx-auto max-w-2xl"
+                className="bg-white rounded-[3%] shadow-lg border border-gray-100 overflow-hidden mx-auto w-full"
                 style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
               >
                 <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentPhotosPerPage, layout, size)}`}>
@@ -250,7 +259,7 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
         const crop = item.crop || item.photoCrops?.[0];
         return (<div key={item.id || index} className="space-y-3">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Taza #{index + 1}</p>
-          <div className="aspect-square bg-gray-100 rounded-2xl shadow-inner border-4 border-white overflow-hidden relative group">
+          <div className="aspect-square bg-gray-100 rounded-[3%] shadow-inner border-4 border-white overflow-hidden relative group">
             {photo ? (
               <ReadOnlyImage src={photo} crop={crop} alt={`Taza ${index + 1}`} />
             ) : (
@@ -310,7 +319,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
             
             <div
-              className="bg-white rounded-xl shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md"
+              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md"
               style={{
                 aspectRatio: orientation === 'horizontal' ? '28/21' : '21/28'
               }}
@@ -449,13 +458,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  // DETECCIÓN INTELIGENTE DEL TIPO DE PRODUCTO
   const productString = String(order.product?.type || order.product?.id || order.product?.name || (order as any).productType || '').toLowerCase();
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
   const isMug = productString.includes('mug') || productString.includes('taza');
   const isAlbum = productString.includes('album') || productString.includes('photobook');
 
-  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Encabezado)
+  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL Y VALIDACIÓN JUSTWHITE
   let displayImage = order.coverData?.image;
   let ProductIcon = isCalendar ? CalendarIcon : isMug ? Coffee : BookOpen;
 
@@ -486,13 +494,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     displayImage = order.product?.image;
   }
 
-  // TÍTULO ADAPTATIVO
-  let titleText = order.coverData?.title || order.product?.name || 'Pedido Personalizado';
-  if (isCalendar && !order.coverData?.title) {
-      titleText = `Calendario ${order.customization?.year || ''}`;
+  // Sustituir dinámicamente si la URL contiene la etiqueta de la foto blanca
+  if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) {
+    displayImage = justWhiteImg;
   }
 
-  // TEXTOS DE CONFIGURACIÓN ADAPTATIVOS
+  const titleText = (isCalendar && !order.coverData?.title) 
+    ? `Calendario ${order.customization?.year || ''}` 
+    : (order.coverData?.title || order.product?.name || 'Pedido Personalizado');
+
   let formatText = 'N/A';
   if (isCalendar) {
     formatText = order.customization?.type === 'wall' ? 'De Pared' : order.customization?.type === 'desk' ? 'De Escritorio' : (order.customization?.orientation || 'Escritorio');
@@ -541,10 +551,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
         className="bg-gray-50/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-900 text-white rounded-xl shadow-lg">
+            <div className="p-3 bg-gray-900 text-white rounded-[3%] shadow-lg">
               <Package className="w-6 h-6" />
             </div>
             <div>
@@ -564,12 +573,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
         </div>
 
         <div className="overflow-y-auto p-6 space-y-8">
-          {/* Main Info Section (NOW DYNAMIC) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
-              <div className="aspect-square rounded-xl overflow-hidden shadow-inner bg-white border border-gray-100 p-2">
+              <div className="aspect-square rounded-[3%] overflow-hidden shadow-inner bg-white border border-gray-100 p-2">
                 {displayImage ? (
-                  <img src={displayImage} alt="Producto" className="w-full h-full object-cover rounded-lg" />
+                  <img src={displayImage} alt="Producto" className="w-full h-full object-cover rounded-[2%]" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-300">
                     <ProductIcon className="w-16 h-16" />
@@ -627,7 +635,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Shipping Address */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-gray-900 font-bold">
                 <MapPin className="w-5 h-5 text-primary" />
@@ -643,7 +650,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
               </div>
             </div>
 
-            {/* Billing Address */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-gray-900 font-bold">
                 <CreditCard className="w-5 h-5 text-primary" />
@@ -660,13 +666,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
             </div>
           </div>
 
-          {/* Render High Fidelity Preview based on Product Type */}
           <div className="pt-8 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             {renderPagesPreview()}
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-gray-100 bg-white flex justify-end">
           <button
             onClick={onClose}

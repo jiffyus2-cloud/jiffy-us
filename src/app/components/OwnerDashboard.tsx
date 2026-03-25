@@ -17,6 +17,9 @@ import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
+// Importación de la imagen blanca local
+import justWhiteImg from '../../assets/justwhite.png';
+
 interface Order {
   id: string;
   createdAt: string;
@@ -151,7 +154,6 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
     return days;
   };
 
-  // Escala matemática precisa para mantener las proporciones intactas en 300DPI
   const baseSize = pxWidth / 100;
   const titleSize = orientation === 'horizontal' ? baseSize * 2.5 : baseSize * 3.5;
   const headerSize = orientation === 'horizontal' ? baseSize * 1.3 : baseSize * 1.8;
@@ -159,7 +161,6 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
   const padding = baseSize * 3;
   const gap = baseSize * 0.5;
 
-  // Lógica de extracción de fotos súper segura
   let photosForMonth: string[] = [];
   const pageData = order.pages?.[monthIndex];
   if (pageData && Array.isArray(pageData.images)) {
@@ -176,7 +177,6 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: orientation === 'horizontal' ? 'row' : 'column', backgroundColor: 'white', boxSizing: 'border-box' }}>
-      {/* Sección de Fotografía */}
       <div style={{ position: 'relative', backgroundColor: '#f9fafb', borderRight: orientation === 'horizontal' ? '2px solid #f3f4f6' : 'none', borderBottom: orientation === 'horizontal' ? 'none' : '2px solid #f3f4f6', width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
         {(() => {
           if (photosForMonth.length > 0 && photosForMonth[0]) {
@@ -214,7 +214,6 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
         })()}
       </div>
       
-      {/* Sección Cuadrícula del Calendario */}
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: 'rgba(249, 250, 251, 0.5)', padding: `${padding}px`, width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
         <div style={{ textAlign: 'center', marginBottom: `${padding * 0.8}px` }}>
           <span style={{ fontSize: `${titleSize}px`, fontWeight: 'bold', color: '#111827', fontFamily: 'sans-serif' }}>{month} {year}</span>
@@ -274,7 +273,6 @@ const OwnerDashboard: React.FC = () => {
         const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
         const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
 
-        // 1. Deducir las dimensiones exactas y la orientación
         const sizeStr = order.customization?.size || '20x20';
         const orientation = order.customization?.orientation || 'vertical';
         
@@ -302,11 +300,9 @@ const OwnerDashboard: React.FC = () => {
           }
         }
         
-        // 2. Calcular los píxeles necesarios para 300 DPI
         const pxWidth = Math.round((wCm / 2.54) * 300);
         const pxHeight = Math.round((hCm / 2.54) * 300);
 
-        // Si es calendario solo son 12 meses (sin portada). Si es álbum, portada + páginas
         const totalItems = isCalendar ? 12 : (1 + (order.pages?.length || 0));
         let itemsProcessed = 0;
 
@@ -316,7 +312,6 @@ const OwnerDashboard: React.FC = () => {
           format: [wCm, hCm]
         });
 
-        // 3. Crear Laboratorio de Renderizado Oculto
         const container = document.createElement('div');
         container.style.position = 'fixed';
         container.style.top = '0';
@@ -349,10 +344,14 @@ const OwnerDashboard: React.FC = () => {
           });
         };
 
-        // 4. Renderizar y estampar la Portada (SOLO PARA ÁLBUMES)
         if (!isCalendar) {
           let coverImageForPdf = order.coverData?.image || '';
           let coverTitleForPdf = order.coverData?.title || '';
+          
+          // Reemplazo dinámico si detectamos la palabra 'justwhite'
+          if (typeof coverImageForPdf === 'string' && coverImageForPdf.includes('justwhite')) {
+            coverImageForPdf = justWhiteImg;
+          }
           
           console.log("Iniciando renderizado de Portada...");
           const coverDataUrl = await renderAndCapture(
@@ -364,9 +363,7 @@ const OwnerDashboard: React.FC = () => {
               coverYear={order.coverData?.year || ''}
               selectedLayout={Number(order.coverData?.layout) || 1}
               coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
-              customization={order.customization}
-              photos={[coverImageForPdf, null]} 
-              photoCrops={{ 'cover-0': { x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 } }}
+              typographyColor={order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000'}
             />
           );
           pdf.addImage(coverDataUrl, 'JPEG', 0, 0, wCm, hCm);
@@ -374,12 +371,10 @@ const OwnerDashboard: React.FC = () => {
           onProgress(Math.round((itemsProcessed / totalItems) * 100));
         }
 
-        // 5. Renderizar y estampar Páginas Internas
         if (isCalendar) {
           for (let i = 0; i < 12; i++) {
             console.log(`Renderizando mes ${i + 1}/12...`);
             
-            // La página 1 ya existe por defecto en jsPDF. Solo añadimos páginas nuevas a partir de febrero.
             if (i > 0) pdf.addPage(); 
             
             const pageDataUrl = await renderAndCapture(
@@ -412,7 +407,6 @@ const OwnerDashboard: React.FC = () => {
           }
         }
 
-        // 6. Limpieza y exportación
         root.unmount();
         document.body.removeChild(container);
         onProgress(100);
@@ -528,14 +522,11 @@ const OwnerDashboard: React.FC = () => {
 
       if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
 
-      // Identificar si es calendario para nombrar los archivos correctamente
       const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
       const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
 
-      // 1. Guardar el JSON crudo
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
-      // 2. CREAR EL ARCHIVO EXCEL (.xlsx) LEGIBLE
       const wb = XLSX.utils.book_new();
       
       const resumenData = [{
@@ -592,7 +583,7 @@ const OwnerDashboard: React.FC = () => {
           'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00',
           'Posición X (%)': order.coverData.crop?.x?.toFixed(2) || '50.00',
           'Posición Y (%)': order.coverData.crop?.y?.toFixed(2) || '50.00',
-          'URL Original': order.coverData.image
+          'URL Original': typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') ? 'Imagen Blanca (Color Sólido)' : order.coverData.image
         });
       }
       if (order.pages && Array.isArray(order.pages)) {
@@ -615,7 +606,6 @@ const OwnerDashboard: React.FC = () => {
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       folder.file('resumen_pedido.xlsx', excelBuffer);
 
-      // 3. Descarga de Archivos de Imagen
       const imgFolder = folder.folder('imagenes');
       if (!imgFolder) throw new Error("No se pudo crear la subcarpeta de imágenes.");
 
@@ -626,12 +616,18 @@ const OwnerDashboard: React.FC = () => {
       };
 
       const imagePromises: Promise<void>[] = [];
+      
       if (!isCalendar && order.coverData?.image) {
+        let coverUrl = order.coverData.image;
+        if (typeof coverUrl === 'string' && coverUrl.includes('justwhite')) {
+          coverUrl = justWhiteImg;
+        }
         imagePromises.push(
-          fetchImageAsBlob(order.coverData.image).then(blob => { imgFolder.file('portada.jpg', blob); })
+          fetchImageAsBlob(coverUrl).then(blob => { imgFolder.file('portada.jpg', blob); })
           .catch(e => console.error(`Error descargando portada:`, e))
         );
       }
+      
       if (order.pages && Array.isArray(order.pages)) {
         order.pages.forEach((page, pageIndex) => {
           if (page.images && Array.isArray(page.images) && page.images.length > 0) {
@@ -648,15 +644,11 @@ const OwnerDashboard: React.FC = () => {
       }
       await Promise.all(imagePromises);
 
-      // ============================================================================
-      // 4. INYECTAR EL PDF DE ALTA RESOLUCIÓN AL ARCHIVO ZIP
-      // ============================================================================
       try {
         const pdfBlob = await generateAlbumPDF(order, (progress) => {
           setDownloadProgress({ orderId: order.id, progress });
         });
         
-        // Asignación de nombre dinámico al archivo PDF
         const pdfFileName = isCalendar 
           ? `Impresion_Calendario_${order.id}_300DPI.pdf` 
           : `Impresion_Album_${order.id}_300DPI.pdf`;
@@ -666,12 +658,10 @@ const OwnerDashboard: React.FC = () => {
         console.error("Error al generar PDF de alta resolución:", pdfError);
         alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");
       }
-      // ============================================================================
       
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `pedido_${order.id}.zip`);
 
-      // Success: wait a bit before resetting
       setTimeout(() => {
         setDownloadProgress({ orderId: null, progress: 0 });
       }, 2000);
@@ -735,7 +725,6 @@ const OwnerDashboard: React.FC = () => {
           </button>
         </header>
 
-        {/* Filters and Search */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -832,7 +821,6 @@ const OwnerDashboard: React.FC = () => {
                           >
                             <Eye className="w-5 h-5" />
                           </button>
-                          {/* BOTON DE DESCARGA */}
                           {downloadProgress.orderId === order.id ? (
                             <div className="w-28 flex items-center gap-2" title={`Renderizando... ${downloadProgress.progress}%`}>
                               <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
