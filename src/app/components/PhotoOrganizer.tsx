@@ -186,6 +186,21 @@ export default function PhotoOrganizer({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://www.1clic.ai/badge.js";
+    script.setAttribute('data-agent', "53893e5c-cc14-4432-b98b-88e8782b2f8b");
+    script.setAttribute('data-key', "1c_90fc90eee14ff5ff347cf5a691554a198d97d65bc584e2d79f0134b0f74a9333");
+    script.async = true;
+    document.body.appendChild(script);
+    
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
   const isVertical = sizeStr.includes('Vertical');
@@ -574,22 +589,28 @@ export default function PhotoOrganizer({
               </div>
 
               <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Acciones de Página</h4>
-                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-                  <button
-                    onClick={() => { handleMovePage(pageIndex, 'up'); setAdvancedSettingsModal(pageIndex - 1); }}
-                    disabled={pageIndex === 0}
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300 font-medium disabled:opacity-50 disabled:hover:bg-gray-50 transition-colors text-xs"
-                  >
-                    <ChevronUp className="w-3.5 h-3.5"/> Arriba
-                  </button>
-                  <button
-                    onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }}
-                    disabled={pageIndex === safePhotos.length - 1}
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300 font-medium disabled:opacity-50 disabled:hover:bg-gray-50 transition-colors text-xs"
-                  >
-                    <ChevronDown className="w-3.5 h-3.5"/> Abajo
-                  </button>
+                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Acciones de Página</h4>
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex bg-gray-50 rounded-lg border border-gray-200 p-0.5">
+                    <button
+                      onClick={() => { handleMovePage(pageIndex, 'up'); setAdvancedSettingsModal(pageIndex - 1); }}
+                      disabled={pageIndex === 0}
+                      className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"
+                      title="Mover Arriba"
+                    >
+                      <ChevronUp className="w-4 h-4"/>
+                    </button>
+                    <div className="w-px h-4 bg-gray-200 my-auto" />
+                    <button
+                      onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }}
+                      disabled={pageIndex === safePhotos.length - 1}
+                      className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"
+                      title="Mover Abajo"
+                    >
+                      <ChevronDown className="w-4 h-4"/>
+                    </button>
+                  </div>
+                  
                   <button
                     onClick={() => {
                       const input = document.createElement('input');
@@ -601,18 +622,20 @@ export default function PhotoOrganizer({
                       };
                       input.click();
                     }}
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 font-medium transition-colors text-xs"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"
                   >
-                    <ImageIcon className="w-3.5 h-3.5"/> Añadir Foto
+                    <Plus className="w-3.5 h-3.5"/> Foto
                   </button>
+                  
                   <button
                     onClick={() => {
                       handleDeletePage(pageIndex);
                       setAdvancedSettingsModal(null);
                     }}
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300 font-medium transition-colors text-xs"
+                    className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                    title="Eliminar Página"
                   >
-                    <Trash2 className="w-3.5 h-3.5"/> Eliminar
+                    <Trash2 className="w-4 h-4"/>
                   </button>
                 </div>
               </div>

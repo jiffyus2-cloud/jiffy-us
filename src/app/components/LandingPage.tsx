@@ -1,6 +1,3 @@
-// RECORDATORIO: Los nombres de los archivos importados (ej. carrusela.png) deben coincidir 
-// exactamente con las mayúsculas/minúsculas del archivo real en el sistema de archivos 
-// para evitar fallos en entornos de producción (Linux/Vercel).
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
@@ -126,7 +123,6 @@ export default function LandingPage() {
     }
   ];
 
-  // Auto-advance carousel
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
