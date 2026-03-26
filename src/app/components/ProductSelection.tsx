@@ -13,6 +13,10 @@ interface ProductSelectionProps {
 export default function ProductSelection({ onSelectProduct }: ProductSelectionProps) {
   const { t } = useLanguage();
 
+  // Lectura de variables de entorno para mostrar/ocultar productos
+  const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
+  const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
+
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
       <div className="text-center mb-12">
