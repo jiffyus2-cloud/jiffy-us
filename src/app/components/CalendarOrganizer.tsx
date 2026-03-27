@@ -1,170 +1,341 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { 
+  Upload, X, Image as ImageIcon, Trash2,
+  Check, Edit3, Plus, Loader2, Calendar as CalendarIcon
+} from 'lucide-react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
-import { ImageIcon, RectangleVertical } from 'lucide-react';
+import { CalendarCustomizationOptions } from './CalendarCustomization';
+import ImageCropper from './ImageCropper';
+import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
-export interface CalendarCustomizationOptions {
-  paperType: string;
-  year: number;
-  type: 'desk' | 'wall';
-  imagesPerMonth: 1 | 4;
-}
-
-interface CalendarCustomizationProps {
+interface CalendarOrganizerProps {
   calendar: Calendar;
-  onCustomizationComplete: (options: CalendarCustomizationOptions) => void;
+  customization: CalendarCustomizationOptions;
+  photos: string[];
+  onPhotosChange: (photos: string[]) => void;
+  photoCrops: Record<number, { x: number; y: number; zoom: number }>;
+  onPhotoCropsChange: (crops: Record<number, { x: number; y: number; zoom: number }>) => void;
+  onComplete: (photos: string[]) => void;
 }
 
-export default function CalendarCustomization({ calendar, onCustomizationComplete }: CalendarCustomizationProps) {
+type Step = 'upload' | 'editor';
+
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+const generateCalendarGrid = (year: number, monthIndex: number) => {
+  const date = new Date(year, monthIndex, 1);
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const firstDayOfWeek = date.getDay();
+  const days = [];
+  for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
+  for (let day = 1; day <= daysInMonth; day++) days.push(day);
+  return days;
+};
+
+export default function CalendarOrganizer({ 
+  calendar, 
+  customization, 
+  photos,
+  onPhotosChange,
+  photoCrops,
+  onPhotoCropsChange,
+  onComplete 
+}: CalendarOrganizerProps) {
   const { t } = useLanguage();
-  const [paperType] = useState('Opalina'); // Fixed option
-  const [year, setYear] = useState(2026);
-  const [type, setType] = useState<'desk' | 'wall'>('desk');
-  const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
+  const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const [editingPhotoIndex, setEditingPhotoIndex] = useState<number | null>(null);
+  const [targetSlot, setTargetSlot] = useState<number | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const specificFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset images per month if type is switched to desk
-  useEffect(() => {
-    if (type === 'desk') {
-      setImagesPerMonth(1);
+  const year = customization.year || new Date().getFullYear();
+  const holidays = getColombianHolidays(year);
+  const requiredPhotos = customization.imagesPerMonth === 4 ? 48 : 12;
+
+  // Carga Masiva (UX Optimizada para iOS)
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsProcessingFiles(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const filesArray = Array.from(files);
+    const loadedPhotos = filesArray.map(file => URL.createObjectURL(file));
+
+    const newPhotos = [...photos];
+    // Aseguramos que el array tenga los espacios exactos
+    while(newPhotos.length < requiredPhotos) newPhotos.push('');
+
+    // Llenamos los espacios vacíos con las fotos subidas
+    let loadedIdx = 0;
+    for (let i = 0; i < requiredPhotos && loadedIdx < loadedPhotos.length; i++) {
+      if (!newPhotos[i] || newPhotos[i].trim() === '') {
+        newPhotos[i] = loadedPhotos[loadedIdx];
+        loadedIdx++;
+      }
     }
-  }, [type]);
 
-  const handleContinue = () => {
-    onCustomizationComplete({
-      paperType,
-      year,
-      type,
-      imagesPerMonth: type === 'wall' ? imagesPerMonth : 1,
+    onPhotosChange(newPhotos);
+    setStep('editor');
+    setIsProcessingFiles(false);
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Carga de un Slot Específico
+  const handleSpecificUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (targetSlot === null) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const newPhotos = [...photos];
+    while(newPhotos.length < requiredPhotos) newPhotos.push('');
+    
+    newPhotos[targetSlot] = URL.createObjectURL(file);
+    onPhotosChange(newPhotos);
+    setTargetSlot(null);
+
+    if (specificFileInputRef.current) specificFileInputRef.current.value = '';
+  };
+
+  const removePhoto = (index: number) => {
+    const newPhotos = [...photos];
+    newPhotos[index] = ''; // Vaciamos el slot sin alterar el orden de los meses
+    onPhotosChange(newPhotos);
+    if (editingPhotoIndex === index) setEditingPhotoIndex(null);
+  };
+
+  const handleCropChange = (index: number, crop: { x: number, y: number, zoom: number }) => {
+    onPhotoCropsChange({
+      ...photoCrops,
+      [index]: crop
     });
   };
 
-  return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-12">
-      {/* Calendar Preview */}
-      <div className="mb-12">
-        <h3 className="text-xl font-medium mb-4 text-center text-gray-400">{t('calendar.preview') || 'Vista Previa'}</h3>
-        <div className="w-full max-w-[600px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center border-2 border-gray-100 shadow-sm">
-          <div className={`bg-white shadow-2xl rounded-sm overflow-hidden flex flex-col transition-all duration-500 ${
-            type === 'desk' ? 'aspect-[21/28] w-[300px]' : 'aspect-[30/44] w-[300px]'
-          }`}>
-             <div className={`bg-gray-100 flex items-center justify-center transition-all duration-500 border-b border-gray-200 ${
-                type === 'desk' ? 'h-[70%]' : 'h-1/2'
-             }`}>
-                {type === 'wall' && imagesPerMonth === 4 ? (
-                  <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full p-1">
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                  </div>
-                ) : (
-                  <ImageIcon className="w-16 h-16 text-gray-300" />
-                )}
-             </div>
-             <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1 h-full w-full`}>
-                <div className="text-2xl font-bold">{year}</div>
-                <div className="text-[10px] uppercase tracking-widest text-gray-400">Calendar</div>
-                {/* Mock grid */}
-                <div className="flex-1 grid grid-cols-7 gap-1 w-full mt-2 min-h-0">
-                   {Array.from({ length: 35 }).map((_, i) => (
-                      <div key={i} className="bg-gray-50 rounded-[1px] min-h-[10px]" />
-                   ))}
-                </div>
-             </div>
-          </div>
-        </div>
-      </div>
+  const uploadedCount = photos.filter(p => p && p.trim() !== '').length;
 
-      <div className="space-y-10">
-        {/* Tipo de Calendario */}
-        <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('calendar.type') || 'Tipo de Calendario'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              onClick={() => setType('desk')}
-              className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
-                type === 'desk'
-                  ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
-                  : 'bg-white text-black border-gray-200 hover:border-black'
-              }`}
-            >
-              <div className={`p-2 rounded-lg ${type === 'desk' ? 'bg-white/20' : 'bg-gray-100'}`}>
-                <RectangleVertical className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="text-lg font-bold">De Escritorio</div>
-                <p className={`text-sm ${type === 'desk' ? 'text-gray-300' : 'text-gray-500'}`}>Formato vertical compacto</p>
-              </div>
-            </button>
-            <button
-              onClick={() => setType('wall')}
-              className={`py-3 px-4 rounded-xl border-4 transition-all flex items-center gap-4 text-left ${
-                type === 'wall'
-                  ? 'bg-black text-white border-black shadow-lg scale-[1.02]'
-                  : 'bg-white text-black border-gray-200 hover:border-black'
-              }`}
-            >
-              <div className={`p-2 rounded-lg ${type === 'wall' ? 'bg-white/20' : 'bg-gray-100'}`}>
-                <RectangleVertical className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="text-lg font-bold">De Pared</div>
-                <p className={`text-sm ${type === 'wall' ? 'text-gray-300' : 'text-gray-500'}`}>Formato grande (30x44 cm)</p>
-              </div>
-            </button>
-          </div>
-        </div>
+  const renderSlot = (globalIdx: number) => {
+    const photo = photos[globalIdx];
+    const crop = photoCrops[globalIdx];
+    const isEditing = editingPhotoIndex === globalIdx;
 
-        {/* Imágenes por Mes (condicional) */}
-        {type === 'wall' && (
-          <div>
-            <h3 className="text-2xl mb-4 font-bold">{t('calendar.imagesPerMonth') || 'Imágenes por Mes'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={() => setImagesPerMonth(1)}
-                className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 1 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
-              >
-                <div className="text-xl font-bold">1 Foto</div>
-                <div className={`text-sm ${imagesPerMonth === 1 ? 'text-gray-300' : 'text-gray-500'}`}>Una imagen grande por mes</div>
-              </button>
-              <button
-                onClick={() => setImagesPerMonth(4)}
-                className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 4 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
-              >
-                <div className="text-xl font-bold">4 Fotos</div>
-                <div className={`text-sm ${imagesPerMonth === 4 ? 'text-gray-300' : 'text-gray-500'}`}>Un collage de 4 imágenes</div>
-              </button>
-            </div>
+    return (
+      <div key={globalIdx} className="relative bg-gray-200 rounded-sm overflow-hidden w-full h-full group">
+        {photo && photo.trim() !== '' ? (
+          <ImageCropper
+            src={photo}
+            defaultPosition={crop || { x: 50, y: 50, zoom: 1 }}
+            defaultZoom={crop?.zoom || 1}
+            onCropChange={(c) => handleCropChange(globalIdx, c)}
+            isEditable={isEditing}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
+            <ImageIcon className="w-6 h-6 mb-1 opacity-30" />
+            <span className="text-[8px] font-bold uppercase tracking-wider text-center">Espacio<br/>Vacío</span>
           </div>
         )}
-
-        {/* Year Selection */}
-        <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('calendar.year') || 'Año'}</h3>
-          <div className="max-w-xs">
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
-              className="w-full p-4 border-4 border-black rounded-lg text-2xl font-bold focus:outline-none text-center"
-              min="2024"
-              max="2050"
-            />
-          </div>
+        
+        {/* Controles de edición overlay - Visibles siempre en móvil (opacity-100), ocultos en PC hasta hover (md:opacity-0) */}
+        <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          {photo && photo.trim() !== '' && (
+            <button 
+              onClick={() => setEditingPhotoIndex(isEditing ? null : globalIdx)} 
+              className={`p-1.5 rounded-full shadow-sm transition-all ${
+                isEditing 
+                  ? 'bg-black text-white hover:bg-gray-800' 
+                  : 'bg-white/90 text-black hover:bg-white'
+              }`}
+            >
+              {isEditing ? <Check className="w-3 h-3"/> : <Edit3 className="w-3 h-3"/>}
+            </button>
+          )}
+          {photo && photo.trim() !== '' && isEditing && (
+            <button 
+              onClick={() => removePhoto(globalIdx)} 
+              className="p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-sm transition-all"
+            >
+              <Trash2 className="w-3 h-3"/>
+            </button>
+          )}
+          {(!photo || photo.trim() === '') && (
+            <button 
+              onClick={() => {
+                setTargetSlot(globalIdx);
+                specificFileInputRef.current?.click();
+              }} 
+              className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-sm transition-all"
+            >
+              <Plus className="w-3 h-3"/>
+            </button>
+          )}
         </div>
       </div>
+    );
+  };
 
-      {/* Continue Button */}
-      <div className="mt-12">
+  if (step === 'upload') {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4">
+            <Upload className="w-10 h-10" />
+          </div>
+          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
+          <p className="text-gray-600">
+            Necesitas {requiredPhotos} fotos para tu calendario del año {year}.
+          </p>
+        </div>
+
+        <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
+          {isProcessingFiles ? (
+             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
+               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
+               <p className="text-xl font-bold">Procesando imágenes...</p>
+               <p className="text-sm text-gray-500">Alistando los meses del calendario...</p>
+             </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <ImageIcon className="w-16 h-16 text-gray-400" />
+              <div className="text-center">
+                <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
+                <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
+              </div>
+            </button>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleBatchUpload}
+            className="hidden"
+            disabled={isProcessingFiles}
+          />
+
+          {uploadedCount > 0 && !isProcessingFiles && (
+             <div className="mt-8 flex flex-col gap-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <span className="font-medium">{uploadedCount} de {requiredPhotos} fotos seleccionadas</span>
+                  <button onClick={() => onPhotosChange([])} className="text-red-500 hover:text-red-700 font-medium">Borrar todas</button>
+                </div>
+                <button
+                  onClick={() => setStep('editor')}
+                  className="w-full py-4 bg-black text-white rounded-lg text-lg font-medium hover:bg-gray-800 transition-all"
+                >
+                  {t('organizer.continueToPages')}
+                </button>
+             </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-12">
+      {/* Input oculto para subidas de slots específicos */}
+      <input
+        ref={specificFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleSpecificUpload}
+        className="hidden"
+      />
+
+      <div className="flex items-center justify-between mb-8 sticky top-24 bg-white/95 backdrop-blur-sm z-40 py-4 border-b">
+        <div>
+          <h2 className="text-2xl font-bold">{calendar.name} Editor</h2>
+          <p className="text-gray-500">
+            {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'}
+          </p>
+        </div>
         <button
-          onClick={handleContinue}
-          className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg font-bold"
+          onClick={() => onComplete(photos)}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium"
         >
-          {t('album.continue')}
-          
+          {t('organizer.complete')}
         </button>
-      </div> 
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+        {MONTHS_ES.map((month, monthIndex) => {
+          const requiredForThisMonth = customization.imagesPerMonth === 4 ? 4 : 1;
+          const startIndex = monthIndex * requiredForThisMonth;
+          const slots = Array.from({ length: requiredForThisMonth }, (_, i) => startIndex + i);
+
+          return (
+            <div key={monthIndex} className="space-y-3">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <CalendarIcon className="w-4 h-4 text-gray-400" />
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">
+                  {month} {year}
+                </p>
+              </div>
+
+              <div 
+                className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow"
+                style={{ aspectRatio: customization.type === 'desk' ? '21/28' : '30/44' }}
+              >
+                <div className="flex flex-col h-full">
+                  {/* Área de la(s) foto(s) */}
+                  <div className="h-1/2 w-full border-b border-gray-100 bg-gray-50 relative p-1.5">
+                    {requiredForThisMonth === 4 ? (
+                      <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full">
+                        {slots.map(globalIdx => renderSlot(globalIdx))}
+                      </div>
+                    ) : (
+                      renderSlot(slots[0])
+                    )}
+                  </div>
+
+                  {/* Cuadrícula del Calendario */}
+                  <div className="h-1/2 w-full p-4 flex flex-col justify-center bg-white relative">
+                    <div className="text-center mb-3">
+                      <span className="text-base sm:text-lg font-bold text-gray-900">{month} {year}</span>
+                    </div>
+                    
+                    <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
+                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
+                        <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
+                      ))}
+                      {generateCalendarGrid(year, monthIndex).map((day, i) => {
+                        if (!day) return <div key={i} className="h-full min-h-[20px]" />;
+                        const date = new Date(year, monthIndex, day);
+                        const holiday = isHoliday(date, holidays);
+                        return (
+                          <div
+                            key={i}
+                            title={holiday ? holiday.name : undefined}
+                            className={`h-full min-h-[20px] flex items-center justify-center text-[10px] rounded cursor-default transition-colors ${
+                              holiday 
+                                ? 'bg-red-50 text-red-600 font-bold border border-red-100 hover:bg-red-100' 
+                                : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {day}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
-// testubg

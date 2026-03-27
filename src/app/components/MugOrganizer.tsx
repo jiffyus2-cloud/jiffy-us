@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { 
   Upload, X, Plus, Eye, Edit3, 
   Image as ImageIcon, Check, Trash2,
-  Type, ALargeSmall
+  Type, ALargeSmall, Loader2
 } from 'lucide-react';
 import { MugProduct } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -15,7 +15,7 @@ export interface MugItem {
   text: string;
   fontSize: number;
   fontFamily: string;
-  fontWeight?: number; // <-- Añadido para controlar el grosor (400 a 900)
+  fontWeight?: number; 
   designStyle?: 'separate' | 'text-cutout';
   photoCrops?: Record<number, { x: number; y: number; zoom: number }>;
 }
@@ -33,6 +33,7 @@ type Step = 'upload' | 'editor';
 export default function MugOrganizer({ mug, customization, items, onItemsChange, onComplete }: MugOrganizerProps) {
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(items.length > 0 ? 'editor' : 'upload');
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTextSlot, setEditingTextSlot] = useState<{ itemId: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,39 +42,33 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
   const safeMug = mug || { name: 'Mug', type: 'mug' as const };
   const safeOnItemsChange = typeof onItemsChange === 'function' ? onItemsChange : () => {};
 
-  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
+
+    setIsProcessingFiles(true);
+    // Cedemos el hilo por 50ms para permitir que React dibuje el Loading antes de procesar las fotos
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const filesArray = Array.from(files);
-    const loadedPhotos: string[] = [];
-    let loadedCount = 0;
+    
+    // createObjectURL es instantáneo comparado con el lector antiguo (FileReader)
+    const newMugs: MugItem[] = filesArray.map((file, idx) => ({
+      id: (Date.now() + idx).toString(),
+      photos: [URL.createObjectURL(file)],
+      text: '',
+      fontSize: 48,
+      fontFamily: 'Arial',
+      fontWeight: 400, 
+      designStyle: 'separate',
+      photoCrops: { 0: { x: 50, y: 50, zoom: 1 } }
+    }));
 
-    filesArray.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (result) {
-          loadedPhotos.push(result);
-          loadedCount++;
-          if (loadedCount === filesArray.length) {
-            const newMugs: MugItem[] = loadedPhotos.map((photo, idx) => ({
-              id: (Date.now() + idx).toString(),
-              photos: [photo],
-              text: '',
-              fontSize: 48,
-              fontFamily: 'Arial',
-              fontWeight: 400, // <-- Por defecto normal (400)
-              designStyle: 'separate',
-              photoCrops: { 0: { x: 50, y: 50, zoom: 1 } }
-            }));
-            safeOnItemsChange([...safeItems, ...newMugs]);
-            setStep('editor');
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    safeOnItemsChange([...safeItems, ...newMugs]);
+    setStep('editor');
+    setIsProcessingFiles(false);
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const addNewItem = () => {
@@ -83,7 +78,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
       text: '',
       fontSize: 48,
       fontFamily: 'Arial',
-      fontWeight: 400, // <-- Por defecto normal (400)
+      fontWeight: 400, 
       designStyle: 'separate',
       photoCrops: {}
     };
@@ -125,16 +120,25 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
-          >
-            <ImageIcon className="w-16 h-16 text-gray-400" />
-            <div className="text-center">
-              <p className="text-xl mb-2">{t('organizer.clickToSelect') || 'Haz clic para seleccionar'}</p>
-              <p className="text-sm text-gray-500">{t('organizer.selectMultiple') || 'Puedes seleccionar múltiples archivos'}</p>
-            </div>
-          </button>
+          {isProcessingFiles ? (
+             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
+               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
+               <p className="text-xl font-bold">Procesando imágenes...</p>
+               <p className="text-sm text-gray-500">Optimizando las fotos para tu diseño...</p>
+             </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <ImageIcon className="w-16 h-16 text-gray-400" />
+              <div className="text-center">
+                <p className="text-xl mb-2">{t('organizer.clickToSelect') || 'Haz clic para seleccionar'}</p>
+                <p className="text-sm text-gray-500">{t('organizer.selectMultiple') || 'Puedes seleccionar múltiples archivos'}</p>
+              </div>
+            </button>
+          )}
+          
           <input
             ref={fileInputRef}
             type="file"
@@ -142,19 +146,22 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
             accept="image/*"
             onChange={handleBatchUpload}
             className="hidden"
+            disabled={isProcessingFiles}
           />
 
           <div className="mt-8 flex flex-col gap-4">
              <button
               onClick={addNewItem}
-              className="w-full py-4 border-2 border-black rounded-lg text-lg font-medium hover:bg-gray-50 transition-all"
+              disabled={isProcessingFiles}
+              className="w-full py-4 border-2 border-black rounded-lg text-lg font-medium hover:bg-gray-50 transition-all disabled:opacity-50"
             >
               {t('mug.startEmpty') || 'Comenzar con una taza en blanco'}
             </button>
             {safeItems.length > 0 && (
               <button
                 onClick={() => setStep('editor')}
-                className="w-full py-4 bg-black text-white rounded-lg text-lg font-medium hover:bg-gray-800 transition-all"
+                disabled={isProcessingFiles}
+                className="w-full py-4 bg-black text-white rounded-lg text-lg font-medium hover:bg-gray-800 transition-all disabled:opacity-50"
               >
                 {t('organizer.continueToPages') || 'Continuar al diseño'}
               </button>
@@ -249,7 +256,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                                     style={{
                                        fontSize: `${item.fontSize}px`,
                                        fontFamily: item.fontFamily,
-                                       fontWeight: item.fontWeight || 400, // <-- Aplica grosor
+                                       fontWeight: item.fontWeight || 400, 
                                        color: 'black', 
                                        textAlign: 'center',
                                        lineHeight: 1.1,
@@ -267,7 +274,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                                     style={{
                                        fontSize: `${item.fontSize}px`,
                                        fontFamily: item.fontFamily,
-                                       fontWeight: item.fontWeight || 400, // <-- Aplica grosor
+                                       fontWeight: item.fontWeight || 400, 
                                        color: item.photos[0] ? 'white' : 'black',
                                        textShadow: item.photos[0] ? '0 2px 8px rgba(0,0,0,0.6)' : 'none',
                                        textAlign: 'center',
@@ -331,13 +338,9 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                               input.onchange = (e: any) => {
                                  const file = e.target.files?.[0];
                                  if (file) {
-                                    const reader = new FileReader();
-                                    reader.onload = (ev) => {
-                                       safeOnItemsChange(safeItems.map(i => 
-                                          i.id === item.id ? { ...i, photos: [ev.target?.result as string] } : i
-                                       ));
-                                    };
-                                    reader.readAsDataURL(file);
+                                    safeOnItemsChange(safeItems.map(i => 
+                                       i.id === item.id ? { ...i, photos: [URL.createObjectURL(file)] } : i
+                                    ));
                                  }
                               };
                               input.click();
@@ -429,7 +432,6 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                 />
               </div>
 
-              {/* GRID ACTUALIZADA A 3 COLUMNAS PARA INCLUIR GROSOR (FONT WEIGHT) */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block items-center gap-1.5 truncate">

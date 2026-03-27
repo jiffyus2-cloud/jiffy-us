@@ -2,20 +2,10 @@ import { db, storage } from '../lib/firebase';
 import { collection, addDoc, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
-// Función recursiva para aplanar arreglos 2D o 3D a 1D
-const flattenDeep = (arr: any[]): any[] => {
-  return arr.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), []);
-};
-
 export const sanitizeForFirestore = (obj: any): any => {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== 'object' || obj instanceof Date) return obj;
-  
-  if (Array.isArray(obj)) {
-    // EL ESCUDO: Si detecta un array, lo aplana completamente para evitar el error de "invalid nested entity"
-    const flattened = flattenDeep(obj);
-    return flattened.map(item => sanitizeForFirestore(item));
-  }
+  if (Array.isArray(obj)) return obj.map(item => sanitizeForFirestore(item));
   
   return Object.entries(obj).reduce((acc, [key, value]) => {
     if (value !== undefined) {
@@ -68,7 +58,7 @@ export async function createDraftOrder(
   const isMugType = productString.includes('mug') || productString.includes('taza');
 
   // ==========================================
-  // 1. SISTEMA DE CONTEO Y PROGRESO
+  // 1. SISTEMA DE CONTEO Y PROGRESO A PRUEBA DE BALAS
   // ==========================================
   let totalUploads = 0;
   let completedUploads = 0;
@@ -83,25 +73,25 @@ export async function createDraftOrder(
   let coverData = { ...designData.coverData };
   if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) totalUploads++;
 
-  if (productString.includes('album') || productString.includes('photobook') || designData.pageLayouts) {
-    (designData.photos || []).forEach((pagePhotos: any[]) => {
-      (pagePhotos || []).forEach((photoUrl: string) => {
-        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
+  // Contamos de forma segura las fotos sin importar si son 1D (Calendarios) o 2D (Álbumes)
+  const photosList = designData.photos || [];
+  photosList.forEach((item: any) => {
+    if (Array.isArray(item)) {
+      item.forEach((url: string) => {
+        if (isBase64(url) || isBlobUrl(url)) totalUploads++;
       });
-    });
-  } else if (isMugType) {
-    const itemsToProcess = designData.items || designData.mugItems || [];
-    itemsToProcess.forEach((item: any) => {
-      (item.photos || []).forEach((photoUrl: string) => {
-        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
-      });
-    });
-  } else if (productString.includes('calendar') || productString.includes('calendario') || productString.includes('pack')) {
-    (designData.photos || []).forEach((photo: any) => {
-      let photoUrl = Array.isArray(photo) ? photo[0] : photo;
+    } else if (typeof item === 'string') {
+      if (isBase64(item) || isBlobUrl(item)) totalUploads++;
+    }
+  });
+
+  // Tazas
+  const itemsToProcess = designData.items || designData.mugItems || [];
+  itemsToProcess.forEach((item: any) => {
+    (item.photos || []).forEach((photoUrl: string) => {
       if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++;
     });
-  }
+  });
 
   if (totalUploads === 0 && onProgress) onProgress(50);
 
@@ -118,11 +108,12 @@ export async function createDraftOrder(
   let finalPhotos: string[] = [];
 
   // ALBUM
-  if (productString.includes('album') || productString.includes('photobook') || designData.pageLayouts) {
+  if (productString.includes('album') || productString.includes('photobook')) {
     const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
 
     for (let i = 0; i < photos.length; i++) {
-      const pagePhotos = photos[i] || [];
+      // Aseguramos que sea un array para evitar el error de .forEach is not a function
+      const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
       const uploadedPhotos: string[] = [];
       const pageCrops: any = {};
 
@@ -148,7 +139,6 @@ export async function createDraftOrder(
   } 
   // TAZAS
   else if (isMugType) {
-    const itemsToProcess = designData.items || designData.mugItems || [];
     for (let i = 0; i < itemsToProcess.length; i++) {
       const item = itemsToProcess[i];
       const uploadedItemPhotos: string[] = [];
@@ -170,14 +160,14 @@ export async function createDraftOrder(
   } 
   // CALENDARIOS Y PACKS
   else if (productString.includes('calendar') || productString.includes('calendario') || productString.includes('pack')) {
-    const { photos = [] } = designData;
+    const photos = designData.photos || [];
     for (let i = 0; i < photos.length; i++) {
       let photoUrl = Array.isArray(photos[i]) ? photos[i][0] : photos[i];
-      if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
+      if (photoUrl && (isBase64(photoUrl) || isBlobUrl(photoUrl))) {
         photoUrl = await uploadImage(`${folderPath}/loose_photos/photo${i}`, photoUrl);
         updateProgress();
       }
-      finalPhotos.push(photoUrl);
+      if (photoUrl) finalPhotos.push(photoUrl);
     }
   }
 
@@ -189,11 +179,13 @@ export async function createDraftOrder(
     cleanCustomization.coverContent.coverImage = "uploaded"; 
   }
 
+  // ESCUDO FIREBASE: Aplanamos a la fuerza para que Firebase no se queje por arreglos de 2D.
   let safePhotosToSave: any[] = [];
   if (finalPhotos.length > 0) {
      safePhotosToSave = finalPhotos;
   } else if (designData.photos) {
-     safePhotosToSave = designData.photos; 
+     // .flat(Infinity) destruye los sub-arreglos y los vuelve uno solo 1D
+     safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean); 
   }
 
   const orderPayload = {
@@ -216,7 +208,6 @@ export async function createDraftOrder(
     photos: safePhotosToSave, 
   };
 
-  // La función sanitizeForFirestore ahora aplanará cualquier arreglo problemático antes de convertir a JSON
   const finalPayload = sanitizeForFirestore(JSON.parse(JSON.stringify(orderPayload)));
   
   await setDoc(orderRef, finalPayload);

@@ -244,11 +244,14 @@ export default function PhotoOrganizer({
 
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    const filesArray = Array.from(files);
     setIsSortingWithAI(true); 
     
+    // ✨ PAUSA MÁGICA: Permite que iOS/React dibuje el loader antes de procesar
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    const filesArray = Array.from(files);
     try {
       const filesWithData = filesArray.map((file, index) => ({
         id: index.toString(), 
@@ -319,7 +322,6 @@ export default function PhotoOrganizer({
   };
 
   const handleFinalizeSetup = () => {
-    // Aplicamos validación estricta al continuar, para asegurar que siempre haya entre 40 y el total de fotos
     let safeVal = typeof numPages === 'number' ? numPages : 40;
     safeVal = Math.min(Math.max(safeVal, 40), uploadedPhotos.length);
     setNumPages(safeVal);
@@ -467,7 +469,6 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
-  // ✨ MODAL DE AJUSTES AVANZADOS E INTERACTIVOS DE PÁGINA ✨
   const renderAdvancedSettingsModal = () => {
     if (advancedSettingsModal === null) return null;
     const pageIndex = advancedSettingsModal;
@@ -522,7 +523,7 @@ export default function PhotoOrganizer({
                         isHalfHeightLayout={isHalfHeightLayout}
                         pageIndex={pageIndex}
                         photoIndex={photoIndex}
-                        editingPageIndex={pageIndex} // Habilita el modo editable
+                        editingPageIndex={pageIndex}
                         handleCropChange={handleCropChange}
                         handleMovePhotoWithinPage={handleMovePhotoWithinPage}
                         handleRemovePhotoFromPage={handleRemovePhotoFromPage}

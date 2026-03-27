@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { 
   Upload, X, Image as ImageIcon, Trash2,
-  Check, Edit3, Plus
+  Check, Edit3, Plus, Loader2
 } from 'lucide-react';
 import { PhotoPack } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -31,33 +31,28 @@ export default function PhotoPackOrganizer({
 }: PhotoPackOrganizerProps) {
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [editingPhotoIndex, setEditingPhotoIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
+
+    setIsProcessingFiles(true);
+    // Cedemos el hilo por 50ms para permitir que React dibuje el Loading
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const filesArray = Array.from(files);
-    const loadedPhotos: string[] = [];
-    let loadedCount = 0;
+    
+    // createObjectURL evita el cuelgue por procesamiento masivo
+    const loadedPhotos = filesArray.map(file => URL.createObjectURL(file));
 
-    filesArray.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (result) {
-          loadedPhotos.push(result);
-          loadedCount++;
+    onPhotosChange([...photos, ...loadedPhotos]);
+    setStep('editor');
+    setIsProcessingFiles(false);
 
-          if (loadedCount === filesArray.length) {
-            onPhotosChange([...photos, ...loadedPhotos]);
-            setStep('editor');
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removePhoto = (index: number) => {
@@ -88,16 +83,25 @@ export default function PhotoPackOrganizer({
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
-          >
-            <ImageIcon className="w-16 h-16 text-gray-400" />
-            <div className="text-center">
-              <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
-              <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
-            </div>
-          </button>
+          {isProcessingFiles ? (
+             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
+               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
+               <p className="text-xl font-bold">Procesando imágenes...</p>
+               <p className="text-sm text-gray-500">Optimizando las fotos para tu diseño...</p>
+             </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <ImageIcon className="w-16 h-16 text-gray-400" />
+              <div className="text-center">
+                <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
+                <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
+              </div>
+            </button>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -105,9 +109,10 @@ export default function PhotoPackOrganizer({
             accept="image/*"
             onChange={handleBatchUpload}
             className="hidden"
+            disabled={isProcessingFiles}
           />
 
-          {photos.length > 0 && (
+          {photos.length > 0 && !isProcessingFiles && (
              <div className="mt-8">
                 <button
                   onClick={() => setStep('editor')}
@@ -194,9 +199,10 @@ export default function PhotoPackOrganizer({
       <div className="mt-20 text-center pb-20">
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"
+          disabled={isProcessingFiles}
+          className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black disabled:opacity-50"
         >
-          <Plus className="w-6 h-6" />
+          {isProcessingFiles ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
           <span className="text-lg font-medium">Add More Photos to Pack</span>
         </button>
         <input
@@ -206,9 +212,9 @@ export default function PhotoPackOrganizer({
           accept="image/*"
           onChange={handleBatchUpload}
           className="hidden"
+          disabled={isProcessingFiles}
         />
       </div>
     </div>
   );
 }
-

@@ -87,16 +87,6 @@ export default function Creator() {
       const activeCustomization = getActiveCustomization();
       
       let currentPhotosRaw = finalData?.photos || getActivePhotos();
-      
-      // SOLUCIÓN A TYPESCRIPT: 
-      // Cast forzado a as string[] para que TypeScript no se queje de FlatArray
-      let safeFlatPhotos: string[] = [];
-      if (Array.isArray(currentPhotosRaw)) {
-        safeFlatPhotos = currentPhotosRaw.reduce((acc: string[], val: any) => {
-          return acc.concat(Array.isArray(val) ? val : [val]);
-        }, []).filter(Boolean) as string[];
-      }
-
       let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
       let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; 
 
@@ -121,7 +111,7 @@ export default function Creator() {
                              : {};
 
       const designData = {
-        photos: safeFlatPhotos, 
+        photos: currentPhotosRaw, // <-- Lo pasamos crudo (2D o 1D) para que el backend lo entienda
         pageLayouts,
         pageLayoutVariants,
         textBoxSlots: currentTextBoxSlots,
@@ -421,7 +411,6 @@ export default function Creator() {
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
-      // SOLUCIÓN A TYPESCRIPT: Casteamos el componente a any para omitir el conflicto de interfaces en CalendarOrganizer
       const AnyCalendarOrganizer = CalendarOrganizer as any;
       return (
         <AnyCalendarOrganizer 
