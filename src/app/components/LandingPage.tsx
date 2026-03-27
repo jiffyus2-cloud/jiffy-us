@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calendar, Coffee, Tag, Truck, Gift } from 'lucide-react';
+import { motion } from 'motion/react';
+import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calendar, Coffee, Tag, Truck, Gift, Star } from 'lucide-react';
 import ProductDetailsModal from './ProductDetailsModal';
 import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
 import { Header } from './navigation/Header';
 import { useLanguage } from '../context/LanguageContext';
+
+// --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
+import { useStoreConfig } from '../context/StoreConfigContext';
 
 import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
@@ -25,106 +28,47 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
-  // Variables de entorno
+  // Traemos las promociones de Firebase
+  const { promotions } = useStoreConfig();
+  const activePromotions = (promotions || []).filter(p => p.active);
+
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
   const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
   const heroImages = [
-    {
-      url: CarruselA,
-      title: t('hero.1.title'),
-      description: t('hero.1.desc'),
-      highlight: t('hero.1.highlight')
-    },
-    {
-      url: CarruselB,
-      title: t('hero.2.title'),
-      description: t('hero.2.desc'),
-      highlight: t('hero.2.highlight')
-    },
-    {
-      url: CarruselC,
-      title: t('hero.3.title'),
-      description: t('hero.3.desc'),
-      highlight: t('hero.3.highlight')
-    },
-    {
-      url: CarruselD,
-      title: t('hero.4.title'),
-      description: t('hero.4.desc'),
-      highlight: t('hero.4.highlight')
-    }
-  ];
-
-  const promotions = [
-    {
-      icon: <Tag className="w-8 h-8" />,
-      title: t('promo.1.title'),
-      desc: t('promo.1.desc'),
-      color: 'bg-blue-50 text-blue-700 border-blue-200'
-    },
-    {
-      icon: <Truck className="w-8 h-8" />,
-      title: t('promo.2.title'),
-      desc: t('promo.2.desc'),
-      color: 'bg-green-50 text-green-700 border-green-200'
-    },
-    {
-      icon: <Gift className="w-8 h-8" />,
-      title: t('promo.3.title'),
-      desc: t('promo.3.desc'),
-      color: 'bg-purple-50 text-purple-700 border-purple-200'
-    }
+    { url: CarruselA, title: t('hero.1.title'), description: t('hero.1.desc'), highlight: t('hero.1.highlight') },
+    { url: CarruselB, title: t('hero.2.title'), description: t('hero.2.desc'), highlight: t('hero.2.highlight') },
+    { url: CarruselC, title: t('hero.3.title'), description: t('hero.3.desc'), highlight: t('hero.3.highlight') },
+    { url: CarruselD, title: t('hero.4.title'), description: t('hero.4.desc'), highlight: t('hero.4.highlight') }
   ];
 
   const testimonials = [
-    {
-      name: 'Sarah Johnson',
-      rating: 5,
-      comment: t('testimonial.1.comment'),
-      avatar: 'https://images.unsplash.com/photo-1762613875432-1b80b1682905?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGN1c3RvbWVyJTIwcmV2aWV3JTIwc2F0aXNmYWN0aW9ufGVufDF8fHx8MTc3MTYxMjM2NXww&ixlib=rb-4.1.0&q=80&w=1080'
-    },
-    {
-      name: 'Michael Chen',
-      rating: 5,
-      comment: t('testimonial.2.comment'),
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400'
-    },
-    {
-      name: 'Emma Rodriguez',
-      rating: 5,
-      comment: t('testimonial.3.comment'),
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400'
-    },
-    {
-      name: 'David Thompson',
-      rating: 5,
-      comment: t('testimonial.4.comment'),
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400'
-    }
+    { name: 'Sarah Johnson', rating: 5, comment: t('testimonial.1.comment'), avatar: 'https://images.unsplash.com/photo-1762613875432-1b80b1682905?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGN1c3RvbWVyJTIwcmV2aWV3JTIwc2F0aXNmYWN0aW9ufGVufDF8fHx8MTc3MTYxMjM2NXww&ixlib=rb-4.1.0&q=80&w=1080' },
+    { name: 'Michael Chen', rating: 5, comment: t('testimonial.2.comment'), avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400' },
+    { name: 'Emma Rodriguez', rating: 5, comment: t('testimonial.3.comment'), avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400' },
+    { name: 'David Thompson', rating: 5, comment: t('testimonial.4.comment'), avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400' }
   ];
 
   const faqs = [
-    {
-      question: t('faq.1.q'),
-      answer: t('faq.1.a')
-    },
-    {
-      question: t('faq.2.q'),
-      answer: t('faq.2.a')
-    },
-    {
-      question: t('faq.3.q'),
-      answer: t('faq.3.a')
-    },
-    {
-      question: t('faq.4.q'),
-      answer: t('faq.4.a')
-    },
-    {
-      question: t('faq.5.q'),
-      answer: t('faq.5.a')
-    }
+    { question: t('faq.1.q'), answer: t('faq.1.a') },
+    { question: t('faq.2.q'), answer: t('faq.2.a') },
+    { question: t('faq.3.q'), answer: t('faq.3.a') },
+    { question: t('faq.4.q'), answer: t('faq.4.a') },
+    { question: t('faq.5.q'), answer: t('faq.5.a') }
+  ];
+
+  const products = [
+    { id: 'album', name: t('product.album.title') || 'Álbum', icon: BookImage, color: 'bg-rose-100 text-rose-600', image: albumImage, desc: t('product.album.desc') },
+    { id: 'calendar', name: t('product.calendar.title') || 'Calendario', icon: Calendar, color: 'bg-emerald-100 text-emerald-600', image: calendarImage, desc: t('product.calendar.desc') },
+    { id: 'mug', name: t('product.mug.title') || 'Taza', icon: Coffee, color: 'bg-amber-100 text-amber-600', image: mugImage, desc: t('product.mug.desc') },
+    { id: 'photo', name: t('product.photo.title') || 'Pack Fotos', icon: ImageIcon, color: 'bg-blue-100 text-blue-600', image: photoPackImage, desc: t('product.photo.desc') }
+  ];
+
+  const features = [
+    { icon: Palette, title: t('features.design.title'), desc: t('features.design.desc') },
+    { icon: ShoppingBag, title: t('features.quality.title'), desc: t('features.quality.desc') },
+    { icon: Gift, title: t('features.gifts.title'), desc: t('features.gifts.desc') },
+    { icon: Truck, title: t('features.delivery.title'), desc: t('features.delivery.desc') }
   ];
 
   useEffect(() => {
@@ -134,31 +78,53 @@ export default function LandingPage() {
     return () => clearInterval(timer);
   }, [heroImages.length]);
 
+  // Diccionario Dinámico de Íconos
+  const getIconComponent = (iconName: string) => {
+    switch(iconName) {
+      case 'Truck': return <Truck className="w-8 h-8" />;
+      case 'Gift': return <Gift className="w-8 h-8" />;
+      case 'Star': return <Star className="w-8 h-8" />;
+      case 'ShoppingBag': return <ShoppingBag className="w-8 h-8" />;
+      case 'Tag':
+      default: return <Tag className="w-8 h-8" />;
+    }
+  };
+
+  // Diccionario Dinámico de Colores
+  const getColorClasses = (theme: string) => {
+    switch(theme) {
+      case 'green': return 'bg-green-50 text-green-700 border-green-200';
+      case 'purple': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'amber': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'rose': return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'blue':
+      default: return 'bg-blue-50 text-blue-700 border-blue-200';
+    }
+  };
+
   return (
     <div className="w-full">
       <Header />
       {/* Hero Carousel Section */}
       <section className="relative h-[70vh] w-full overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentSlide}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.7 }}
-            className="absolute inset-0"
-          >
-            <div className="relative h-full w-full">
-              <img
-                src={heroImages[currentSlide].url}
-                alt="Hero"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          key={currentSlide}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.7 }}
+          className="absolute inset-0"
+        >
+          <div className="relative h-full w-full">
+            <img
+              src={heroImages[currentSlide].url}
+              alt="Hero"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        </motion.div>
 
-        {/* Hero Content - Aligned to Left */}
+        {/* Hero Content */}
         <div className="absolute inset-0 flex items-center justify-start z-20">
           <div className="text-left text-white pl-12 md:pl-24 pr-16 py-10 bg-white/40 max-w-4xl w-fit rounded-r-2xl backdrop-blur-sm">
             <motion.h1
@@ -214,31 +180,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Promotions Panel */}
-      <section className="bg-white py-12 border-b border-gray-100">
-        <div className={DESIGN.layout.container}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {promotions.map((promo, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className={`p-6 rounded-2xl border-2 ${promo.color} flex items-center gap-5 shadow-sm hover:shadow-md transition-shadow`}
-              >
-                <div className="shrink-0">
-                  {promo.icon}
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold mb-1">{promo.title}</h3>
-                  <p className="text-sm opacity-90 font-medium">{promo.desc}</p>
-                </div>
-              </motion.div>
-            ))}
+      {/* SECCIÓN DINÁMICA DE PROMOCIONES (Avisos Controlables) */}
+      {activePromotions.length > 0 && (
+        <section className="bg-white py-12 border-b border-gray-100">
+          <div className={DESIGN.layout.container}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {activePromotions.map((promo, index) => (
+                <motion.div
+                  key={promo.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  className={`p-6 rounded-2xl border-2 ${getColorClasses(promo.colorTheme)} flex items-center gap-5 shadow-sm hover:shadow-md transition-shadow`}
+                >
+                  <div className="shrink-0">
+                    {getIconComponent(promo.icon)}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">{promo.title}</h3>
+                    <p className="text-sm opacity-90 font-medium">{promo.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Products Section - Bento Boxes */}
       <section className={DESIGN.layout.sectionGray}>
@@ -252,22 +220,13 @@ export default function LandingPage() {
             {/* Photo Album - Large */}
             <div className={`md:col-span-2 md:row-span-2 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
               <div className="relative h-96 md:h-full">
-                <img
-                  src={albumImage}
-                  alt="Photo Albums"
-                  className="w-full h-full object-cover"
-                />
+                <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <BookImage className="w-12 h-12 mb-4" />
                   <h3 className={DESIGN.text.h3}>{t('product.album')}</h3>
-                  <p className="text-lg mb-4 text-gray-200">
-                    {t('product.albumDesc')}
-                  </p>
-                  <button
-                    onClick={() => setSelectedProduct('album')}
-                    className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
-                  >
+                  <p className="text-lg mb-4 text-gray-200">{t('product.albumDesc')}</p>
+                  <button onClick={() => setSelectedProduct('album')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                     {t('landing.more')}
                   </button>
                 </div>
@@ -277,22 +236,13 @@ export default function LandingPage() {
             {/* Calendar */}
             <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
               <div className="relative h-96">
-                <img
-                  src={calendarImage}
-                  alt="Photo Calendars"
-                  className="w-full h-full object-cover"
-                />
+                <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <Calendar className="w-10 h-10 mb-3" />
                   <h3 className="text-2xl mb-2 font-medium">{t('product.calendar')}</h3>
-                  <p className="text-sm mb-3 text-gray-200">
-                    {t('product.calendarDesc')}
-                  </p>
-                  <button
-                    onClick={() => setSelectedProduct('calendar')}
-                    className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
-                  >
+                  <p className="text-sm mb-3 text-gray-200">{t('product.calendarDesc')}</p>
+                  <button onClick={() => setSelectedProduct('calendar')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                     {t('landing.more')}
                   </button>
                 </div>
@@ -303,22 +253,13 @@ export default function LandingPage() {
             {showMugs && (
               <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
                 <div className="relative h-96">
-                  <img
-                    src={mugImage}
-                    alt="Photo Mugs"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
                     <Coffee className="w-10 h-10 mb-3" />
                     <h3 className="text-2xl mb-2 font-medium">{t('product.mug')}</h3>
-                    <p className="text-sm mb-3 text-gray-200">
-                      {t('product.mugDesc')}
-                    </p>
-                    <button
-                      onClick={() => setSelectedProduct('mug')}
-                      className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
-                    >
+                    <p className="text-sm mb-3 text-gray-200">{t('product.mugDesc')}</p>
+                    <button onClick={() => setSelectedProduct('mug')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                       {t('landing.more')}
                     </button>
                   </div>
@@ -330,22 +271,13 @@ export default function LandingPage() {
             {showPhotoPacks && (
               <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
                 <div className="relative h-80">
-                  <img
-                    src={photoPackImage}
-                    alt="Photo Packs"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
                     <ImageIcon className="w-10 h-10 mb-3" />
                     <h3 className="text-2xl mb-2 font-medium">{t('product.photoPack')}</h3>
-                    <p className="text-sm mb-3 text-gray-200">
-                      {t('product.photoPackDesc')}
-                    </p>
-                    <button
-                      onClick={() => setSelectedProduct('photo-pack')}
-                      className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}
-                    >
+                    <p className="text-sm mb-3 text-gray-200">{t('product.photoPackDesc')}</p>
+                    <button onClick={() => setSelectedProduct('photo-pack')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                       {t('landing.more')}
                     </button>
                   </div>
@@ -360,44 +292,33 @@ export default function LandingPage() {
       <section className={DESIGN.layout.section}>
         <div className="max-w-6xl mx-auto">
           <h2 className={DESIGN.text.h2}>{t('landing.simpleProcess')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>
-            {t('landing.processSubtitle')}
-          </p>
+          <p className={DESIGN.text.sectionSubtitle}>{t('landing.processSubtitle')}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            {/* Step 1 */}
             <div className="text-center">
               <div className="relative mb-6">
                 <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
                   <ShoppingBag className="w-20 h-20 text-white opacity-20 absolute" />
                   <span className="text-6xl text-white font-bold relative z-10">1</span>
                 </div>
-                {/* Connector Line */}
                 <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step1Title')}</h3>
-              <p className={DESIGN.text.body}>
-                {t('landing.step1Desc')}
-              </p>
+              <p className={DESIGN.text.body}>{t('landing.step1Desc')}</p>
             </div>
 
-            {/* Step 2 */}
             <div className="text-center">
               <div className="relative mb-6">
                 <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
                   <Palette className="w-20 h-20 text-white opacity-20 absolute" />
                   <span className="text-6xl text-white font-bold relative z-10">2</span>
                 </div>
-                {/* Connector Line */}
                 <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step2Title')}</h3>
-              <p className={DESIGN.text.body}>
-                {t('landing.step2Desc')}
-              </p>
+              <p className={DESIGN.text.body}>{t('landing.step2Desc')}</p>
             </div>
 
-            {/* Step 3 */}
             <div className="text-center">
               <div className="relative mb-6">
                 <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
@@ -406,17 +327,12 @@ export default function LandingPage() {
                 </div>
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step3Title')}</h3>
-              <p className={DESIGN.text.body}>
-                {t('landing.step3Desc')}
-              </p>
+              <p className={DESIGN.text.body}>{t('landing.step3Desc')}</p>
             </div>
           </div>
 
           <div className="text-center mt-16">
-            <button
-              onClick={() => navigate('/create')}
-              className={`${DESIGN.button.base} ${DESIGN.button.primary}`}
-            >
+            <button onClick={() => navigate('/create')} className={`${DESIGN.button.base} ${DESIGN.button.primary}`}>
               {t('landing.startNow')}
             </button>
           </div>
@@ -427,19 +343,13 @@ export default function LandingPage() {
       <section className={DESIGN.layout.sectionGray}>
         <div className={DESIGN.layout.container}>
           <h2 className={DESIGN.text.h2}>{t('landing.testimonials')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>
-            {t('landing.testimonialsSubtitle')}
-          </p>
+          <p className={DESIGN.text.sectionSubtitle}>{t('landing.testimonialsSubtitle')}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {testimonials.map((testimonial, index) => (
               <div key={index} className="bg-white rounded-xl p-6 shadow-lg">
                 <div className="flex items-center gap-4 mb-4">
-                  <img
-                    src={testimonial.avatar}
-                    alt={testimonial.name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
+                  <img src={testimonial.avatar} alt={testimonial.name} className="w-16 h-16 rounded-full object-cover" />
                   <div>
                     <h4 className={DESIGN.text.label}>{testimonial.name}</h4>
                     <div className="flex gap-1">
@@ -460,29 +370,16 @@ export default function LandingPage() {
       <section className={DESIGN.layout.section}>
         <div className={DESIGN.layout.containerNarrow}>
           <h2 className={DESIGN.text.h2}>{t('landing.faq')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>
-            {t('landing.faqSubtitle')}
-          </p>
+          <p className={DESIGN.text.sectionSubtitle}>{t('landing.faqSubtitle')}</p>
 
           <div className="space-y-4">
             {faqs.map((faq, index) => (
               <div key={index} className="border-2 border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
-                >
+                <button onClick={() => setOpenFaq(openFaq === index ? null : index)} className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <span className="text-xl font-medium">{faq.question}</span>
-                  <ChevronDown
-                    className={`w-6 h-6 transition-transform ${
-                      openFaq === index ? 'rotate-180' : ''
-                    }`}
-                  />
+                  <ChevronDown className={`w-6 h-6 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
                 </button>
-                {openFaq === index && (
-                  <div className={`px-6 pb-6 ${DESIGN.text.body}`}>
-                    {faq.answer}
-                  </div>
-                )}
+                {openFaq === index && <div className={`px-6 pb-6 ${DESIGN.text.body}`}>{faq.answer}</div>}
               </div>
             ))}
           </div>
@@ -493,15 +390,10 @@ export default function LandingPage() {
       <footer className={DESIGN.footer.wrapper}>
         <div className={DESIGN.layout.container}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-            {/* Brand */}
             <div>
               <h3 className="text-2xl mb-4 font-medium">Photo Creator</h3>
-              <p className="text-gray-400">
-                {t('footer.description')}
-              </p>
+              <p className="text-gray-400">{t('footer.description')}</p>
             </div>
-
-            {/* Products */}
             <div>
               <h4 className={DESIGN.text.footerHeading}>{t('footer.products')}</h4>
               <ul className="space-y-2">
@@ -511,8 +403,6 @@ export default function LandingPage() {
                 {showPhotoPacks && <li><a href="#" className={DESIGN.text.footerLink}>{t('product.photoPack')}</a></li>}
               </ul>
             </div>
-
-            {/* Support */}
             <div>
               <h4 className={DESIGN.text.footerHeading}>{t('footer.support')}</h4>
               <ul className="space-y-2">
@@ -522,8 +412,6 @@ export default function LandingPage() {
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.contactUs')}</a></li>
               </ul>
             </div>
-
-            {/* Legal */}
             <div>
               <h4 className={DESIGN.text.footerHeading}>{t('footer.legal')}</h4>
               <ul className="space-y-2">
@@ -533,19 +421,13 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-
           <div className={DESIGN.footer.bottom}>
-            <p>&copy; 2026 Photo Creator. {t('footer.rights')}</p>
+            <p>&copy; {new Date().getFullYear()} Photo Creator. {t('footer.rights')}</p>
           </div>
         </div>
       </footer>
 
-      {/* Product Details Modal */}
-      <ProductDetailsModal
-        isOpen={selectedProduct !== null}
-        onClose={() => setSelectedProduct(null)}
-        productType={selectedProduct || 'album'}
-      />
+      <ProductDetailsModal isOpen={selectedProduct !== null} onClose={() => setSelectedProduct(null)} productType={selectedProduct || 'album'} />
     </div>
   );
 }

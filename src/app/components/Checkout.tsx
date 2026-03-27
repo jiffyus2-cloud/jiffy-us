@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag } from 'lucide-react';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import OrderDetailsModal from './OrderDetailsModal';
-
-// Importamos la misma imagen de respaldo por si el cover es "justwhite"
 import justWhiteImg from '../../assets/justwhite.png';
+
+// --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
+import { useStoreConfig } from '../context/StoreConfigContext';
 
 export default function Checkout() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
+  
+  // Obtenemos la configuración dinámica en tiempo real
+  const config = useStoreConfig();
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -22,16 +27,8 @@ export default function Checkout() {
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
   const [formData, setFormData] = useState({
-    name: '',
-    email: user?.email || '',
-    address: '',
-    city: '',
-    zipCode: '',
-    billingName: '',
-    billingAddress: '',
-    billingCity: '',
-    billingZipCode: '',
-    sameAsShipping: true,
+    name: '', email: user?.email || '', address: '', city: '', zipCode: '',
+    billingName: '', billingAddress: '', billingCity: '', billingZipCode: '', sameAsShipping: true,
   });
 
   useEffect(() => {
@@ -55,7 +52,6 @@ export default function Checkout() {
         setIsLoadingOrder(false);
       }
     };
-    
     fetchOrderDetails();
   }, [state?.orderId]);
 
@@ -74,13 +70,8 @@ export default function Checkout() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <AlertCircle className="w-16 h-16 text-gray-400 mb-4" />
         <h2 className="text-2xl mb-4 font-semibold">{t('checkout.noOrderData')}</h2>
-        <p className="text-gray-600 mb-8 text-center max-w-md">
-          {t('checkout.errorSession')}
-        </p>
-        <button 
-          onClick={() => navigate('/')}
-          className="bg-black text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors"
-        >
+        <p className="text-gray-600 mb-8 text-center max-w-md">{t('checkout.errorSession')}</p>
+        <button onClick={() => navigate('/')} className="bg-black text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors">
           {t('success.backHome')}
         </button>
       </div>
@@ -90,40 +81,33 @@ export default function Checkout() {
   const product = orderData.product;
   const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
   const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
-  const isCalendar = 
-    productTypeStr.includes('calendar') || 
-    productTypeStr.includes('calendario') || 
-    orderData.customization?.year !== undefined || 
-    orderData.customization?.imagesPerMonth !== undefined;
+  const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
   
   const getMugCount = () => {
     const arr = orderData.items || orderData.mugItems || [];
     return Array.isArray(arr) && arr.length > 0 ? arr.length : 1;
   };
 
-  const calculateTotal = () => {
+  // --- CÁLCULO DINÁMICO DE PRECIOS ---
+  const calculateSubtotal = () => {
     if (!product || !orderData) return 0;
 
-    // 1. ÁLBUMES
     if (productTypeStr.includes('album') || productTypeStr.includes('photobook')) {
       const size = orderData.customization?.size || '';
       const pageCount = orderData.pages?.length || orderData.photos?.length || 0; 
       const basePages = 40;
-      let basePrice = 0;
-      let additionalPagePrice = 0;
+      let basePrice = config.prices.album20x20;
+      let additionalPagePrice = config.prices.albumExtra20x20;
 
       if (size.includes('20x20') || size.includes('2x2')) {
-        basePrice = 150000;
-        additionalPagePrice = 3750;
+        basePrice = config.prices.album20x20;
+        additionalPagePrice = config.prices.albumExtra20x20;
       } else if (size.includes('30x30')) {
-        basePrice = 190000;
-        additionalPagePrice = 4750;
+        basePrice = config.prices.album30x30;
+        additionalPagePrice = config.prices.albumExtra30x30;
       } else if (size.includes('28x21') || size.includes('21x28')) {
-        basePrice = 180000;
-        additionalPagePrice = 4500;
-      } else {
-        basePrice = 150000;
-        additionalPagePrice = 3750;
+        basePrice = config.prices.albumRect;
+        additionalPagePrice = config.prices.albumExtraRect;
       }
 
       if (pageCount > basePages) {
@@ -132,41 +116,27 @@ export default function Checkout() {
       return basePrice;
     } 
     
-    // 2. TAZAS 
-    if (isMugType) {
-      return 45000 * getMugCount(); 
-    } 
+    if (isMugType) return config.prices.mug * getMugCount(); 
     
-    // 3. CALENDARIOS
     if (isCalendar) {
-      const calendarFormat = String(
-        orderData.customization?.type || 
-        orderData.customization?.format || 
-        orderData.customization?.size || 
-        ''
-      ).toLowerCase();
-
-      if (calendarFormat.includes('wall') || calendarFormat.includes('pared')) {
-        return 80000; // Calendario de Pared
-      }
-      
-      return 60000; // Calendario de Escritorio
+      const calendarFormat = String(orderData.customization?.type || orderData.customization?.format || orderData.customization?.size || '').toLowerCase();
+      if (calendarFormat.includes('wall') || calendarFormat.includes('pared')) return config.prices.calendarWall;
+      return config.prices.calendarDesk;
     }
     
-    // 4. FOTOS SUELTAS (Photo Packs)
     if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) {
-      const basePrice = Number(product.basePrice || product.price || 0);
-      return basePrice * (orderData.photos?.length || 0);
+      const perPhoto = config.prices.photoPackBase || Number(product.basePrice || product.price || 0);
+      return perPhoto * (orderData.photos?.length || 0);
     }
 
-    // 5. FALLBACK
     return Number(product.basePrice || product.price || 0);
   };
 
-  const subtotal = calculateTotal();
+  const subtotal = calculateSubtotal();
+  const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
   const shipping = 0; 
   const tax = 0; 
-  const total = subtotal + shipping + tax;
+  const total = subtotal - discountAmount + shipping + tax;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,21 +150,8 @@ export default function Checkout() {
     setIsProcessing(true);
 
     try {
-      const shippingAddress = {
-        name: formData.name,
-        email: formData.email,
-        address: formData.address,
-        city: formData.city,
-        zipCode: formData.zipCode,
-      };
-
-      const billingAddress = formData.sameAsShipping ? shippingAddress : {
-        name: formData.billingName,
-        email: formData.email,
-        address: formData.billingAddress,
-        city: formData.billingCity,
-        zipCode: formData.billingZipCode,
-      };
+      const shippingAddress = { name: formData.name, email: formData.email, address: formData.address, city: formData.city, zipCode: formData.zipCode };
+      const billingAddress = formData.sameAsShipping ? shippingAddress : { name: formData.billingName, email: formData.email, address: formData.billingAddress, city: formData.billingCity, zipCode: formData.billingZipCode };
 
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
       localStorage.setItem('pending_order_id', state.orderId);
@@ -216,13 +173,11 @@ export default function Checkout() {
       }
 
       const sessionData = await response.json();
-
       if (sessionData && sessionData.url) {
         window.location.href = sessionData.url;
       } else {
         throw new Error(t('checkout.errorStripe'));
       }
-
     } catch (error: any) {
       console.error('Error en el proceso de pago:', error);
       setErrorMessage(error.message || t('error.generic'));
@@ -232,63 +187,36 @@ export default function Checkout() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const modalOrderData = {
-    ...orderData,
-    total: total,
-    shippingAddress: null,
-    billingAddress: null
-  };
+  const modalOrderData = { ...orderData, total: total, shippingAddress: null, billingAddress: null };
 
-  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Idéntica a OrderDetailsModal)
   let displayImage = orderData.coverData?.image;
-
   if (isCalendar) {
     const januaryPage = orderData.pages?.[0];
     if (januaryPage) {
-      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) {
-        displayImage = januaryPage.images[0];
-      } else if (januaryPage.image) {
-        displayImage = januaryPage.image;
-      }
+      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) displayImage = januaryPage.images[0];
+      else if (januaryPage.image) displayImage = januaryPage.image;
     }
     if (!displayImage && orderData.photos && orderData.photos.length > 0) {
       const firstPhoto = orderData.photos[0];
-      if (Array.isArray(firstPhoto) && firstPhoto.length > 0) {
-        displayImage = firstPhoto[0];
-      } else if (typeof firstPhoto === 'string') {
-        displayImage = firstPhoto as string;
-      }
+      if (Array.isArray(firstPhoto) && firstPhoto.length > 0) displayImage = firstPhoto[0];
+      else if (typeof firstPhoto === 'string') displayImage = firstPhoto as string;
     }
   } else if (isMugType) {
     const arr = orderData.items || orderData.mugItems || [];
-    if (arr.length > 0) {
-      displayImage = arr[0].photo || arr[0].photos?.[0];
-    }
+    if (arr.length > 0) displayImage = arr[0].photo || arr[0].photos?.[0];
   }
 
-  if (!displayImage) {
-    displayImage = product?.image;
-  }
-
-  if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) {
-    displayImage = justWhiteImg;
-  }
+  if (!displayImage) displayImage = product?.image;
+  if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) displayImage = justWhiteImg;
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12 relative">
       <div className="flex items-center gap-4 mb-8">
-        <button 
-          onClick={() => navigate('/create')}
-          className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">{t('step.back')}</span>
+        <button onClick={() => navigate('/create')} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
+          <ArrowLeft className="w-5 h-5" /><span className="font-medium">{t('step.back')}</span>
         </button>
       </div>
 
@@ -296,13 +224,11 @@ export default function Checkout() {
 
       {errorMessage && (
         <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <p>{errorMessage}</p>
+          <AlertCircle className="w-5 h-5 flex-shrink-0" /><p>{errorMessage}</p>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Resumen del Pedido */}
         <div className="lg:col-span-1 lg:order-2">
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 lg:sticky lg:top-8">
             <h3 className="text-xl font-bold mb-6">{t('checkout.summary')}</h3>
@@ -314,23 +240,18 @@ export default function Checkout() {
               </div>
               {orderData.customization?.size && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">{t('album.size')}</span>
-                  <span>{orderData.customization.size}</span>
+                  <span className="text-gray-600">{t('album.size')}</span><span>{orderData.customization.size}</span>
                 </div>
               )}
               {product.type === 'album' && (orderData.pages || orderData.photos) && (
                  <div className="flex justify-between text-sm">
                    <span className="text-gray-600">{t('dashboard.totalPages')}</span>
-                   <span className="font-medium">
-                     {(orderData.pages || orderData.photos).length} 
-                     {(orderData.pages || orderData.photos).length > 40 ? ` (+${(orderData.pages || orderData.photos).length - 40} extra)` : ' (Base)'}
-                   </span>
+                   <span className="font-medium">{(orderData.pages || orderData.photos).length} {(orderData.pages || orderData.photos).length > 40 ? ` (+${(orderData.pages || orderData.photos).length - 40} extra)` : ' (Base)'}</span>
                  </div>
               )}
               {isMugType && (
                  <div className="flex justify-between text-sm border-t border-gray-200 pt-3">
-                   <span className="text-gray-600">Cantidad Tazas</span>
-                   <span className="font-medium">{getMugCount()} x $45.000 COP</span>
+                   <span className="text-gray-600">Cantidad Tazas</span><span className="font-medium">{getMugCount()} x ${config.prices.mug.toLocaleString('es-CO')} COP</span>
                  </div>
               )}
             </div>
@@ -340,13 +261,17 @@ export default function Checkout() {
                 <span className="text-gray-600">{t('checkout.subtotal')}</span>
                 <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
+              
+              {/* --- DESCUENTO DINÁMICO --- */}
+              {config.discounts.active && (
+                <div className="flex justify-between text-green-600 font-bold">
+                  <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> Descuento ({config.discounts.percentage}%)</span>
+                  <span>-${discountAmount.toLocaleString('es-CO')} COP</span>
+                </div>
+              )}
+
               <div className="flex justify-between">
-                <span className="text-gray-600">{t('checkout.shipping')}</span>
-                <span>${shipping.toLocaleString('es-CO')} COP</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">{t('checkout.taxes')}</span>
-                <span>${tax.toLocaleString('es-CO')} COP</span>
+                <span className="text-gray-600">{t('checkout.shipping')}</span><span>${shipping.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
 
@@ -357,227 +282,80 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Sección de Previsualización que lanza el Modal */}
             <div className="mt-8 pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">{t('checkout.preview')}</p>
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-                >
-                  <Eye className="w-4 h-4" /> Ver completo
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(true)} className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"><Eye className="w-4 h-4" /> Ver completo</button>
               </div>
 
-              <div 
-                className="aspect-square rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group"
-                onClick={() => setIsModalOpen(true)}
-              >
+              <div className="aspect-square rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group" onClick={() => setIsModalOpen(true)}>
                 {displayImage ? (
                   <div className="w-full h-full relative">
-                    <img
-                      src={displayImage}
-                      alt="Preview"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                       <Eye className="text-white w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
-                    </div>
+                    <img src={displayImage} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center"><Eye className="text-white w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" /></div>
                   </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300">
-                    <ImageIcon className="w-16 h-16" />
-                  </div>
+                  <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon className="w-16 h-16" /></div>
                 )}
               </div>
-
-              {orderData.coverData?.title && !isMugType && (
-                <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>
-              )}
-              
-              {isMugType && (
-                 <button 
-                   type="button"
-                   onClick={() => setIsModalOpen(true)}
-                   className="w-full mt-4 py-4 bg-white hover:bg-gray-50 rounded-xl flex items-center justify-center gap-3 border border-gray-200 hover:border-black transition-all shadow-sm group"
-                 >
-                   <Coffee className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
-                   <span className="font-bold text-gray-700 group-hover:text-black">Revisar mis diseños</span>
-                 </button>
-              )}
+              {orderData.coverData?.title && !isMugType && <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>}
+              {isMugType && (<button type="button" onClick={() => setIsModalOpen(true)} className="w-full mt-4 py-4 bg-white hover:bg-gray-50 rounded-xl flex items-center justify-center gap-3 border border-gray-200 hover:border-black transition-all shadow-sm group"><Coffee className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" /><span className="font-bold text-gray-700 group-hover:text-black">Revisar mis diseños</span></button>)}
             </div>
           </div>
         </div>
 
-        {/* Formulario de Checkout */}
+        {/* --- FORMULARIO DE CONTACTO --- */}
         <div className="lg:col-span-2 lg:order-1">
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">1</span>
-                {t('checkout.contactInfo')}
-              </h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">1</span>{t('checkout.contactInfo')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label>
-                  <input
-                    type="text" id="name" name="name" required
-                    value={formData.name} onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    placeholder="Ej. Juan Pérez"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label>
-                  <input
-                    type="email" id="email" name="email" required
-                    value={formData.email} onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    placeholder="juan@ejemplo.com"
-                  />
-                </div>
+                <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
+                <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
               </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>
-                {t('checkout.shippingAddress')}
-              </h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>{t('checkout.shippingAddress')}</h3>
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label>
-                  <input
-                    type="text" id="address" name="address" required
-                    value={formData.address} onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    placeholder="Calle, número, piso/depto"
-                  />
-                </div>
+                <div className="space-y-2"><label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label><input type="text" id="address" name="address" required value={formData.address} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Calle, número, piso/depto" /></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
-                    <input
-                      type="text" id="city" name="city" required
-                      value={formData.city} onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
-                    <input
-                      type="text" id="zipCode" name="zipCode" required
-                      value={formData.zipCode} onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    />
-                  </div>
+                  <div className="space-y-2"><label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="city" name="city" required value={formData.city} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" /></div>
+                  <div className="space-y-2"><label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="zipCode" name="zipCode" required value={formData.zipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" /></div>
                 </div>
               </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">3</span>
-                {t('checkout.billingAddress')}
-              </h3>
-              
-              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                <input
-                  type="checkbox" id="sameAsShipping" name="sameAsShipping"
-                  checked={formData.sameAsShipping} onChange={handleChange}
-                  className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
-                />
-                <span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span>
-              </label>
-              
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">3</span>{t('checkout.billingAddress')}</h3>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="space-y-2">
-                    <label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label>
-                    <input
-                      type="text" id="billingName" name="billingName" required
-                      value={formData.billingName} onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label>
-                    <input
-                      type="text" id="billingAddress" name="billingAddress" required
-                      value={formData.billingAddress} onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none"
-                    />
-                  </div>
+                  <div className="space-y-2"><label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label><input type="text" id="billingName" name="billingName" required value={formData.billingName} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                  <div className="space-y-2"><label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label><input type="text" id="billingAddress" name="billingAddress" required value={formData.billingAddress} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
-                      <input
-                        type="text" id="billingCity" name="billingCity" required
-                        value={formData.billingCity} onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
-                      <input
-                        type="text" id="billingZipCode" name="billingZipCode" required
-                        value={formData.billingZipCode} onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none"
-                      />
-                    </div>
+                    <div className="space-y-2"><label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="billingCity" name="billingCity" required value={formData.billingCity} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                    <div className="space-y-2"><label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="billingZipCode" name="billingZipCode" required value={formData.billingZipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   </div>
                 </div>
               )}
             </div>
 
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                  <CreditCard className="w-6 h-6" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3>
-              </div>
-              <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                {t('checkout.securePaymentDesc')}
-              </p>
-              <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex">
-                <Lock className="w-3.5 h-3.5" />
-                <span>{t('checkout.encrypted')}</span>
-              </div>
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-6 h-6" /></div><h3 className="text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
+              <p className="text-gray-600 text-sm leading-relaxed mb-6">{t('checkout.securePaymentDesc')}</p>
+              <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="w-full bg-black text-white py-5 rounded-xl hover:bg-gray-900 transition-all text-xl font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  {t('checkout.processing')}
-                </>
-              ) : (
-                <>
-                  {t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}
-                </>
-              )}
+            <button type="submit" disabled={isProcessing} className="w-full bg-black text-white py-5 rounded-xl hover:bg-gray-900 transition-all text-xl font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+              {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
             </button>
-            
-            <p className="text-center text-xs text-gray-400">
-              {t('checkout.terms')}
-            </p>
+            <p className="text-center text-xs text-gray-400">{t('checkout.terms')}</p>
           </form>
         </div>
       </div>
 
-      {/* Renderizamos el Modal al final de la vista */}
-      <OrderDetailsModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        order={modalOrderData}
-        hideAddressInfo={true} 
-      />
+      <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={modalOrderData} hideAddressInfo={true} />
     </div>
   );
 }
