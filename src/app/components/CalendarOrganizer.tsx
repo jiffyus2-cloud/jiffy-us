@@ -161,8 +161,10 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
           className="w-full py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-lg font-bold"
         >
           {t('album.continue')}
+          
         </button>
-      </div>
+      </div> 
     </div>
   );
 }
+// testubg
