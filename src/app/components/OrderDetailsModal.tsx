@@ -5,7 +5,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import CoverPreview from './CoverPreview';
-import ImageCropper from './ImageCropper'; // <-- IMPORTAMOS EL CROPPER NUEVO
+import ImageCropper from './ImageCropper';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 // Importación de la imagen blanca local
@@ -137,7 +137,6 @@ const AlbumPagePhoto: React.FC<{
     <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
       {photo ? (
         <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
-          {/* USAMOS EL COMPONENTE IMAGECROPPER NUEVO AQUÍ */}
           <ImageCropper src={photo} position={calculatedCrop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
         </div>
       ) : textBox ? (
@@ -187,6 +186,21 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
       </div>
 
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16 mt-12">
+        {/* CUADRO 1: Interior de la Portada Principal */}
+        <div className="space-y-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Portada</p>
+          <div
+            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 overflow-hidden mx-auto w-full flex items-center justify-center"
+            style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
+          >
+            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
+              <Layers className="w-10 h-10 md:w-12 md:h-12" />
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mapeo de las páginas reales */}
         {order.pages?.map((pageObj, pageIndex) => {
           const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
           const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
@@ -226,6 +240,34 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
             </div>
           );
         })}
+
+        {/* PÁGINA EN BLANCO: Si el número de páginas configuradas por el usuario es impar */}
+        {order.pages && order.pages.length % 2 !== 0 && (
+          <div className="space-y-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página en Blanco</p>
+            <div
+              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full flex items-center justify-center"
+              style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
+            >
+              <span className="text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest">En Blanco</span>
+            </div>
+          </div>
+        )}
+
+        {/* CUADRO FINAL: Interior de la Contraportada */}
+        <div className="space-y-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Contraportada</p>
+          <div
+            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 overflow-hidden mx-auto w-full flex items-center justify-center"
+            style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
+          >
+            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
+              <Layers className="w-10 h-10 md:w-12 md:h-12" />
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso Final</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -246,7 +288,6 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Taza #{index + 1}</p>
           <div className="aspect-square bg-gray-100 rounded-[3%] shadow-inner border-4 border-white overflow-hidden relative group">
             {photo ? (
-              // USAMOS EL COMPONENTE IMAGECROPPER NUEVO AQUÍ
               <div className="absolute inset-0 w-full h-full">
                 <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Taza ${index + 1}`} />
               </div>

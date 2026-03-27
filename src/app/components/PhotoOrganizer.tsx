@@ -524,17 +524,35 @@ export default function PhotoOrganizer({
       </div>
 
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16">
+        
+        {/* CUADRO 1: Interior de la Portada Principal (Fija a la Izquierda) */}
+        <div className="relative group flex flex-col">
+          <div className="flex items-center justify-between mb-4 h-10 md:h-12">
+            <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Portada</span>
+          </div>
+          <div 
+            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
+            style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+          >
+            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
+              <Layers className="w-10 h-10 md:w-12 md:h-12" />
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
         {safePhotos.map((pagePhotos, pageIndex) => (
-          <div key={pageIndex} className="relative group">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">{t('album.caratula')} {pageIndex + 1}</span>
+          <div key={pageIndex} className="relative group flex flex-col">
+            <div className="flex items-center justify-between mb-4 h-10 md:h-12">
+              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página {pageIndex + 1}</span>
               <div className="flex gap-2">
-                {editingPageIndex === pageIndex && (<button onClick={() => setAdvancedSettingsModal(pageIndex)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"><Settings className="w-4 h-4"/><span className="text-xs font-bold uppercase hidden sm:inline">{t('organizer.pageSettings')}</span></button>)}
-                <button onClick={() => { if (editingPageIndex === pageIndex) setEditingPageIndex(null); else { setEditingPageIndex(pageIndex); setAdvancedSettingsModal(pageIndex); } }} className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${editingPageIndex === pageIndex ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-200 hover:border-black'}`}>{editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />}<span className="text-xs md:text-sm font-bold uppercase tracking-tight">{editingPageIndex === pageIndex ? <span className="hidden lg:inline">{t('organizer.finishEditing')}</span> : <span className="hidden lg:inline">{t('organizer.enableEditing')}</span>}{editingPageIndex === pageIndex ? <span className="lg:hidden">LISTO</span> : <span className="lg:hidden">EDITAR</span>}</span></button>
+                {editingPageIndex === pageIndex && (<button onClick={() => setAdvancedSettingsModal(pageIndex)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"><Settings className="w-4 h-4"/><span className="text-xs font-bold uppercase hidden sm:inline">{t('organizer.pageSettings') || 'Ajustes'}</span></button>)}
+                <button onClick={() => { if (editingPageIndex === pageIndex) setEditingPageIndex(null); else { setEditingPageIndex(pageIndex); setAdvancedSettingsModal(pageIndex); } }} className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${editingPageIndex === pageIndex ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-200 hover:border-black'}`}>{editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />}<span className="text-xs md:text-sm font-bold uppercase tracking-tight">{editingPageIndex === pageIndex ? <span className="hidden lg:inline">{t('organizer.finishEditing') || 'Listo'}</span> : <span className="hidden lg:inline">{t('organizer.enableEditing') || 'Editar'}</span>}{editingPageIndex === pageIndex ? <span className="lg:hidden">LISTO</span> : <span className="lg:hidden">EDITAR</span>}</span></button>
               </div>
             </div>
 
-            <div className={`bg-white rounded-[3%] shadow-sm border-2 transition-all overflow-hidden ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+            <div className={`bg-white rounded-[3%] shadow-sm border-2 transition-all overflow-hidden mt-auto ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
               {(() => {
                 const currentPhotosPerPage = pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length);
                 const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => pagePhotos[i] || null);
@@ -563,6 +581,38 @@ export default function PhotoOrganizer({
             </div>
           </div>
         ))}
+
+        {/* PÁGINA EN BLANCO (Se añade SOLO si el total de páginas del usuario es impar, empuja la contraportada a la derecha) */}
+        {safePhotos.length % 2 !== 0 && (
+          <div className="relative group flex flex-col">
+            <div className="flex items-center justify-between mb-4 h-10 md:h-12">
+              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página en Blanco</span>
+            </div>
+            <div 
+              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 transition-all overflow-hidden flex items-center justify-center mt-auto"
+              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+            >
+              <span className="text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest">En Blanco</span>
+            </div>
+          </div>
+        )}
+
+        {/* CUADRO FINAL: Interior de la Contraportada (Siempre terminará a la Derecha) */}
+        <div className="relative group flex flex-col">
+          <div className="flex items-center justify-between mb-4 h-10 md:h-12">
+            <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Contraportada</span>
+          </div>
+          <div 
+            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
+            style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+          >
+            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
+              <Layers className="w-10 h-10 md:w-12 md:h-12" />
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso Final</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd')}</span></button></div>
