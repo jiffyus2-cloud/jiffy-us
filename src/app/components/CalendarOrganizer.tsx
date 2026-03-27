@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
 import { 
   Upload, X, Image as ImageIcon, Trash2,
-  Check, Edit3, Plus, Loader2, Calendar as CalendarIcon
+  Check, Edit3, Plus, Loader2, Calendar as CalendarIcon, Crop as CropIcon
 } from 'lucide-react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
+import CropModal from './CropModal';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 interface CalendarOrganizerProps {
@@ -48,8 +49,9 @@ export default function CalendarOrganizer({
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
-  const [editingPhotoIndex, setEditingPhotoIndex] = useState<number | null>(null);
   const [targetSlot, setTargetSlot] = useState<number | null>(null);
+  
+  const [cropModalData, setCropModalData] = useState<{ index: number, aspectRatio: number } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const specificFileInputRef = useRef<HTMLInputElement>(null);
@@ -58,7 +60,9 @@ export default function CalendarOrganizer({
   const holidays = getColombianHolidays(year);
   const requiredPhotos = customization.imagesPerMonth === 4 ? 48 : 12;
 
-  // Carga Masiva (UX Optimizada para iOS)
+  const pageAspect = customization.type === 'desk' ? 21/14 : 30/22;
+  const totalPrice = customization.type === 'wall' ? 80000 : 60000;
+
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -70,10 +74,8 @@ export default function CalendarOrganizer({
     const loadedPhotos = filesArray.map(file => URL.createObjectURL(file));
 
     const newPhotos = [...photos];
-    // Aseguramos que el array tenga los espacios exactos
     while(newPhotos.length < requiredPhotos) newPhotos.push('');
 
-    // Llenamos los espacios vacíos con las fotos subidas
     let loadedIdx = 0;
     for (let i = 0; i < requiredPhotos && loadedIdx < loadedPhotos.length; i++) {
       if (!newPhotos[i] || newPhotos[i].trim() === '') {
@@ -89,7 +91,6 @@ export default function CalendarOrganizer({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Carga de un Slot Específico
   const handleSpecificUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (targetSlot === null) return;
     const file = event.target.files?.[0];
@@ -107,9 +108,8 @@ export default function CalendarOrganizer({
 
   const removePhoto = (index: number) => {
     const newPhotos = [...photos];
-    newPhotos[index] = ''; // Vaciamos el slot sin alterar el orden de los meses
+    newPhotos[index] = ''; 
     onPhotosChange(newPhotos);
-    if (editingPhotoIndex === index) setEditingPhotoIndex(null);
   };
 
   const handleCropChange = (index: number, crop: { x: number, y: number, zoom: number }) => {
@@ -124,17 +124,13 @@ export default function CalendarOrganizer({
   const renderSlot = (globalIdx: number) => {
     const photo = photos[globalIdx];
     const crop = photoCrops[globalIdx];
-    const isEditing = editingPhotoIndex === globalIdx;
 
     return (
       <div key={globalIdx} className="relative bg-gray-200 rounded-sm overflow-hidden w-full h-full group">
         {photo && photo.trim() !== '' ? (
           <ImageCropper
             src={photo}
-            defaultPosition={crop || { x: 50, y: 50, zoom: 1 }}
-            defaultZoom={crop?.zoom || 1}
-            onCropChange={(c) => handleCropChange(globalIdx, c)}
-            isEditable={isEditing}
+            position={crop || { x: 50, y: 50, zoom: 1 }}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
@@ -143,26 +139,23 @@ export default function CalendarOrganizer({
           </div>
         )}
         
-        {/* Controles de edición overlay - Visibles siempre en móvil (opacity-100), ocultos en PC hasta hover (md:opacity-0) */}
         <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           {photo && photo.trim() !== '' && (
             <button 
-              onClick={() => setEditingPhotoIndex(isEditing ? null : globalIdx)} 
-              className={`p-1.5 rounded-full shadow-sm transition-all ${
-                isEditing 
-                  ? 'bg-black text-white hover:bg-gray-800' 
-                  : 'bg-white/90 text-black hover:bg-white'
-              }`}
+              onClick={() => setCropModalData({ index: globalIdx, aspectRatio: pageAspect })} 
+              className="p-1.5 bg-white/90 text-black hover:bg-white rounded-full shadow-sm transition-all"
+              title="Ajustar Recorte"
             >
-              {isEditing ? <Check className="w-3 h-3"/> : <Edit3 className="w-3 h-3"/>}
+              <CropIcon className="w-3.5 h-3.5"/>
             </button>
           )}
-          {photo && photo.trim() !== '' && isEditing && (
+          {photo && photo.trim() !== '' && (
             <button 
               onClick={() => removePhoto(globalIdx)} 
               className="p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-sm transition-all"
+              title="Eliminar Foto"
             >
-              <Trash2 className="w-3 h-3"/>
+              <Trash2 className="w-3.5 h-3.5"/>
             </button>
           )}
           {(!photo || photo.trim() === '') && (
@@ -173,7 +166,7 @@ export default function CalendarOrganizer({
               }} 
               className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-sm transition-all"
             >
-              <Plus className="w-3 h-3"/>
+              <Plus className="w-3.5 h-3.5"/>
             </button>
           )}
         </div>
@@ -245,26 +238,16 @@ export default function CalendarOrganizer({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
-      {/* Input oculto para subidas de slots específicos */}
-      <input
-        ref={specificFileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleSpecificUpload}
-        className="hidden"
-      />
+      <input type="file" ref={specificFileInputRef} accept="image/*" onChange={handleSpecificUpload} className="hidden" />
 
       <div className="flex items-center justify-between mb-8 sticky top-24 bg-white/95 backdrop-blur-sm z-40 py-4 border-b">
         <div>
           <h2 className="text-2xl font-bold">{calendar.name} Editor</h2>
           <p className="text-gray-500">
-            {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'}
+            {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'} • Total: ${totalPrice.toLocaleString('es-CO')} COP
           </p>
         </div>
-        <button
-          onClick={() => onComplete(photos)}
-          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium"
-        >
+        <button onClick={() => onComplete(photos)} className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium">
           {t('organizer.complete')}
         </button>
       </div>
@@ -279,51 +262,27 @@ export default function CalendarOrganizer({
             <div key={monthIndex} className="space-y-3">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <CalendarIcon className="w-4 h-4 text-gray-400" />
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">
-                  {month} {year}
-                </p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
               </div>
 
-              <div 
-                className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow"
-                style={{ aspectRatio: customization.type === 'desk' ? '21/28' : '30/44' }}
-              >
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow" style={{ aspectRatio: customization.type === 'desk' ? '21/28' : '30/44' }}>
                 <div className="flex flex-col h-full">
-                  {/* Área de la(s) foto(s) */}
                   <div className="h-1/2 w-full border-b border-gray-100 bg-gray-50 relative p-1.5">
                     {requiredForThisMonth === 4 ? (
-                      <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full">
-                        {slots.map(globalIdx => renderSlot(globalIdx))}
-                      </div>
-                    ) : (
-                      renderSlot(slots[0])
-                    )}
+                      <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full">{slots.map(globalIdx => renderSlot(globalIdx))}</div>
+                    ) : renderSlot(slots[0])}
                   </div>
 
-                  {/* Cuadrícula del Calendario */}
                   <div className="h-1/2 w-full p-4 flex flex-col justify-center bg-white relative">
-                    <div className="text-center mb-3">
-                      <span className="text-base sm:text-lg font-bold text-gray-900">{month} {year}</span>
-                    </div>
-                    
+                    <div className="text-center mb-3"><span className="text-base sm:text-lg font-bold text-gray-900">{month} {year}</span></div>
                     <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
-                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-                        <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
-                      ))}
+                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (<div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>))}
                       {generateCalendarGrid(year, monthIndex).map((day, i) => {
                         if (!day) return <div key={i} className="h-full min-h-[20px]" />;
                         const date = new Date(year, monthIndex, day);
                         const holiday = isHoliday(date, holidays);
                         return (
-                          <div
-                            key={i}
-                            title={holiday ? holiday.name : undefined}
-                            className={`h-full min-h-[20px] flex items-center justify-center text-[10px] rounded cursor-default transition-colors ${
-                              holiday 
-                                ? 'bg-red-50 text-red-600 font-bold border border-red-100 hover:bg-red-100' 
-                                : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
+                          <div key={i} title={holiday ? holiday.name : undefined} className={`h-full min-h-[20px] flex items-center justify-center text-[10px] rounded cursor-default transition-colors ${holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100 hover:bg-red-100' : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'}`}>
                             {day}
                           </div>
                         );
@@ -336,6 +295,18 @@ export default function CalendarOrganizer({
           );
         })}
       </div>
+
+      {cropModalData !== null && (
+        <CropModal
+          isOpen={true}
+          onClose={() => setCropModalData(null)}
+          imageSrc={photos[cropModalData.index]}
+          currentCrop={photoCrops[cropModalData.index]}
+          aspectRatio={cropModalData.aspectRatio}
+          title={`Ajustar Foto del Calendario`}
+          onSave={(newCrop) => handleCropChange(cropModalData.index, newCrop)}
+        />
+      )}
     </div>
   );
 }

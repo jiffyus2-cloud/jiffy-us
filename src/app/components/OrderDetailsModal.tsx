@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import CoverPreview from './CoverPreview';
+import ImageCropper from './ImageCropper'; // <-- IMPORTAMOS EL CROPPER NUEVO
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 // Importación de la imagen blanca local
@@ -34,29 +35,13 @@ interface OrderDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: Order | null;
+  hideAddressInfo?: boolean; 
 }
 
 const MONTHS_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
-
-const ReadOnlyImage = ({ src, crop, alt, className }: { src: string, crop?: { x: number, y: number, zoom: number }, alt?: string, className?: string }) => {
-  const { x = 50, y = 50, zoom = 1 } = crop || {};
-  return (
-    <div className={`absolute inset-0 overflow-hidden bg-gray-100 ${className || ''}`}>
-      <img
-        src={src}
-        alt={alt || "Preview"}
-        className="w-full h-full object-cover pointer-events-none"
-        style={{
-          transform: `scale(${zoom}) translate(${(50 - x)}%, ${(50 - y)}%)`,
-          transformOrigin: 'center center',
-        }}
-      />
-    </div>
-  );
-};
 
 // --- Album Viewer ---
 const getClosestAllowed = (count: number, size: string) => {
@@ -152,7 +137,8 @@ const AlbumPagePhoto: React.FC<{
     <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
       {photo ? (
         <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
-          <ReadOnlyImage src={photo} crop={calculatedCrop} alt={`Foto ${photoIndex + 1}`} />
+          {/* USAMOS EL COMPONENTE IMAGECROPPER NUEVO AQUÍ */}
+          <ImageCropper src={photo} position={calculatedCrop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
         </div>
       ) : textBox ? (
         <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
@@ -175,7 +161,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const isHorizontal = size.includes('Horizontal');
   const isVertical = size.includes('Vertical');
 
-  // Lógica para detectar la imagen blanca
   const coverImageFixed = order.coverData?.image && typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') 
     ? justWhiteImg 
     : (order.coverData?.image || '');
@@ -261,7 +246,10 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Taza #{index + 1}</p>
           <div className="aspect-square bg-gray-100 rounded-[3%] shadow-inner border-4 border-white overflow-hidden relative group">
             {photo ? (
-              <ReadOnlyImage src={photo} crop={crop} alt={`Taza ${index + 1}`} />
+              // USAMOS EL COMPONENTE IMAGECROPPER NUEVO AQUÍ
+              <div className="absolute inset-0 w-full h-full">
+                <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Taza ${index + 1}`} />
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-300">
                 <Package className="w-16 h-16 opacity-20" />
@@ -269,7 +257,7 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
             )}
             {item.text && (
               <div
-                className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none"
+                className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none z-10"
                 style={{
                   fontSize: `${item.fontSize}px`,
                   fontFamily: item.fontFamily,
@@ -356,7 +344,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
                               return (
                                 <div key={photoIdx} className="relative bg-gray-200 rounded-sm overflow-hidden">
                                   {photo ? (
-                                    <ReadOnlyImage src={photo} crop={crop} alt={`Foto ${photoIdx + 1} para ${month}`} />
+                                    <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIdx + 1} para ${month}`} />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-gray-300">
                                       <ImageIcon className="w-8 h-8 opacity-20" />
@@ -370,7 +358,11 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
                       } else {
                         const photo = photosForMonth[0];
                         const crop = order.photoCrops?.[index] || order.photoCrops?.[`${index}-0`];
-                        return <ReadOnlyImage src={photo} crop={crop} alt={`Foto para ${month}`} />;
+                        return (
+                          <div className="w-full h-full absolute inset-0">
+                             <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto para ${month}`} />
+                          </div>
+                        );
                       }
                     }
                     
@@ -427,7 +419,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 // --- Main Modal Component ---
-const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order }) => {
+const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false }) => {
   if (!isOpen || !order) return null;
 
   const formatDate = (dateString: string) => {
@@ -494,7 +486,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     displayImage = order.product?.image;
   }
 
-  // Sustituir dinámicamente si la URL contiene la etiqueta de la foto blanca
   if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) {
     displayImage = justWhiteImg;
   }
@@ -546,7 +537,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div 
         className="bg-gray-50/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -634,37 +625,39 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-gray-900 font-bold">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h4>Dirección de Envío</h4>
-              </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-1 text-sm text-gray-700">
-                <p className="font-bold text-gray-900 text-base mb-1">{order.shippingAddress?.name}</p>
-                <p className="font-medium text-gray-600">{order.shippingAddress?.address}</p>
-                <p className="font-medium text-gray-600">{order.shippingAddress?.city}, {order.shippingAddress?.zipCode}</p>
-                <div className="pt-2 mt-2 border-t border-gray-50">
-                  <p className="text-gray-400 font-medium italic">{order.shippingAddress?.email}</p>
+          {!hideAddressInfo && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-gray-900 font-bold">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  <h4>Dirección de Envío</h4>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-1 text-sm text-gray-700">
+                  <p className="font-bold text-gray-900 text-base mb-1">{order.shippingAddress?.name}</p>
+                  <p className="font-medium text-gray-600">{order.shippingAddress?.address}</p>
+                  <p className="font-medium text-gray-600">{order.shippingAddress?.city}, {order.shippingAddress?.zipCode}</p>
+                  <div className="pt-2 mt-2 border-t border-gray-50">
+                    <p className="text-gray-400 font-medium italic">{order.shippingAddress?.email}</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-gray-900 font-bold">
-                <CreditCard className="w-5 h-5 text-primary" />
-                <h4>Datos de Facturación</h4>
-              </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-1 text-sm text-gray-700">
-                <p className="font-bold text-gray-900 text-base mb-1">{order.billingAddress?.name}</p>
-                <p className="font-medium text-gray-600">{order.billingAddress?.address}</p>
-                <p className="font-medium text-gray-600">{order.billingAddress?.city}, {order.billingAddress?.zipCode}</p>
-                <div className="pt-2 mt-2 border-t border-gray-50">
-                  <p className="text-gray-400 font-medium italic">{order.billingAddress?.email}</p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-gray-900 font-bold">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                  <h4>Datos de Facturación</h4>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-1 text-sm text-gray-700">
+                  <p className="font-bold text-gray-900 text-base mb-1">{order.billingAddress?.name}</p>
+                  <p className="font-medium text-gray-600">{order.billingAddress?.address}</p>
+                  <p className="font-medium text-gray-600">{order.billingAddress?.city}, {order.billingAddress?.zipCode}</p>
+                  <div className="pt-2 mt-2 border-t border-gray-50">
+                    <p className="text-gray-400 font-medium italic">{order.billingAddress?.email}</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="pt-8 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             {renderPagesPreview()}

@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon } from 'lucide-react';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
+import OrderDetailsModal from './OrderDetailsModal';
+
+// Importamos la misma imagen de respaldo por si el cover es "justwhite"
+import justWhiteImg from '../../assets/justwhite.png';
 
 export default function Checkout() {
   const { state } = useLocation();
@@ -13,9 +17,9 @@ export default function Checkout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Nuevos estados para el flujo en dos pasos
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false); 
 
   const [formData, setFormData] = useState({
     name: '',
@@ -30,14 +34,12 @@ export default function Checkout() {
     sameAsShipping: true,
   });
 
-  // Actualizar email cuando el usuario cargue
   useEffect(() => {
     if (user?.email && !formData.email) {
       setFormData(prev => ({ ...prev, email: user.email! }));
     }
   }, [user, formData.email]);
 
-  // Efecto que busca los datos del pedido en Firebase al entrar
   useEffect(() => {
     const fetchOrderDetails = async () => {
       if (!state?.orderId) {
@@ -88,9 +90,14 @@ export default function Checkout() {
   const product = orderData.product;
   const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
   const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
+  const isCalendar = 
+    productTypeStr.includes('calendar') || 
+    productTypeStr.includes('calendario') || 
+    orderData.customization?.year !== undefined || 
+    orderData.customization?.imagesPerMonth !== undefined;
   
   const getMugCount = () => {
-    const arr = orderData.items || orderData.designData?.items || orderData.mugItems || orderData.designData?.mugItems || [];
+    const arr = orderData.items || orderData.mugItems || [];
     return Array.isArray(arr) && arr.length > 0 ? arr.length : 1;
   };
 
@@ -100,7 +107,7 @@ export default function Checkout() {
     // 1. ÁLBUMES
     if (productTypeStr.includes('album') || productTypeStr.includes('photobook')) {
       const size = orderData.customization?.size || '';
-      const pageCount = orderData.designData?.photos?.length || 0; 
+      const pageCount = orderData.pages?.length || orderData.photos?.length || 0; 
       const basePages = 40;
       let basePrice = 0;
       let additionalPagePrice = 0;
@@ -131,17 +138,11 @@ export default function Checkout() {
     } 
     
     // 3. CALENDARIOS
-    const isCalendar = 
-      productTypeStr.includes('calendar') || 
-      productTypeStr.includes('calendario') || 
-      orderData.designData?.customization?.year !== undefined || 
-      orderData.designData?.customization?.imagesPerMonth !== undefined;
-
     if (isCalendar) {
       const calendarFormat = String(
-        orderData.designData?.customization?.type || 
-        orderData.designData?.customization?.format || 
-        orderData.designData?.customization?.size || 
+        orderData.customization?.type || 
+        orderData.customization?.format || 
+        orderData.customization?.size || 
         ''
       ).toLowerCase();
 
@@ -152,10 +153,10 @@ export default function Checkout() {
       return 60000; // Calendario de Escritorio
     }
     
-    // 4. FOTOS
-    if (productTypeStr.includes('photo') || productTypeStr.includes('foto')) {
+    // 4. FOTOS SUELTAS (Photo Packs)
+    if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) {
       const basePrice = Number(product.basePrice || product.price || 0);
-      return basePrice * (orderData.designData?.photos?.length || 0);
+      return basePrice * (orderData.photos?.length || 0);
     }
 
     // 5. FALLBACK
@@ -237,8 +238,50 @@ export default function Checkout() {
     }));
   };
 
+  const modalOrderData = {
+    ...orderData,
+    total: total,
+    shippingAddress: null,
+    billingAddress: null
+  };
+
+  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Idéntica a OrderDetailsModal)
+  let displayImage = orderData.coverData?.image;
+
+  if (isCalendar) {
+    const januaryPage = orderData.pages?.[0];
+    if (januaryPage) {
+      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) {
+        displayImage = januaryPage.images[0];
+      } else if (januaryPage.image) {
+        displayImage = januaryPage.image;
+      }
+    }
+    if (!displayImage && orderData.photos && orderData.photos.length > 0) {
+      const firstPhoto = orderData.photos[0];
+      if (Array.isArray(firstPhoto) && firstPhoto.length > 0) {
+        displayImage = firstPhoto[0];
+      } else if (typeof firstPhoto === 'string') {
+        displayImage = firstPhoto as string;
+      }
+    }
+  } else if (isMugType) {
+    const arr = orderData.items || orderData.mugItems || [];
+    if (arr.length > 0) {
+      displayImage = arr[0].photo || arr[0].photos?.[0];
+    }
+  }
+
+  if (!displayImage) {
+    displayImage = product?.image;
+  }
+
+  if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) {
+    displayImage = justWhiteImg;
+  }
+
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-12">
+    <div className="w-full max-w-6xl mx-auto px-4 py-12 relative">
       <div className="flex items-center gap-4 mb-8">
         <button 
           onClick={() => navigate('/create')}
@@ -269,19 +312,21 @@ export default function Checkout() {
                 <span className="text-gray-600">{t('dashboard.product')}</span>
                 <span className="font-medium text-right">{product.name}</span>
               </div>
-              {orderData.designData?.customization?.size && (
+              {orderData.customization?.size && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">{t('album.size')}</span>
-                  <span>{orderData.designData.customization.size}</span>
+                  <span>{orderData.customization.size}</span>
                 </div>
               )}
-              {product.type === 'album' && orderData.designData?.photos && (
+              {product.type === 'album' && (orderData.pages || orderData.photos) && (
                  <div className="flex justify-between text-sm">
                    <span className="text-gray-600">{t('dashboard.totalPages')}</span>
-                   <span className="font-medium">{orderData.designData.photos.length} ({orderData.designData.photos.length > 40 ? `+${orderData.designData.photos.length - 40} extra` : 'Base'})</span>
+                   <span className="font-medium">
+                     {(orderData.pages || orderData.photos).length} 
+                     {(orderData.pages || orderData.photos).length > 40 ? ` (+${(orderData.pages || orderData.photos).length - 40} extra)` : ' (Base)'}
+                   </span>
                  </div>
               )}
-              {/* Información visual para el usuario cuando compra tazas */}
               {isMugType && (
                  <div className="flex justify-between text-sm border-t border-gray-200 pt-3">
                    <span className="text-gray-600">Cantidad Tazas</span>
@@ -312,25 +357,56 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Vista previa segura */}
-            {(orderData.designData?.coverData?.image || product?.image) && !isMugType && (
-              <div className="mt-8 pt-6 border-t border-gray-200">
-                <p className="text-sm text-gray-500 font-medium mb-4 uppercase tracking-wider">{t('checkout.preview')}</p>
-                <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100">
-                  <img
-                    src={orderData.designData?.coverData?.image || product.image}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {orderData.designData?.coverData?.title && (
-                  <p className="text-center mt-3 font-semibold text-gray-800">{orderData.designData.coverData.title}</p>
-                )}
-                {orderData.designData?.coverData?.subtitle && (
-                  <p className="text-center text-sm text-gray-500">{orderData.designData.coverData.subtitle}</p>
+            {/* Sección de Previsualización que lanza el Modal */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">{t('checkout.preview')}</p>
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                >
+                  <Eye className="w-4 h-4" /> Ver completo
+                </button>
+              </div>
+
+              <div 
+                className="aspect-square rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group"
+                onClick={() => setIsModalOpen(true)}
+              >
+                {displayImage ? (
+                  <div className="w-full h-full relative">
+                    <img
+                      src={displayImage}
+                      alt="Preview"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                       <Eye className="text-white w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <ImageIcon className="w-16 h-16" />
+                  </div>
                 )}
               </div>
-            )}
+
+              {orderData.coverData?.title && !isMugType && (
+                <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>
+              )}
+              
+              {isMugType && (
+                 <button 
+                   type="button"
+                   onClick={() => setIsModalOpen(true)}
+                   className="w-full mt-4 py-4 bg-white hover:bg-gray-50 rounded-xl flex items-center justify-center gap-3 border border-gray-200 hover:border-black transition-all shadow-sm group"
+                 >
+                   <Coffee className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
+                   <span className="font-bold text-gray-700 group-hover:text-black">Revisar mis diseños</span>
+                 </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -494,6 +570,14 @@ export default function Checkout() {
           </form>
         </div>
       </div>
+
+      {/* Renderizamos el Modal al final de la vista */}
+      <OrderDetailsModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        order={modalOrderData}
+        hideAddressInfo={true} 
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import JSZip from 'jszip';
@@ -10,7 +10,7 @@ import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2, Tras
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
-// --- NUEVAS DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
+// --- DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
@@ -75,6 +75,62 @@ const getGridLayout = (count: number, layout: any, size: string) => {
 };
 
 // ============================================================================
+// NUEVO: RENDERIZADOR CANVAS NATIVO (Ignora fallos CSS del PDF)
+// ============================================================================
+const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      // Tomamos el tamaño que el layout le da al hueco y lo duplicamos para nitidez de impresión
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * 2;
+      canvas.height = rect.height * 2;
+
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+      const destWidth = canvas.width;
+      const destHeight = canvas.height;
+
+      const { x = 50, y = 50, zoom = 1 } = crop || { x: 50, y: 50, zoom: 1 };
+      const imgAspect = imgWidth / imgHeight;
+      const destAspect = destWidth / destHeight;
+
+      let baseSWidth = imgWidth;
+      let baseSHeight = imgHeight;
+
+      if (imgAspect > destAspect) {
+        baseSWidth = imgHeight * destAspect;
+      } else {
+        baseSHeight = imgWidth / destAspect;
+      }
+
+      const finalSWidth = baseSWidth / zoom;
+      const finalSHeight = baseSHeight / zoom;
+
+      const centerX = (x / 100) * imgWidth;
+      const centerY = (y / 100) * imgHeight;
+
+      const sX = centerX - (finalSWidth / 2);
+      const sY = centerY - (finalSHeight / 2);
+
+      ctx.clearRect(0, 0, destWidth, destHeight);
+      ctx.drawImage(img, sX, sY, finalSWidth, finalSHeight, 0, 0, destWidth, destHeight);
+    };
+    img.src = src;
+  }, [src, crop]);
+
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
+};
+
+// ============================================================================
 // COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
 const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
@@ -104,16 +160,10 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
           <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-white flex items-center justify-center w-full h-full border border-gray-100/50">
             {photo ? (
               <div className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto bg-gray-100" : "w-full h-full relative bg-gray-100"}>
-                <img 
-                  src={photo} 
-                  crossOrigin="anonymous"
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                  style={{
-                    objectPosition: '50% 50%',
-                    transform: `scale(${crop.zoom || 1}) translate(${(50 - (crop.x || 50))}%, ${(50 - (crop.y || 50))}%)`,
-                    transformOrigin: 'center center'
-                  }}
-                />
+                {/* Uso del CanvasCropper para que el PDF renderice perfecto */}
+                <div className="absolute inset-0 w-full h-full pointer-events-none">
+                  <CanvasCropper src={photo} crop={crop} />
+                </div>
               </div>
             ) : textBox ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
@@ -189,10 +239,9 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
                     return (
                       <div key={photoIdx} style={{ position: 'relative', backgroundColor: '#e5e7eb', borderRadius: `${baseSize*0.5}px`, overflow: 'hidden' }}>
                         {photo && (
-                          <img 
-                            src={photo} crossOrigin="anonymous" alt="Preview"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${crop?.zoom || 1}) translate(${50 - (crop?.x || 50)}%, ${50 - (crop?.y || 50)}%)`, transformOrigin: 'center center' }}
-                          />
+                          <div className="absolute inset-0 w-full h-full pointer-events-none">
+                            <CanvasCropper src={photo} crop={crop} />
+                          </div>
                         )}
                       </div>
                     );
@@ -203,10 +252,9 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
               const photo = photosForMonth[0];
               const crop = order.photoCrops?.[monthIndex] || order.photoCrops?.[`${monthIndex}-0`];
               return (
-                <img 
-                  src={photo} crossOrigin="anonymous" alt="Preview"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${crop?.zoom || 1}) translate(${50 - (crop?.x || 50)}%, ${50 - (crop?.y || 50)}%)`, transformOrigin: 'center center' }}
-                />
+                <div className="absolute inset-0 w-full h-full pointer-events-none">
+                  <CanvasCropper src={photo} crop={crop} />
+                </div>
               );
             }
           }
