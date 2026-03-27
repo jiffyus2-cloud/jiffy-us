@@ -40,21 +40,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   
   const [isCoverEdited, setIsCoverEdited] = useState(false);
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
-  
-  const getCoverColors = () => {
-    if (coverType === 'Tela') {
-      return [
-        { name: t('album.tela') || 'Tela', color: '#E8DCC4', isPhoto: false },
-      ];
-    } else {
-      return [
-        { name: t('album.color.whitePhoto') || 'Blanco (Foto)', color: '#F5F5F5', isPhoto: true },
-        { name: t('album.color.white') || 'Blanco', color: '#FFFFFF', isPhoto: false },
-      ];
-    }
-  };
-
-  const currentCoverColors = getCoverColors();
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
@@ -69,29 +54,17 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
   const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
     setCoverType(type);
-    const newCoverColors = type === 'Tela' 
-      ? [{ name: t('album.tela'), color: '#E8DCC4', isPhoto: false }]
-      : [{ name: t('album.color.whitePhoto'), color: '#F5F5F5', isPhoto: true }, { name: t('album.color.white'), color: '#FFFFFF', isPhoto: false }];
     
-    const newColor = newCoverColors[0].color;
+    // Si es Tela, usa su color característico. Si es Papel, siempre usa el Blanco para Fotos.
+    const newColor = type === 'Tela' ? '#E8DCC4' : '#F5F5F5';
     setCoverColor(newColor);
     
-    const isNoPhoto = type === 'Tela' || (type === 'Papel' && newColor === '#FFFFFF');
+    const isNoPhoto = type === 'Tela';
     
     setCoverContent(prev => ({
       ...prev,
       typographyColor: type === 'Papel' ? '#000000' : '#D4AF37',
-      coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
-    }));
-  };
-
-  const handleColorChange = (color: string) => {
-    setCoverColor(color);
-    const isNoPhoto = coverType === 'Tela' || (coverType === 'Papel' && color === '#FFFFFF');
-    
-    setCoverContent(prev => ({
-      ...prev,
-      // Inyectamos la imagen blanca si la opción no requiere foto, si vuelve a foto, la limpiamos.
+      // Inyectamos la imagen blanca si es Tela, si vuelve a Papel (foto), la limpiamos para que suba la suya.
       coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
     }));
   };
@@ -116,8 +89,8 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     return '20x20';
   };
 
-  // Variable de apoyo para ocultar el editor de imágenes
-  const hidePhoto = coverType === 'Tela' || (coverType === 'Papel' && coverColor === '#FFFFFF');
+  // Variable de apoyo para ocultar el editor de imágenes en la vista de edición (solo si es tela)
+  const hidePhoto = coverType === 'Tela';
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8">
@@ -128,6 +101,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           <p className="text-sm text-gray-500">Ajusta los materiales y dimensiones antes de diseñar la portada.</p>
         </div>
 
+        {/* Al quitar el color, los dos selectores principales quedan perfectamente divididos en 2 columnas */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           <div className="space-y-3">
@@ -201,32 +175,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
               </button>
             </div>
           </div>
-
-          {coverType !== 'Tela' && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverColor')}</h3>
-              <div className="flex flex-wrap gap-4">
-                {currentCoverColors.map((colorOption: any) => (
-                  <div key={colorOption.color} className="flex flex-col items-center gap-1.5">
-                    <button
-                      onClick={() => handleColorChange(colorOption.color)}
-                      className={`w-12 h-12 rounded-full border-2 transition-all flex items-center justify-center ${
-                        coverColor === colorOption.color
-                          ? 'border-black ring-2 ring-offset-2 ring-black scale-105'
-                          : 'border-gray-200 hover:border-gray-400'
-                      }`}
-                      style={{ backgroundColor: colorOption.color }}
-                    >
-                      {colorOption.isPhoto && (
-                        <ImageIcon className="w-5 h-5 text-gray-500/50" />
-                      )}
-                    </button>
-                    <span className="text-[10px] font-medium text-center">{colorOption.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
