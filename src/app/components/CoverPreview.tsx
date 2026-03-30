@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import ImageCropper from './ImageCropper'; // <-- IMPORTAMOS EL NUEVO CROPPER
 
 interface CoverPreviewProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -38,15 +39,14 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   const renderImageSlot = () => {
     if (coverImage) {
       return (
-        <img 
-          src={coverImage} 
-          alt="Portada" 
-          className="absolute inset-0 w-full h-full object-cover" 
-          style={{ 
-            objectPosition: '50% 50%', 
-            transform: `scale(${coverCrop.zoom}) translate(${(50 - coverCrop.x)}%, ${(50 - coverCrop.y)}%)` 
-          }} 
-        />
+        <div className="absolute inset-0 w-full h-full">
+          {/* USAMOS EL COMPONENTE MATEMÁTICO EN VEZ DEL CSS CRUDO */}
+          <ImageCropper 
+            src={coverImage} 
+            position={coverCrop} 
+            alt="Portada" 
+          />
+        </div>
       );
     }
     return (
