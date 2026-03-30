@@ -23,6 +23,7 @@ interface ProductDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   productType: ProductType;
+  onConfirm?: () => void; // <-- NUEVA PROPIEDAD: Permite interceptar la acción de avanzar
 }
 
 const MONTHS_ES = [
@@ -88,7 +89,7 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
   );
 };
 
-export default function ProductDetailsModal({ isOpen, onClose, productType }: ProductDetailsModalProps) {
+export default function ProductDetailsModal({ isOpen, onClose, productType, onConfirm }: ProductDetailsModalProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -104,8 +105,14 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
   }, [isOpen]);
 
   const handleMakeYourOwn = () => {
-    onClose();
-    navigate('/create', { state: { startProduct: productType } });
+    // Si se provee onConfirm, ejecutamos eso (ideal para cuando ya estamos en Creator.tsx)
+    if (onConfirm) {
+      onConfirm();
+    } else {
+      // Flujo clásico desde el LandingPage
+      onClose();
+      navigate('/create', { state: { startProduct: productType } });
+    }
   };
 
   const CalendarPreview = useMemo(() => {

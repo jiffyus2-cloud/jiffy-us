@@ -10,6 +10,7 @@ import MugCustomization, { MugCustomizationOptions } from './MugCustomization';
 import MugOrganizer, { MugItem } from './MugOrganizer';
 import PhotoPackCustomization, { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
 import PhotoPackOrganizer from './PhotoPackOrganizer';
+import ProductDetailsModal from './ProductDetailsModal'; // <-- IMPORTAMOS EL MODAL
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
@@ -73,6 +74,9 @@ export default function Creator() {
   const [currentStep, setCurrentStep] = useState<Step>('product');
   const [isSaving, setIsSaving] = useState(false); 
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // --- NUEVO ESTADO PARA INTERCEPTAR LA SELECCIÓN Y MOSTRAR EL MODAL ---
+  const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
 
   const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
@@ -362,7 +366,8 @@ export default function Creator() {
 
   const renderProductSelection = () => (
     <ProductSelection 
-      onSelectProduct={handleSelectProduct}
+      // Al dar click, seteamos la vista previa en vez de seleccionarlo directamente
+      onSelectProduct={(product) => setPreviewProduct(product)}
     />
   );
 
@@ -597,6 +602,20 @@ export default function Creator() {
           </div>
         </div>
       )}
+
+      {/* RENDERIZAMOS EL MODAL DE DETALLES DEL PRODUCTO AQUÍ PARA INTERCEPTAR EL FLUJO */}
+      <ProductDetailsModal
+        isOpen={previewProduct !== null}
+        onClose={() => setPreviewProduct(null)}
+        productType={previewProduct || 'album'}
+        onConfirm={() => {
+          if (previewProduct) {
+            handleSelectProduct(previewProduct);
+          }
+          setPreviewProduct(null);
+        }}
+      />
+
     </div>
   );
 }
