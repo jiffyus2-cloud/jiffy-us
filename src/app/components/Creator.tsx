@@ -111,7 +111,7 @@ export default function Creator() {
                              : {};
 
       const designData = {
-        photos: currentPhotosRaw, // <-- Lo pasamos crudo (2D o 1D) para que el backend lo entienda
+        photos: currentPhotosRaw, 
         pageLayouts,
         pageLayoutVariants,
         textBoxSlots: currentTextBoxSlots,
@@ -174,10 +174,18 @@ export default function Creator() {
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
+    // Usamos la variable de entorno
+    const apiKey = import.meta.env.VITE_1CLIC_API_KEY;
+
+    if (!apiKey) {
+      console.warn("La variable VITE_1CLIC_API_KEY no está configurada. El widget de 1Clic no se cargará.");
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = "https://www.1clic.ai/badge.js";
     script.setAttribute('data-agent', "53893e5c-cc14-4432-b98b-88e8782b2f8b");
-    script.setAttribute('data-key', "1c_90fc90eee14ff5ff347cf5a691554a198d97d65bc584e2d79f0134b0f74a9333");
+    script.setAttribute('data-key', apiKey); // Insertada dinámicamente
     script.async = true;
     document.body.appendChild(script);
     
