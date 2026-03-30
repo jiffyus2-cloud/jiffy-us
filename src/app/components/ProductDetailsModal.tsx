@@ -1,9 +1,23 @@
-import { X, BookImage, Calendar, Coffee, Check, Image as ImageIcon } from 'lucide-react';
+import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
+
+// --- IMPORTACIÓN DE IMÁGENES LOCALES PARA ESTILOS DE ÁLBUM ---
+import tela1 from '../../assets/TELA.jpg';
+import tela2 from '../../assets/TELA2.jpg';
+import tela3 from '../../assets/TELA3.jpg';
+
+import papel1 from '../../assets/PC100039 - Editado.jpg';
+import papel2 from '../../assets/PC100043 - Editado.jpg';
+import papel3 from '../../assets/PC100092 - Editado.jpg';
+
+// --- IMPORTACIÓN DINÁMICA DE LA CARPETA DE CLIENTES (Magia de Vite) ---
+// Esto leerá automáticamente todas las imágenes de la carpeta sin tener que importarlas una por una
+const clientImagesGlob = import.meta.glob('../../assets/Clientes/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
+const allClientImages = Object.values(clientImagesGlob).map((module: any) => module.default);
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -16,10 +30,78 @@ const MONTHS_ES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+// --- MINI COMPONENTE PARA EL CARRUSEL DE ESTILOS ---
+const StyleCarouselCard = ({ style }: { style: any }) => {
+  const images = style.images || (style.image ? [style.image] : []);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  return (
+    <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
+        <img
+          src={images[currentIndex]}
+          alt={style.name}
+          className="w-full h-full object-cover transition-transform duration-500"
+        />
+        
+        {images.length > 1 && (
+          <>
+            <button
+              onClick={prevImage}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white text-black rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={nextImage}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white text-black rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {images.map((_: any, idx: number) => (
+                <div
+                  key={idx}
+                  className={`h-1.5 rounded-full transition-all shadow-sm ${idx === currentIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="p-4 bg-white flex-1">
+        <h4 className="font-bold text-gray-900 mb-1">{style.name}</h4>
+        <p className="text-xs text-gray-500 leading-relaxed">{style.description}</p>
+      </div>
+    </div>
+  );
+};
+
 export default function ProductDetailsModal({ isOpen, onClose, productType }: ProductDetailsModalProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Seleccionador aleatorio de imágenes de clientes
+  // Se vuelve a calcular cada vez que se abre el modal
+  const randomClientImages = useMemo(() => {
+    if (!isOpen || allClientImages.length === 0) return [];
+    // Hacemos una copia y la mezclamos aleatoriamente
+    const shuffled = [...allClientImages].sort(() => 0.5 - Math.random());
+    // Tomamos exactamente 6 imágenes (o menos si no hay suficientes)
+    return shuffled.slice(0, 6);
+  }, [isOpen]);
 
   const handleMakeYourOwn = () => {
     onClose();
@@ -27,7 +109,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
   };
 
   const CalendarPreview = useMemo(() => {
-    const year = 2026; // Match the default in CalendarCustomization
+    const year = 2026; 
     const holidays = getColombianHolidays(year);
 
     const generateCalendarGrid = (year: number, monthIndex: number) => {
@@ -93,31 +175,29 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
         return {
           title: t('product.album'),
           icon: <BookImage className="w-12 h-12" />,
-          description: t('product.albumDesc'),
+          description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
             { 
-              name: t('album.tela'), 
+              name: 'Tela', 
               description: 'Acabado premium con textura de lino',
-              image: 'https://images.unsplash.com/photo-1646645766793-25e5ffa020e9?w=800'
+              images: [tela1, tela2, tela3]
             },
             { 
-              name: t('album.papel'), 
+              name: 'Papel', 
               description: 'Portada personalizada con tu foto favorita',
-              image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800'
+              images: [papel1, papel2, papel3]
             }
           ],
           specifications: [
-            { label: t('album.coverType'), value: `${t('album.tela')}, ${t('album.papel')}` },
-            { label: t('album.size'), value: '20x20, 30x30, 21x28, 28x21 cm' },
-            { label: t('album.pagesCount'), value: t('album.pagesLimitDesc') },
-            { label: t('album.paperType'), value: `${t('album.mate')}, ${t('album.brillante')}` }
+            { label: 'Tipos de carátula', value: 'Tela, Papel' },
+            { label: 'Tamaños', value: '20x20 Cuadrado, 30x30 Cuadrado, 21x28 Vertical, 28x21 Horizontal' },
+            { label: 'Cantidad de páginas', value: 'Mínimo 40, máximo 250 (incrementos de 2)' },
+            { label: 'Tipo de papel', value: 'Opalina Mate' }
           ],
-          gallery: [
-            'https://images.unsplash.com/photo-1627353802168-e8e8a81e51f6?w=800',
-            'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800',
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
-            'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800'
-          ]
+          galleryTitle: 'Clientes Felices',
+          gallerySubtitle: 'Historias reales, recuerdos que hoy se pueden volver a sentir',
+          // Usamos el arreglo dinámico, y si está vacío usamos un fallback
+          gallery: randomClientImages.length > 0 ? randomClientImages : [tela1, papel1]
         };
       case 'calendar':
         return {
@@ -131,6 +211,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             { label: 'Diseño', value: '1 o 4 fotos por mes' },
             { label: 'Papel', value: 'Opalina premium' }
           ],
+          galleryTitle: undefined,
+          gallerySubtitle: undefined,
           gallery: [
             'https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=800',
             'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800',
@@ -161,6 +243,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             { label: 'Estilo', value: 'Imagen y Texto o Texto con Foto' },
             { label: 'Uso', value: 'Apto para microondas y lavavajillas' }
           ],
+          galleryTitle: undefined,
+          gallerySubtitle: undefined,
           gallery: [
             'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800',
             'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=800',
@@ -186,6 +270,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
             { label: 'Acabado', value: 'Mate o Brillante' },
             { label: 'Empaque', value: 'Incluye caja de regalo' }
           ],
+          galleryTitle: undefined,
+          gallerySubtitle: undefined,
           gallery: [
             'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=800',
             'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800',
@@ -200,6 +286,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
           description: '',
           styles: [],
           specifications: [],
+          galleryTitle: undefined,
+          gallerySubtitle: undefined,
           gallery: []
         };
     }
@@ -243,22 +331,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
               <h3 className="text-2xl font-bold mb-6">{t('details.availableStyles')}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {productData.styles.map((style, index) => (
-                  <div
-                    key={index}
-                    className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
-                  >
-                    <div className="aspect-square overflow-hidden bg-gray-50">
-                      <img
-                        src={style.image}
-                        alt={style.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    </div>
-                    <div className="p-4 bg-white">
-                      <h4 className="font-bold text-gray-900 mb-1">{style.name}</h4>
-                      <p className="text-xs text-gray-500 leading-relaxed">{style.description}</p>
-                    </div>
-                  </div>
+                  <StyleCarouselCard key={index} style={style} />
                 ))}
               </div>
             </div>
@@ -281,11 +354,14 @@ export default function ProductDetailsModal({ isOpen, onClose, productType }: Pr
 
           {/* Gallery */}
           <div>
-            <h3 className="text-2xl font-bold mb-2">{t('details.customerExamples')}</h3>
+            <h3 className="text-2xl font-bold mb-2">
+              {productData.galleryTitle || t('details.customerExamples')}
+            </h3>
             <p className="text-gray-500 font-medium mb-6">
-              {t('details.customerExamplesDesc')}
+              {productData.gallerySubtitle || t('details.customerExamplesDesc')}
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Si tiene exactamente 6 imágenes, lo acomodamos en 3 columnas; si no, en 4 */}
+            <div className={`grid grid-cols-2 ${productData.gallery.length === 6 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-4`}>
               {productData.gallery.map((image, index) => (
                 <div
                   key={index}

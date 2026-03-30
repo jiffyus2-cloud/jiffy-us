@@ -11,15 +11,17 @@ import { useLanguage } from '../context/LanguageContext';
 // --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 
-import albumImage from '../../assets/393887a967df563ed043288f1df82bb73bcc5ae3.png';
+// --- IMÁGENES DE LOS PRODUCTOS ACTUALIZADAS ---
+import albumImage from '../../assets/IMG_8973.jpg';
 import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
-import calendarImage from '../../assets/e10b8bcd9dce4c4659f29f62c8704217f6ab8e6a.png';
+import calendarImage from '../../assets/Calendario.jpg';
 import photoPackImage from '../../assets/926a104c374871caf4fcad0882de38be9da36b8a.png';
 
-import CarruselA from '../../assets/carrusela.png';
-import CarruselB from '../../assets/carruselb.png';
-import CarruselC from '../../assets/carruselc.png';
-import CarruselD from '../../assets/carruseld.png';
+// --- NUEVAS IMÁGENES DEL CARRUSEL ---
+import Slide1 from '../../assets/Carousel/c4.jpg';
+import Slide2 from '../../assets/Carousel/C100164.jpg';
+import Slide3 from '../../assets/Carousel/c8.jpg';
+import Slide4 from '../../assets/Carousel/C100153.jpg';
 
 export default function LandingPage() {
   const { t } = useLanguage();
@@ -28,18 +30,39 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
-  // Traemos las promociones de Firebase
+  // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions } = useStoreConfig();
   const activePromotions = (promotions || []).filter(p => p.active);
 
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
   const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
+  // --- NUEVOS TEXTOS DEL CARRUSEL ---
   const heroImages = [
-    { url: CarruselA, title: t('hero.1.title'), description: t('hero.1.desc'), highlight: t('hero.1.highlight') },
-    { url: CarruselB, title: t('hero.2.title'), description: t('hero.2.desc'), highlight: t('hero.2.highlight') },
-    { url: CarruselC, title: t('hero.3.title'), description: t('hero.3.desc'), highlight: t('hero.3.highlight') },
-    { url: CarruselD, title: t('hero.4.title'), description: t('hero.4.desc'), highlight: t('hero.4.highlight') }
+    { 
+      url: Slide1, 
+      title: 'Esos momentos que no quieres olvidar', 
+      description: 'Cada photobook es un pedacito de tu historia', 
+      cta: 'Vamos a Diseñar' 
+    },
+    { 
+      url: Slide2, 
+      title: 'Tus momentos en las mejores manos', 
+      description: 'Porque tus recuerdos merecen lo mejor', 
+      cta: 'Vamos a Diseñar' 
+    },
+    { 
+      url: Slide3, 
+      title: 'Lo que más amas, siempre cerca de ti', 
+      description: 'Que cada día te recuerde lo que realmente importa', 
+      cta: 'Vamos a Diseñar' 
+    },
+    { 
+      url: Slide4, 
+      title: 'Recuerdos que vuelves a sentir cada vez que los miras', 
+      description: 'Llena tus días de momentos que amas', 
+      cta: 'Vamos a Diseñar' 
+    }
   ];
 
   const testimonials = [
@@ -49,26 +72,77 @@ export default function LandingPage() {
     { name: 'David Thompson', rating: 5, comment: t('testimonial.4.comment'), avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400' }
   ];
 
+  // --- PREGUNTAS FRECUENTES (Desde tu documento) ---
   const faqs = [
-    { question: t('faq.1.q'), answer: t('faq.1.a') },
-    { question: t('faq.2.q'), answer: t('faq.2.a') },
-    { question: t('faq.3.q'), answer: t('faq.3.a') },
-    { question: t('faq.4.q'), answer: t('faq.4.a') },
-    { question: t('faq.5.q'), answer: t('faq.5.a') }
-  ];
-
-  const products = [
-    { id: 'album', name: t('product.album.title') || 'Álbum', icon: BookImage, color: 'bg-rose-100 text-rose-600', image: albumImage, desc: t('product.album.desc') },
-    { id: 'calendar', name: t('product.calendar.title') || 'Calendario', icon: Calendar, color: 'bg-emerald-100 text-emerald-600', image: calendarImage, desc: t('product.calendar.desc') },
-    { id: 'mug', name: t('product.mug.title') || 'Taza', icon: Coffee, color: 'bg-amber-100 text-amber-600', image: mugImage, desc: t('product.mug.desc') },
-    { id: 'photo', name: t('product.photo.title') || 'Pack Fotos', icon: ImageIcon, color: 'bg-blue-100 text-blue-600', image: photoPackImage, desc: t('product.photo.desc') }
-  ];
-
-  const features = [
-    { icon: Palette, title: t('features.design.title'), desc: t('features.design.desc') },
-    { icon: ShoppingBag, title: t('features.quality.title'), desc: t('features.quality.desc') },
-    { icon: Gift, title: t('features.gifts.title'), desc: t('features.gifts.desc') },
-    { icon: Truck, title: t('features.delivery.title'), desc: t('features.delivery.desc') }
+    {
+      question: '1. ¿Cómo creo mi álbum Jiffy?',
+      answer: (
+        <div className="space-y-2">
+          <p>Crear tu álbum es muy fácil:</p>
+          <ul className="list-disc pl-5">
+            <li>Elige el tipo de álbum que más te guste.</li>
+            <li>Personaliza tu portada con título, colores y detalles.</li>
+            <li>Selecciona tus fotos desde el celular o computador.</li>
+            <li>Aprueba el diseño digital.</li>
+            <li>¡Recibe tu álbum en casa!</li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      question: '2. ¿Qué tipos de álbumes ofrecen?',
+      answer: (
+        <div className="space-y-2">
+          <p>Contamos con 4 formatos:</p>
+          <ul className="list-disc pl-5">
+            <li>20x20 cm</li>
+            <li>30x30 cm</li>
+            <li>Vertical 21x28 cm</li>
+            <li>Horizontal 28x21 cm</li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      question: '3. ¿Cuánto tiempo tarda la entrega?',
+      answer: 'El tiempo de producción es de 10 días hábiles después de que apruebes el diseño. El envío depende de tu ciudad, pero normalmente llega en 2 a 5 días hábiles adicionales.'
+    },
+    {
+      question: '4. ¿Hacen envíos a todo el país?',
+      answer: 'Sí. Enviamos a cualquier ciudad de Colombia mediante transportadoras confiables.'
+    },
+    {
+      question: '5. ¿Cómo se realiza el pago?',
+      answer: 'Puedes pagar por tarjeta de crédito o débito (link de pago).'
+    },
+    {
+      question: '6. ¿Puedo regalar un álbum Jiffy?',
+      answer: '¡Claro! 🎁 Tenemos bonos de regalo para que la persona que quieras pueda crear su álbum con sus propias fotos y estilo.'
+    },
+    {
+      question: '7. ¿Cuántas fotos puedo incluir?',
+      answer: 'Generalmente recomendamos entre 40 y 120 fotos para que el álbum quede bien organizado y visualmente equilibrado. Si tienes más, puedes agregar páginas hasta un total de 250 páginas por álbum.'
+    },
+    {
+      question: '8. ¿Puedo hacer cambios en el diseño?',
+      answer: 'Sí. Después de terminar tu álbum lo puedes revisar en vista previa y ahí podrás realizar ajustes en portada, orden de fotos o textos.'
+    },
+    {
+      question: '9. ¿Las fotos pierden calidad al imprimirse?',
+      answer: 'Trabajamos con impresión de alta resolución. Recomendamos subir las fotos en la mejor calidad posible (evita capturas de pantalla o fotos descargadas de WhatsApp, porque suelen perder nitidez).'
+    },
+    {
+      question: '10. ¿Qué otros productos ofrece Jiffy además de álbumes?',
+      answer: 'Además de álbumes, también tenemos calendarios, imanes, mugs e impresión de fotos que puedes personalizar para ti o para regalar.'
+    },
+    {
+      question: '11. Política de calidad de imagen e impresión',
+      answer: 'En Jiffy cuidamos cada detalle para que tus recuerdos se vean lo mejor posible. Sin embargo, es importante tener en cuenta que los colores pueden variar ligeramente entre lo que ves en pantalla y el resultado impreso. Esto se debe a que las pantallas emiten luz, mientras que la impresión se realiza con tinta sobre papel, lo que puede generar pequeñas diferencias en tonos y brillo. Trabajamos con estándares de impresión profesional para lograr la mayor fidelidad posible en cada álbum.'
+    },
+    {
+      question: '12. ¿Qué formatos de archivos aceptan para las fotos?',
+      answer: 'Aceptamos formatos JPG, PNG y HEIC. Para obtener la mejor calidad, recomendamos imágenes con una resolución mayor a 300 dpi.'
+    }
   ];
 
   useEffect(() => {
@@ -105,6 +179,7 @@ export default function LandingPage() {
   return (
     <div className="w-full">
       <Header />
+      
       {/* Hero Carousel Section */}
       <section className="relative h-[70vh] w-full overflow-hidden">
         <motion.div
@@ -141,18 +216,9 @@ export default function LandingPage() {
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="text-xl md:text-2xl mb-4 text-gray-800"
-            >
-              {heroImages[currentSlide].description}
-            </motion.p>
-            <motion.p
-              key={`highlight-${currentSlide}`}
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.6 }}
               className="text-xl md:text-2xl mb-8 font-bold text-gray-800"
             >
-              {heroImages[currentSlide].highlight}
+              {heroImages[currentSlide].description}
             </motion.p>
             <motion.button
               initial={{ x: -20, opacity: 0 }}
@@ -161,7 +227,7 @@ export default function LandingPage() {
               onClick={() => navigate('/create')}
               className={`${DESIGN.button.base} ${DESIGN.button.secondary}`}
             >
-              {t('landing.letsDesign')}
+              {heroImages[currentSlide].cta}
             </motion.button>
           </div>
         </div>
@@ -224,8 +290,8 @@ export default function LandingPage() {
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <BookImage className="w-12 h-12 mb-4" />
-                  <h3 className={DESIGN.text.h3}>{t('product.album')}</h3>
-                  <p className="text-lg mb-4 text-gray-200">{t('product.albumDesc')}</p>
+                  <h3 className={DESIGN.text.h3}>Álbumes de fotos</h3>
+                  <p className="text-lg mb-4 text-gray-200">Cada recuerdo es único y merece ser contado. Álbumes personalizados para tus momentos más importantes.</p>
                   <button onClick={() => setSelectedProduct('album')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                     {t('landing.more')}
                   </button>
@@ -240,8 +306,8 @@ export default function LandingPage() {
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <Calendar className="w-10 h-10 mb-3" />
-                  <h3 className="text-2xl mb-2 font-medium">{t('product.calendar')}</h3>
-                  <p className="text-sm mb-3 text-gray-200">{t('product.calendarDesc')}</p>
+                  <h3 className="text-2xl mb-2 font-medium">Calendarios</h3>
+                  <p className="text-sm mb-3 text-gray-200">Tus días merecen la mejor sonrisa. Calendarios personalizados para recibir el día con la mejor actitud.</p>
                   <button onClick={() => setSelectedProduct('calendar')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
                     {t('landing.more')}
                   </button>
@@ -369,8 +435,8 @@ export default function LandingPage() {
       {/* FAQ Section */}
       <section className={DESIGN.layout.section}>
         <div className={DESIGN.layout.containerNarrow}>
-          <h2 className={DESIGN.text.h2}>{t('landing.faq')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>{t('landing.faqSubtitle')}</p>
+          <h2 className={DESIGN.text.h2}>Preguntas Frecuentes</h2>
+          <p className={DESIGN.text.sectionSubtitle}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
 
           <div className="space-y-4">
             {faqs.map((faq, index) => (
