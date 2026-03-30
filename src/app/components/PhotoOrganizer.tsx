@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
-  Upload, X, ChevronUp, ChevronDown, Plus, Trash2, Loader2,
+  Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles, Settings, Crop as CropIcon
+  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles, Settings, Crop as CropIcon,
+  AlertCircle
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -128,6 +129,14 @@ export default function PhotoOrganizer({
   const [isSortingWithAI, setIsSortingWithAI] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
+  const [layoutChangeModal, setLayoutChangeModal] = useState<{
+    type: 'decrease' | 'increase';
+    pageIndex: number;
+    newVariant: number;
+    overflowCount: number;
+  } | null>(null);
+  const [selectedTargetPage, setSelectedTargetPage] = useState<number>(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isSquare = sizeStr.includes('Cuadrado');
@@ -135,8 +144,12 @@ export default function PhotoOrganizer({
   const isVertical = sizeStr.includes('Vertical');
   const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
 
-  const getClosestAllowed = (count: number) => {
-    return allowedPhotosPerPage.find(opt => opt >= count) || allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+  // --- NUEVA LÓGICA ESTRICTA: Siempre salta al layout más cercano que pueda contener N fotos ---
+  const getNextAllowed = (count: number) => {
+    for (const opt of allowedPhotosPerPage) {
+      if (opt >= count) return opt;
+    }
+    return allowedPhotosPerPage[allowedPhotosPerPage.length - 1]; // Topa en 9 o 6
   };
 
   const getGridLayout = (count: number, layout?: 'row' | 'column' | 'grid') => {
@@ -160,13 +173,20 @@ export default function PhotoOrganizer({
     return 'grid-cols-2 grid-rows-2';
   };
 
+  const getMaxPages = (photoCount: number) => {
+    const baseMax = Math.max(40, photoCount);
+    return Math.min(250, baseMax % 2 === 0 ? baseMax : baseMax + 1);
+  };
+
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
-      const minPages = 40;
-      const maxPages = uploadedPhotos.length;
+      const maxP = getMaxPages(uploadedPhotos.length);
       if (typeof numPages === 'number') {
-        if (numPages < minPages) setNumPages(minPages);
-        if (numPages > maxPages) setNumPages(maxPages);
+        let newNum = numPages;
+        if (newNum < 40) newNum = 40;
+        if (newNum > maxP) newNum = maxP;
+        if (newNum % 2 !== 0) newNum = Math.min(newNum + 1, maxP);
+        setNumPages(newNum);
       }
     }
   }, [uploadedPhotos.length]);
@@ -227,8 +247,11 @@ export default function PhotoOrganizer({
   };
 
   const handleFinalizeSetup = () => {
+    const maxP = getMaxPages(uploadedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
-    safeVal = Math.min(Math.max(safeVal, 40), uploadedPhotos.length);
+    
+    safeVal = Math.min(Math.max(safeVal, 40), maxP);
+    if (safeVal % 2 !== 0) safeVal = Math.min(safeVal + 1, maxP);
     setNumPages(safeVal);
 
     const totalPages = safeVal;
@@ -262,9 +285,14 @@ export default function PhotoOrganizer({
   };
 
   const handleAddPage = (index: number) => {
+    if (photos.length >= 249) {
+      alert('Límite máximo de 250 páginas alcanzado.');
+      return;
+    }
     const newPhotos = [...photos];
-    newPhotos.splice(index + 1, 0, []);
+    newPhotos.splice(index + 1, 0, [], []);
     onPhotosChange(newPhotos);
+    setNumPages(newPhotos.length);
   };
 
   const handleDeletePage = (index: number) => {
@@ -273,8 +301,13 @@ export default function PhotoOrganizer({
       return;
     }
     const newPhotos = [...photos];
-    newPhotos.splice(index, 1);
+    if (newPhotos.length > 41) {
+      newPhotos.splice(index, 2);
+    } else {
+      newPhotos.splice(index, 1);
+    }
     onPhotosChange(newPhotos);
+    setNumPages(newPhotos.length);
     setEditingPageIndex(null);
   };
 
@@ -290,7 +323,15 @@ export default function PhotoOrganizer({
 
   const handleAddPhotoToPage = (pageIndex: number, file: File) => {
     const newPhotos = [...photos];
+    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+
+    if (newPhotos[pageIndex].length >= maxAllowed) {
+      alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
+      return;
+    }
+
     newPhotos[pageIndex] = [...newPhotos[pageIndex], URL.createObjectURL(file)];
+    onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: getNextAllowed(newPhotos[pageIndex].length) });
     onPhotosChange(newPhotos);
   };
 
@@ -345,6 +386,318 @@ export default function PhotoOrganizer({
     }
   };
 
+  // ==========================================================================
+  // LÓGICA AVANZADA DE CASCADA (RIPPLE / PULL) 100% CORREGIDA
+  // ==========================================================================
+
+  // Función auxiliar para saber si una página es la ÚLTIMA que tiene fotos
+  const isLastPageWithContent = (pageIdx: number, currentPhotos: string[][]) => {
+    for (let i = pageIdx + 1; i < currentPhotos.length; i++) {
+        if (currentPhotos[i].length > 0) return false;
+    }
+    return true;
+  };
+  
+  const applyRippleShift = (startIndex: number, newVariant: number) => {
+    let newPhotos = [...photos.map(p => [...p])];
+    let newCrops = { ...photoCrops };
+    let newTexts = { ...textBoxSlots };
+    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
+
+    // Extraemos las fotos que "sobran" de la página inicial
+    let currentOverflow = newPhotos[startIndex].splice(newVariant);
+
+    let movingData = currentOverflow.map((_, idx) => {
+        let oldIdx = newVariant + idx;
+        let crop = newCrops[`${startIndex}-${oldIdx}`];
+        let text = newTexts[startIndex]?.[oldIdx];
+        delete newCrops[`${startIndex}-${oldIdx}`];
+        if (newTexts[startIndex]) delete newTexts[startIndex][oldIdx];
+        return { crop, text };
+    });
+
+    let p = startIndex + 1;
+    while(currentOverflow.length > 0) {
+        // Bloqueo de seguridad: No exceder 250 páginas
+        if (p >= newPhotos.length) {
+            if (newPhotos.length >= 250) {
+                alert("Límite máximo de 250 páginas alcanzado. Algunas fotos no se pudieron acomodar.");
+                currentOverflow = [];
+                break;
+            }
+            newPhotos.push([], []); 
+            setNumPages(newPhotos.length);
+        }
+
+        let insertCount = currentOverflow.length;
+        let existingLength = newPhotos[p].length;
+
+        // ¿Es esta la última página que tiene fotos en el álbum?
+        let lastWithContent = isLastPageWithContent(p, newPhotos);
+
+        // Si la página ya tiene un diseño, lo respetamos.
+        let capacity = newVariants[p] || getNextAllowed(existingLength);
+        
+        // REGLA DE ORO: Si la página está vacía, o si es la ÚLTIMA página con fotos,
+        // la expandimos automáticamente para absorber todo lo posible (hasta el máximo permitido 6 o 9).
+        if (existingLength === 0 || lastWithContent) {
+            capacity = getNextAllowed(existingLength + insertCount);
+        }
+
+        // Desplazamos la data existente en esta página hacia la derecha para hacer hueco al inicio
+        for (let i = existingLength - 1; i >= 0; i--) {
+            if (newCrops[`${p}-${i}`]) {
+                newCrops[`${p}-${i + insertCount}`] = newCrops[`${p}-${i}`];
+                delete newCrops[`${p}-${i}`];
+            }
+            if (newTexts[p]?.[i]) {
+                if (!newTexts[p]) newTexts[p] = {};
+                newTexts[p][i + insertCount] = newTexts[p][i];
+                delete newTexts[p][i];
+            }
+        }
+
+        // Insertamos el desbordamiento al INICIO de esta página
+        newPhotos[p].unshift(...currentOverflow);
+
+        movingData.forEach((data, idx) => {
+            if (data.crop) newCrops[`${p}-${idx}`] = data.crop;
+            if (data.text) {
+                if (!newTexts[p]) newTexts[p] = {};
+                newTexts[p][idx] = data.text;
+            }
+        });
+
+        // Si después de insertar las fotos, excedemos la capacidad de esta página, cortamos y seguimos empujando.
+        if (newPhotos[p].length > capacity) {
+            currentOverflow = newPhotos[p].splice(capacity);
+            movingData = currentOverflow.map((_, idx) => {
+                let oldIdx = capacity + idx;
+                let crop = newCrops[`${p}-${oldIdx}`];
+                let text = newTexts[p]?.[oldIdx];
+                delete newCrops[`${p}-${oldIdx}`];
+                if (newTexts[p]) delete newTexts[p][oldIdx];
+                return { crop, text };
+            });
+            newVariants[p] = capacity;
+        } else {
+            currentOverflow = [];
+            // Ajustamos estrictamente el layout al número de fotos que quedaron.
+            newVariants[p] = getNextAllowed(newPhotos[p].length);
+        }
+        p++;
+    }
+
+    onPhotosChange(newPhotos);
+    onPhotoCropsChange(newCrops);
+    onTextBoxSlotsChange(newTexts);
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const applyPullShift = (startIndex: number, newVariant: number) => {
+    let newPhotos = [...photos.map(p => [...p])];
+    let newCrops = { ...photoCrops };
+    let newTexts = { ...textBoxSlots };
+    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
+
+    let gap = newVariant - newPhotos[startIndex].length;
+    let p = startIndex;
+
+    while (gap > 0 && p < newPhotos.length - 1) {
+        let nextPage = p + 1;
+        let pullCount = Math.min(gap, newPhotos[nextPage].length);
+        if (pullCount === 0) break; 
+
+        let pulledPhotos = newPhotos[nextPage].splice(0, pullCount);
+        let currentLen = newPhotos[p].length;
+        newPhotos[p].push(...pulledPhotos);
+
+        for (let i = 0; i < pullCount; i++) {
+            if (newCrops[`${nextPage}-${i}`]) {
+                newCrops[`${p}-${currentLen + i}`] = newCrops[`${nextPage}-${i}`];
+                delete newCrops[`${nextPage}-${i}`];
+            }
+            if (newTexts[nextPage]?.[i]) {
+                if (!newTexts[p]) newTexts[p] = {};
+                newTexts[p][currentLen + i] = newTexts[nextPage][i];
+                delete newTexts[nextPage][i];
+            }
+        }
+
+        let nextLenAfterPull = newPhotos[nextPage].length;
+        for (let i = 0; i < nextLenAfterPull; i++) {
+            let oldIdx = i + pullCount;
+            if (newCrops[`${nextPage}-${oldIdx}`]) {
+                newCrops[`${nextPage}-${i}`] = newCrops[`${nextPage}-${oldIdx}`];
+                delete newCrops[`${nextPage}-${oldIdx}`];
+            }
+            if (newTexts[nextPage]?.[oldIdx]) {
+                if (!newTexts[nextPage]) newTexts[nextPage] = {};
+                newTexts[nextPage][i] = newTexts[nextPage][oldIdx];
+                delete newTexts[nextPage][oldIdx];
+            }
+        }
+        
+        newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
+        gap = pullCount; 
+        p++;
+    }
+
+    onPhotosChange(newPhotos);
+    onPhotoCropsChange(newCrops);
+    onTextBoxSlotsChange(newTexts);
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const applyIncreaseVariantOnly = (pageIndex: number, newVariant: number) => {
+    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const applyIncreaseNextPageVariant = (pageIndex: number, newVariant: number) => {
+    let newPhotos = [...photos.map(p => [...p])];
+    let newCrops = { ...photoCrops };
+    let newTexts = { ...textBoxSlots };
+    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
+
+    let overflow = newPhotos[pageIndex].splice(newVariant);
+    let nextPage = pageIndex + 1;
+
+    if (nextPage >= newPhotos.length) {
+        if (newPhotos.length >= 250) {
+            alert("Límite máximo de 250 páginas alcanzado.");
+            return;
+        }
+        newPhotos.push([], []);
+        setNumPages(newPhotos.length);
+    }
+
+    let insertCount = overflow.length;
+    let existingLength = newPhotos[nextPage].length;
+
+    for (let i = existingLength - 1; i >= 0; i--) {
+        if (newCrops[`${nextPage}-${i}`]) {
+            newCrops[`${nextPage}-${i + insertCount}`] = newCrops[`${nextPage}-${i}`];
+            delete newCrops[`${nextPage}-${i}`];
+        }
+        if (newTexts[nextPage]?.[i]) {
+            if (!newTexts[nextPage]) newTexts[nextPage] = {};
+            newTexts[nextPage][i + insertCount] = newTexts[nextPage][i];
+            delete newTexts[nextPage][i];
+        }
+    }
+
+    newPhotos[nextPage].unshift(...overflow);
+
+    overflow.forEach((_, idx) => {
+        let oldIdx = newVariant + idx;
+        if (newCrops[`${pageIndex}-${oldIdx}`]) {
+            newCrops[`${nextPage}-${idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
+            delete newCrops[`${pageIndex}-${oldIdx}`];
+        }
+        if (newTexts[pageIndex]?.[oldIdx]) {
+            if (!newTexts[nextPage]) newTexts[nextPage] = {};
+            newTexts[nextPage][idx] = newTexts[pageIndex][oldIdx];
+            delete newTexts[pageIndex][oldIdx];
+        }
+    });
+
+    // Ajuste estricto: la siguiente página asume el layout perfecto.
+    newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
+
+    onPhotosChange(newPhotos);
+    onPhotoCropsChange(newCrops);
+    onTextBoxSlotsChange(newTexts);
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const applyDeleteOverflow = (pageIndex: number, newVariant: number) => {
+    let newPhotos = [...photos.map(p => [...p])];
+    let newCrops = { ...photoCrops };
+    let newTexts = { ...textBoxSlots };
+    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
+
+    let overflow = newPhotos[pageIndex].splice(newVariant);
+    
+    overflow.forEach((_, idx) => {
+        let oldIdx = newVariant + idx;
+        delete newCrops[`${pageIndex}-${oldIdx}`];
+        if (newTexts[pageIndex]) delete newTexts[pageIndex][oldIdx];
+    });
+
+    onPhotosChange(newPhotos);
+    onPhotoCropsChange(newCrops);
+    onTextBoxSlotsChange(newTexts);
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const applyMoveToSpecificPage = (pageIndex: number, newVariant: number, targetPage: number) => {
+    let newPhotos = [...photos.map(p => [...p])];
+    let newCrops = { ...photoCrops };
+    let newTexts = { ...textBoxSlots };
+    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
+
+    let overflow = newPhotos[pageIndex].splice(newVariant);
+    let targetLen = newPhotos[targetPage].length;
+
+    newPhotos[targetPage].push(...overflow);
+
+    overflow.forEach((_, idx) => {
+        let oldIdx = newVariant + idx;
+        if (newCrops[`${pageIndex}-${oldIdx}`]) {
+            newCrops[`${targetPage}-${targetLen + idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
+            delete newCrops[`${pageIndex}-${oldIdx}`];
+        }
+        if (newTexts[pageIndex]?.[oldIdx]) {
+            if (!newTexts[targetPage]) newTexts[targetPage] = {};
+            newTexts[targetPage][targetLen + idx] = newTexts[pageIndex][oldIdx];
+            delete newTexts[pageIndex][oldIdx];
+        }
+    });
+
+    newVariants[targetPage] = getNextAllowed(newPhotos[targetPage].length);
+
+    onPhotosChange(newPhotos);
+    onPhotoCropsChange(newCrops);
+    onTextBoxSlotsChange(newTexts);
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const handleVariantSelect = (opt: number) => {
+    if (advancedSettingsModal === null) return;
+    const pageIndex = advancedSettingsModal;
+    const currentLen = photos[pageIndex].length;
+
+    if (opt < currentLen) {
+        const maxForNext = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+        const nextPageLen = photos[pageIndex + 1]?.length || 0;
+        const overflowCount = currentLen - opt;
+        
+        // Si al desbordar, la siguiente página revienta su límite máximo (ej 9 o 6), omitimos pregunta y empujamos.
+        const isNextPageFull = (nextPageLen + overflowCount > maxForNext);
+
+        if (isNextPageFull && pageIndex < photos.length - 1) {
+            applyRippleShift(pageIndex, opt);
+        } else {
+            setSelectedTargetPage(pageIndex + 1 < photos.length ? pageIndex + 1 : 0);
+            setLayoutChangeModal({ type: 'decrease', pageIndex, newVariant: opt, overflowCount });
+        }
+    } else if (opt > currentLen) {
+        let totalAhead = 0;
+        for(let i = pageIndex + 1; i < photos.length; i++) totalAhead += photos[i].length;
+
+        if (totalAhead > 0) {
+            setLayoutChangeModal({ type: 'increase', pageIndex, newVariant: opt, overflowCount: 0 });
+        } else {
+            applyIncreaseVariantOnly(pageIndex, opt);
+        }
+    } else {
+        applyIncreaseVariantOnly(pageIndex, opt);
+    }
+  };
+
+  // ==========================================================================
+
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
   const renderAdvancedSettingsModal = () => {
@@ -353,7 +706,8 @@ export default function PhotoOrganizer({
     if (!photos || !photos[pageIndex]) return null;
 
     const pagePhotos = photos[pageIndex];
-    const currentVariant = pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length);
+    // Se utiliza getNextAllowed para mostrar los recuadros vacíos si el usuario empuja 5 fotos.
+    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
     
     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
@@ -409,7 +763,7 @@ export default function PhotoOrganizer({
                     <label className="block text-xs font-medium text-gray-700 mb-1.5">Elementos en página</label>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {allowedPhotosPerPage.map(opt => (
-                        <button key={opt} onClick={() => onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: opt })} className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg border-2 text-xs font-bold transition-all ${currentVariant === opt ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>{opt}</button>
+                        <button key={opt} onClick={() => handleVariantSelect(opt)} className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg border-2 text-xs font-bold transition-all ${currentVariant === opt ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>{opt}</button>
                       ))}
                     </div>
                   </div>
@@ -482,6 +836,7 @@ export default function PhotoOrganizer({
   }
 
   if (step === 'pages') {
+    const maxP = getMaxPages(uploadedPhotos.length);
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
         <div className="text-center mb-8"><div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Grid3x3 className="w-10 h-10" /></div><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
@@ -489,9 +844,31 @@ export default function PhotoOrganizer({
           <div>
             <div className="flex justify-between items-center mb-4">
               <label className="text-xl font-medium">{t('organizer.numPages')}</label>
-              <input type="number" min={40} max={Math.max(uploadedPhotos.length, 40)} value={numPages} onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))} onBlur={() => setNumPages(Math.min(Math.max(typeof numPages === 'number' ? numPages : 40, 40), uploadedPhotos.length))} className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" />
+              <input 
+                type="number" 
+                min={40} 
+                max={maxP} 
+                step={2} 
+                value={numPages} 
+                onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
+                onBlur={() => {
+                  let val = typeof numPages === 'number' ? numPages : 40;
+                  val = Math.min(Math.max(val, 40), maxP);
+                  if (val % 2 !== 0) val = Math.min(val + 1, maxP);
+                  setNumPages(val);
+                }} 
+                className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
+              />
             </div>
-            <input type="range" min={40} max={Math.max(uploadedPhotos.length, 40)} value={numPages === '' ? 40 : numPages} onChange={(e) => setNumPages(parseInt(e.target.value, 10))} className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" />
+            <input 
+              type="range" 
+              min={40} 
+              max={maxP} 
+              step={2} 
+              value={numPages === '' ? 40 : numPages} 
+              onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
+              className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" 
+            />
           </div>
           <div className="flex gap-4"><button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button><button onClick={handleFinalizeSetup} className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12">{t('organizer.createAlbum')}</button></div>
         </div>
@@ -518,6 +895,74 @@ export default function PhotoOrganizer({
     <div className="w-full max-w-5xl mx-auto px-4 py-12">
       {renderAdvancedSettingsModal()}
 
+      {/* MODAL DE CONFLICTOS DE LAYOUT */}
+      {layoutChangeModal && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {layoutChangeModal.type === 'decrease' ? 'Ajuste de Espacio' : 'Espacio Disponible'}
+                </h3>
+              </div>
+            </div>
+
+            {layoutChangeModal.type === 'decrease' ? (
+              <div className="space-y-4">
+                <p className="text-gray-600 text-sm">
+                  Al reducir el diseño, te quedan <span className="font-bold text-black">{layoutChangeModal.overflowCount} foto(s)</span> por fuera. ¿Qué deseas hacer con ellas?
+                </p>
+                <div className="space-y-3">
+                  <button onClick={() => { applyRippleShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
+                    Desplazar todas las fotos en cascada (Recomendado)
+                  </button>
+                  {layoutChangeModal.pageIndex < photos.length - 1 && (
+                    <button onClick={() => { applyIncreaseNextPageVariant(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
+                      Aumentar el layout de la pág. siguiente en {layoutChangeModal.overflowCount}
+                    </button>
+                  )}
+                  <button onClick={() => { applyDeleteOverflow(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-100 hover:border-red-500 hover:bg-red-50 font-medium transition-all text-sm text-red-600">
+                    Eliminar la(s) foto(s) sobrante(s)
+                  </button>
+                  
+                  <div className="pt-2 flex items-center gap-2">
+                    <select value={selectedTargetPage} onChange={(e) => setSelectedTargetPage(Number(e.target.value))} className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-xl focus:border-black outline-none text-sm">
+                      {photos.map((_, i) => (
+                         <option key={i} value={i}>Página {i + 1}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => { applyMoveToSpecificPage(layoutChangeModal.pageIndex, layoutChangeModal.newVariant, selectedTargetPage); setLayoutChangeModal(null); }} className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800">
+                      Enviar a pág
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <p className="text-gray-600 text-sm">
+                  Has aumentado el diseño y ahora tienes más espacio. ¿Deseas reajustar trayendo fotos de las páginas siguientes para llenar el vacío?
+                </p>
+                <div className="space-y-3">
+                  <button onClick={() => { applyPullShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
+                    Sí, reajustar fotos (Traer siguientes)
+                  </button>
+                  <button onClick={() => { applyIncreaseVariantOnly(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
+                    No, dejar los espacios vacíos
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+               <button onClick={() => setLayoutChangeModal(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-black">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
         <div><h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2><p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p></div>
         <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">{t('organizer.complete')}</button>
@@ -525,7 +970,7 @@ export default function PhotoOrganizer({
 
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16">
         
-        {/* CUADRO 1: Interior de la Portada Principal (Fija a la Izquierda) */}
+        {/* CUADRO 1: Interior de la Portada Principal */}
         <div className="relative group flex flex-col">
           <div className="flex items-center justify-between mb-4 h-10 md:h-12">
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Portada</span>
@@ -554,15 +999,15 @@ export default function PhotoOrganizer({
 
             <div className={`bg-white rounded-[3%] shadow-sm border-2 transition-all overflow-hidden mt-auto ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
               {(() => {
-                const currentPhotosPerPage = pageLayoutVariants[pageIndex] || getClosestAllowed(pagePhotos.length);
-                const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => pagePhotos[i] || null);
+                const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+                const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
                 
                 return (
-                  <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentPhotosPerPage, pageLayouts[pageIndex])}`}>
+                  <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
                     {slots.map((photo, photoIndex) => {
                       const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                       const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                      const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && pageLayouts[pageIndex] !== 'column';
+                      const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
                       
                       return (
                         <AlbumEditorPhotoSlot
@@ -582,7 +1027,7 @@ export default function PhotoOrganizer({
           </div>
         ))}
 
-        {/* PÁGINA EN BLANCO (Se añade SOLO si el total de páginas del usuario es impar, empuja la contraportada a la derecha) */}
+        {/* PÁGINA EN BLANCO */}
         {safePhotos.length % 2 !== 0 && (
           <div className="relative group flex flex-col">
             <div className="flex items-center justify-between mb-4 h-10 md:h-12">
@@ -597,7 +1042,7 @@ export default function PhotoOrganizer({
           </div>
         )}
 
-        {/* CUADRO FINAL: Interior de la Contraportada (Siempre terminará a la Derecha) */}
+        {/* CUADRO FINAL: Interior de la Contraportada */}
         <div className="relative group flex flex-col">
           <div className="flex items-center justify-between mb-4 h-10 md:h-12">
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Contraportada</span>
@@ -615,7 +1060,7 @@ export default function PhotoOrganizer({
 
       </div>
 
-      <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd')}</span></button></div>
+      <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button></div>
 
       {cropModalData !== null && (
         <CropModal
