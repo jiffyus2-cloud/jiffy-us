@@ -65,13 +65,6 @@ export default function LandingPage() {
     }
   ];
 
-  const testimonials = [
-    { name: 'Sarah Johnson', rating: 5, comment: t('testimonial.1.comment'), avatar: 'https://images.unsplash.com/photo-1762613875432-1b80b1682905?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGN1c3RvbWVyJTIwcmV2aWV3JTIwc2F0aXNmYWN0aW9ufGVufDF8fHx8MTc3MTYxMjM2NXww&ixlib=rb-4.1.0&q=80&w=1080' },
-    { name: 'Michael Chen', rating: 5, comment: t('testimonial.2.comment'), avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400' },
-    { name: 'Emma Rodriguez', rating: 5, comment: t('testimonial.3.comment'), avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400' },
-    { name: 'David Thompson', rating: 5, comment: t('testimonial.4.comment'), avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400' }
-  ];
-
   // --- PREGUNTAS FRECUENTES (Desde tu documento) ---
   const faqs = [
     {
@@ -246,11 +239,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECCIÓN DINÁMICA DE PROMOCIONES (Avisos Controlables) */}
+      {/* SECCIÓN DINÁMICA DE PROMOCIONES COMPACTA PARA MÓVIL */}
       {activePromotions.length > 0 && (
-        <section className="bg-white py-12 border-b border-gray-100">
+        <section className="bg-white py-6 md:py-12 border-b border-gray-100">
           <div className={DESIGN.layout.container}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-8">
               {activePromotions.map((promo, index) => (
                 <motion.div
                   key={promo.id}
@@ -258,14 +251,14 @@ export default function LandingPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                   viewport={{ once: true }}
-                  className={`p-6 rounded-2xl border-2 ${getColorClasses(promo.colorTheme)} flex items-center gap-5 shadow-sm hover:shadow-md transition-shadow`}
+                  className={`p-4 md:p-6 rounded-xl md:rounded-2xl border-2 ${getColorClasses(promo.colorTheme)} flex items-center gap-3 md:gap-5 shadow-sm hover:shadow-md transition-shadow`}
                 >
-                  <div className="shrink-0">
+                  <div className="shrink-0 scale-75 md:scale-100 origin-left">
                     {getIconComponent(promo.icon)}
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold mb-1">{promo.title}</h3>
-                    <p className="text-sm opacity-90 font-medium">{promo.desc}</p>
+                    <h3 className="text-base md:text-xl font-bold mb-0.5 md:mb-1 leading-tight">{promo.title}</h3>
+                    <p className="text-xs md:text-sm opacity-90 font-medium leading-snug">{promo.desc}</p>
                   </div>
                 </motion.div>
               ))}
@@ -405,42 +398,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className={DESIGN.layout.sectionGray}>
-        <div className={DESIGN.layout.container}>
-          <h2 className={DESIGN.text.h2}>{t('landing.testimonials')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>{t('landing.testimonialsSubtitle')}</p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-white rounded-xl p-6 shadow-lg">
-                <div className="flex items-center gap-4 mb-4">
-                  <img src={testimonial.avatar} alt={testimonial.name} className="w-16 h-16 rounded-full object-cover" />
-                  <div>
-                    <h4 className={DESIGN.text.label}>{testimonial.name}</h4>
-                    <div className="flex gap-1">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <span key={i} className="text-yellow-400">★</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-gray-600">{testimonial.comment}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* FAQ Section */}
-      <section className={DESIGN.layout.section}>
+      <section className={DESIGN.layout.sectionGray}>
         <div className={DESIGN.layout.containerNarrow}>
           <h2 className={DESIGN.text.h2}>Preguntas Frecuentes</h2>
           <p className={DESIGN.text.sectionSubtitle}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
 
           <div className="space-y-4">
             {faqs.map((faq, index) => (
-              <div key={index} className="border-2 border-gray-200 rounded-lg overflow-hidden">
+              <div key={index} className="border-2 border-gray-200 bg-white rounded-lg overflow-hidden">
                 <button onClick={() => setOpenFaq(openFaq === index ? null : index)} className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <span className="text-xl font-medium">{faq.question}</span>
                   <ChevronDown className={`w-6 h-6 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />

@@ -19,6 +19,7 @@ export interface CustomizationOptions {
     coverTitle: string;
     coverSubtitle: string;
     coverYear: string;
+    spineText?: string; // <-- AÑADIDO: Propiedad para el lomo
     selectedLayout: number;
     typographyColor: string;
     coverCrop?: { x: number; y: number; zoom: number };
@@ -46,6 +47,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     coverTitle: t('album.defaultTitle') || 'Mi Álbum',
     coverSubtitle: t('album.defaultSubtitle') || 'Un recuerdo especial',
     coverYear: new Date().getFullYear().toString(),
+    spineText: t('album.defaultTitle') || 'Mi Álbum', // <-- AÑADIDO: Estado inicial del lomo
     coverImage: '',
     selectedLayout: 1,
     typographyColor: '#000000', // Negro por defecto para Papel
@@ -199,6 +201,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
               coverTitle={coverContent.coverTitle}
               coverSubtitle={coverContent.coverSubtitle}
               coverYear={coverContent.coverYear}
+              spineText={coverContent.spineText} // <-- AÑADIDO: Pasamos el texto del lomo a la previsualización
               selectedLayout={coverContent.selectedLayout}
               coverCrop={coverContent.coverCrop}
               typographyColor={coverContent.typographyColor}
