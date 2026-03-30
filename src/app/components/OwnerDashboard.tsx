@@ -17,6 +17,7 @@ import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import justWhiteImg from '../../assets/justwhite.png';
+import jiffyLogo from '../../assets/JiffyLogo.svg'; // <-- Importamos el logo para la contraportada
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
@@ -30,7 +31,7 @@ interface Order {
   shippingAddress?: { email?: string; name?: string; address?: string; city?: string; zipCode?: string; };
   billingAddress?: { email?: string; name?: string; address?: string; city?: string; zipCode?: string; };
   coverData?: {
-    image?: string; title?: string; subtitle?: string; year?: string; layout?: number | string;
+    image?: string; title?: string; subtitle?: string; year?: string; layout?: number | string; spineText?: string;
     crop?: { x?: number; y?: number; zoom?: number; };
   };
   customization?: any;
@@ -44,7 +45,7 @@ const MONTHS_ES = [
 ];
 
 // ============================================================================
-// FUNCIONES HELPERS
+// FUNCIONES HELPERS DE DIMENSIONES Y LAYOUT
 // ============================================================================
 const getClosestAllowed = (count: number, size: string) => {
   const isSquare = size?.includes('Cuadrado');
@@ -74,6 +75,35 @@ const getGridLayout = (count: number, layout: any, size: string) => {
   if (count === 9) return 'grid-cols-3 grid-rows-3';
   return 'grid-cols-2 grid-rows-2';
 };
+
+const getDimensions = (order: Order) => {
+  const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+  const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+  const isAlbum = productString.includes('album') || productString.includes('photobook');
+  const sizeStr = order.customization?.size || '20x20';
+  const orientation = order.customization?.orientation || 'vertical';
+  
+  const isVert = sizeStr.toLowerCase().includes('vertical') || (isCalendar && orientation === 'vertical');
+  const isHoriz = sizeStr.toLowerCase().includes('horizontal') || (isCalendar && orientation === 'horizontal');
+  
+  let wCm = 20;
+  let hCm = 20;
+  let coverSizeProp = '20x20';
+
+  if (isVert) {
+    wCm = 21; hCm = 28; coverSizeProp = '28x21'; 
+  } else if (isHoriz) {
+    wCm = 28; hCm = 21; coverSizeProp = '21x28'; 
+  } else {
+    const match = sizeStr.match(/(\d+)\s*x\s*(\d+)/i);
+    if (match) {
+      wCm = parseInt(match[1], 10);
+      hCm = parseInt(match[2], 10);
+      coverSizeProp = `${wCm}x${hCm}`;
+    }
+  }
+  return { wCm, hCm, coverSizeProp, pxWidth: Math.round((wCm / 2.54) * 300), pxHeight: Math.round((hCm / 2.54) * 300), isCalendar, isAlbum };
+}
 
 // ============================================================================
 // RENDERIZADOR CANVAS NATIVO
@@ -409,50 +439,111 @@ const OwnerDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const generateAlbumPDF = async (order: Order, onProgress: (progress: number) => void): Promise<Blob> => {
+  // ==========================================================================
+  // GENERADORES DE PDF SEPARADOS (PORTADA A DOBLE PÁGINA E INTERIORES)
+  // ==========================================================================
+
+  const generateCoverPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
       try {
-        const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
-        const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+        const { wCm, hCm, coverSizeProp, pxWidth, pxHeight } = getDimensions(order);
+        const spineCm = 2;
+        const totalWCm = (wCm * 2) + spineCm;
+        const totalHCm = hCm;
 
-        const sizeStr = order.customization?.size || '20x20';
-        const orientation = order.customization?.orientation || 'vertical';
-        
-        const isVert = sizeStr.toLowerCase().includes('vertical') || (isCalendar && orientation === 'vertical');
-        const isHoriz = sizeStr.toLowerCase().includes('horizontal') || (isCalendar && orientation === 'horizontal');
-        
-        let wCm = 20;
-        let hCm = 20;
-        let coverSizeProp = '20x20';
+        const totalPxWidth = Math.round((totalWCm / 2.54) * 300);
+        const spinePxWidth = totalPxWidth - (pxWidth * 2);
 
-        if (isVert) {
-          wCm = 21;
-          hCm = 28;
-          coverSizeProp = '28x21'; 
-        } else if (isHoriz) {
-          wCm = 28;
-          hCm = 21;
-          coverSizeProp = '21x28'; 
-        } else {
-          const match = sizeStr.match(/(\d+)\s*x\s*(\d+)/i);
-          if (match) {
-            wCm = parseInt(match[1], 10);
-            hCm = parseInt(match[2], 10);
-            coverSizeProp = `${wCm}x${hCm}`;
-          }
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'cm', format: [totalWCm, totalHCm] });
+
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '-99999px'; 
+        container.style.width = `${totalPxWidth}px`;
+        container.style.height = `${pxHeight}px`;
+        document.body.appendChild(container); 
+        
+        const root = createRoot(container);
+
+        const renderAndCapture = async (element: React.ReactNode) => {
+          return new Promise<string>((res, rej) => {
+            root.render(<div style={{ width: totalPxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+            setTimeout(async () => {
+              try {
+                const node = container.firstChild as HTMLElement;
+                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
+                res(dataUrl);
+              } catch (e) {
+                rej(e);
+              }
+            }, 1500); 
+          });
+        };
+
+        let coverImageForPdf = order.coverData?.image || '';
+        if (typeof coverImageForPdf === 'string' && coverImageForPdf.includes('justwhite')) {
+          coverImageForPdf = justWhiteImg;
         }
         
-        const pxWidth = Math.round((wCm / 2.54) * 300);
-        const pxHeight = Math.round((hCm / 2.54) * 300);
+        // Se ignora el coverColor general de la vista previa para garantizar que el lomo y contraportada sean blancos
+        const textColor = order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000';
+        const spineText = order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || '';
 
-        const totalItems = isCalendar ? 12 : (1 + (order.pages?.length || 0));
+        const dataUrl = await renderAndCapture(
+            <div style={{ display: 'flex', width: totalPxWidth, height: pxHeight, backgroundColor: '#FFFFFF' }}>
+               {/* Contraportada (Izquierda) - Fondo Blanco puro */}
+               <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ position: 'absolute', bottom: '23%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.02}px` }}>
+                     <img src={jiffyLogo} style={{ width: `${pxWidth * 0.25}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                     <span style={{ fontSize: `${(pxWidth * 0.03) - 5}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                  </div>
+               </div>
+               
+               {/* Lomo (Centro) - Fondo Blanco puro, sin sombras */}
+               <div style={{ width: spinePxWidth, height: pxHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', backgroundColor: '#FFFFFF' }}>
+                   <span style={{ transform: 'rotate(-90deg)', whiteSpace: 'nowrap', fontSize: `${spinePxWidth * 0.4}px`, fontWeight: 'bold', letterSpacing: '8px', color: textColor }}>
+                      {spineText}
+                   </span>
+               </div>
+               
+               {/* Portada (Derecha) */}
+               <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                   <CoverPreview
+                     coverSize={coverSizeProp as any} 
+                     coverImage={coverImageForPdf} 
+                     coverTitle={order.coverData?.title || ''}
+                     coverSubtitle={order.coverData?.subtitle || ''} 
+                     coverYear={order.coverData?.year || ''}
+                     selectedLayout={Number(order.coverData?.layout) || 1} 
+                     coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
+                     typographyColor={textColor}
+                     hideSpine={true}
+                   />
+               </div>
+            </div>
+        );
+
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
+        onProgress(100);
+        
+        root.unmount();
+        document.body.removeChild(container);
+        resolve(pdf.output('blob'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
+  const generateInnerPagesPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
+        const totalItems = order.pages?.length || 0;
         let itemsProcessed = 0;
 
-        const pdf = new jsPDF({
-          orientation: wCm > hCm ? 'landscape' : 'portrait',
-          unit: 'cm',
-          format: [wCm, hCm]
-        });
+        const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
 
         const container = document.createElement('div');
         container.style.position = 'fixed';
@@ -479,35 +570,9 @@ const OwnerDashboard: React.FC = () => {
           });
         };
 
-        if (!isCalendar) {
-          let coverImageForPdf = order.coverData?.image || '';
-          if (typeof coverImageForPdf === 'string' && coverImageForPdf.includes('justwhite')) {
-            coverImageForPdf = justWhiteImg;
-          }
-          const coverDataUrl = await renderAndCapture(
-            <CoverPreview
-              coverSize={coverSizeProp as any} coverImage={coverImageForPdf} coverTitle={order.coverData?.title || ''}
-              coverSubtitle={order.coverData?.subtitle || ''} coverYear={order.coverData?.year || ''}
-              selectedLayout={Number(order.coverData?.layout) || 1} coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
-              typographyColor={order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000'}
-            />
-          );
-          pdf.addImage(coverDataUrl, 'JPEG', 0, 0, wCm, hCm);
-          itemsProcessed++;
-          onProgress(Math.round((itemsProcessed / totalItems) * 100));
-        }
-
-        if (isCalendar) {
-          for (let i = 0; i < 12; i++) {
-            if (i > 0) pdf.addPage(); 
-            const pageDataUrl = await renderAndCapture(<CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />);
-            pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
-            itemsProcessed++;
-            onProgress(Math.round((itemsProcessed / totalItems) * 100));
-          }
-        } else if (order.pages && order.pages.length > 0) {
+        if (order.pages && order.pages.length > 0) {
           for (let i = 0; i < order.pages.length; i++) {
-            pdf.addPage();
+            if (i > 0) pdf.addPage();
             const pageDataUrl = await renderAndCapture(
               <AlbumPagePrintView pageObj={order.pages[i]} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} />
             );
@@ -521,12 +586,65 @@ const OwnerDashboard: React.FC = () => {
         document.body.removeChild(container);
         onProgress(100);
         resolve(pdf.output('blob'));
-
       } catch (err) {
         reject(err);
       }
     });
   };
+
+  const generateCalendarPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
+        const totalItems = 12;
+        let itemsProcessed = 0;
+
+        const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
+
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '-99999px'; 
+        container.style.width = `${pxWidth}px`;
+        container.style.height = `${pxHeight}px`;
+        document.body.appendChild(container); 
+        
+        const root = createRoot(container);
+
+        const renderAndCapture = async (element: React.ReactNode) => {
+          return new Promise<string>((res, rej) => {
+            root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+            setTimeout(async () => {
+              try {
+                const node = container.firstChild as HTMLElement;
+                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
+                res(dataUrl);
+              } catch (e) {
+                rej(e);
+              }
+            }, 1500); 
+          });
+        };
+
+        for (let i = 0; i < 12; i++) {
+          if (i > 0) pdf.addPage(); 
+          const pageDataUrl = await renderAndCapture(<CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />);
+          pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
+          itemsProcessed++;
+          onProgress(Math.round((itemsProcessed / totalItems) * 100));
+        }
+
+        root.unmount();
+        document.body.removeChild(container);
+        onProgress(100);
+        resolve(pdf.output('blob'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
+  // ==========================================================================
 
   const handleDownloadZIP = async (order: Order) => {
     if (downloadProgress.orderId) return;
@@ -536,8 +654,7 @@ const OwnerDashboard: React.FC = () => {
       const folder = zip.folder(`pedido_${order.id}`);
       if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
 
-      const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
-      const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+      const { isCalendar, isAlbum } = getDimensions(order);
 
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
@@ -631,9 +748,18 @@ const OwnerDashboard: React.FC = () => {
       await Promise.all(imagePromises);
 
       try {
-        const pdfBlob = await generateAlbumPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
-        const pdfFileName = isCalendar ? `Impresion_Calendario_${order.id}_300DPI.pdf` : `Impresion_Album_${order.id}_300DPI.pdf`;
-        folder.file(pdfFileName, pdfBlob);
+        if (isCalendar) {
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
+          folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+        } else if (isAlbum) {
+          // Generar PDF 1: Portada Formato Doble (30%)
+          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
+          folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+
+          // Generar PDF 2: Páginas Interiores (70%)
+          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
+          folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+        }
       } catch (pdfError) {
         console.error("Error al generar PDF de alta resolución:", pdfError);
         alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");

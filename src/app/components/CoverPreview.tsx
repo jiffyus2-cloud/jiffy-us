@@ -12,6 +12,7 @@ interface CoverPreviewProps {
   coverCrop?: { x: number; y: number; zoom: number };
   typographyColor?: string;
 
+  hideSpine?: boolean; // Usado también para saber si estamos en "Modo Impresión PDF"
   customization?: any;
   photos?: (string | null)[];
   photoCrops?: Record<string, { x: number; y: number; zoom: number }>;
@@ -27,6 +28,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   selectedLayout,
   coverCrop = { x: 50, y: 50, zoom: 1 },
   typographyColor = '#000000',
+  hideSpine = false,
 }) => {
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -37,6 +39,10 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     if (isHorizontal) return '28 / 21';
     return '1 / 1';
   }, [isVertical, isHorizontal]);
+
+  // --- ELIMINAR SOMBRAS SI ESTAMOS EN EL MODO DE IMPRESIÓN (hideSpine === true) ---
+  const containerShadow = hideSpine ? 'shadow-none' : 'shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)]';
+  const floatingBoxShadow = hideSpine ? 'shadow-none' : 'shadow-2xl';
 
   const renderImageSlot = () => {
     if (coverImage) {
@@ -68,7 +74,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 1:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
               <div className="h-[20%] flex-shrink-0 flex flex-col items-center justify-center p-[10cqw] bg-white z-10">
@@ -89,7 +95,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 2:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
               <div className="relative w-full h-[75%] bg-white">
@@ -112,7 +118,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 3:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
@@ -120,7 +126,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                 <div 
-                  className="absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border shadow-2xl p-[4cqw] text-center w-[70%] ring-white ring-[2cqw]"
+                  className={`absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border ${floatingBoxShadow} p-[4cqw] text-center w-[70%] ring-white ring-[2cqw]`}
                   style={{ borderColor: typographyColor }}
                 >
                   <div className="w-full mb-[1.5cqw]">
@@ -137,7 +143,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 4:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
               <div className="h-[10%] flex-shrink-0 flex flex-col items-center justify-center p-[8cqw] bg-white z-10">
@@ -164,7 +170,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 5:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
@@ -188,7 +194,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 1:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
               <div className="h-[25%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
@@ -207,7 +213,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 2:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
               <div className="relative w-full h-[75%] bg-white">
@@ -230,7 +236,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 3:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
@@ -238,7 +244,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               </div>
               <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                 <div 
-                  className="absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border shadow-2xl p-[4cqw] text-center w-[65%] ring-white ring-[2cqw]"
+                  className={`absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border ${floatingBoxShadow} p-[4cqw] text-center w-[65%] ring-white ring-[2cqw]`}
                   style={{ borderColor: typographyColor }}
                 >
                   <div className="w-full mb-[1.5cqw]">
@@ -255,7 +261,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 4:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
               <div className="h-[5%] flex-shrink-0 flex flex-col items-center justify-center p-[5cqw] bg-white z-10">
@@ -282,7 +288,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 5:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
@@ -306,7 +312,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 1:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
             >
               <div className="relative w-full h-[70%] bg-white">
@@ -324,7 +330,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 2:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
             >
               <div className="relative w-full h-[75%] bg-white">
@@ -347,7 +353,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 3:
             return (
               <div 
-                className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
                 style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
               >
                 <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
@@ -355,7 +361,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
                 <div className="absolute inset-[10%] z-10 pointer-events-none" style={{ containerType: 'inline-size' }}>
                   <div 
-                    className="absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border shadow-2xl p-[4cqw] text-center w-[70%] ring-white ring-[2cqw]"
+                    className={`absolute left-1/2 -translate-x-1/2 bottom-[15%] bg-white border ${floatingBoxShadow} p-[4cqw] text-center w-[70%] ring-white ring-[2cqw]`}
                     style={{ borderColor: typographyColor }}
                   >
                     <div className="w-full mb-[1.5cqw]">
@@ -372,7 +378,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 4:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
             >
               <div className="h-[10%] flex-shrink-0 flex flex-col items-center justify-center p-[5cqw] bg-white z-10">
@@ -399,7 +405,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         case 5:
           return (
             <div 
-              className="relative bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}>
               <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
@@ -421,23 +427,27 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   };
 
   return (
-    <div className="flex w-full items-stretch justify-center">
+    <div className="flex w-full items-stretch justify-center h-full">
       
       {/* Lomo (Spine) con el texto anclado de forma absoluta */}
-      <div 
-        className="w-[7%] mr-[3%] bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm" 
-        style={{ containerType: 'inline-size' }}
-      >
-        <span 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[35cqw] tracking-widest font-bold opacity-80" 
-          style={{ color: typographyColor }}
+      {!hideSpine && (
+        <div 
+          className="w-[7%] mr-[3%] bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm" 
+          style={{ containerType: 'inline-size' }}
         >
-          {spineText}
-        </span>
-      </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span 
+              className="transform -rotate-90 whitespace-nowrap text-[35cqw] tracking-widest font-bold opacity-80 origin-center" 
+              style={{ color: typographyColor }}
+            >
+              {spineText}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Recuadro de la Portada */}
-      <div className="w-[90%] shrink-0 relative">
+      <div className={`${hideSpine ? 'w-full h-full' : 'w-[90%] shrink-0'} relative`}>
         {renderPreviewContent()}
       </div>
 
