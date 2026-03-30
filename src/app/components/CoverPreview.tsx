@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import ImageCropper from './ImageCropper'; // <-- IMPORTAMOS EL NUEVO CROPPER
+import ImageCropper from './ImageCropper';
 
 interface CoverPreviewProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -7,6 +7,7 @@ interface CoverPreviewProps {
   coverTitle?: string;
   coverSubtitle?: string;
   coverYear?: string;
+  spineText?: string;
   selectedLayout: number;
   coverCrop?: { x: number; y: number; zoom: number };
   typographyColor?: string;
@@ -22,6 +23,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverTitle = '',
   coverSubtitle = '',
   coverYear = '',
+  spineText = '',
   selectedLayout,
   coverCrop = { x: 50, y: 50, zoom: 1 },
   typographyColor = '#000000',
@@ -40,7 +42,6 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     if (coverImage) {
       return (
         <div className="absolute inset-0 w-full h-full">
-          {/* USAMOS EL COMPONENTE MATEMÁTICO EN VEZ DEL CSS CRUDO */}
           <ImageCropper 
             src={coverImage} 
             position={coverCrop} 
@@ -420,9 +421,27 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   };
 
   return (
-    <React.Fragment>
-      {renderPreviewContent()}
-    </React.Fragment>
+    <div className="flex w-full items-stretch justify-center">
+      
+      {/* Lomo (Spine) con el texto anclado de forma absoluta */}
+      <div 
+        className="w-[7%] mr-[3%] bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm" 
+        style={{ containerType: 'inline-size' }}
+      >
+        <span 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[35cqw] tracking-widest font-bold opacity-80" 
+          style={{ color: typographyColor }}
+        >
+          {spineText}
+        </span>
+      </div>
+
+      {/* Recuadro de la Portada */}
+      <div className="w-[90%] shrink-0 relative">
+        {renderPreviewContent()}
+      </div>
+
+    </div>
   );
 };
 

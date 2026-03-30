@@ -15,6 +15,7 @@ interface CoverEditorProps {
     coverTitle: string;
     coverSubtitle: string;
     coverYear: string;
+    spineText: string;
     selectedLayout: number;
     typographyColor: string;
     coverCrop: { x: number; y: number; zoom: number };
@@ -24,6 +25,7 @@ interface CoverEditorProps {
     coverTitle: string;
     coverSubtitle: string;
     coverYear: string;
+    spineText?: string;
     selectedLayout: number;
     typographyColor?: string;
     coverCrop?: { x: number; y: number; zoom: number };
@@ -44,6 +46,9 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || 'NUESTRA HISTORIA');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || 'Un viaje inolvidable');
   const [coverYear, setCoverYear] = useState(initialData?.coverYear || '2024');
+  
+  const [spineText, setSpineText] = useState(initialData?.spineText !== undefined ? initialData.spineText : (initialData?.coverTitle || 'NUESTRA HISTORIA'));
+  
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
   const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1 });
   const [typographyColor, setTypographyColor] = useState(initialData?.typographyColor || '#000000');
@@ -54,38 +59,34 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
   const isHorizontal = coverSize === '21x28';
 
-  // 1. Proporción base de la carátula (ej. 21/28 = 0.75)
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
-  // 2. CÁLCULO MATEMÁTICO EXACTO DEL DOM
-  // Analizamos los porcentajes reales de Tailwind en CoverPreview.tsx para obtener el ratio del hueco.
   const currentImageAspectRatio = useMemo(() => {
-    let wPercent = 0.80; // Todos los diseños usan left-[10%] right-[10%] o inset-[10%] (80% ancho)
-    let hPercent = 0.80; // Default
+    let wPercent = 0.80; 
+    let hPercent = 0.80; 
 
     if (isVertical) {
-      if (selectedLayout === 1) hPercent = 0.80 * 0.90;      // h-[80%] y bottom-[10%]
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; // h-[75%] y top-[10%]
-      else if (selectedLayout === 3) hPercent = 0.80;        // inset-[10%]
-      else if (selectedLayout === 4) hPercent = 0.80;        // h-[80%] y top-0 bottom-0
-      else if (selectedLayout === 5) hPercent = 0.80;        // inset-[10%]
+      if (selectedLayout === 1) hPercent = 0.80 * 0.90;      
+      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+      else if (selectedLayout === 3) hPercent = 0.80;        
+      else if (selectedLayout === 4) hPercent = 0.80;        
+      else if (selectedLayout === 5) hPercent = 0.80;        
     } 
     else if (isHorizontal) {
-      if (selectedLayout === 1) hPercent = 0.75 * 0.90;      // h-[75%] y bottom-[10%]
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; // h-[75%] y top-[10%]
-      else if (selectedLayout === 3) hPercent = 0.80;        // inset-[10%]
-      else if (selectedLayout === 4) hPercent = 0.90;        // h-[90%] y top-0 bottom-0
-      else if (selectedLayout === 5) hPercent = 0.80;        // inset-[10%]
+      if (selectedLayout === 1) hPercent = 0.75 * 0.90;      
+      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+      else if (selectedLayout === 3) hPercent = 0.80;        
+      else if (selectedLayout === 4) hPercent = 0.90;        
+      else if (selectedLayout === 5) hPercent = 0.80;        
     } 
     else if (isSquare) {
-      if (selectedLayout === 1) hPercent = 0.70 * 0.90;      // h-[70%] y top-[10%] bottom-0
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; // h-[75%] y top-[10%] bottom-0
-      else if (selectedLayout === 3) hPercent = 0.80;        // inset-[10%]
-      else if (selectedLayout === 4) hPercent = 0.80;        // h-[80%] y top-0 bottom-0
-      else if (selectedLayout === 5) hPercent = 0.80;        // inset-[10%]
+      if (selectedLayout === 1) hPercent = 0.70 * 0.90;      
+      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+      else if (selectedLayout === 3) hPercent = 0.80;        
+      else if (selectedLayout === 4) hPercent = 0.80;        
+      else if (selectedLayout === 5) hPercent = 0.80;        
     }
 
-    // Ratio = Ratio de la portada * (Ancho ocupado / Alto ocupado)
     return baseAspectRatio * (wPercent / hPercent);
   }, [selectedLayout, isVertical, isHorizontal, isSquare, baseAspectRatio]);
 
@@ -125,17 +126,18 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </button>
 
         <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
-          <div className="w-full" style={{ maxWidth: isVertical ? '180px' : isHorizontal ? '260px' : '200px' }}>
+          {/* Se ajustó levemente el maxWidth para acomodar el lomo sin encoger la portada */}
+          <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
             <div className="md:hidden">
               <CoverPreview
                 coverSize={coverSize} coverImage={coverImage} coverTitle={coverTitle} coverSubtitle={coverSubtitle}
-                coverYear={coverYear} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                coverYear={coverYear} spineText={spineText} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
               />
             </div>
-            <div className="hidden md:block w-full" style={{ maxWidth: isVertical ? '350px' : isHorizontal ? '500px' : '400px' }}>
+            <div className="hidden md:block w-full" style={{ maxWidth: isVertical ? '400px' : isHorizontal ? '580px' : '470px' }}>
               <CoverPreview
                 coverSize={coverSize} coverImage={coverImage} coverTitle={coverTitle} coverSubtitle={coverSubtitle}
-                coverYear={coverYear} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                coverYear={coverYear} spineText={spineText} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
               />
             </div>
           </div>
@@ -155,7 +157,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8">
           
-          {/* LAYOUT */}
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
               <Layout size={16} />
@@ -175,7 +176,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* COLOR */}
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400"><Palette size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Color de Tipografía</h3></div>
             <div className="flex flex-wrap gap-3 md:gap-4">
@@ -188,20 +188,27 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* TEXTO */}
           <section className="space-y-4 md:space-y-5">
             <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
             <div className="space-y-3 md:space-y-4">
+              
               <div className="space-y-1 md:space-y-1.5">
                 <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal</label>
                 <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-sm md:text-base" placeholder="Título del álbum" />
               </div>
+
+              <div className="space-y-1 md:space-y-1.5">
+                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo</label>
+                <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-xs md:text-sm" placeholder="Texto lateral (lomo)" />
+              </div>
+
               {!( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
                   <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
                   <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-xs md:text-sm" placeholder="Subtítulo" />
                 </div>
               )}
+
               {( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
                   <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia</label>
@@ -211,7 +218,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
           </section>
 
-          {/* FOTO */}
           {!hidePhoto && (
             <section className="pb-4">
                <div className="flex items-center gap-1.5 mb-3 text-gray-400">
@@ -245,11 +251,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
         <div className="p-3 md:p-6 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0">
           <button onClick={onClose} className="flex-1 py-2.5 md:py-3.5 bg-white text-black border-2 border-black font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl hover:bg-gray-50 transition-all text-[10px] sm:text-xs">Cerrar</button>
-          <button onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, selectedLayout, coverCrop, typographyColor })} className="flex-[2] py-2.5 md:py-3.5 bg-black text-white font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl flex items-center justify-center gap-1.5 md:gap-2 hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] text-[10px] sm:text-xs"><Check size={14} className="md:w-4 md:h-4" /> Guardar Cambios</button>
+          <button onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} className="flex-[2] py-2.5 md:py-3.5 bg-black text-white font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl flex items-center justify-center gap-1.5 md:gap-2 hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] text-[10px] sm:text-xs"><Check size={14} className="md:w-4 md:h-4" /> Guardar Cambios</button>
         </div>
       </div>
 
-      {/* MODAL DE RECORTE */}
       {isCropModalOpen && (
         <CropModal 
           isOpen={true} 
