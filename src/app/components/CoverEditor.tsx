@@ -117,7 +117,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const currentTypographyColors = getTypographyColors();
 
   return (
-    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-300 overflow-hidden">
+    // Agregamos overscroll-none para evitar que Safari "arrastre" el contenedor entero fuera de la pantalla
+    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-300 overflow-hidden overscroll-none">
       
       {/* PANEL IZQUIERDO: PREVISUALIZACIÓN */}
       <div className="h-[35dvh] md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 relative order-1 md:order-2 border-b md:border-b-0 border-gray-200 shrink-0">
@@ -154,7 +155,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors md:hidden"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8">
+        {/* Añadimos overscroll-contain para mantener el scroll confinado a este div */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8">
           
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
@@ -191,27 +193,28 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
             <div className="space-y-3 md:space-y-4">
               
+              {/* Cambiamos a text-[16px] en móvil para evitar el zoom de Safari */}
               <div className="space-y-1 md:space-y-1.5">
                 <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal</label>
-                <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-sm md:text-base" placeholder="Título del álbum" />
+                <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título del álbum" />
               </div>
 
               <div className="space-y-1 md:space-y-1.5">
                 <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo</label>
-                <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-xs md:text-sm" placeholder="Texto lateral (lomo)" />
+                <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
               </div>
 
               {!( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
                   <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
-                  <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-xs md:text-sm" placeholder="Subtítulo" />
+                  <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo" />
                 </div>
               )}
 
               {( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
                   <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia</label>
-                  <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-sm md:text-base" placeholder="2024" />
+                  <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="2024" />
                 </div>
               )}
             </div>
