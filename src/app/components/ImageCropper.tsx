@@ -2,13 +2,14 @@ import React, { useRef, useState, useLayoutEffect } from 'react';
 
 interface ImageCropperProps {
   src: string;
-  /** Posición central y zoom {x, y, zoom} provisto por Jiffy */
-  position: { x: number; y: number; zoom: number };
+  /** Posición central y zoom {x, y, zoom, rotation} provisto por Jiffy */
+  position: { x: number; y: number; zoom: number; rotation?: number };
   alt?: string;
 }
 
 export default function ImageCropper({ src, position, alt = "Photo" }: ImageCropperProps) {
-  const { x = 50, y = 50, zoom = 1 } = position || {};
+  // Extraemos la rotación (0 por defecto si no existe)
+  const { x = 50, y = 50, zoom = 1, rotation = 0 } = position || {};
   
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -51,18 +52,18 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
       const translateX = (Cw / 2) - imgCenterX;
       const translateY = (Ch / 2) - imgCenterY;
 
-      // 5. Aplicar estilos definitivos (Hacemos Zoom exactamente alrededor de ese centro)
+      // 5. Aplicar estilos definitivos (Rotación y Zoom se hacen alrededor del centro exacto)
       setStyle({
         position: 'absolute',
         width: `${Rw}px`,
         height: `${Rh}px`,
         left: `${translateX}px`,
         top: `${translateY}px`,
-        transform: `scale(${zoom})`,
+        transform: `rotate(${rotation}deg) scale(${zoom})`,
         transformOrigin: `${imgCenterX}px ${imgCenterY}px`,
         maxWidth: 'none', 
         maxHeight: 'none',
-        opacity: 1, // Mostrar imagen una vez calculada
+        opacity: 1, 
       });
     };
 
@@ -77,7 +78,7 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
       observer.disconnect();
       img.removeEventListener('load', updateStyle);
     };
-  }, [x, y, zoom, src]);
+  }, [x, y, zoom, rotation, src]);
 
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-100 relative">

@@ -144,12 +144,11 @@ export default function PhotoOrganizer({
   const isVertical = sizeStr.includes('Vertical');
   const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
 
-  // --- NUEVA LÓGICA ESTRICTA: Siempre salta al layout más cercano que pueda contener N fotos ---
   const getNextAllowed = (count: number) => {
     for (const opt of allowedPhotosPerPage) {
       if (opt >= count) return opt;
     }
-    return allowedPhotosPerPage[allowedPhotosPerPage.length - 1]; // Topa en 9 o 6
+    return allowedPhotosPerPage[allowedPhotosPerPage.length - 1]; 
   };
 
   const getGridLayout = (count: number, layout?: 'row' | 'column' | 'grid') => {
@@ -191,59 +190,69 @@ export default function PhotoOrganizer({
     }
   }, [uploadedPhotos.length]);
 
-  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ==========================================================================
+  // MANEJADOR DE CARGA OPTIMIZADO PARA SAFARI IOS
+  // ==========================================================================
+  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsSortingWithAI(true); 
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
+    // 1. Mostrar estado de carga INSTANTÁNEAMENTE para no congelar la UI
+    setIsSortingWithAI(true);
+
+    // 2. Extraer archivos del evento nativo
     const filesArray = Array.from(files);
-    try {
-      const filesWithData = filesArray.map((file, index) => ({
-        id: index.toString(), url: URL.createObjectURL(file),
-        metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-      }));
 
-      let finalUrls: string[] = [];
+    // 3. Empujar el procesamiento pesado fuera del hilo principal usando setTimeout
+    // Esto obliga al navegador (y especialmente a Safari) a hacer un "repaint" y mostrar el spinner.
+    setTimeout(async () => {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
-        const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            photos_data: filesWithData.map(f => ({ id: f.id, ...f.metadata })),
-            page_count: typeof numPages === 'number' ? numPages : 40,
-            layout_preferences: { isSquare, isHorizontal, isVertical }
-          })
-        });
+        const filesWithData = filesArray.map((file, index) => ({
+          id: index.toString(), 
+          url: URL.createObjectURL(file),
+          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+        }));
 
-        if (!aiResponse.ok) throw new Error('Error IA');
-        const responseData = await aiResponse.json();
-
-        if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
-          const orderedIdsFromAI: string[] = [];
-          responseData.Albums.forEach((album: any) => {
-            if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
+        let finalUrls: string[] = [];
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
+          const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              photos_data: filesWithData.map(f => ({ id: f.id, ...f.metadata })),
+              page_count: typeof numPages === 'number' ? numPages : 40,
+              layout_preferences: { isSquare, isHorizontal, isVertical }
+            })
           });
-          finalUrls = orderedIdsFromAI.map((id: string) => {
-            const matchedFile = filesWithData.find(f => f.id === id);
-            return matchedFile ? matchedFile.url : '';
-          }).filter(Boolean);
-        } else {
+
+          if (!aiResponse.ok) throw new Error('Error IA');
+          const responseData = await aiResponse.json();
+
+          if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
+            const orderedIdsFromAI: string[] = [];
+            responseData.Albums.forEach((album: any) => {
+              if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
+            });
+            finalUrls = orderedIdsFromAI.map((id: string) => {
+              const matchedFile = filesWithData.find(f => f.id === id);
+              return matchedFile ? matchedFile.url : '';
+            }).filter(Boolean);
+          } else {
+            finalUrls = filesWithData.map(f => f.url);
+          }
+        } catch (aiError: any) {
           finalUrls = filesWithData.map(f => f.url);
         }
-      } catch (aiError: any) {
-        finalUrls = filesWithData.map(f => f.url);
-      }
 
-      setUploadedPhotos(prev => [...prev, ...finalUrls]);
-    } catch (error) {
-      console.error("Error al procesar archivos:", error);
-    } finally {
-      setIsSortingWithAI(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+        setUploadedPhotos(prev => [...prev, ...finalUrls]);
+      } catch (error) {
+        console.error("Error al procesar archivos:", error);
+      } finally {
+        setIsSortingWithAI(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    }, 100); // 100ms de gracia garantizan que Safari dibuje el loader visualmente
   };
 
   const handleFinalizeSetup = () => {
@@ -386,11 +395,6 @@ export default function PhotoOrganizer({
     }
   };
 
-  // ==========================================================================
-  // LÓGICA AVANZADA DE CASCADA (RIPPLE / PULL) 100% CORREGIDA
-  // ==========================================================================
-
-  // Función auxiliar para saber si una página es la ÚLTIMA que tiene fotos
   const isLastPageWithContent = (pageIdx: number, currentPhotos: string[][]) => {
     for (let i = pageIdx + 1; i < currentPhotos.length; i++) {
         if (currentPhotos[i].length > 0) return false;
@@ -404,7 +408,6 @@ export default function PhotoOrganizer({
     let newTexts = { ...textBoxSlots };
     let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
 
-    // Extraemos las fotos que "sobran" de la página inicial
     let currentOverflow = newPhotos[startIndex].splice(newVariant);
 
     let movingData = currentOverflow.map((_, idx) => {
@@ -418,7 +421,6 @@ export default function PhotoOrganizer({
 
     let p = startIndex + 1;
     while(currentOverflow.length > 0) {
-        // Bloqueo de seguridad: No exceder 250 páginas
         if (p >= newPhotos.length) {
             if (newPhotos.length >= 250) {
                 alert("Límite máximo de 250 páginas alcanzado. Algunas fotos no se pudieron acomodar.");
@@ -432,19 +434,13 @@ export default function PhotoOrganizer({
         let insertCount = currentOverflow.length;
         let existingLength = newPhotos[p].length;
 
-        // ¿Es esta la última página que tiene fotos en el álbum?
         let lastWithContent = isLastPageWithContent(p, newPhotos);
-
-        // Si la página ya tiene un diseño, lo respetamos.
         let capacity = newVariants[p] || getNextAllowed(existingLength);
         
-        // REGLA DE ORO: Si la página está vacía, o si es la ÚLTIMA página con fotos,
-        // la expandimos automáticamente para absorber todo lo posible (hasta el máximo permitido 6 o 9).
         if (existingLength === 0 || lastWithContent) {
             capacity = getNextAllowed(existingLength + insertCount);
         }
 
-        // Desplazamos la data existente en esta página hacia la derecha para hacer hueco al inicio
         for (let i = existingLength - 1; i >= 0; i--) {
             if (newCrops[`${p}-${i}`]) {
                 newCrops[`${p}-${i + insertCount}`] = newCrops[`${p}-${i}`];
@@ -457,7 +453,6 @@ export default function PhotoOrganizer({
             }
         }
 
-        // Insertamos el desbordamiento al INICIO de esta página
         newPhotos[p].unshift(...currentOverflow);
 
         movingData.forEach((data, idx) => {
@@ -468,7 +463,6 @@ export default function PhotoOrganizer({
             }
         });
 
-        // Si después de insertar las fotos, excedemos la capacidad de esta página, cortamos y seguimos empujando.
         if (newPhotos[p].length > capacity) {
             currentOverflow = newPhotos[p].splice(capacity);
             movingData = currentOverflow.map((_, idx) => {
@@ -482,7 +476,6 @@ export default function PhotoOrganizer({
             newVariants[p] = capacity;
         } else {
             currentOverflow = [];
-            // Ajustamos estrictamente el layout al número de fotos que quedaron.
             newVariants[p] = getNextAllowed(newPhotos[p].length);
         }
         p++;
@@ -602,7 +595,6 @@ export default function PhotoOrganizer({
         }
     });
 
-    // Ajuste estricto: la siguiente página asume el layout perfecto.
     newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
 
     onPhotosChange(newPhotos);
@@ -673,7 +665,6 @@ export default function PhotoOrganizer({
         const nextPageLen = photos[pageIndex + 1]?.length || 0;
         const overflowCount = currentLen - opt;
         
-        // Si al desbordar, la siguiente página revienta su límite máximo (ej 9 o 6), omitimos pregunta y empujamos.
         const isNextPageFull = (nextPageLen + overflowCount > maxForNext);
 
         if (isNextPageFull && pageIndex < photos.length - 1) {
@@ -706,7 +697,6 @@ export default function PhotoOrganizer({
     if (!photos || !photos[pageIndex]) return null;
 
     const pagePhotos = photos[pageIndex];
-    // Se utiliza getNextAllowed para mostrar los recuadros vacíos si el usuario empuja 5 fotos.
     const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
     

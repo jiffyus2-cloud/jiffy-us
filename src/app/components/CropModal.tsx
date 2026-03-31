@@ -1,16 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactCrop, { Crop } from 'react-image-crop';
-import { X, Maximize, ZoomIn, Search, Image as ImageIcon } from 'lucide-react';
+import { X, Maximize, ZoomIn, Search, Image as ImageIcon, RotateCcw, RotateCw } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 
 interface CropModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageSrc: string;
-  currentCrop?: { x: number; y: number; zoom: number };
+  currentCrop?: { x: number; y: number; zoom: number; rotation?: number };
   aspectRatio: number;
   title?: string;
-  onSave: (newCrop: { x: number; y: number; zoom: number }) => void;
+  onSave: (newCrop: { x: number; y: number; zoom: number; rotation: number }) => void;
 }
 
 export default function CropModal({ 
@@ -19,14 +19,17 @@ export default function CropModal({
   
   const imgRef = useRef<HTMLImageElement>(null);
   
-  // Mantenemos solo el estado en porcentaje para evitar los fallos de píxeles
+  // Estado para el recorte (x, y, zoom calculados en porcentajes)
   const [crop, setCrop] = useState<Crop>();
+  // Estado para la rotación en grados
+  const [rotation, setRotation] = useState<number>(currentCrop?.rotation || 0);
 
   useEffect(() => {
     if (isOpen && imageSrc) {
       setCrop(undefined); 
+      setRotation(currentCrop?.rotation || 0);
     }
-  }, [isOpen, imageSrc]);
+  }, [isOpen, imageSrc, currentCrop]);
 
   function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const { naturalWidth, naturalHeight } = e.currentTarget;
@@ -34,7 +37,7 @@ export default function CropModal({
     const C_AR = aspectRatio;
 
     if (currentCrop && currentCrop.zoom >= 1) {
-      // Reconstruimos el recuadro guardado basándonos en los porcentajes universales
+      // Reconstruimos el recuadro guardado basándonos en los porcentajes
       const baseScaleX = Math.min(1, C_AR / I_AR);
       const widthPercent = (baseScaleX / currentCrop.zoom) * 100;
       const heightPercent = widthPercent * (I_AR / C_AR);
@@ -91,7 +94,8 @@ export default function CropModal({
     onSave({
       x: parseFloat(centerXPercent.toFixed(2)),
       y: parseFloat(centerYPercent.toFixed(2)),
-      zoom: parseFloat(Math.max(1, zoom).toFixed(2)) // Bloquear el zoom para que nunca sea < 1
+      zoom: parseFloat(Math.max(1, zoom).toFixed(2)), // Bloquear zoom < 1
+      rotation: rotation
     });
     
     onClose();
@@ -105,7 +109,8 @@ export default function CropModal({
         className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()} 
       >
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+        {/* CABECERA */}
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gray-900 text-white rounded-xl shadow-md">
               <Search className="w-5 h-5" />
@@ -117,12 +122,12 @@ export default function CropModal({
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 sm:p-8 bg-gray-50 flex-1 flex items-center justify-center min-h-[400px]">
+        {/* ÁREA DE RECORTE */}
+        <div className="overflow-y-auto p-4 sm:p-8 bg-gray-50 flex-1 flex items-center justify-center min-h-[350px]">
           {imageSrc ? (
             <div className="shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100">
                <ReactCrop
                 crop={crop}
-                // Ignoramos el primer argumento (píxeles) y guardamos directamente los porcentajes
                 onChange={(_, percentCrop) => setCrop(percentCrop)} 
                 aspect={aspectRatio}
                 className="max-w-full"
@@ -135,7 +140,11 @@ export default function CropModal({
                   src={imageSrc}
                   alt="Crop preview"
                   onLoad={onImageLoad}
-                  style={{ maxHeight: 'calc(95vh - 200px)' }} 
+                  style={{ 
+                    maxHeight: 'calc(95vh - 280px)', 
+                    transform: `rotate(${rotation}deg)`,
+                    transition: 'transform 0.3s ease'
+                  }} 
                   className="block max-w-full h-auto pointer-events-none"
                 />
               </ReactCrop>
@@ -148,21 +157,45 @@ export default function CropModal({
           )}
         </div>
 
-        <div className="px-8 py-4 bg-white border-t border-gray-100 text-sm text-gray-500 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Maximize className="w-4 h-4 text-blue-500" />
-                <span>Arrastra las esquinas del recuadro para ajustar el área visible.</span>
+        {/* BARRA DE HERRAMIENTAS DE ROTACIÓN */}
+        <div className="px-6 py-4 bg-white border-t border-gray-100 shrink-0">
+          <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl mx-auto">
+            <button 
+              onClick={() => setRotation(r => r - 90)} 
+              className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-sm"
+              title="Rotar 90º Izquierda"
+            >
+              <RotateCcw className="w-5 h-5" /> -90º
+            </button>
+            
+            <div className="flex-1 flex items-center gap-3 w-full">
+              <span className="text-xs font-bold text-gray-400">-180º</span>
+              <input 
+                type="range" 
+                min="-180" 
+                max="180" 
+                value={rotation}
+                onChange={(e) => setRotation(Number(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+              />
+              <span className="text-xs font-bold text-gray-400">+180º</span>
             </div>
-            <div className="flex items-center gap-2">
-                <ZoomIn className="w-4 h-4 text-blue-500" />
-                <span>Mueve el recuadro completo para centrar tu foto.</span>
-            </div>
+
+            <button 
+              onClick={() => setRotation(r => r + 90)} 
+              className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-sm"
+              title="Rotar 90º Derecha"
+            >
+              +90º <RotateCw className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6 border-t border-gray-100 bg-white flex items-center justify-end gap-3 sticky bottom-0 z-10">
+        {/* PIE DE MODAL (GUARDAR/CANCELAR) */}
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 sticky bottom-0 z-10 shrink-0">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all text-sm"
+            className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-100 transition-all text-sm"
           >
             Cancelar
           </button>

@@ -18,7 +18,7 @@ interface CoverEditorProps {
     spineText: string;
     selectedLayout: number;
     typographyColor: string;
-    coverCrop: { x: number; y: number; zoom: number };
+    coverCrop: { x: number; y: number; zoom: number; rotation?: number };
   }) => void;
   initialData?: {
     coverImage: string;
@@ -28,7 +28,7 @@ interface CoverEditorProps {
     spineText?: string;
     selectedLayout: number;
     typographyColor?: string;
-    coverCrop?: { x: number; y: number; zoom: number };
+    coverCrop?: { x: number; y: number; zoom: number; rotation?: number };
   };
 }
 
@@ -50,7 +50,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [spineText, setSpineText] = useState(initialData?.spineText !== undefined ? initialData.spineText : (initialData?.coverTitle || 'NUESTRA HISTORIA'));
   
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
-  const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1 });
+  const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1, rotation: 0 });
   const [typographyColor, setTypographyColor] = useState(initialData?.typographyColor || '#000000');
 
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
@@ -96,7 +96,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       setCoverImage(URL.createObjectURL(file));
-      setCoverCrop({ x: 50, y: 50, zoom: 1 }); 
+      setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 }); 
     }
   };
 
@@ -117,7 +117,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const currentTypographyColors = getTypographyColors();
 
   return (
-    // Agregamos overscroll-none para evitar que Safari "arrastre" el contenedor entero fuera de la pantalla
     <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-300 overflow-hidden overscroll-none">
       
       {/* PANEL IZQUIERDO: PREVISUALIZACIÓN */}
@@ -155,7 +154,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors md:hidden"><X size={20} /></button>
         </div>
 
-        {/* Añadimos overscroll-contain para mantener el scroll confinado a este div */}
         <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8">
           
           <section>
@@ -193,7 +191,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
             <div className="space-y-3 md:space-y-4">
               
-              {/* Cambiamos a text-[16px] en móvil para evitar el zoom de Safari */}
               <div className="space-y-1 md:space-y-1.5">
                 <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal</label>
                 <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título del álbum" />
@@ -237,7 +234,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     />
                     <div className="absolute top-1.5 right-1.5 md:top-2 md:right-2 z-10 flex gap-2">
                       <button onClick={() => setIsCropModalOpen(true)} className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte"><CropIcon size={14} className="md:w-4 md:h-4" /></button>
-                      <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1}); }} className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto"><X size={14} className="md:w-4 md:h-4" /></button>
+                      <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); }} className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto"><X size={14} className="md:w-4 md:h-4" /></button>
                     </div>
                   </div>
                ) : (
