@@ -117,16 +117,15 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const currentTypographyColors = getTypographyColors();
 
   return (
-    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-screen animate-in fade-in duration-300 overflow-hidden">
+    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-300 overflow-hidden">
       
       {/* PANEL IZQUIERDO: PREVISUALIZACIÓN */}
-      <div className="h-[35vh] md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 relative order-1 md:order-2 border-b md:border-b-0 border-gray-200 shrink-0">
+      <div className="h-[35dvh] md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 relative order-1 md:order-2 border-b md:border-b-0 border-gray-200 shrink-0">
         <button onClick={onClose} className="hidden md:flex absolute top-10 right-10 p-3 bg-white rounded-full shadow-2xl hover:scale-110 transition-all z-20 group">
           <X size={24} className="group-hover:rotate-90 transition-transform" />
         </button>
 
         <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
-          {/* Se ajustó levemente el maxWidth para acomodar el lomo sin encoger la portada */}
           <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
             <div className="md:hidden">
               <CoverPreview
@@ -249,7 +248,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           )}
         </div>
 
-        <div className="p-3 md:p-6 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0">
+        <div className="p-3 md:p-6 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <button onClick={onClose} className="flex-1 py-2.5 md:py-3.5 bg-white text-black border-2 border-black font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl hover:bg-gray-50 transition-all text-[10px] sm:text-xs">Cerrar</button>
           <button onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} className="flex-[2] py-2.5 md:py-3.5 bg-black text-white font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl flex items-center justify-center gap-1.5 md:gap-2 hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] text-[10px] sm:text-xs"><Check size={14} className="md:w-4 md:h-4" /> Guardar Cambios</button>
         </div>
