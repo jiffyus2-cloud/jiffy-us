@@ -43,11 +43,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const { t } = useLanguage();
   
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
-  const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || 'NUESTRA HISTORIA');
-  const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || 'Un viaje inolvidable');
-  const [coverYear, setCoverYear] = useState(initialData?.coverYear || '2024');
-  
-  const [spineText, setSpineText] = useState(initialData?.spineText !== undefined ? initialData.spineText : (initialData?.coverTitle || 'NUESTRA HISTORIA'));
+  const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || '');
+  const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || '');
+  const [coverYear, setCoverYear] = useState(initialData?.coverYear || '');
+  const [spineText, setSpineText] = useState(initialData?.spineText || '');
   
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
   const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1, rotation: 0 });
@@ -60,6 +59,18 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const isHorizontal = coverSize === '21x28';
 
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
+
+  // Lógica de Validación
+  const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5;
+  const isFormValid = coverTitle.trim() !== '' && 
+                      spineText.trim() !== '' && 
+                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
+
+  // Valores a mostrar en la vista previa (si el usuario aún no escribe nada, mostramos el placeholder)
+  const displayTitle = coverTitle || 'Mi album';
+  const displaySubtitle = coverSubtitle || 'Subtitulo';
+  const displayYear = coverYear || new Date().getFullYear().toString();
+  const displaySpine = spineText || displayTitle;
 
   const currentImageAspectRatio = useMemo(() => {
     let wPercent = 0.80; 
@@ -117,10 +128,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const currentTypographyColors = getTypographyColors();
 
   return (
-    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-300 overflow-hidden overscroll-none">
+    // fixed inset-0 permite que el navegador estire o encoja el contenedor dinámicamente si sale el teclado
+    <div className="fixed inset-0 bg-white z-[100] flex flex-col md:flex-row overflow-hidden overscroll-none">
       
       {/* PANEL IZQUIERDO: PREVISUALIZACIÓN */}
-      <div className="h-[35dvh] md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 relative order-1 md:order-2 border-b md:border-b-0 border-gray-200 shrink-0">
+      <div className="relative flex-[0_0_35%] md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
         <button onClick={onClose} className="hidden md:flex absolute top-10 right-10 p-3 bg-white rounded-full shadow-2xl hover:scale-110 transition-all z-20 group">
           <X size={24} className="group-hover:rotate-90 transition-transform" />
         </button>
@@ -129,14 +141,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
             <div className="md:hidden">
               <CoverPreview
-                coverSize={coverSize} coverImage={coverImage} coverTitle={coverTitle} coverSubtitle={coverSubtitle}
-                coverYear={coverYear} spineText={spineText} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                coverSize={coverSize} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
+                coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
               />
             </div>
             <div className="hidden md:block w-full" style={{ maxWidth: isVertical ? '400px' : isHorizontal ? '580px' : '470px' }}>
               <CoverPreview
-                coverSize={coverSize} coverImage={coverImage} coverTitle={coverTitle} coverSubtitle={coverSubtitle}
-                coverYear={coverYear} spineText={spineText} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                coverSize={coverSize} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
+                coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
               />
             </div>
           </div>
@@ -148,13 +160,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       </div>
 
       {/* PANEL DERECHO: HERRAMIENTAS */}
-      <div className="flex-1 w-full md:w-[400px] md:h-full border-r border-gray-200 flex flex-col bg-white shadow-xl z-10 order-2 md:order-1 overflow-hidden">
+      <div className="flex-1 w-full md:w-[400px] flex flex-col bg-white shadow-xl z-10 order-2 md:order-1 overflow-hidden min-h-0">
         <div className="p-3 md:p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 className="text-lg md:text-xl font-black tracking-tighter">EDITOR DE PORTADA</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors md:hidden"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
           
           <section>
             <div className="flex items-center gap-1.5 mb-3 text-gray-400">
@@ -192,25 +204,25 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <div className="space-y-3 md:space-y-4">
               
               <div className="space-y-1 md:space-y-1.5">
-                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal</label>
-                <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título del álbum" />
+                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
+                <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Mi album" />
               </div>
 
               <div className="space-y-1 md:space-y-1.5">
-                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo</label>
-                <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
+                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo *</label>
+                <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto del lomo" />
               </div>
 
               {!( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
-                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
-                  <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo" />
+                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción *</label>
+                  <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtitulo" />
                 </div>
               )}
 
               {( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
                 <div className="space-y-1 md:space-y-1.5">
-                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia</label>
+                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
                   <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="2024" />
                 </div>
               )}
@@ -232,9 +244,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       src={coverImage} 
                       position={coverCrop} 
                     />
-                    <div className="absolute top-1.5 right-1.5 md:top-2 md:right-2 z-10 flex gap-2">
-                      <button onClick={() => setIsCropModalOpen(true)} className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte"><CropIcon size={14} className="md:w-4 md:h-4" /></button>
-                      <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); }} className="bg-white/90 text-black p-1.5 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto"><X size={14} className="md:w-4 md:h-4" /></button>
+                    {/* Botones agrandados en móvil para mejorar la accesibilidad táctil */}
+                    <div className="absolute top-2 right-2 md:top-2 md:right-2 z-10 flex gap-2.5 md:gap-2">
+                      <button onClick={() => setIsCropModalOpen(true)} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte">
+                        <CropIcon className="w-6 h-6 md:w-4 md:h-4" />
+                      </button>
+                      <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); }} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto">
+                        <X className="w-6 h-6 md:w-4 md:h-4" />
+                      </button>
                     </div>
                   </div>
                ) : (
@@ -250,7 +267,17 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
         <div className="p-3 md:p-6 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <button onClick={onClose} className="flex-1 py-2.5 md:py-3.5 bg-white text-black border-2 border-black font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl hover:bg-gray-50 transition-all text-[10px] sm:text-xs">Cerrar</button>
-          <button onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} className="flex-[2] py-2.5 md:py-3.5 bg-black text-white font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl flex items-center justify-center gap-1.5 md:gap-2 hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] text-[10px] sm:text-xs"><Check size={14} className="md:w-4 md:h-4" /> Guardar Cambios</button>
+          <button 
+            onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
+            disabled={!isFormValid}
+            className={`flex-[2] py-2.5 md:py-3.5 font-black uppercase tracking-tighter md:tracking-widest rounded-lg md:rounded-xl flex items-center justify-center gap-1.5 md:gap-2 transition-all text-[10px] sm:text-xs ${
+              isFormValid 
+                ? 'bg-black text-white hover:bg-zinc-800 shadow-lg active:scale-[0.98]' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+            }`}
+          >
+            <Check size={14} className="md:w-4 md:h-4" /> Guardar Cambios
+          </button>
         </div>
       </div>
 

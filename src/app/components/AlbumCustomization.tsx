@@ -19,7 +19,7 @@ export interface CustomizationOptions {
     coverTitle: string;
     coverSubtitle: string;
     coverYear: string;
-    spineText?: string; // <-- AÑADIDO: Propiedad para el lomo
+    spineText?: string;
     selectedLayout: number;
     typographyColor: string;
     coverCrop?: { x: number; y: number; zoom: number };
@@ -37,20 +37,22 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   // 1. Opciones por defecto: Papel y Blanco (Foto)
   const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Papel');
   const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
-  const [coverColor, setCoverColor] = useState('#F5F5F5'); // #F5F5F5 es el color de 'Blanco (Foto)'
+  const [coverColor, setCoverColor] = useState('#F5F5F5'); 
   
   const [isCoverEdited, setIsCoverEdited] = useState(false);
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
+  
+  // Iniciamos los campos de texto vacíos para obligar al usuario a personalizarlos
   const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
-    coverTitle: t('album.defaultTitle') || 'Mi Álbum',
-    coverSubtitle: t('album.defaultSubtitle') || 'Un recuerdo especial',
-    coverYear: new Date().getFullYear().toString(),
-    spineText: t('album.defaultTitle') || 'Mi Álbum', // <-- AÑADIDO: Estado inicial del lomo
+    coverTitle: '',
+    coverSubtitle: '',
+    coverYear: '',
+    spineText: '',
     coverImage: '',
     selectedLayout: 1,
-    typographyColor: '#000000', // Negro por defecto para Papel
+    typographyColor: '#000000',
     coverCrop: { x: 50, y: 50, zoom: 1 }
   });
 
@@ -66,7 +68,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     setCoverContent(prev => ({
       ...prev,
       typographyColor: type === 'Papel' ? '#000000' : '#D4AF37',
-      // Inyectamos la imagen blanca si es Tela, si vuelve a Papel (foto), la limpiamos para que suba la suya.
       coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
     }));
   };
@@ -91,11 +92,10 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     return '20x20';
   };
 
-  // Variable de apoyo para ocultar el editor de imágenes en la vista de edición (solo si es tela)
   const hidePhoto = coverType === 'Tela';
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-8">
+    <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-10">
       
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-10 space-y-8">
         <div className="border-b border-gray-100 pb-4 mb-6">
@@ -103,7 +103,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           <p className="text-sm text-gray-500">Ajusta los materiales y dimensiones antes de diseñar la portada.</p>
         </div>
 
-        {/* Al quitar el color, los dos selectores principales quedan perfectamente divididos en 2 columnas */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           <div className="space-y-3">
@@ -198,10 +197,11 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             <CoverPreview
               coverSize={mapSizeToCoverSize(size)}
               coverImage={coverContent.coverImage}
-              coverTitle={coverContent.coverTitle}
-              coverSubtitle={coverContent.coverSubtitle}
-              coverYear={coverContent.coverYear}
-              spineText={coverContent.spineText} // <-- AÑADIDO: Pasamos el texto del lomo a la previsualización
+              // Si no han escrito nada, mostramos el placeholder temporal en la previsualización exterior
+              coverTitle={coverContent.coverTitle || 'NUESTRA HISTORIA'}
+              coverSubtitle={coverContent.coverSubtitle || 'Un viaje inolvidable'}
+              coverYear={coverContent.coverYear || new Date().getFullYear().toString()}
+              spineText={coverContent.spineText || coverContent.coverTitle || 'NUESTRA HISTORIA'}
               selectedLayout={coverContent.selectedLayout}
               coverCrop={coverContent.coverCrop}
               typographyColor={coverContent.typographyColor}

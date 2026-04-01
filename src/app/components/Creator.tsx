@@ -75,8 +75,12 @@ export default function Creator() {
   const [isSaving, setIsSaving] = useState(false); 
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // --- NUEVO ESTADO PARA INTERCEPTAR LA SELECCIÓN Y MOSTRAR EL MODAL ---
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
+
+  // EFECTO PARA LLEVAR EL SCROLL SIEMPRE ARRIBA AL CAMBIAR DE PASO
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [currentStep, previewProduct]);
 
   const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
@@ -178,7 +182,6 @@ export default function Creator() {
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
-    // Usamos la variable de entorno
     const apiKey = import.meta.env.VITE_1CLIC_API_KEY;
 
     if (!apiKey) {
@@ -189,7 +192,7 @@ export default function Creator() {
     const script = document.createElement('script');
     script.src = "https://www.1clic.ai/badge.js";
     script.setAttribute('data-agent', "53893e5c-cc14-4432-b98b-88e8782b2f8b");
-    script.setAttribute('data-key', apiKey); // Insertada dinámicamente
+    script.setAttribute('data-key', apiKey); 
     script.async = true;
     document.body.appendChild(script);
     
@@ -366,7 +369,6 @@ export default function Creator() {
 
   const renderProductSelection = () => (
     <ProductSelection 
-      // Al dar click, seteamos la vista previa en vez de seleccionarlo directamente
       onSelectProduct={(product) => setPreviewProduct(product)}
     />
   );
@@ -557,10 +559,10 @@ export default function Creator() {
       )}
 
       {currentStep !== 'product' && (
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-4 pt-6"> {/* Espacio ajustado, sin margen inferior extra */}
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors"
+            className="flex items-center gap-1 text-gray-500 hover:text-black font-semibold transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
             <span className="hidden md:inline">{t('step.back')}</span>
@@ -603,7 +605,6 @@ export default function Creator() {
         </div>
       )}
 
-      {/* RENDERIZAMOS EL MODAL DE DETALLES DEL PRODUCTO AQUÍ PARA INTERCEPTAR EL FLUJO */}
       <ProductDetailsModal
         isOpen={previewProduct !== null}
         onClose={() => setPreviewProduct(null)}

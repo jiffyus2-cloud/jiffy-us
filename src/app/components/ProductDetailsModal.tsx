@@ -15,7 +15,6 @@ import papel2 from '../../assets/PC100043 - Editado.jpg';
 import papel3 from '../../assets/PC100092 - Editado.jpg';
 
 // --- IMPORTACIÓN DINÁMICA DE LA CARPETA DE CLIENTES (Magia de Vite) ---
-// Esto leerá automáticamente todas las imágenes de la carpeta sin tener que importarlas una por una
 const clientImagesGlob = import.meta.glob('../../assets/Clientes/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
 const allClientImages = Object.values(clientImagesGlob).map((module: any) => module.default);
 
@@ -23,7 +22,7 @@ interface ProductDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   productType: ProductType;
-  onConfirm?: () => void; // <-- NUEVA PROPIEDAD: Permite interceptar la acción de avanzar
+  onConfirm?: () => void;
 }
 
 const MONTHS_ES = [
@@ -38,11 +37,13 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
@@ -59,22 +60,22 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
           <>
             <button
               onClick={prevImage}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white text-black rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 md:p-1.5 bg-white/90 md:bg-white/80 hover:bg-white text-black rounded-full shadow-lg opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10 active:scale-95"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 md:w-5 md:h-5" />
             </button>
             <button
               onClick={nextImage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white text-black rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 md:p-1.5 bg-white/90 md:bg-white/80 hover:bg-white text-black rounded-full shadow-lg opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10 active:scale-95"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5 md:w-5 md:h-5" />
             </button>
             
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {images.map((_: any, idx: number) => (
                 <div
                   key={idx}
-                  className={`h-1.5 rounded-full transition-all shadow-sm ${idx === currentIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}`}
+                  className={`h-1.5 rounded-full transition-all shadow-sm ${idx === currentIndex ? 'w-5 md:w-4 bg-white' : 'w-2 md:w-1.5 bg-white/70'}`}
                 />
               ))}
             </div>
@@ -94,22 +95,16 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Seleccionador aleatorio de imágenes de clientes
-  // Se vuelve a calcular cada vez que se abre el modal
   const randomClientImages = useMemo(() => {
     if (!isOpen || allClientImages.length === 0) return [];
-    // Hacemos una copia y la mezclamos aleatoriamente
     const shuffled = [...allClientImages].sort(() => 0.5 - Math.random());
-    // Tomamos exactamente 6 imágenes (o menos si no hay suficientes)
     return shuffled.slice(0, 6);
   }, [isOpen]);
 
   const handleMakeYourOwn = () => {
-    // Si se provee onConfirm, ejecutamos eso (ideal para cuando ya estamos en Creator.tsx)
     if (onConfirm) {
       onConfirm();
     } else {
-      // Flujo clásico desde el LandingPage
       onClose();
       navigate('/create', { state: { startProduct: productType } });
     }
@@ -181,19 +176,10 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
       case 'album':
         return {
           title: t('product.album'),
-          icon: <BookImage className="w-12 h-12" />,
           description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
-            { 
-              name: 'Tela', 
-              description: 'Acabado premium con textura de lino',
-              images: [tela1, tela2, tela3]
-            },
-            { 
-              name: 'Papel', 
-              description: 'Portada personalizada con tu foto favorita',
-              images: [papel1, papel2, papel3]
-            }
+            { name: 'Tela', description: 'Acabado premium con textura de lino', images: [tela1, tela2, tela3] },
+            { name: 'Papel', description: 'Portada personalizada con tu foto favorita', images: [papel1, papel2, papel3] }
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Tela, Papel' },
@@ -203,13 +189,11 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ],
           galleryTitle: 'Clientes Felices',
           gallerySubtitle: 'Historias reales, recuerdos que hoy se pueden volver a sentir',
-          // Usamos el arreglo dinámico, y si está vacío usamos un fallback
           gallery: randomClientImages.length > 0 ? randomClientImages : [tela1, papel1]
         };
       case 'calendar':
         return {
           title: t('product.calendar'),
-          icon: <Calendar className="w-12 h-12" />,
           description: t('product.calendarDesc'),
           styles: [],
           specifications: [
@@ -230,19 +214,10 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
       case 'mug':
         return {
           title: t('product.mug'),
-          icon: <Coffee className="w-12 h-12" />,
           description: t('product.mugDesc'),
           styles: [
-            { 
-              name: 'Clásica', 
-              description: 'Taza de cerámica tradicional',
-              image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?w=800'
-            },
-            { 
-              name: 'Premium', 
-              description: 'Porcelana de alta calidad',
-              image: 'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800'
-            }
+            { name: 'Clásica', description: 'Taza de cerámica tradicional', image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?w=800' },
+            { name: 'Premium', description: 'Porcelana de alta calidad', image: 'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800' }
           ],
           specifications: [
             { label: 'Materiales', value: 'Cerámica, Porcelana, Acero Inoxidable' },
@@ -262,14 +237,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
       case 'photo-pack':
         return {
           title: t('product.photoPack'),
-          icon: <ImageIcon className="w-12 h-12" />,
           description: t('product.photoPackDesc'),
           styles: [
-            { 
-              name: 'Impresiones Estándar', 
-              description: 'Fotos clásicas en varios tamaños',
-              image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800'
-            }
+            { name: 'Impresiones Estándar', description: 'Fotos clásicas en varios tamaños', image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800' }
           ],
           specifications: [
             { label: 'Tamaños', value: 'Estándar, Grandes, Retratos' },
@@ -287,16 +257,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ]
         };
       default:
-        return {
-          title: '',
-          icon: null,
-          description: '',
-          styles: [],
-          specifications: [],
-          galleryTitle: undefined,
-          gallerySubtitle: undefined,
-          gallery: []
-        };
+        return { title: '', description: '', styles: [], specifications: [], galleryTitle: undefined, gallerySubtitle: undefined, gallery: [] };
     }
   };
 
@@ -305,38 +266,35 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const productData = getProductData();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm overscroll-none" onClick={onClose}>
       <div 
-        className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300"
+        className="bg-white w-full h-[100dvh] md:h-auto md:max-h-[90dvh] md:rounded-3xl shadow-2xl max-w-5xl flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-gray-100 p-6 flex items-center justify-between z-20">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-black text-white rounded-2xl shadow-lg">
-              {productData.icon}
-            </div>
-            <div>
-              <h2 className="text-3xl font-black tracking-tight">{productData.title}</h2>
-              <p className="text-gray-500 font-medium">{productData.description}</p>
-            </div>
+        {/* Cabecera Fija */}
+        <div className="bg-white/95 backdrop-blur-md border-b border-gray-100 p-4 md:p-6 relative shrink-0 z-20">
+          <div className="pr-12 md:pr-16">
+            <h2 className="text-xl md:text-3xl font-black tracking-tight">{productData.title}</h2>
+            {/* Se removió la clase que truncaba el texto (line-clamp) para que fluya hacia abajo */}
+            <p className="text-xs md:text-sm text-gray-500 font-medium mt-1.5">{productData.description}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
+            className="absolute top-4 right-4 md:top-6 md:right-6 p-2 hover:bg-gray-100 rounded-full transition-colors group"
           >
-            <X className="w-6 h-6 text-gray-400 group-hover:text-black" />
+            <X className="w-5 h-5 md:w-6 text-gray-400 group-hover:text-black" />
           </button>
         </div>
 
-        <div className="p-8 space-y-12">
-          {/* Available Styles */}
+        {/* Contenido con Scroll */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-8 space-y-8 md:space-y-12">
+          {/* Estilos Disponibles */}
           {productType === 'calendar' ? (
             CalendarPreview
           ) : (
             <div>
-              <h3 className="text-2xl font-bold mb-6">{t('details.availableStyles')}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {productData.styles.map((style, index) => (
                   <StyleCarouselCard key={index} style={style} />
                 ))}
@@ -344,35 +302,34 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
             </div>
           )}
 
-          {/* Specifications */}
+          {/* Especificaciones */}
           <div>
-            <h3 className="text-2xl font-bold mb-6">{t('details.specifications')}</h3>
-            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.specifications')}</h3>
+            <div className="bg-gray-50 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
                 {productData.specifications.map((spec, index) => (
                   <div key={index} className="flex flex-col">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">{spec.label}</span>
-                    <span className="font-bold text-gray-900">{spec.value}</span>
+                    <span className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 md:mb-2">{spec.label}</span>
+                    <span className="text-sm md:text-base font-bold text-gray-900">{spec.value}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Gallery */}
+          {/* Galería de Ejemplos */}
           <div>
-            <h3 className="text-2xl font-bold mb-2">
+            <h3 className="text-xl md:text-2xl font-bold mb-1 md:mb-2">
               {productData.galleryTitle || t('details.customerExamples')}
             </h3>
-            <p className="text-gray-500 font-medium mb-6">
+            <p className="text-xs md:text-sm text-gray-500 font-medium mb-4 md:mb-6">
               {productData.gallerySubtitle || t('details.customerExamplesDesc')}
             </p>
-            {/* Si tiene exactamente 6 imágenes, lo acomodamos en 3 columnas; si no, en 4 */}
-            <div className={`grid grid-cols-2 ${productData.gallery.length === 6 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-4`}>
+            <div className={`grid grid-cols-2 ${productData.gallery.length === 6 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-2 md:gap-4`}>
               {productData.gallery.map((image, index) => (
                 <div
                   key={index}
-                  className="aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
+                  className="aspect-square rounded-xl md:rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
                   onClick={() => setSelectedImage(image)}
                 >
                   <img
@@ -384,30 +341,30 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
               ))}
             </div>
           </div>
+        </div>
 
-          {/* CTA Button */}
-          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md pt-6 pb-2 border-t border-gray-100 z-10">
-            <button
-              onClick={handleMakeYourOwn}
-              className="w-full py-5 bg-black text-white rounded-2xl hover:bg-gray-800 transition-all text-xl font-bold shadow-xl hover:shadow-black/20 active:scale-[0.98]"
-            >
-              {t('details.makeYourOwn')}
-            </button>
-          </div>
+        {/* Botón CTA Fijado Abajo */}
+        <div className="bg-white/95 backdrop-blur-md p-4 md:p-6 border-t border-gray-100 shrink-0 z-20 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:pb-6">
+          <button
+            onClick={handleMakeYourOwn}
+            className="w-full py-4 md:py-5 bg-black text-white rounded-xl md:rounded-2xl hover:bg-gray-800 transition-all text-lg md:text-xl font-bold shadow-xl hover:shadow-black/20 active:scale-[0.98]"
+          >
+            {t('details.makeYourOwn')}
+          </button>
         </div>
       </div>
 
-      {/* Image Lightbox */}
+      {/* Lightbox para Imágenes */}
       {selectedImage && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-300"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-300 overscroll-none"
           onClick={() => setSelectedImage(null)}
         >
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+            className="absolute top-4 right-4 md:top-6 md:right-6 p-2 md:p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10"
           >
-            <X className="w-6 h-6 text-white" />
+            <X className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </button>
           <div 
             className="max-w-5xl max-h-[85vh] w-full relative"

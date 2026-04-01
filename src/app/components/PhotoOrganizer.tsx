@@ -204,7 +204,6 @@ export default function PhotoOrganizer({
     const filesArray = Array.from(files);
 
     // 3. Empujar el procesamiento pesado fuera del hilo principal usando setTimeout
-    // Esto obliga al navegador (y especialmente a Safari) a hacer un "repaint" y mostrar el spinner.
     setTimeout(async () => {
       try {
         const filesWithData = filesArray.map((file, index) => ({
@@ -252,7 +251,7 @@ export default function PhotoOrganizer({
         setIsSortingWithAI(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
-    }, 100); // 100ms de gracia garantizan que Safari dibuje el loader visualmente
+    }, 100); 
   };
 
   const handleFinalizeSetup = () => {
@@ -796,7 +795,7 @@ export default function PhotoOrganizer({
 
   if (step === 'upload') {
     return (
-      <div className="w-full max-w-4xl mx-auto px-4 py-12">
+      <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Upload className="w-10 h-10" /></div>
           <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2><p className="text-gray-600">{t('organizer.uploadDesc')}</p>
@@ -828,14 +827,16 @@ export default function PhotoOrganizer({
   if (step === 'pages') {
     const maxP = getMaxPages(uploadedPhotos.length);
     return (
-      <div className="w-full max-w-4xl mx-auto px-4 py-12">
+      <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         <div className="text-center mb-8"><div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Grid3x3 className="w-10 h-10" /></div><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
           <div>
             <div className="flex justify-between items-center mb-4">
               <label className="text-xl font-medium">{t('organizer.numPages')}</label>
               <input 
-                type="number" 
+                type="number"
+                inputMode="numeric"
+                pattern="[0-9]*" 
                 min={40} 
                 max={maxP} 
                 step={2} 
@@ -882,7 +883,7 @@ export default function PhotoOrganizer({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-12">
+    <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
       {renderAdvancedSettingsModal()}
 
       {/* MODAL DE CONFLICTOS DE LAYOUT */}
