@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Sparkles, Settings, Crop as CropIcon,
+  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
   AlertCircle
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -10,6 +10,107 @@ import { useLanguage } from '../context/LanguageContext';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
+
+// ============================================================================
+// COMPONENTE DE CARGA PERSONALIZADO (JiffyLoader)
+// ============================================================================
+interface JiffyLoaderProps {
+  t?: (key: string) => string;
+}
+
+const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
+  return (
+    <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
+      {/* Contenedor relativo para alojar los dos triángulos superpuestos */}
+      <div className="relative w-24 h-24 flex items-center justify-center">
+        {/* TRIÁNGULO T1 (Naranja Claro - Apunta a la derecha) */}
+        <div
+          className="absolute w-12 h-14 animate-spin-right-t1"
+          style={{
+            top: '20%',
+            left: '-8%',
+            transform: 'translate(50%, 50%)',
+            transformOrigin: '50% 50%',
+            animationDelay: '0ms'
+          }}
+        >
+          <svg viewBox="0 0 256 292" className="w-full h-full drop-shadow-md">
+            <path fill="#fcd3ba" d="M0,0 L0,292 L256,146  Z" />
+          </svg>
+        </div>
+
+        {/* TRIÁNGULO T2 (Naranja Oscuro - Apunta a la izquierda) */}
+        <div
+          className="absolute w-12 h-14 animate-spin-left-t2"
+          style={{
+            top: '0%',
+            left: '0%',
+            transform: 'translate(50%, 50%)',
+            transformOrigin: '50% 50%',
+            animationDelay: '0ms'
+          }}
+        >
+          <svg viewBox="0 0 256 292" className="w-full h-full drop-shadow-lg">
+            <path fill="#ff7300" d="M256,0 L0,146 L256,292 Z" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Texto de carga debajo */}
+      <div className="text-center animate-pulse">
+        <p className="text-xl font-bold text-gray-900">
+          {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
+        </p>
+      </div>
+
+      {/* --- ESTILOS DE ANIMACIÓN CON TRANSLATE INCLUIDO --- */}
+      <style>{`
+        @keyframes spinRightT1 {
+          0% {
+            opacity: 0.1;
+            transform: translate(50%, 50%) rotate(180deg) scale(0.5);
+          }
+          50% {
+            opacity: 1;
+            transform: translate(50%, 50%) rotate(0deg) scale(0.75);
+          }
+          100% {
+            opacity: 0.1;
+            transform: translate(50%, 50%) rotate(-180deg) scale(0.5);
+          }
+        }
+
+        @keyframes spinLeftT2 {
+          0% {
+            opacity: 0.1;
+            transform: translate(50%, 50%) rotate(-180deg) scale(0.8);
+          }
+          50% {
+            opacity: 1;
+            transform: translate(50%, 50%) rotate(0deg) scale(1.1);
+          }
+          100% {
+            opacity: 0.1;
+            transform: translate(50%, 50%) rotate(180deg) scale(0.8);
+          }
+        }
+
+        .animate-spin-right-t1 {
+          animation: spinRightT1 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .animate-spin-left-t2 {
+          animation: spinLeftT2 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+      `}</style>
+    </div>
+  );
+};
+// ============================================================================
+
 
 interface PhotoOrganizerProps {
   album: Album;
@@ -714,7 +815,7 @@ export default function PhotoOrganizer({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
             <div className="bg-gray-50 rounded-2xl p-4 sm:p-6 border border-gray-200 flex flex-col items-center justify-center shadow-inner">
               <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" /> Previsualización Interactiva
+                <AlertCircle className="w-4 h-4 text-amber-500" /> Previsualización Interactiva
               </p>
               
               <div className="bg-white rounded-[3%] shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
@@ -803,9 +904,7 @@ export default function PhotoOrganizer({
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isSortingWithAI ? (
-            <div className="w-full py-16 flex flex-col items-center justify-center gap-4 bg-purple-50 rounded-xl border border-purple-100">
-              <Sparkles className="w-16 h-16 text-purple-600 animate-bounce" /><p className="text-xl font-bold text-purple-800">{t('organizer.aiSorting')}</p><p className="text-sm text-purple-600">{t('organizer.aiSortingDesc')}</p>
-            </div>
+            <JiffyLoader t={t} />
           ) : (
             <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
               <ImageIcon className="w-16 h-16 text-gray-400 group-hover:text-black transition-colors" />
