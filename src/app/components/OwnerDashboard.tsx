@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc } from 'firebase/firestore';
+// Importamos la lógica de Autenticación de Firebase
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../lib/firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -17,7 +19,7 @@ import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import justWhiteImg from '../../assets/justwhite.png';
-import jiffyLogo from '../../assets/JiffyLogo.svg'; // <-- Importamos el logo para la contraportada
+import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
@@ -325,9 +327,13 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
 // MAIN COMPONENT: OWNER DASHBOARD
 // ============================================================================
 const OwnerDashboard: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('owner_authenticated') === 'true');
+  // 1. Estados de Autenticación actualizados a Firebase Auth
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
 
@@ -343,12 +349,20 @@ const OwnerDashboard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
 
-  const ownerKey = import.meta.env.VITE_OWNER_KEY || 'admin123';
-
   // --- CONTEXTO GLOBAL DE LA TIENDA ---
   const storeConfig = useStoreConfig();
   const [localConfig, setLocalConfig] = useState<StoreConfig>(storeConfig);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  // 2. Comprobar sesión activa automáticamente con Firebase
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setIsAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     setLocalConfig(storeConfig);
@@ -367,21 +381,25 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  // 3. Nuevo manejo de Login con Firebase Auth
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === ownerKey) {
-      setIsAuthenticated(true);
-      localStorage.setItem('owner_authenticated', 'true');
+    setIsLoggingIn(true);
+    try {
+      const auth = getAuth();
+      await signInWithEmailAndPassword(auth, emailInput, passwordInput);
       setAuthError(null);
-    } else {
-      setAuthError('Clave de acceso incorrecta.');
-      setPasswordInput('');
+    } catch (error) {
+      setAuthError('Correo o contraseña incorrectos, o no tienes permisos.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('owner_authenticated');
+  // 4. Nuevo manejo de Logout
+  const handleLogout = async () => {
+    const auth = getAuth();
+    await signOut(auth);
   };
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -775,6 +793,14 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -784,11 +810,14 @@ const OwnerDashboard: React.FC = () => {
             <h1 className="text-2xl font-bold text-center text-gray-900">Acceso Administrador</h1>
           </div>
           <form onSubmit={handleLogin}>
-            <div className="mb-4">
-              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black transition-all text-center font-medium" placeholder="Ingresa la clave maestra" />
+            <div className="mb-4 space-y-3">
+              <input type="email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black transition-all font-medium" placeholder="Correo electrónico" required />
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black transition-all font-medium" placeholder="Contraseña" required />
             </div>
             {authError && <p className="text-red-500 text-sm text-center mb-4">{authError}</p>}
-            <button type="submit" className="w-full bg-gray-900 text-white py-3 rounded-xl hover:bg-black transition-colors font-bold text-lg">Acceder al Panel</button>
+            <button type="submit" disabled={isLoggingIn} className="w-full bg-gray-900 text-white py-3 rounded-xl hover:bg-black transition-colors font-bold text-lg flex justify-center items-center gap-2">
+              {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Acceder al Panel'}
+            </button>
           </form>
         </div>
       </div>
