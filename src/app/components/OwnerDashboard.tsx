@@ -177,7 +177,6 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
   const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
 
   const gridClass = getGridLayout(currentPhotosPerPage, layout, size);
-  const textScale = Math.max(1, Math.round(pxWidth / 800)); 
 
   return (
     <div className={`w-full h-full bg-white grid gap-[2%] p-[4%] ${gridClass}`}>
@@ -197,12 +196,17 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                 </div>
               </div>
             ) : textBox ? (
-              <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
+              // Contenedor configurado para Container Queries
+              <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
                 <div style={{ 
-                  fontSize: `${(textBox.fontSize || 24) * textScale}px`, 
+                  width: '90%', 
+                  fontSize: `${(textBox.fontSize || 24) * 0.25}cqi`, // Escala relativa perfecta
                   fontFamily: textBox.fontFamily || 'Arial', 
                   color: textBox.color || '#000', 
-                  wordBreak: 'break-word' 
+                  textAlign: 'center',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
+                  lineHeight: '1.3'
                 }}>
                   {textBox.text}
                 </div>

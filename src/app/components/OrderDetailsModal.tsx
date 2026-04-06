@@ -140,10 +140,19 @@ const AlbumPagePhoto: React.FC<{
           <ImageCropper src={photo} position={calculatedCrop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
         </div>
       ) : textBox ? (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white text-center">
+        // Contenedor configurado para Container Queries
+        <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
           <div
-            style={{ fontSize: `${textBox.fontSize}px`, fontFamily: textBox.fontFamily, color: textBox.color, wordBreak: 'break-word' }}
-            className="w-full"
+            style={{ 
+              width: '90%', 
+              fontSize: `${textBox.fontSize * 0.25}cqi`, // Escala relativa perfecta
+              fontFamily: textBox.fontFamily, 
+              color: textBox.color, 
+              textAlign: 'center',
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
+              lineHeight: '1.3'
+            }}
           >
             {textBox.text}
           </div>
@@ -307,6 +316,7 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
                   textShadow: photo ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
                   textAlign: 'center',
                   wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap'
                 }}
               >
                 {item.text}

@@ -180,8 +180,20 @@ const AlbumEditorPhotoSlot: React.FC<{
             )}
         </div>
       ) : textBox ? (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white relative">
-          <div style={{ fontSize: `${textBox.fontSize}px`, fontFamily: textBox.fontFamily, color: textBox.color, textAlign: 'center', wordBreak: 'break-word' }} className="w-full">
+        // Contenedor configurado para Container Queries (containerType: 'inline-size')
+        <div className="w-full h-full flex flex-col items-center justify-center bg-white relative" style={{ containerType: 'inline-size' }}>
+          <div 
+            style={{ 
+              width: '90%', // Mismo margen del 10% que el textarea
+              fontSize: `${textBox.fontSize * 0.25}cqi`, // Escala relativa perfecta
+              fontFamily: textBox.fontFamily, 
+              color: textBox.color, 
+              textAlign: 'center', 
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
+              lineHeight: '1.3'       // Mantiene el mismo alto de línea que el editor
+            }} 
+          >
             {textBox.text || t('organizer.addText') + '...'}
           </div>
           {editingPageIndex === pageIndex && (
@@ -1177,7 +1189,31 @@ export default function PhotoOrganizer({
               <button onClick={() => setEditingTextSlot(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="space-y-6">
-              <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.content')}</label><textarea value={currentEditingText.text} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text: e.target.value })} placeholder="Type your message here..." className="w-full p-4 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black min-h-[120px] resize-none text-lg" autoFocus /></div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.content')}</label>
+                {/* Contenedor configurado para Container Queries en el área de edición */}
+                <div 
+                  className="w-full border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center h-[200px]"
+                  style={{ containerType: 'inline-size' }}
+                >
+                  <textarea 
+                    value={currentEditingText.text} 
+                    onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text: e.target.value })} 
+                    placeholder="Escribe tu texto aquí..." 
+                    className="bg-transparent resize-none outline-none p-0 m-0 border-none" 
+                    style={{
+                      width: '90%', // Mismo ancho relativo que el bloque de previsualización
+                      height: '90%',
+                      fontSize: `${currentEditingText.fontSize * 0.25}cqi`, // Misma escala matemática
+                      fontFamily: currentEditingText.fontFamily,
+                      color: currentEditingText.color,
+                      textAlign: 'center',
+                      lineHeight: '1.3'
+                    }}
+                    autoFocus 
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label><select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{[12, 16, 20, 24, 32, 40, 48, 64].map(size => <option key={size} value={size}>{size}px</option>)}</select></div>
                 <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.font')}</label><select value={currentEditingText.fontFamily} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontFamily: e.target.value })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white"><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Monospace</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Handwritten</option></select></div>
