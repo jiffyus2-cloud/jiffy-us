@@ -180,18 +180,17 @@ const AlbumEditorPhotoSlot: React.FC<{
             )}
         </div>
       ) : textBox ? (
-        // Contenedor configurado para Container Queries (containerType: 'inline-size')
         <div className="w-full h-full flex flex-col items-center justify-center bg-white relative" style={{ containerType: 'inline-size' }}>
           <div 
             style={{ 
-              width: '90%', // Mismo margen del 10% que el textarea
-              fontSize: `${textBox.fontSize * 0.25}cqi`, // Escala relativa perfecta
+              width: '90%', 
+              fontSize: `${textBox.fontSize * 0.25}cqi`, 
               fontFamily: textBox.fontFamily, 
               color: textBox.color, 
               textAlign: 'center', 
               wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
-              lineHeight: '1.3'       // Mantiene el mismo alto de línea que el editor
+              whiteSpace: 'pre-wrap', 
+              lineHeight: '1.3'       
             }} 
           >
             {textBox.text || t('organizer.addText') + '...'}
@@ -310,13 +309,9 @@ export default function PhotoOrganizer({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // 1. Mostrar estado de carga INSTANTÁNEAMENTE para no congelar la UI
     setIsSortingWithAI(true);
-
-    // 2. Extraer archivos del evento nativo
     const filesArray = Array.from(files);
 
-    // 3. Empujar el procesamiento pesado fuera del hilo principal usando setTimeout
     setTimeout(async () => {
       try {
         const filesWithData = filesArray.map((file, index) => ({
@@ -367,6 +362,9 @@ export default function PhotoOrganizer({
     }, 100); 
   };
 
+  // ==========================================================================
+  // LÓGICA DE DISTRIBUCIÓN EXCLUSIVA (Página 0 siempre con 1 imagen)
+  // ==========================================================================
   const handleFinalizeSetup = () => {
     const maxP = getMaxPages(uploadedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
@@ -379,14 +377,23 @@ export default function PhotoOrganizer({
     const photosToDistribute = [...uploadedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
+    // 1. Asignamos al menos 1 foto a cada página para evitar páginas vacías (empezando por la primera)
     for (let i = 0; i < totalPages; i++) {
       if (photosToDistribute.length > 0) newPhotos[i].push(photosToDistribute.shift()!);
     }
 
-    let pageIndex = 0;
+    // 2. Repartimos las fotos sobrantes protegiendo la página 0
+    let pageIndex = totalPages > 1 ? 1 : 0; 
     let consecutiveFullPages = 0;
+    let allowPageZero = totalPages <= 1; // Solo se permite si la persona configuró 1 sola página
     
     while (photosToDistribute.length > 0 && consecutiveFullPages < totalPages) {
+      // Salto estricto de la página 0
+      if (pageIndex === 0 && !allowPageZero) {
+        pageIndex = 1;
+        continue;
+      }
+
       const currentPagePhotos = newPhotos[pageIndex];
       const currentCount = currentPagePhotos.length;
       const nextAllowed = allowedPhotosPerPage.find(opt => opt > currentCount);
@@ -397,10 +404,27 @@ export default function PhotoOrganizer({
         if (toAdd > 0) {
           currentPagePhotos.push(...photosToDistribute.splice(0, toAdd));
           consecutiveFullPages = 0;
-        } else consecutiveFullPages++;
-      } else consecutiveFullPages++;
-      pageIndex = (pageIndex + 1) % totalPages;
+        } else {
+          consecutiveFullPages++;
+        }
+      } else {
+        consecutiveFullPages++;
+      }
+      
+      pageIndex++;
+      if (pageIndex >= totalPages) {
+        pageIndex = allowPageZero ? 0 : 1;
+      }
+
+      // Si ya verificamos todas las demás páginas y absolutamente todas están llenas, 
+      // desbloqueamos la página 0 para no perder las fotos sobrantes
+      if (consecutiveFullPages >= totalPages - 1 && !allowPageZero) {
+        allowPageZero = true;
+        consecutiveFullPages = 0;
+        pageIndex = 0; // Saltamos inmediatamente a la página 0 para rellenarla
+      }
     }
+    
     onPhotosChange(newPhotos);
     setStep('editor');
   };
@@ -1202,9 +1226,9 @@ export default function PhotoOrganizer({
                     placeholder="Escribe tu texto aquí..." 
                     className="bg-transparent resize-none outline-none p-0 m-0 border-none" 
                     style={{
-                      width: '90%', // Mismo ancho relativo que el bloque de previsualización
+                      width: '90%', 
                       height: '90%',
-                      fontSize: `${currentEditingText.fontSize * 0.25}cqi`, // Misma escala matemática
+                      fontSize: `${currentEditingText.fontSize * 0.25}cqi`, 
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
                       textAlign: 'center',

@@ -82,40 +82,50 @@ export default function Checkout() {
   const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
   const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
   const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
+  const isAlbum = productTypeStr.includes('album') || productTypeStr.includes('photobook');
   
   const getMugCount = () => {
     const arr = orderData.items || orderData.mugItems || [];
     return Array.isArray(arr) && arr.length > 0 ? arr.length : 1;
   };
 
+  // --- CÁLCULO DE DESGLOSE PARA ÁLBUMES ---
+  let albumBasePrice = 0;
+  let albumExtraPagePrice = 0;
+  let extraPagesCount = 0;
+  let extraPagesCost = 0;
+  let totalPageCount = 0;
+
+  if (isAlbum && orderData) {
+    const size = orderData.customization?.size || '';
+    totalPageCount = orderData.pages?.length || orderData.photos?.length || 0;
+    const basePages = 40;
+
+    if (size.includes('20x20') || size.includes('2x2')) {
+      albumBasePrice = config.prices.album20x20;
+      albumExtraPagePrice = config.prices.albumExtra20x20;
+    } else if (size.includes('30x30')) {
+      albumBasePrice = config.prices.album30x30;
+      albumExtraPagePrice = config.prices.albumExtra30x30;
+    } else if (size.includes('28x21') || size.includes('21x28')) {
+      albumBasePrice = config.prices.albumRect;
+      albumExtraPagePrice = config.prices.albumExtraRect;
+    } else {
+       albumBasePrice = config.prices.album20x20;
+       albumExtraPagePrice = config.prices.albumExtra20x20;
+    }
+
+    if (totalPageCount > basePages) {
+      extraPagesCount = totalPageCount - basePages;
+      extraPagesCost = extraPagesCount * albumExtraPagePrice;
+    }
+  }
+
   // --- CÁLCULO DINÁMICO DE PRECIOS ---
   const calculateSubtotal = () => {
     if (!product || !orderData) return 0;
-
-    if (productTypeStr.includes('album') || productTypeStr.includes('photobook')) {
-      const size = orderData.customization?.size || '';
-      const pageCount = orderData.pages?.length || orderData.photos?.length || 0; 
-      const basePages = 40;
-      let basePrice = config.prices.album20x20;
-      let additionalPagePrice = config.prices.albumExtra20x20;
-
-      if (size.includes('20x20') || size.includes('2x2')) {
-        basePrice = config.prices.album20x20;
-        additionalPagePrice = config.prices.albumExtra20x20;
-      } else if (size.includes('30x30')) {
-        basePrice = config.prices.album30x30;
-        additionalPagePrice = config.prices.albumExtra30x30;
-      } else if (size.includes('28x21') || size.includes('21x28')) {
-        basePrice = config.prices.albumRect;
-        additionalPagePrice = config.prices.albumExtraRect;
-      }
-
-      if (pageCount > basePages) {
-        return basePrice + ((pageCount - basePages) * additionalPagePrice);
-      }
-      return basePrice;
-    } 
     
+    if (isAlbum) return albumBasePrice + extraPagesCost;
     if (isMugType) return config.prices.mug * getMugCount(); 
     
     if (isCalendar) {
@@ -243,14 +253,30 @@ export default function Checkout() {
                   <span className="text-gray-600">{t('album.size')}</span><span>{orderData.customization.size}</span>
                 </div>
               )}
-              {product.type === 'album' && (orderData.pages || orderData.photos) && (
-                 <div className="flex justify-between text-sm">
-                   <span className="text-gray-600">{t('dashboard.totalPages')}</span>
-                   <span className="font-medium">{(orderData.pages || orderData.photos).length} {(orderData.pages || orderData.photos).length > 40 ? ` (+${(orderData.pages || orderData.photos).length - 40} extra)` : ' (Base)'}</span>
-                 </div>
+              
+              {/* --- DESGLOSE EXCLUSIVO DE ÁLBUMES --- */}
+              {isAlbum && (
+                 <>
+                   <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
+                     <span className="text-gray-600">Álbum Base (40 págs)</span>
+                     <span className="font-medium">${albumBasePrice.toLocaleString('es-CO')} COP</span>
+                   </div>
+                   {extraPagesCount > 0 && (
+                     <div className="flex justify-between text-sm mt-2">
+                       <span className="text-gray-600">Páginas Extra ({extraPagesCount} x ${albumExtraPagePrice.toLocaleString('es-CO')})</span>
+                       <span className="font-medium">${extraPagesCost.toLocaleString('es-CO')} COP</span>
+                     </div>
+                   )}
+                   <div className="flex justify-between text-sm mt-2 font-bold text-gray-800">
+                     <span>Total Páginas</span>
+                     <span>{totalPageCount}</span>
+                   </div>
+                 </>
               )}
+
+              {/* --- DESGLOSE DE TAZAS --- */}
               {isMugType && (
-                 <div className="flex justify-between text-sm border-t border-gray-200 pt-3">
+                 <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
                    <span className="text-gray-600">Cantidad Tazas</span><span className="font-medium">{getMugCount()} x ${config.prices.mug.toLocaleString('es-CO')} COP</span>
                  </div>
               )}
