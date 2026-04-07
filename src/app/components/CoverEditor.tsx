@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon } from 'lucide-react';
+import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Loader2 } from 'lucide-react';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -42,7 +42,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 }) => {
   const { t } = useLanguage();
   
-  // Estados inicializados siempre vacíos para obligar a escribir (placeholders)
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || '');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || '');
@@ -55,19 +54,21 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
+  // Estados para validación de resolución
+  const [isValidating, setIsValidating] = useState(false);
+  const [lowResImage, setLowResImage] = useState<{file: File, url: string, width: number, height: number} | null>(null);
+
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
   const isHorizontal = coverSize === '21x28';
 
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
-  // Lógica de Validación Estricta
   const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5;
   const isFormValid = coverTitle.trim() !== '' && 
                       spineText.trim() !== '' && 
                       (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
 
-  // Valores a mostrar en la vista previa (si están vacíos, muestran el texto de ejemplo)
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
   const displaySubtitle = coverSubtitle || 'Un viaje inolvidable';
   const displayYear = coverYear || new Date().getFullYear().toString();
@@ -104,13 +105,52 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const numLayouts = isVertical ? 4 : 5;
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ==========================================================================
+  // VALIDADOR DE RESOLUCIÓN
+  // ==========================================================================
+  const checkImageDimensions = (file: File): Promise<{file: File, url: string, isLowRes: boolean, width: number, height: number}> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const minDim = Math.min(img.width, img.height);
+        resolve({ file, url, isLowRes: minDim < 1080, width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        resolve({ file, url, isLowRes: false, width: 0, height: 0 }); 
+      };
+      img.src = url;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCoverImage(URL.createObjectURL(file));
-      setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 }); 
+    if (!file) return;
+
+    setIsValidating(true);
+    const result = await checkImageDimensions(file);
+
+    if (result.isLowRes) {
+      setLowResImage(result);
+      setIsValidating(false);
+    } else {
+      processCoverUpload(file);
+      setIsValidating(false);
     }
   };
+
+  const processCoverUpload = (file: File) => {
+    setCoverImage(URL.createObjectURL(file));
+    setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 }); 
+  };
+
+  const handleLowResDecision = (keep: boolean) => {
+    if (keep && lowResImage) {
+      processCoverUpload(lowResImage.file);
+    }
+    setLowResImage(null);
+  };
+  // ==========================================================================
 
   const getTypographyColors = () => {
     if (coverType === 'Tela') {
@@ -128,7 +168,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const currentTypographyColors = getTypographyColors();
 
-  // Componente reutilizable para los botones de acción para no duplicar código
   const ActionButtons = () => (
     <>
       <button onClick={onClose} className="flex-1 py-3 bg-white text-black border-2 border-black font-black uppercase tracking-widest rounded-xl hover:bg-gray-50 transition-all text-xs">
@@ -136,9 +175,9 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       </button>
       <button 
         onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
-        disabled={!isFormValid}
+        disabled={!isFormValid || isValidating}
         className={`flex-[2] py-3 font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all text-xs ${
-          isFormValid 
+          isFormValid && !isValidating
             ? 'bg-black text-white hover:bg-zinc-800 shadow-lg active:scale-[0.98]' 
             : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
         }`}
@@ -151,6 +190,34 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden overscroll-none">
       
+      {/* MODAL PARA REVISIÓN DE IMÁGENES DE BAJA RESOLUCIÓN */}
+      {lowResImage && (
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Esta imagen mide <strong>{lowResImage.width}x{lowResImage.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
+            </p>
+
+            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
+              <img src={lowResImage.url} className="w-full h-full object-contain" alt="Low res preview" />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
+                Elegir otra
+              </button>
+              <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+                Usar de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER EXCLUSIVO MÓVIL */}
       <div className="md:hidden p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-20">
         <h2 className="text-lg font-black tracking-tighter">EDITOR DE PORTADA</h2>
@@ -159,11 +226,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </button>
       </div>
 
-      {/* ÁREA PRINCIPAL: Scroll unificado en Móvil / División flex en Desktop */}
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden overscroll-contain">
-        
-        {/* PANEL DE PREVISUALIZACIÓN */}
-        {/* En móvil: Altura fija de 350px para que se vea claro y permita hacer scroll hacia las herramientas */}
         <div className="relative w-full h-[350px] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-4 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
           <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
             <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
@@ -187,16 +250,12 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           </div>
         </div>
 
-        {/* PANEL DE HERRAMIENTAS */}
         <div className="w-full md:w-[400px] flex flex-col bg-white md:shadow-xl z-10 order-2 md:order-1 md:h-full shrink-0 md:shrink">
-          
-          {/* Header Exclusivo Desktop */}
           <div className="hidden md:flex p-6 border-b border-gray-100 items-center justify-between shrink-0">
             <h2 className="text-xl font-black tracking-tighter">EDITOR DE PORTADA</h2>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
           </div>
 
-          {/* Contenedor de Formularios (En Desktop tiene su propio scroll) */}
           <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
             
             <section>
@@ -266,7 +325,12 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   <ImageIcon size={16} />
                   <h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Imagen de Portada</h3>
                 </div>
-                 {coverImage ? (
+                 {isValidating ? (
+                    <div className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl bg-gray-50">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400 mb-2" />
+                      <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Verificando...</span>
+                    </div>
+                 ) : coverImage ? (
                     <div 
                       className="relative group rounded-xl md:rounded-2xl overflow-hidden shadow-md w-full max-w-[200px] md:max-w-none mx-auto border border-gray-100" 
                       style={{ aspectRatio: currentImageAspectRatio }}
@@ -288,14 +352,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     <label className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group">
                       <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors"><Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" /></div>
                       <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
                     </label>
                  )}
               </section>
             )}
           </div>
 
-          {/* Footer Exclusivo Desktop (oculto en móvil) */}
           <div className="hidden md:flex p-6 border-t border-gray-100 bg-gray-50/50 gap-2 shrink-0">
             <ActionButtons />
           </div>
@@ -303,7 +366,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
       </div>
 
-      {/* FOOTER EXCLUSIVO MÓVIL (fijo abajo) */}
       <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <ActionButtons />
       </div>

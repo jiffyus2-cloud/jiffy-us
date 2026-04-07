@@ -3,7 +3,7 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, Check, 
   ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
-  AlertCircle
+  AlertCircle, Loader2
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -21,34 +21,19 @@ interface JiffyLoaderProps {
 const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
   return (
     <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
-      {/* Contenedor relativo para alojar los dos triángulos superpuestos */}
       <div className="relative w-24 h-24 flex items-center justify-center">
-        {/* TRIÁNGULO T1 (Naranja Claro - Apunta a la derecha) */}
         <div
           className="absolute w-12 h-14 animate-spin-right-t1"
-          style={{
-            top: '20%',
-            left: '-8%',
-            transform: 'translate(50%, 50%)',
-            transformOrigin: '50% 50%',
-            animationDelay: '0ms'
-          }}
+          style={{ top: '20%', left: '-8%', transform: 'translate(50%, 50%)', transformOrigin: '50% 50%', animationDelay: '0ms' }}
         >
           <svg viewBox="0 0 256 292" className="w-full h-full drop-shadow-md">
             <path fill="#fcd3ba" d="M0,0 L0,292 L256,146  Z" />
           </svg>
         </div>
 
-        {/* TRIÁNGULO T2 (Naranja Oscuro - Apunta a la izquierda) */}
         <div
           className="absolute w-12 h-14 animate-spin-left-t2"
-          style={{
-            top: '0%',
-            left: '0%',
-            transform: 'translate(50%, 50%)',
-            transformOrigin: '50% 50%',
-            animationDelay: '0ms'
-          }}
+          style={{ top: '0%', left: '0%', transform: 'translate(50%, 50%)', transformOrigin: '50% 50%', animationDelay: '0ms' }}
         >
           <svg viewBox="0 0 256 292" className="w-full h-full drop-shadow-lg">
             <path fill="#ff7300" d="M256,0 L0,146 L256,292 Z" />
@@ -56,7 +41,6 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </div>
       </div>
 
-      {/* Texto de carga debajo */}
       <div className="text-center animate-pulse">
         <p className="text-xl font-bold text-gray-900">
           {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
@@ -66,51 +50,23 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </p>
       </div>
 
-      {/* --- ESTILOS DE ANIMACIÓN CON TRANSLATE INCLUIDO --- */}
       <style>{`
         @keyframes spinRightT1 {
-          0% {
-            opacity: 0.1;
-            transform: translate(50%, 50%) rotate(180deg) scale(0.5);
-          }
-          50% {
-            opacity: 1;
-            transform: translate(50%, 50%) rotate(0deg) scale(0.75);
-          }
-          100% {
-            opacity: 0.1;
-            transform: translate(50%, 50%) rotate(-180deg) scale(0.5);
-          }
+          0% { opacity: 0.1; transform: translate(50%, 50%) rotate(180deg) scale(0.5); }
+          50% { opacity: 1; transform: translate(50%, 50%) rotate(0deg) scale(0.75); }
+          100% { opacity: 0.1; transform: translate(50%, 50%) rotate(-180deg) scale(0.5); }
         }
-
         @keyframes spinLeftT2 {
-          0% {
-            opacity: 0.1;
-            transform: translate(50%, 50%) rotate(-180deg) scale(0.8);
-          }
-          50% {
-            opacity: 1;
-            transform: translate(50%, 50%) rotate(0deg) scale(1.1);
-          }
-          100% {
-            opacity: 0.1;
-            transform: translate(50%, 50%) rotate(180deg) scale(0.8);
-          }
+          0% { opacity: 0.1; transform: translate(50%, 50%) rotate(-180deg) scale(0.8); }
+          50% { opacity: 1; transform: translate(50%, 50%) rotate(0deg) scale(1.1); }
+          100% { opacity: 0.1; transform: translate(50%, 50%) rotate(180deg) scale(0.8); }
         }
-
-        .animate-spin-right-t1 {
-          animation: spinRightT1 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
-
-        .animate-spin-left-t2 {
-          animation: spinLeftT2 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
+        .animate-spin-right-t1 { animation: spinRightT1 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+        .animate-spin-left-t2 { animation: spinLeftT2 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
       `}</style>
     </div>
   );
 };
-// ============================================================================
-
 
 interface PhotoOrganizerProps {
   album: Album;
@@ -251,6 +207,13 @@ export default function PhotoOrganizer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Estados para validación de resolución
+  const [isValidating, setIsValidating] = useState(false);
+  const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
+  const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
+  const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
+  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); // NUEVO ESTADO
+
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
   const isVertical = sizeStr.includes('Vertical');
@@ -303,18 +266,89 @@ export default function PhotoOrganizer({
   }, [uploadedPhotos.length]);
 
   // ==========================================================================
-  // MANEJADOR DE CARGA OPTIMIZADO PARA SAFARI IOS
+  // VALIDADOR DE RESOLUCIÓN DE IMÁGENES
   // ==========================================================================
-  const handleBatchUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const checkImageDimensions = (file: File): Promise<{file: File, url: string, isLowRes: boolean, width: number, height: number}> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const minDim = Math.min(img.width, img.height);
+        resolve({ file, url, isLowRes: minDim < 1080, width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        resolve({ file, url, isLowRes: false, width: 0, height: 0 }); 
+      };
+      img.src = url;
+    });
+  };
+
+  const handleFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsSortingWithAI(true);
+    setIsValidating(true);
     const filesArray = Array.from(files);
+    const results = await Promise.all(filesArray.map(checkImageDimensions));
+
+    const valid = results.filter(r => !r.isLowRes).map(r => r.file);
+    const lowRes = results.filter(r => r.isLowRes);
+
+    if (lowRes.length > 0) {
+      setApprovedFiles(valid);
+      setLowResImages(lowRes);
+      setCurrentLowResIndex(0);
+      setApplyToAllLowRes(false);
+      setIsValidating(false);
+    } else {
+      setIsValidating(false);
+      processUpload(valid);
+    }
+    
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleLowResDecision = (keep: boolean) => {
+    let newApproved = [...approvedFiles];
+    
+    if (applyToAllLowRes) {
+      if (keep) {
+        // Se aplica la decisión de MANTENER a todas las restantes
+        for (let i = currentLowResIndex; i < lowResImages.length; i++) {
+          newApproved.push(lowResImages[i].file);
+        }
+      }
+      // Si no las mantiene, simplemente se descartan todas las restantes
+      setLowResImages([]);
+      setCurrentLowResIndex(0);
+      setApplyToAllLowRes(false);
+      processUpload(newApproved);
+    } else {
+      const current = lowResImages[currentLowResIndex];
+      if (keep) {
+        newApproved.push(current.file);
+      }
+      
+      if (currentLowResIndex + 1 < lowResImages.length) {
+        setApprovedFiles(newApproved);
+        setCurrentLowResIndex(currentLowResIndex + 1);
+      } else {
+        setLowResImages([]);
+        setCurrentLowResIndex(0);
+        setApplyToAllLowRes(false);
+        processUpload(newApproved);
+      }
+    }
+  };
+
+  const processUpload = (finalFiles: File[]) => {
+    if (finalFiles.length === 0) return; 
+
+    setIsSortingWithAI(true);
 
     setTimeout(async () => {
       try {
-        const filesWithData = filesArray.map((file, index) => ({
+        const filesWithData = finalFiles.map((file, index) => ({
           id: index.toString(), 
           url: URL.createObjectURL(file),
           metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
@@ -357,13 +391,12 @@ export default function PhotoOrganizer({
         console.error("Error al procesar archivos:", error);
       } finally {
         setIsSortingWithAI(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
       }
     }, 100); 
   };
 
   // ==========================================================================
-  // LÓGICA DE DISTRIBUCIÓN EXCLUSIVA (Página 0 siempre con 1 imagen)
+  // LÓGICA DE DISTRIBUCIÓN
   // ==========================================================================
   const handleFinalizeSetup = () => {
     const maxP = getMaxPages(uploadedPhotos.length);
@@ -377,18 +410,15 @@ export default function PhotoOrganizer({
     const photosToDistribute = [...uploadedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
-    // 1. Asignamos al menos 1 foto a cada página para evitar páginas vacías (empezando por la primera)
     for (let i = 0; i < totalPages; i++) {
       if (photosToDistribute.length > 0) newPhotos[i].push(photosToDistribute.shift()!);
     }
 
-    // 2. Repartimos las fotos sobrantes protegiendo la página 0
     let pageIndex = totalPages > 1 ? 1 : 0; 
     let consecutiveFullPages = 0;
-    let allowPageZero = totalPages <= 1; // Solo se permite si la persona configuró 1 sola página
+    let allowPageZero = totalPages <= 1; 
     
     while (photosToDistribute.length > 0 && consecutiveFullPages < totalPages) {
-      // Salto estricto de la página 0
       if (pageIndex === 0 && !allowPageZero) {
         pageIndex = 1;
         continue;
@@ -416,12 +446,10 @@ export default function PhotoOrganizer({
         pageIndex = allowPageZero ? 0 : 1;
       }
 
-      // Si ya verificamos todas las demás páginas y absolutamente todas están llenas, 
-      // desbloqueamos la página 0 para no perder las fotos sobrantes
       if (consecutiveFullPages >= totalPages - 1 && !allowPageZero) {
         allowPageZero = true;
         consecutiveFullPages = 0;
-        pageIndex = 0; // Saltamos inmediatamente a la página 0 para rellenarla
+        pageIndex = 0; 
       }
     }
     
@@ -827,6 +855,53 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
+  const renderLowResModal = () => {
+    if (lowResImages.length === 0) return null;
+    const remainingCount = lowResImages.length - currentLowResIndex;
+
+    return (
+      <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+          <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
+          <p className="text-sm text-gray-500 mb-6">
+            Esta imagen mide <strong>{lowResImages[currentLowResIndex].width}x{lowResImages[currentLowResIndex].height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
+          </p>
+
+          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
+            <img src={lowResImages[currentLowResIndex].url} className="w-full h-full object-contain" alt="Low res preview" />
+            <div className="absolute top-3 right-3 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full font-mono font-bold shadow-lg">
+              {currentLowResIndex + 1} / {lowResImages.length}
+            </div>
+          </div>
+
+          {remainingCount > 1 && (
+            <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer bg-gray-50 p-3 rounded-xl border border-gray-200 hover:border-black transition-colors">
+              <input 
+                type="checkbox" 
+                checked={applyToAllLowRes} 
+                onChange={(e) => setApplyToAllLowRes(e.target.checked)}
+                className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black accent-black"
+              />
+              <span className="text-sm font-bold text-gray-700">Aplicar a las {remainingCount} fotos restantes</span>
+            </label>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
+              Descartar
+            </button>
+            <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+              Usar de todos modos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAdvancedSettingsModal = () => {
     if (advancedSettingsModal === null) return null;
     const pageIndex = advancedSettingsModal;
@@ -933,13 +1008,21 @@ export default function PhotoOrganizer({
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+        {renderLowResModal()}
+        
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Upload className="w-10 h-10" /></div>
           <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2><p className="text-gray-600">{t('organizer.uploadDesc')}</p>
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
-          {isSortingWithAI ? (
+          {isValidating ? (
+            <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
+              <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
+              <p className="text-xl font-bold">Verificando calidad de imágenes...</p>
+              <p className="text-sm text-gray-500">Asegurando la mejor resolución para tu impresión</p>
+            </div>
+          ) : isSortingWithAI ? (
             <JiffyLoader t={t} />
           ) : (
             <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
@@ -947,10 +1030,10 @@ export default function PhotoOrganizer({
               <div className="text-center"><p className="text-xl mb-2 font-medium">{t('organizer.clickToSelect')}</p><p className="text-sm text-gray-500 mb-4">{t('organizer.selectMultiple')}</p></div>
             </button>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleBatchUpload} className="hidden" disabled={isSortingWithAI} />
+          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isSortingWithAI || isValidating} />
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (<div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"><span className="font-medium">{uploadedPhotos.length} {t('organizer.photosSelected')}</span><button onClick={() => setUploadedPhotos([])} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button></div>)}
-            <button disabled={uploadedPhotos.length < 40 || isSortingWithAI} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isSortingWithAI ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+            <button disabled={uploadedPhotos.length < 40 || isSortingWithAI || isValidating} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isSortingWithAI && !isValidating ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
@@ -963,6 +1046,8 @@ export default function PhotoOrganizer({
     const maxP = getMaxPages(uploadedPhotos.length);
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+        {renderLowResModal()}
+        
         <div className="text-center mb-8"><div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Grid3x3 className="w-10 h-10" /></div><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
           <div>
@@ -1019,6 +1104,8 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
+      
+      {renderLowResModal()}
       {renderAdvancedSettingsModal()}
 
       {/* MODAL DE CONFLICTOS DE LAYOUT */}
