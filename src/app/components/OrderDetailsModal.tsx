@@ -604,7 +604,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                 <h2 className="text-xl font-bold text-gray-900">Detalles del Pedido</h2>
                 {getStatusBadge(order.status)}
               </div>
-              <p className="text-sm text-gray-500 mt-0.5">ID: {order.id}</p>
+              {isAlbum && order.coverData?.title && (
+                <p className="text-sm text-gray-500 mt-0.5 font-medium">{order.coverData.title}</p>
+              )}
             </div>
           </div>
           <button

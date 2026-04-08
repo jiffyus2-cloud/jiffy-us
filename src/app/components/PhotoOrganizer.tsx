@@ -20,7 +20,7 @@ interface JiffyLoaderProps {
 
 const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
   return (
-    <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
+    <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-none border border-gray-200 shadow-inner">
       <div className="relative w-24 h-24 flex items-center justify-center">
         <div
           className="absolute w-12 h-14 animate-spin-right-t1"
@@ -41,17 +41,13 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </div>
       </div>
 
-      <div className="text-center">
-        <p className="text-xl font-bold text-gray-900 animate-pulse">
+      <div className="text-center animate-pulse">
+        <p className="text-xl font-bold text-gray-900">
           {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
         </p>
         <p className="text-sm text-gray-500 mt-1">
           {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
         </p>
-        {/* AVISO DE NO CERRAR PESTAÑA */}
-        <div className="mt-4 inline-block bg-amber-50 border border-amber-200 text-amber-600 text-xs md:text-sm font-bold px-4 py-2 rounded-full animate-pulse shadow-sm">
-          ⚠️ Por favor, no cierres ni recargues esta pestaña
-        </div>
       </div>
 
       <style>{`
@@ -102,7 +98,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   handleRemovePhotoFromPage: (pageIndex: number, photoIndex: number) => void;
   setEditingTextSlot: (slot: { pageIndex: number, photoIndex: number } | null) => void;
   handleRemoveTextBox: (pageIndex: number, photoIndex: number) => void;
-  handleAddPhotoToPage: (pageIndex: number, file: File) => void;
+  handleAddPhotoToPage: (pageIndex: number, file: File, targetPhotoIndex?: number) => void;
   handleAddTextBox: (pageIndex: number, photoIndex: number) => void;
   onOpenCropModal: (pageIndex: number, photoIndex: number, aspect: number) => void;
   t: (key: string) => string;
@@ -114,7 +110,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className={`relative group/photo overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
+    <div className={`relative group/photo overflow-hidden rounded-none bg-white flex items-center justify-center`}>
       {photo ? (
         <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
             <ImageCropper 
@@ -122,20 +118,26 @@ const AlbumEditorPhotoSlot: React.FC<{
               position={crop || { x: 50, y: 50, zoom: 1 }}
             />
             {editingPageIndex === pageIndex && (
-              <div className="absolute top-2 right-2 flex gap-1 transition-opacity z-10">
-                <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm" title="Mover Izquierda"><ArrowLeft className="w-3.5 h-3.5" /></button>
-                <button 
-                   onClick={() => {
-                      const aspect = containerRef.current ? containerRef.current.offsetWidth / containerRef.current.offsetHeight : 1;
-                      onOpenCropModal(pageIndex, photoIndex, aspect);
-                   }} 
-                   className="p-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-sm" 
-                   title="Ajustar Recorte"
-                >
-                   <CropIcon className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm" title="Eliminar"><Trash2 className="w-3.5 h-3.5" /></button>
-                <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1.5 bg-white/90 rounded-full hover:bg-white text-black shadow-sm" title="Mover Derecha"><ArrowRight className="w-3.5 h-3.5" /></button>
+              <div className="absolute top-1 right-1 flex flex-wrap justify-end items-start gap-1 max-w-[85%] transition-opacity z-10 pointer-events-none">
+                {/* GRUPO DE MOVIMIENTO */}
+                <div className="flex gap-1 pointer-events-auto bg-black/10 backdrop-blur-md rounded-full p-0.5 shrink-0">
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                </div>
+                {/* GRUPO DE ACCIONES */}
+                <div className="flex gap-1 pointer-events-auto shrink-0">
+                  <button 
+                     onClick={() => {
+                        const aspect = containerRef.current ? containerRef.current.offsetWidth / containerRef.current.offsetHeight : 1;
+                        onOpenCropModal(pageIndex, photoIndex, aspect);
+                     }} 
+                     className="p-1 sm:p-1.5 bg-blue-500 text-white hover:bg-blue-600 shadow-sm rounded-full" 
+                     title="Ajustar Recorte"
+                  >
+                     <CropIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  </button>
+                  <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-1 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-sm rounded-full" title="Eliminar"><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                </div>
               </div>
             )}
         </div>
@@ -156,23 +158,33 @@ const AlbumEditorPhotoSlot: React.FC<{
             {textBox.text || t('organizer.addText') + '...'}
           </div>
           {editingPageIndex === pageIndex && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center gap-2 opacity-0 group-hover/photo:opacity-100 transition-opacity">
-              <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 bg-white rounded-full hover:bg-gray-100"><Edit3 className="w-4 h-4" /></button>
-              <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"><Trash2 className="w-4 h-4" /></button>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 z-10">
+              <div className="flex flex-wrap justify-center items-center gap-1 sm:gap-2 w-full max-w-[95%] pointer-events-none">
+                {/* GRUPO DE MOVIMIENTO */}
+                <div className="flex gap-1 pointer-events-auto bg-white/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                </div>
+                {/* GRUPO DE ACCIONES */}
+                <div className="flex gap-1 pointer-events-auto shrink-0">
+                  <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-1 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-1 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                </div>
+              </div>
             </div>
           )}
         </div>
       ) : (
         editingPageIndex === pageIndex && (
-          <div className="flex flex-col gap-3">
-            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file); }; input.click(); }} className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors">
-              <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300"><ImageIcon className="w-6 h-6" /></div>
-              <span className="text-[10px] font-bold uppercase">{t('organizer.addPhoto')}</span>
+          <div className="flex flex-col gap-1 sm:gap-2 p-1 items-center justify-center w-full h-full">
+            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
+              <div className="p-1.5 sm:p-2 bg-gray-200 group-hover:bg-gray-300 rounded-full"><ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
+              <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{t('organizer.addPhoto')}</span>
             </button>
-            <div className="h-px bg-gray-200 w-12 mx-auto" />
-            <button onClick={() => handleAddTextBox(pageIndex, photoIndex)} className="flex flex-col items-center gap-1 text-gray-400 hover:text-black transition-colors">
-              <div className="p-2 rounded-full bg-gray-200 group-hover:bg-gray-300"><Type className="w-6 h-6" /></div>
-              <span className="text-[10px] font-bold uppercase">{t('organizer.addText')}</span>
+            <div className="h-px bg-gray-200 w-6 sm:w-10 mx-auto" />
+            <button onClick={() => handleAddTextBox(pageIndex, photoIndex)} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
+              <div className="p-1.5 sm:p-2 bg-gray-200 group-hover:bg-gray-300 rounded-full"><Type className="w-4 h-4 sm:w-5 sm:h-5" /></div>
+              <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{t('organizer.addText')}</span>
             </button>
           </div>
         )
@@ -193,7 +205,6 @@ export default function PhotoOrganizer({
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  // NUEVO: Estado para mantener la información de las fotos antes de mandarlas a 1Clic.ai
   const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, metadata: any}[]>([]);
   const [numPages, setNumPages] = useState<number | string>(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
@@ -341,7 +352,6 @@ export default function PhotoOrganizer({
     }
   };
 
-  // NUEVO FLUJO: Solo almacena las fotos en local. El llamado a la IA ocurre en el Paso 2
   const processUpload = (finalFiles: File[]) => {
     if (finalFiles.length === 0) return; 
 
@@ -355,7 +365,6 @@ export default function PhotoOrganizer({
     setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
   };
 
-  // NUEVO FLUJO: Esta función se ejecuta al hacer clic en "Crear Álbum" (Paso 2)
   const runAISortingAndDistribute = async () => {
     setIsSortingWithAI(true);
 
@@ -387,18 +396,15 @@ export default function PhotoOrganizer({
             return matchedFile ? matchedFile.url : '';
           }).filter(Boolean);
 
-          // Si la IA dejó alguna foto por fuera, la rescatamos y la añadimos al final
           const missingUrls = pendingFilesData.filter(f => !orderedIdsFromAI.includes(f.id)).map(f => f.url);
           finalUrls = [...finalUrls, ...missingUrls];
         } else {
           finalUrls = pendingFilesData.map(f => f.url);
         }
 
-        // Pasamos las URLs ya ordenadas a nuestra función de distribución
         handleFinalizeSetup(finalUrls);
       } catch (error) {
         console.error("Error al procesar archivos con IA:", error);
-        // Fallback: Si hay error con 1Clic, las ordenamos como se subieron
         handleFinalizeSetup(pendingFilesData.map(f => f.url));
       } finally {
         setIsSortingWithAI(false);
@@ -406,9 +412,6 @@ export default function PhotoOrganizer({
     }, 100); 
   };
 
-  // ==========================================================================
-  // NUEVA LÓGICA DE DISTRIBUCIÓN CRONOLÓGICA ESPACIADA (Recibe las fotos ordenadas)
-  // ==========================================================================
   const handleFinalizeSetup = (sortedPhotos: string[]) => {
     const maxP = getMaxPages(sortedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
@@ -419,7 +422,6 @@ export default function PhotoOrganizer({
 
     const totalPages = safeVal;
     
-    // 1. Calculamos las "capacidades" de las páginas (cuántos huecos tendrá cada una)
     let pageCapacities = new Array(totalPages).fill(1);
     let remainingPhotos = Math.max(0, sortedPhotos.length - totalPages);
     let allowPageZero = totalPages <= 1;
@@ -435,22 +437,18 @@ export default function PhotoOrganizer({
 
       if (availablePages.length === 0) {
         if (!allowPageZero && pageCapacities[0] < maxAllowed) {
-          allowPageZero = true; // Desbloqueamos la página 0 si ya no hay espacio
+          allowPageZero = true; 
           continue;
         } else {
-          // Medida de seguridad extrema para no perder fotos
           pageCapacities[totalPages - 1] += remainingPhotos;
           remainingPhotos = 0;
           break;
         }
       }
 
-      // Encontramos las páginas que tienen la menor cantidad de fotos
-      // para distribuir de manera equilibrada (evitando páginas con 9 fotos seguidas)
       const minCap = Math.min(...availablePages.map(p => pageCapacities[p]));
       const candidatePages = availablePages.filter(p => pageCapacities[p] === minCap);
 
-      // Calculamos el salto matemático para espaciarlas
       let incrementsCount = Math.min(remainingPhotos, candidatePages.length);
       let spacing = candidatePages.length / incrementsCount;
 
@@ -461,7 +459,6 @@ export default function PhotoOrganizer({
       }
     }
 
-    // 2. Repartimos las fotos CRONOLÓGICAMENTE en los huecos calculados
     const photosToDistribute = [...sortedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
@@ -474,7 +471,6 @@ export default function PhotoOrganizer({
       }
     }
     
-    // Seguro final (por si sobró alguna imagen en el cálculo matemático)
     while (photosToDistribute.length > 0) {
        newPhotos[totalPages - 1].push(photosToDistribute.shift()!);
     }
@@ -520,33 +516,72 @@ export default function PhotoOrganizer({
     setEditingPageIndex(targetIndex);
   };
 
-  const handleAddPhotoToPage = (pageIndex: number, file: File) => {
+  const handleAddPhotoToPage = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
     const newPhotos = [...photos];
+    const pagePhotos = [...newPhotos[pageIndex]];
     const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
 
-    if (newPhotos[pageIndex].length >= maxAllowed) {
-      alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
-      return;
+    if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
+      while (pagePhotos.length <= targetPhotoIndex) {
+        pagePhotos.push('');
+      }
+      pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
+    } else {
+      const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
+      if (firstEmpty !== -1) {
+        pagePhotos[firstEmpty] = URL.createObjectURL(file);
+      } else {
+        if (pagePhotos.length >= maxAllowed) {
+          alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
+          return;
+        }
+        pagePhotos.push(URL.createObjectURL(file));
+      }
     }
 
-    newPhotos[pageIndex] = [...newPhotos[pageIndex], URL.createObjectURL(file)];
-    onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: getNextAllowed(newPhotos[pageIndex].length) });
+    newPhotos[pageIndex] = pagePhotos;
+    
+    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+    const neededVariant = getNextAllowed(pagePhotos.length);
+    
+    if (currentVariant < neededVariant) {
+      onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
+    }
+
     onPhotosChange(newPhotos);
   };
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
-    newPhotos[pageIndex] = newPhotos[pageIndex].filter((_, i) => i !== photoIndex);
+    const pagePhotos = [...newPhotos[pageIndex]];
+    pagePhotos[photoIndex] = ''; 
+
+    while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) {
+      pagePhotos.pop();
+    }
+
+    newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
   };
 
   const handleMovePhotoWithinPage = (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => {
     if (direction === 'left' && photoIndex === 0) return;
-    if (direction === 'right' && photoIndex === photos[pageIndex].length - 1) return;
+    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(photos[pageIndex].length);
+    if (direction === 'right' && photoIndex >= currentVariant - 1) return;
+
     const newPhotos = [...photos];
-    const targetIndex = direction === 'left' ? photoIndex - 1 : photoIndex + 1;
     const pagePhotos = [...newPhotos[pageIndex]];
+    const targetIndex = direction === 'left' ? photoIndex - 1 : photoIndex + 1;
+    
+    while (pagePhotos.length <= Math.max(photoIndex, targetIndex)) {
+      pagePhotos.push('');
+    }
+    
     [pagePhotos[photoIndex], pagePhotos[targetIndex]] = [pagePhotos[targetIndex], pagePhotos[photoIndex]];
+    
+    while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) {
+      pagePhotos.pop();
+    }
     newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
 
@@ -558,6 +593,20 @@ export default function PhotoOrganizer({
     if (targetCrop) newCrops[`${pageIndex}-${photoIndex}`] = targetCrop;
     else delete newCrops[`${pageIndex}-${photoIndex}`];
     onPhotoCropsChange(newCrops);
+
+    const currentText = textBoxSlots[pageIndex]?.[photoIndex];
+    const targetText = textBoxSlots[pageIndex]?.[targetIndex];
+    const newTexts = { ...textBoxSlots };
+    if (!newTexts[pageIndex]) newTexts[pageIndex] = {};
+    
+    if (currentText) newTexts[pageIndex][targetIndex] = currentText;
+    else delete newTexts[pageIndex][targetIndex];
+    
+    if (targetText) newTexts[pageIndex][photoIndex] = targetText;
+    else delete newTexts[pageIndex][photoIndex];
+    
+    if (Object.keys(newTexts[pageIndex]).length === 0) delete newTexts[pageIndex];
+    onTextBoxSlotsChange(newTexts);
   };
 
   const handleAddTextBox = (pageIndex: number, photoIndex: number) => {
@@ -587,7 +636,7 @@ export default function PhotoOrganizer({
 
   const isLastPageWithContent = (pageIdx: number, currentPhotos: string[][]) => {
     for (let i = pageIdx + 1; i < currentPhotos.length; i++) {
-        if (currentPhotos[i].length > 0) return false;
+        if (currentPhotos[i].some(p => p && p.trim() !== '')) return false;
     }
     return true;
   };
@@ -955,7 +1004,7 @@ export default function PhotoOrganizer({
                 <AlertCircle className="w-4 h-4 text-amber-500" /> Previsualización Interactiva
               </p>
               
-              <div className="bg-white rounded-[3%] shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+              <div className="bg-white rounded-none shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
                 <div className={`grid gap-2 p-3 sm:p-4 h-full ${getGridLayout(currentVariant, currentLayout)}`}>
                   {slots.map((photo, photoIndex) => {
                     const textBox = textBoxSlots[pageIndex]?.[photoIndex];
@@ -1231,7 +1280,7 @@ export default function PhotoOrganizer({
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Portada</span>
           </div>
           <div 
-            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
+            className="bg-gray-100 rounded-none shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
             style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
           >
             <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
@@ -1252,7 +1301,7 @@ export default function PhotoOrganizer({
               </div>
             </div>
 
-            <div className={`bg-white rounded-[3%] shadow-sm border-2 transition-all overflow-hidden mt-auto ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+            <div className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
               {(() => {
                 const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
                 const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
@@ -1289,7 +1338,7 @@ export default function PhotoOrganizer({
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página en Blanco</span>
             </div>
             <div 
-              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 transition-all overflow-hidden flex items-center justify-center mt-auto"
+              className="bg-white rounded-none shadow-sm border-2 border-gray-100 transition-all overflow-hidden flex items-center justify-center mt-auto"
               style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
             >
               <span className="text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest">En Blanco</span>
@@ -1303,7 +1352,7 @@ export default function PhotoOrganizer({
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Contraportada</span>
           </div>
           <div 
-            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
+            className="bg-gray-100 rounded-none shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
             style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
           >
             <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
