@@ -172,10 +172,11 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             <div 
               className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}>
-              <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
+              <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
               </div>
-              <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
+              {/* Le damos un padding de 10cqw para mantener el texto alejado de los bordes, pero la imagen llena todo el espacio */}
+              <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
                   <h2 className="text-[8cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
@@ -290,10 +291,10 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             <div 
               className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}>
-              <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
+              <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
               </div>
-              <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
+              <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
                   <h2 className="text-[8cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
@@ -407,10 +408,10 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
             <div 
               className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}>
-              <div className="absolute inset-[10%] z-0 overflow-hidden bg-gray-100">
+              <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
               </div>
-              <div className="absolute inset-[10%] z-10 flex flex-col justify-between p-[6cqw] pointer-events-none">
+              <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
                   <h2 className="text-[8cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>

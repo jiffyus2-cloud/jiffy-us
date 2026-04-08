@@ -78,26 +78,29 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     let wPercent = 0.80; 
     let hPercent = 0.80; 
 
-    if (isVertical) {
-      if (selectedLayout === 1) hPercent = 0.80 * 0.90;      
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
-      else if (selectedLayout === 3) hPercent = 0.80;        
-      else if (selectedLayout === 4) hPercent = 0.80;        
-      else if (selectedLayout === 5) hPercent = 0.80;        
-    } 
-    else if (isHorizontal) {
-      if (selectedLayout === 1) hPercent = 0.75 * 0.90;      
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
-      else if (selectedLayout === 3) hPercent = 0.80;        
-      else if (selectedLayout === 4) hPercent = 0.90;        
-      else if (selectedLayout === 5) hPercent = 0.80;        
-    } 
-    else if (isSquare) {
-      if (selectedLayout === 1) hPercent = 0.70 * 0.90;      
-      else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
-      else if (selectedLayout === 3) hPercent = 0.80;        
-      else if (selectedLayout === 4) hPercent = 0.80;        
-      else if (selectedLayout === 5) hPercent = 0.80;        
+    // Si es layout 5, el recorte exige cubrir el 100% del área (full bleed / a sangre)
+    if (selectedLayout === 5) {
+      wPercent = 1.0;
+      hPercent = 1.0;
+    } else {
+      if (isVertical) {
+        if (selectedLayout === 1) hPercent = 0.80 * 0.90;      
+        else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+        else if (selectedLayout === 3) hPercent = 0.80;        
+        else if (selectedLayout === 4) hPercent = 0.80;        
+      } 
+      else if (isHorizontal) {
+        if (selectedLayout === 1) hPercent = 0.75 * 0.90;      
+        else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+        else if (selectedLayout === 3) hPercent = 0.80;        
+        else if (selectedLayout === 4) hPercent = 0.90;        
+      } 
+      else if (isSquare) {
+        if (selectedLayout === 1) hPercent = 0.70 * 0.90;      
+        else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
+        else if (selectedLayout === 3) hPercent = 0.80;        
+        else if (selectedLayout === 4) hPercent = 0.80;        
+      }
     }
 
     return baseAspectRatio * (wPercent / hPercent);
@@ -168,28 +171,33 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const currentTypographyColors = getTypographyColors();
 
+  // Eliminamos el botón Cancelar y hacemos el de Guardar de ancho completo (w-full)
   const ActionButtons = () => (
-    <>
-      <button onClick={onClose} className="flex-1 py-3 bg-white text-black border-2 border-black font-black uppercase tracking-widest rounded-xl hover:bg-gray-50 transition-all text-xs">
-        Cancelar
-      </button>
-      <button 
-        onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
-        disabled={!isFormValid || isValidating}
-        className={`flex-[2] py-3 font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all text-xs ${
-          isFormValid && !isValidating
-            ? 'bg-black text-white hover:bg-zinc-800 shadow-lg active:scale-[0.98]' 
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-        }`}
-      >
-        <Check size={16} /> Guardar
-      </button>
-    </>
+    <button 
+      onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
+      disabled={!isFormValid || isValidating}
+      className={`w-full py-4 font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all text-sm ${
+        isFormValid && !isValidating
+          ? 'bg-black text-white hover:bg-zinc-800 shadow-xl active:scale-[0.98]' 
+          : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+      }`}
+    >
+      <Check size={18} /> Guardar
+    </button>
   );
 
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden overscroll-none">
       
+      {/* Regla CSS para empujar el widget de 1Clic hacia arriba */}
+      <style>{`
+        @media (max-width: 768px) {
+          #oneclic-badge, [id*="1clic"], iframe[src*="1clic"] {
+            bottom: 110px !important;
+          }
+        }
+      `}</style>
+
       {/* MODAL PARA REVISIÓN DE IMÁGENES DE BAJA RESOLUCIÓN */}
       {lowResImage && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -366,7 +374,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
       </div>
 
-      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+      {/* FOOTER EXCLUSIVO MÓVIL (Con padding inferior de pb-24 para elevar el botón por encima del badge de 1Clic) */}
+      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-24">
         <ActionButtons />
       </div>
 

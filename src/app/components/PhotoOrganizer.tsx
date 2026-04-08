@@ -41,13 +41,17 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </div>
       </div>
 
-      <div className="text-center animate-pulse">
-        <p className="text-xl font-bold text-gray-900">
+      <div className="text-center">
+        <p className="text-xl font-bold text-gray-900 animate-pulse">
           {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
         </p>
         <p className="text-sm text-gray-500 mt-1">
           {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
         </p>
+        {/* AVISO DE NO CERRAR PESTAÑA */}
+        <div className="mt-4 inline-block bg-amber-50 border border-amber-200 text-amber-600 text-xs md:text-sm font-bold px-4 py-2 rounded-full animate-pulse shadow-sm">
+          ⚠️ Por favor, no cierres ni recargues esta pestaña
+        </div>
       </div>
 
       <style>{`
@@ -189,6 +193,8 @@ export default function PhotoOrganizer({
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  // NUEVO: Estado para mantener la información de las fotos antes de mandarlas a 1Clic.ai
+  const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, metadata: any}[]>([]);
   const [numPages, setNumPages] = useState<number | string>(40);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
@@ -207,12 +213,11 @@ export default function PhotoOrganizer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados para validación de resolución
   const [isValidating, setIsValidating] = useState(false);
   const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
   const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
   const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
-  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); // NUEVO ESTADO
+  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
 
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
@@ -265,9 +270,6 @@ export default function PhotoOrganizer({
     }
   }, [uploadedPhotos.length]);
 
-  // ==========================================================================
-  // VALIDADOR DE RESOLUCIÓN DE IMÁGENES
-  // ==========================================================================
   const checkImageDimensions = (file: File): Promise<{file: File, url: string, isLowRes: boolean, width: number, height: number}> => {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
@@ -313,12 +315,10 @@ export default function PhotoOrganizer({
     
     if (applyToAllLowRes) {
       if (keep) {
-        // Se aplica la decisión de MANTENER a todas las restantes
         for (let i = currentLowResIndex; i < lowResImages.length; i++) {
           newApproved.push(lowResImages[i].file);
         }
       }
-      // Si no las mantiene, simplemente se descartan todas las restantes
       setLowResImages([]);
       setCurrentLowResIndex(0);
       setApplyToAllLowRes(false);
@@ -341,54 +341,65 @@ export default function PhotoOrganizer({
     }
   };
 
+  // NUEVO FLUJO: Solo almacena las fotos en local. El llamado a la IA ocurre en el Paso 2
   const processUpload = (finalFiles: File[]) => {
     if (finalFiles.length === 0) return; 
 
+    const newFilesData = finalFiles.map((file) => ({
+      id: Math.random().toString(36).substring(2, 11), 
+      url: URL.createObjectURL(file),
+      metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+    }));
+
+    setPendingFilesData(prev => [...prev, ...newFilesData]);
+    setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+  };
+
+  // NUEVO FLUJO: Esta función se ejecuta al hacer clic en "Crear Álbum" (Paso 2)
+  const runAISortingAndDistribute = async () => {
     setIsSortingWithAI(true);
 
     setTimeout(async () => {
       try {
-        const filesWithData = finalFiles.map((file, index) => ({
-          id: index.toString(), 
-          url: URL.createObjectURL(file),
-          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-        }));
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
+        const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            photos_data: pendingFilesData.map(f => ({ id: f.id, ...f.metadata })),
+            page_count: typeof numPages === 'number' ? numPages : 40,
+            layout_preferences: { isSquare, isHorizontal, isVertical }
+          })
+        });
+
+        if (!aiResponse.ok) throw new Error('Error IA');
+        const responseData = await aiResponse.json();
 
         let finalUrls: string[] = [];
-        try {
-          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
-          const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              photos_data: filesWithData.map(f => ({ id: f.id, ...f.metadata })),
-              page_count: typeof numPages === 'number' ? numPages : 40,
-              layout_preferences: { isSquare, isHorizontal, isVertical }
-            })
+        if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
+          const orderedIdsFromAI: string[] = [];
+          responseData.Albums.forEach((album: any) => {
+            if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
           });
+          
+          finalUrls = orderedIdsFromAI.map((id: string) => {
+            const matchedFile = pendingFilesData.find(f => f.id === id);
+            return matchedFile ? matchedFile.url : '';
+          }).filter(Boolean);
 
-          if (!aiResponse.ok) throw new Error('Error IA');
-          const responseData = await aiResponse.json();
-
-          if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
-            const orderedIdsFromAI: string[] = [];
-            responseData.Albums.forEach((album: any) => {
-              if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
-            });
-            finalUrls = orderedIdsFromAI.map((id: string) => {
-              const matchedFile = filesWithData.find(f => f.id === id);
-              return matchedFile ? matchedFile.url : '';
-            }).filter(Boolean);
-          } else {
-            finalUrls = filesWithData.map(f => f.url);
-          }
-        } catch (aiError: any) {
-          finalUrls = filesWithData.map(f => f.url);
+          // Si la IA dejó alguna foto por fuera, la rescatamos y la añadimos al final
+          const missingUrls = pendingFilesData.filter(f => !orderedIdsFromAI.includes(f.id)).map(f => f.url);
+          finalUrls = [...finalUrls, ...missingUrls];
+        } else {
+          finalUrls = pendingFilesData.map(f => f.url);
         }
 
-        setUploadedPhotos(prev => [...prev, ...finalUrls]);
+        // Pasamos las URLs ya ordenadas a nuestra función de distribución
+        handleFinalizeSetup(finalUrls);
       } catch (error) {
-        console.error("Error al procesar archivos:", error);
+        console.error("Error al procesar archivos con IA:", error);
+        // Fallback: Si hay error con 1Clic, las ordenamos como se subieron
+        handleFinalizeSetup(pendingFilesData.map(f => f.url));
       } finally {
         setIsSortingWithAI(false);
       }
@@ -396,10 +407,10 @@ export default function PhotoOrganizer({
   };
 
   // ==========================================================================
-  // LÓGICA DE DISTRIBUCIÓN
+  // NUEVA LÓGICA DE DISTRIBUCIÓN CRONOLÓGICA ESPACIADA (Recibe las fotos ordenadas)
   // ==========================================================================
-  const handleFinalizeSetup = () => {
-    const maxP = getMaxPages(uploadedPhotos.length);
+  const handleFinalizeSetup = (sortedPhotos: string[]) => {
+    const maxP = getMaxPages(sortedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
     
     safeVal = Math.min(Math.max(safeVal, 40), maxP);
@@ -407,52 +418,67 @@ export default function PhotoOrganizer({
     setNumPages(safeVal);
 
     const totalPages = safeVal;
-    const photosToDistribute = [...uploadedPhotos];
+    
+    // 1. Calculamos las "capacidades" de las páginas (cuántos huecos tendrá cada una)
+    let pageCapacities = new Array(totalPages).fill(1);
+    let remainingPhotos = Math.max(0, sortedPhotos.length - totalPages);
+    let allowPageZero = totalPages <= 1;
+    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+
+    while (remainingPhotos > 0) {
+      let availablePages = [];
+      for (let i = (allowPageZero ? 0 : 1); i < totalPages; i++) {
+        if (pageCapacities[i] < maxAllowed) {
+          availablePages.push(i);
+        }
+      }
+
+      if (availablePages.length === 0) {
+        if (!allowPageZero && pageCapacities[0] < maxAllowed) {
+          allowPageZero = true; // Desbloqueamos la página 0 si ya no hay espacio
+          continue;
+        } else {
+          // Medida de seguridad extrema para no perder fotos
+          pageCapacities[totalPages - 1] += remainingPhotos;
+          remainingPhotos = 0;
+          break;
+        }
+      }
+
+      // Encontramos las páginas que tienen la menor cantidad de fotos
+      // para distribuir de manera equilibrada (evitando páginas con 9 fotos seguidas)
+      const minCap = Math.min(...availablePages.map(p => pageCapacities[p]));
+      const candidatePages = availablePages.filter(p => pageCapacities[p] === minCap);
+
+      // Calculamos el salto matemático para espaciarlas
+      let incrementsCount = Math.min(remainingPhotos, candidatePages.length);
+      let spacing = candidatePages.length / incrementsCount;
+
+      for (let i = 0; i < incrementsCount; i++) {
+        let pageIdx = candidatePages[Math.floor(i * spacing)];
+        pageCapacities[pageIdx] += 1;
+        remainingPhotos -= 1;
+      }
+    }
+
+    // 2. Repartimos las fotos CRONOLÓGICAMENTE en los huecos calculados
+    const photosToDistribute = [...sortedPhotos];
     const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
     
     for (let i = 0; i < totalPages; i++) {
-      if (photosToDistribute.length > 0) newPhotos[i].push(photosToDistribute.shift()!);
-    }
-
-    let pageIndex = totalPages > 1 ? 1 : 0; 
-    let consecutiveFullPages = 0;
-    let allowPageZero = totalPages <= 1; 
-    
-    while (photosToDistribute.length > 0 && consecutiveFullPages < totalPages) {
-      if (pageIndex === 0 && !allowPageZero) {
-        pageIndex = 1;
-        continue;
-      }
-
-      const currentPagePhotos = newPhotos[pageIndex];
-      const currentCount = currentPagePhotos.length;
-      const nextAllowed = allowedPhotosPerPage.find(opt => opt > currentCount);
-      
-      if (nextAllowed) {
-        const canAdd = nextAllowed - currentCount;
-        const toAdd = Math.min(canAdd, photosToDistribute.length);
-        if (toAdd > 0) {
-          currentPagePhotos.push(...photosToDistribute.splice(0, toAdd));
-          consecutiveFullPages = 0;
-        } else {
-          consecutiveFullPages++;
+      let cap = pageCapacities[i];
+      for (let j = 0; j < cap; j++) {
+        if (photosToDistribute.length > 0) {
+          newPhotos[i].push(photosToDistribute.shift()!);
         }
-      } else {
-        consecutiveFullPages++;
-      }
-      
-      pageIndex++;
-      if (pageIndex >= totalPages) {
-        pageIndex = allowPageZero ? 0 : 1;
-      }
-
-      if (consecutiveFullPages >= totalPages - 1 && !allowPageZero) {
-        allowPageZero = true;
-        consecutiveFullPages = 0;
-        pageIndex = 0; 
       }
     }
     
+    // Seguro final (por si sobró alguna imagen en el cálculo matemático)
+    while (photosToDistribute.length > 0) {
+       newPhotos[totalPages - 1].push(photosToDistribute.shift()!);
+    }
+
     onPhotosChange(newPhotos);
     setStep('editor');
   };
@@ -1021,19 +1047,26 @@ export default function PhotoOrganizer({
               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
               <p className="text-xl font-bold">Verificando calidad de imágenes...</p>
               <p className="text-sm text-gray-500">Asegurando la mejor resolución para tu impresión</p>
+              <p className="text-xs md:text-sm text-amber-600 font-bold mt-2 bg-amber-50 px-3 py-1.5 rounded-full animate-pulse border border-amber-200">
+                ⚠️ Por favor, no cierres ni recargues esta pestaña
+              </p>
             </div>
-          ) : isSortingWithAI ? (
-            <JiffyLoader t={t} />
           ) : (
             <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
               <ImageIcon className="w-16 h-16 text-gray-400 group-hover:text-black transition-colors" />
               <div className="text-center"><p className="text-xl mb-2 font-medium">{t('organizer.clickToSelect')}</p><p className="text-sm text-gray-500 mb-4">{t('organizer.selectMultiple')}</p></div>
             </button>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isSortingWithAI || isValidating} />
+          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
+          
           <div className="mt-8 flex flex-col gap-4">
-            {uploadedPhotos.length > 0 && (<div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"><span className="font-medium">{uploadedPhotos.length} {t('organizer.photosSelected')}</span><button onClick={() => setUploadedPhotos([])} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button></div>)}
-            <button disabled={uploadedPhotos.length < 40 || isSortingWithAI || isValidating} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isSortingWithAI && !isValidating ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+            {uploadedPhotos.length > 0 && (
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <span className="font-medium">{uploadedPhotos.length} {t('organizer.photosSelected')}</span>
+                <button onClick={() => { setUploadedPhotos([]); setPendingFilesData([]); }} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
+              </div>
+            )}
+            <button disabled={uploadedPhotos.length < 40 || isValidating} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
@@ -1050,38 +1083,47 @@ export default function PhotoOrganizer({
         
         <div className="text-center mb-8"><div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Grid3x3 className="w-10 h-10" /></div><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <label className="text-xl font-medium">{t('organizer.numPages')}</label>
-              <input 
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*" 
-                min={40} 
-                max={maxP} 
-                step={2} 
-                value={numPages} 
-                onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
-                onBlur={() => {
-                  let val = typeof numPages === 'number' ? numPages : 40;
-                  val = Math.min(Math.max(val, 40), maxP);
-                  if (val % 2 !== 0) val = Math.min(val + 1, maxP);
-                  setNumPages(val);
-                }} 
-                className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
-              />
-            </div>
-            <input 
-              type="range" 
-              min={40} 
-              max={maxP} 
-              step={2} 
-              value={numPages === '' ? 40 : numPages} 
-              onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
-              className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" 
-            />
-          </div>
-          <div className="flex gap-4"><button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button><button onClick={handleFinalizeSetup} className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12">{t('organizer.createAlbum')}</button></div>
+          {isSortingWithAI ? (
+            <JiffyLoader t={t} />
+          ) : (
+            <>
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <label className="text-xl font-medium">{t('organizer.numPages')}</label>
+                  <input 
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*" 
+                    min={40} 
+                    max={maxP} 
+                    step={2} 
+                    value={numPages} 
+                    onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
+                    onBlur={() => {
+                      let val = typeof numPages === 'number' ? numPages : 40;
+                      val = Math.min(Math.max(val, 40), maxP);
+                      if (val % 2 !== 0) val = Math.min(val + 1, maxP);
+                      setNumPages(val);
+                    }} 
+                    className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
+                  />
+                </div>
+                <input 
+                  type="range" 
+                  min={40} 
+                  max={maxP} 
+                  step={2} 
+                  value={numPages === '' ? 40 : numPages} 
+                  onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
+                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" 
+                />
+              </div>
+              <div className="flex gap-4">
+                <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>
+                <button onClick={runAISortingAndDistribute} className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12">{t('organizer.createAlbum')}</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
