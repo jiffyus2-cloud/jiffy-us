@@ -59,7 +59,7 @@ export default function CalendarOrganizer({
   const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
   const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
   const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
-  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); // NUEVO ESTADO
+  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const specificFileInputRef = useRef<HTMLInputElement>(null);
@@ -93,8 +93,24 @@ export default function CalendarOrganizer({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    let filesArray = Array.from(files);
+    
+    // Cálculo de espacios disponibles
+    const currentCount = photos.filter(p => p && p.trim() !== '').length;
+    const remainingSlots = requiredPhotos - currentCount;
+
+    // Bloqueo estricto del límite de fotos
+    if (filesArray.length > remainingSlots) {
+      alert(`Solo puedes subir un máximo de ${requiredPhotos} fotos para este calendario.\n\nSe han seleccionado automáticamente las primeras ${remainingSlots} fotos permitidas para completar los espacios vacíos.`);
+      filesArray = filesArray.slice(0, remainingSlots);
+    }
+
+    if (filesArray.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsValidating(true);
-    const filesArray = Array.from(files);
     
     const results = await Promise.all(filesArray.map(checkImageDimensions));
     const valid = results.filter(r => !r.isLowRes).map(r => r.file);

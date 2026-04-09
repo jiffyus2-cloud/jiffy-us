@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Upload, X, Settings, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, X, Settings, Image as ImageIcon, AlertCircle, Layout, Check } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
@@ -92,6 +92,16 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
     return '20x20';
   };
 
+  const currentCoverSize = mapSizeToCoverSize(size);
+  const numLayouts = currentCoverSize === '28x21' ? 4 : 5;
+
+  // Si el usuario cambia de un tamaño cuadrado/horizontal a uno vertical y tenía el diseño 5, lo devolvemos al 1
+  useEffect(() => {
+    if (coverContent.selectedLayout > numLayouts) {
+      setCoverContent(prev => ({ ...prev, selectedLayout: 1 }));
+    }
+  }, [numLayouts, coverContent.selectedLayout]);
+
   const hidePhoto = coverType === 'Tela';
 
   return (
@@ -183,8 +193,31 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {!isCoverEdited ? 'Es necesario configurar la portada para continuar.' : 'Haz clic en la imagen si deseas hacer más cambios.'}
+            Elige el diseño que más te guste y luego haz clic en la portada para añadir tus textos y fotos.
           </p>
+        </div>
+
+        {/* SELECTOR RÁPIDO DE LAYOUTS CON BOTONES REDUCIDOS */}
+        <div className="mb-8">
+          <div className="flex items-center justify-center gap-2 mb-4 text-gray-400">
+            <Layout className="w-4 h-4" />
+            <h3 className="text-xs font-bold uppercase tracking-widest">Diseños Disponibles</h3>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 md:gap-3">
+            {Array.from({ length: numLayouts }, (_, i) => i + 1).map((layout) => (
+              <button
+                key={layout}
+                onClick={() => setCoverContent(prev => ({ ...prev, selectedLayout: layout }))}
+                className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl text-sm md:text-base font-bold transition-all border-2 ${
+                  coverContent.selectedLayout === layout 
+                    ? 'bg-black text-white border-black shadow-md scale-105' 
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-black hover:text-black'
+                }`}
+              >
+                {layout}
+              </button>
+            ))}
+          </div>
         </div>
 
         <button
@@ -195,9 +228,8 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         >
           <div className="w-full max-w-[400px] shadow-2xl rounded-sm transition-transform duration-300 group-hover:scale-[1.02]">
             <CoverPreview
-              coverSize={mapSizeToCoverSize(size)}
+              coverSize={currentCoverSize}
               coverImage={coverContent.coverImage}
-              // Si no han escrito nada, mostramos el placeholder temporal en la previsualización exterior
               coverTitle={coverContent.coverTitle || 'NUESTRA HISTORIA'}
               coverSubtitle={coverContent.coverSubtitle || 'Un viaje inolvidable'}
               coverYear={coverContent.coverYear || new Date().getFullYear().toString()}
@@ -212,7 +244,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2">
               <Settings className="w-5 h-5 text-primary" />
               <span className="font-bold text-sm">
-                {!isCoverEdited ? 'Haz clic para diseñar portada' : 'Modificar portada'}
+                {!isCoverEdited ? 'Haz clic para añadir foto y texto' : 'Modificar portada'}
               </span>
             </div>
           </div>
@@ -236,7 +268,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
       {showCoverEditor && (
         <CoverEditor
-          coverSize={mapSizeToCoverSize(size)}
+          coverSize={currentCoverSize}
           coverType={coverType}
           hidePhoto={hidePhoto}
           onClose={() => setShowCoverEditor(false)}

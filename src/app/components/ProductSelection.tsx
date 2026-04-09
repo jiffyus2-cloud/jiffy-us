@@ -1,4 +1,4 @@
-import albumImage from '../../assets/c5681b257e0dede5d7d87776730ada678398ff51.png';
+import albumImage from '../../assets/Album2.jpeg';
 import calendarImage from '../../assets/ec28dc812bed68927d47becc060a8091e563d836.png';
 import mugImage from '../../assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png';
 import { DESIGN } from '../../styles/design-system';
@@ -44,7 +44,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>{t('product.album')}</h3>
             <p className="text-sm mb-4 text-gray-600">
-              {t('product.albumDesc')}
+              Cada recuerdo es único y merece ser contado. Álbumes personalizados para tus momentos más importantes.
             </p>
           </div>
         </button>
@@ -66,7 +66,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>{t('product.calendar')}</h3>
             <p className="text-sm mb-4 text-gray-600">
-              {t('product.calendarDesc')}
+              Tus días merecen la mejor sonrisa. Calendarios personalizados para recibir el día con la mejor actitud.
             </p>
           </div>
         </button>
