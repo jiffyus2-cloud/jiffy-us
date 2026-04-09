@@ -93,9 +93,11 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   };
 
   const currentCoverSize = mapSizeToCoverSize(size);
-  const numLayouts = currentCoverSize === '28x21' ? 4 : 5;
+  
+  // Determinamos el número de layouts disponibles dependiendo del material y orientación
+  const numLayouts = coverType === 'Tela' ? 3 : (currentCoverSize === '28x21' ? 4 : 5);
 
-  // Si el usuario cambia de un tamaño cuadrado/horizontal a uno vertical y tenía el diseño 5, lo devolvemos al 1
+  // Si el usuario cambia de material o tamaño y el layout seleccionado ya no existe, lo regresamos al 1
   useEffect(() => {
     if (coverContent.selectedLayout > numLayouts) {
       setCoverContent(prev => ({ ...prev, selectedLayout: 1 }));
@@ -229,6 +231,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           <div className="w-full max-w-[400px] shadow-2xl rounded-sm transition-transform duration-300 group-hover:scale-[1.02]">
             <CoverPreview
               coverSize={currentCoverSize}
+              coverType={coverType}
               coverImage={coverContent.coverImage}
               coverTitle={coverContent.coverTitle || 'NUESTRA HISTORIA'}
               coverSubtitle={coverContent.coverSubtitle || 'Un viaje inolvidable'}

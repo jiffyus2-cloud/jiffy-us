@@ -202,6 +202,7 @@ export default function Checkout() {
 
   const modalOrderData = { ...orderData, total: total, shippingAddress: null, billingAddress: null };
 
+  // --- LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Para miniatura) ---
   let displayImage = orderData.coverData?.image;
   if (isCalendar) {
     const januaryPage = orderData.pages?.[0];
@@ -217,6 +218,41 @@ export default function Checkout() {
   } else if (isMugType) {
     const arr = orderData.items || orderData.mugItems || [];
     if (arr.length > 0) displayImage = arr[0].photo || arr[0].photos?.[0];
+  } else if (isAlbum) {
+    // Si es Tela, buscar la primera foto interna para mostrarla
+    const isTela = orderData.customization?.coverType === 'Tela' || orderData.customization?.material === 'Tela';
+    if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
+      let firstInnerPhoto = null;
+      if (orderData.pages && orderData.pages.length > 0) {
+        for (const page of orderData.pages) {
+          const imgs = Array.isArray(page) ? page : page.images;
+          if (imgs && imgs.length > 0) {
+            const validImg = imgs.find((img: any) => typeof img === 'string' && img.trim() !== '');
+            if (validImg) {
+              firstInnerPhoto = validImg;
+              break;
+            }
+          }
+        }
+      }
+      if (!firstInnerPhoto && orderData.photos && orderData.photos.length > 0) {
+        for (const page of orderData.photos) {
+          if (Array.isArray(page)) {
+            const validImg = page.find((img: any) => typeof img === 'string' && img.trim() !== '');
+            if (validImg) {
+              firstInnerPhoto = validImg;
+              break;
+            }
+          } else if (typeof page === 'string' && page.trim() !== '') {
+            firstInnerPhoto = page;
+            break;
+          }
+        }
+      }
+      if (firstInnerPhoto) {
+        displayImage = firstInnerPhoto;
+      }
+    }
   }
 
   if (!displayImage) displayImage = product?.image;
@@ -315,13 +351,13 @@ export default function Checkout() {
               </div>
 
               <div className="aspect-square rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group" onClick={() => setIsModalOpen(true)}>
-                {displayImage ? (
+                {displayImage && displayImage !== justWhiteImg ? (
                   <div className="w-full h-full relative">
                     <img src={displayImage} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center"><Eye className="text-white w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" /></div>
                   </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon className="w-16 h-16" /></div>
+                  <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-300"><ImageIcon className="w-16 h-16" /></div>
                 )}
               </div>
               {orderData.coverData?.title && !isMugType && <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>}

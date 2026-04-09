@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Loader2 } from 'lucide-react';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
@@ -54,7 +54,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
-  // Estados para validación de resolución
   const [isValidating, setIsValidating] = useState(false);
   const [lowResImage, setLowResImage] = useState<{file: File, url: string, width: number, height: number} | null>(null);
 
@@ -64,7 +63,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
-  const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5;
+  // Lógica de validación requerida para Layout 5 en papel
+  const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
   const isFormValid = coverTitle.trim() !== '' && 
                       spineText.trim() !== '' && 
                       (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
@@ -78,11 +78,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     let wPercent = 0.80; 
     let hPercent = 0.80; 
 
-    // Si es layout 5, el recorte exige cubrir el 100% del área (full bleed / a sangre)
-    if (selectedLayout === 5) {
+    if (coverType === 'Papel' && selectedLayout === 5) {
       wPercent = 1.0;
       hPercent = 1.0;
-    } else {
+    } else if (coverType === 'Papel') {
       if (isVertical) {
         if (selectedLayout === 1) hPercent = 0.80 * 0.90;      
         else if (selectedLayout === 2) hPercent = 0.75 * 0.90; 
@@ -104,13 +103,16 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     }
 
     return baseAspectRatio * (wPercent / hPercent);
-  }, [selectedLayout, isVertical, isHorizontal, isSquare, baseAspectRatio]);
+  }, [selectedLayout, isVertical, isHorizontal, isSquare, baseAspectRatio, coverType]);
 
-  const numLayouts = isVertical ? 4 : 5;
+  const numLayouts = coverType === 'Tela' ? 3 : (isVertical ? 4 : 5);
 
-  // ==========================================================================
-  // VALIDADOR DE RESOLUCIÓN
-  // ==========================================================================
+  useEffect(() => {
+    if (selectedLayout > numLayouts) {
+      setSelectedLayout(1);
+    }
+  }, [numLayouts, selectedLayout]);
+
   const checkImageDimensions = (file: File): Promise<{file: File, url: string, isLowRes: boolean, width: number, height: number}> => {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
@@ -153,7 +155,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     }
     setLowResImage(null);
   };
-  // ==========================================================================
 
   const getTypographyColors = () => {
     if (coverType === 'Tela') {
@@ -171,7 +172,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const currentTypographyColors = getTypographyColors();
 
-  // Eliminamos el botón Cancelar y hacemos el de Guardar de ancho completo (w-full)
   const ActionButtons = () => (
     <button 
       onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
@@ -188,8 +188,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden overscroll-none">
-      
-      {/* Regla CSS para empujar el widget de 1Clic hacia arriba */}
       <style>{`
         @media (max-width: 768px) {
           #oneclic-badge, [id*="1clic"], iframe[src*="1clic"] {
@@ -198,7 +196,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         }
       `}</style>
 
-      {/* MODAL PARA REVISIÓN DE IMÁGENES DE BAJA RESOLUCIÓN */}
       {lowResImage && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
@@ -226,7 +223,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         </div>
       )}
 
-      {/* HEADER EXCLUSIVO MÓVIL */}
       <div className="md:hidden p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-20">
         <h2 className="text-lg font-black tracking-tighter">EDITOR DE PORTADA</h2>
         <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
@@ -240,13 +236,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
               <div className="md:hidden">
                 <CoverPreview
-                  coverSize={coverSize} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
+                  coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
                 />
               </div>
               <div className="hidden md:block w-full" style={{ maxWidth: isVertical ? '400px' : isHorizontal ? '580px' : '470px' }}>
                 <CoverPreview
-                  coverSize={coverSize} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
+                  coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
                 />
               </div>
@@ -271,15 +267,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 <Layout size={16} />
                 <h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Layout de Diseño</h3>
               </div>
-              <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
+              <div className="flex flex-wrap gap-2 md:gap-3">
                 {Array.from({ length: numLayouts }, (_, i) => i + 1).map((layout) => (
                   <button
                     key={layout}
                     onClick={() => setSelectedLayout(layout)}
-                    className={`group relative py-2 md:py-3 px-1 rounded-lg md:rounded-xl text-xs font-bold transition-all border-2 ${selectedLayout === layout ? 'bg-black text-white border-black shadow-md scale-[1.02]' : 'bg-white text-gray-400 border-gray-100 hover:border-black hover:text-black'}`}
+                    className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-lg md:rounded-xl text-sm md:text-base font-bold transition-all border-2 ${selectedLayout === layout ? 'bg-black text-white border-black shadow-md scale-105' : 'bg-white text-gray-400 border-gray-100 hover:border-black hover:text-black'}`}
                   >
-                    <span className="relative z-10">{layout === 1 ? 'DIS. 1' : `DIS. 0${layout}`}</span>
-                    {selectedLayout === layout && <div className="absolute top-1 right-1"><Check size={10} className="text-white md:w-3 md:h-3" /></div>}
+                    {layout}
                   </button>
                 ))}
               </div>
@@ -311,14 +306,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
                 </div>
 
-                {!( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
+                {!( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción *</label>
                     <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Un viaje inolvidable" />
                   </div>
                 )}
 
-                {( (isSquare || isHorizontal) && selectedLayout === 5 ) && (
+                {( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
                     <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="2024" />
@@ -374,7 +369,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
       </div>
 
-      {/* FOOTER EXCLUSIVO MÓVIL (Con padding inferior de pb-24 para elevar el botón por encima del badge de 1Clic) */}
       <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-24">
         <ActionButtons />
       </div>

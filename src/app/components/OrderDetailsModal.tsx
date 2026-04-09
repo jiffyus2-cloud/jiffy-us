@@ -184,6 +184,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Portada</p>
         <CoverPreview
           coverSize={mapSizeToCoverSize(order.customization?.size)}
+          coverType={order.customization?.coverType || 'Papel'} 
           coverImage={coverImageFixed}
           coverTitle={order.coverData?.title || ''}
           coverSubtitle={order.coverData?.subtitle || ''}
@@ -507,7 +508,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   const isMug = productString.includes('mug') || productString.includes('taza');
   const isAlbum = productString.includes('album') || productString.includes('photobook');
 
-  // LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL Y VALIDACIÓN JUSTWHITE
+  // --- LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Para miniatura) ---
   let displayImage = order.coverData?.image;
   let ProductIcon = isCalendar ? CalendarIcon : isMug ? Coffee : BookOpen;
 
@@ -531,6 +532,41 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   } else if (isMug) {
     if (order.items && order.items.length > 0) {
       displayImage = order.items[0].photo || order.items[0].photos?.[0];
+    }
+  } else if (isAlbum) {
+    // Si es Tela, buscar la primera foto interna para mostrarla
+    const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
+    if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
+      let firstInnerPhoto = null;
+      if (order.pages && order.pages.length > 0) {
+        for (const page of order.pages) {
+          const imgs = Array.isArray(page) ? page : page.images;
+          if (imgs && imgs.length > 0) {
+            const validImg = imgs.find((img: any) => typeof img === 'string' && img.trim() !== '');
+            if (validImg) {
+              firstInnerPhoto = validImg;
+              break;
+            }
+          }
+        }
+      }
+      if (!firstInnerPhoto && order.photos && order.photos.length > 0) {
+        for (const page of order.photos) {
+          if (Array.isArray(page)) {
+            const validImg = page.find((img: any) => typeof img === 'string' && img.trim() !== '');
+            if (validImg) {
+              firstInnerPhoto = validImg;
+              break;
+            }
+          } else if (typeof page === 'string' && page.trim() !== '') {
+            firstInnerPhoto = page;
+            break;
+          }
+        }
+      }
+      if (firstInnerPhoto) {
+        displayImage = firstInnerPhoto;
+      }
     }
   }
 
@@ -621,7 +657,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
               <div className="aspect-square rounded-[3%] overflow-hidden shadow-inner bg-white border border-gray-100 p-2">
-                {displayImage ? (
+                {displayImage && displayImage !== justWhiteImg ? (
                   <img src={displayImage} alt="Producto" className="w-full h-full object-cover rounded-[2%]" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-300">

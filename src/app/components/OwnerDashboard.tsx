@@ -196,16 +196,15 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                 </div>
               </div>
             ) : textBox ? (
-              // Contenedor configurado para Container Queries
               <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
                 <div style={{ 
                   width: '90%', 
-                  fontSize: `${(textBox.fontSize || 24) * 0.25}cqi`, // Escala relativa perfecta
+                  fontSize: `${(textBox.fontSize || 24) * 0.25}cqi`,
                   fontFamily: textBox.fontFamily || 'Arial', 
                   color: textBox.color || '#000', 
                   textAlign: 'center',
                   wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
+                  whiteSpace: 'pre-wrap',
                   lineHeight: '1.3'
                 }}>
                   {textBox.text}
@@ -522,17 +521,29 @@ const OwnerDashboard: React.FC = () => {
                   </div>
                </div>
                
-               {/* Lomo (Centro) - Fondo Blanco puro, sin sombras */}
-               <div style={{ width: spinePxWidth, height: pxHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', backgroundColor: '#FFFFFF' }}>
-                   <span style={{ transform: 'rotate(-90deg)', whiteSpace: 'nowrap', fontSize: `${spinePxWidth * 0.4}px`, fontWeight: 'bold', letterSpacing: '8px', color: textColor }}>
-                      {spineText}
-                   </span>
+               {/* Lomo (Centro) - Fondo Blanco puro, sin sombras, texto anclado arriba y rotado para leer de arriba a abajo */}
+               <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                   <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
+                       <span style={{ 
+                          display: 'block',
+                          transform: 'rotate(90deg) translateY(-50%)', 
+                          transformOrigin: 'top left', 
+                          whiteSpace: 'nowrap', 
+                          fontSize: `${spinePxWidth * 0.4}px`, 
+                          fontWeight: 'bold', 
+                          letterSpacing: '8px', 
+                          color: textColor 
+                       }}>
+                          {spineText}
+                       </span>
+                   </div>
                </div>
                
                {/* Portada (Derecha) */}
                <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
                    <CoverPreview
                      coverSize={coverSizeProp as any} 
+                     coverType={order.customization?.coverType || order.customization?.material || 'Papel'}
                      coverImage={coverImageForPdf} 
                      coverTitle={order.coverData?.title || ''}
                      coverSubtitle={order.coverData?.subtitle || ''} 
