@@ -468,14 +468,18 @@ const OwnerDashboard: React.FC = () => {
     return new Promise(async (resolve, reject) => {
       try {
         const { wCm, hCm, coverSizeProp, pxWidth, pxHeight } = getDimensions(order);
-        const spineCm = 2;
-        const totalWCm = (wCm * 2) + spineCm;
+        
+        // VALIDACIÓN DE TELA: Si es Tela, el PDF no debe tener lomo ni contraportada
+        const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
+
+        const spineCm = isTela ? 0 : 2;
+        const totalWCm = isTela ? wCm : (wCm * 2) + spineCm;
         const totalHCm = hCm;
 
         const totalPxWidth = Math.round((totalWCm / 2.54) * 300);
-        const spinePxWidth = totalPxWidth - (pxWidth * 2);
+        const spinePxWidth = isTela ? 0 : totalPxWidth - (pxWidth * 2);
 
-        const pdf = new jsPDF({ orientation: 'landscape', unit: 'cm', format: [totalWCm, totalHCm] });
+        const pdf = new jsPDF({ orientation: isTela && wCm <= hCm ? 'portrait' : 'landscape', unit: 'cm', format: [totalWCm, totalHCm] });
 
         const container = document.createElement('div');
         container.style.position = 'fixed';
@@ -507,43 +511,46 @@ const OwnerDashboard: React.FC = () => {
           coverImageForPdf = justWhiteImg;
         }
         
-        // Se ignora el coverColor general de la vista previa para garantizar que el lomo y contraportada sean blancos
         const textColor = order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000';
         const spineText = order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || '';
 
         const dataUrl = await renderAndCapture(
             <div style={{ display: 'flex', width: totalPxWidth, height: pxHeight, backgroundColor: '#FFFFFF' }}>
-               {/* Contraportada (Izquierda) - Fondo Blanco puro */}
-               <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                  <div style={{ position: 'absolute', bottom: '23%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.02}px` }}>
-                     <img src={jiffyLogo} style={{ width: `${pxWidth * 0.25}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                     <span style={{ fontSize: `${(pxWidth * 0.03) - 5}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
-                  </div>
-               </div>
-               
-               {/* Lomo (Centro) - Fondo Blanco puro, sin sombras, texto anclado arriba y rotado para leer de arriba a abajo */}
-               <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                   <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
-                       <span style={{ 
-                          display: 'block',
-                          transform: 'rotate(90deg) translateY(-50%)', 
-                          transformOrigin: 'top left', 
-                          whiteSpace: 'nowrap', 
-                          fontSize: `${spinePxWidth * 0.4}px`, 
-                          fontWeight: 'bold', 
-                          letterSpacing: '8px', 
-                          color: textColor 
-                       }}>
-                          {spineText}
-                       </span>
+               {!isTela && (
+                 <>
+                   {/* Contraportada (Izquierda) - Fondo Blanco puro */}
+                   <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                      <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
+                         <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                         <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                      </div>
                    </div>
-               </div>
+                   
+                   {/* Lomo (Centro) - Fondo Blanco puro */}
+                   <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                       <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
+                           <span style={{ 
+                              display: 'block',
+                              transform: 'rotate(90deg) translateY(-50%)', 
+                              transformOrigin: 'top left', 
+                              whiteSpace: 'nowrap', 
+                              fontSize: `${spinePxWidth * 0.24}px`, 
+                              fontWeight: 'bold', 
+                              letterSpacing: '8px', 
+                              color: textColor 
+                           }}>
+                              {spineText}
+                           </span>
+                       </div>
+                   </div>
+                 </>
+               )}
                
-               {/* Portada (Derecha) */}
+               {/* Portada (Derecha o Centro si es Tela) */}
                <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
                    <CoverPreview
                      coverSize={coverSizeProp as any} 
-                     coverType={order.customization?.coverType || order.customization?.material || 'Papel'}
+                     coverType={isTela ? 'Tela' : 'Papel'}
                      coverImage={coverImageForPdf} 
                      coverTitle={order.coverData?.title || ''}
                      coverSubtitle={order.coverData?.subtitle || ''} 
@@ -688,6 +695,7 @@ const OwnerDashboard: React.FC = () => {
       if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
 
       const { isCalendar, isAlbum } = getDimensions(order);
+      const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
 
       folder.file('datos_pedido.json', JSON.stringify(order, null, 2));
 
@@ -707,7 +715,8 @@ const OwnerDashboard: React.FC = () => {
         'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
         'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
         'Título de Portada': order.coverData?.title || 'N/A', 'Subtítulo': order.coverData?.subtitle || 'N/A',
-        'Año': order.coverData?.year || 'N/A', 'Layout Portada': order.coverData?.layout || 'N/A'
+        'Año': order.coverData?.year || 'N/A', 'Layout Portada': order.coverData?.layout || 'N/A',
+        'Texto Lomo': !isTela ? (order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || 'N/A') : 'N/A (Tela)'
       }];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(configData), "Configuración");
 
@@ -785,7 +794,7 @@ const OwnerDashboard: React.FC = () => {
           const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
           folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
         } else if (isAlbum) {
-          // Generar PDF 1: Portada Formato Doble (30%)
+          // Generar PDF 1: Portada (Frente únicamente si es tela, Completa si es Papel)
           const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
           folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
 

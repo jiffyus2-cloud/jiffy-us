@@ -140,17 +140,16 @@ const AlbumPagePhoto: React.FC<{
           <ImageCropper src={photo} position={calculatedCrop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
         </div>
       ) : textBox ? (
-        // Contenedor configurado para Container Queries
         <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
           <div
             style={{ 
               width: '90%', 
-              fontSize: `${textBox.fontSize * 0.25}cqi`, // Escala relativa perfecta
+              fontSize: `${textBox.fontSize * 0.25}cqi`,
               fontFamily: textBox.fontFamily, 
               color: textBox.color, 
               textAlign: 'center',
               wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap', // Mantiene los saltos de línea
+              whiteSpace: 'pre-wrap',
               lineHeight: '1.3'
             }}
           >
@@ -184,7 +183,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Portada</p>
         <CoverPreview
           coverSize={mapSizeToCoverSize(order.customization?.size)}
-          coverType={order.customization?.coverType || 'Papel'} 
+          coverType={order.customization?.coverType || order.customization?.material || 'Papel'} 
           coverImage={coverImageFixed}
           coverTitle={order.coverData?.title || ''}
           coverSubtitle={order.coverData?.subtitle || ''}
@@ -197,7 +196,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
       </div>
 
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16 mt-12">
-        {/* CUADRO 1: Interior de la Portada Principal */}
         <div className="space-y-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Portada</p>
           <div
@@ -211,7 +209,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
           </div>
         </div>
 
-        {/* Mapeo de las páginas reales */}
         {order.pages?.map((pageObj, pageIndex) => {
           const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
           const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
@@ -252,7 +249,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
           );
         })}
 
-        {/* PÁGINA EN BLANCO: Si el número de páginas configuradas por el usuario es impar */}
         {order.pages && order.pages.length % 2 !== 0 && (
           <div className="space-y-4">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página en Blanco</p>
@@ -265,7 +261,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
           </div>
         )}
 
-        {/* CUADRO FINAL: Interior de la Contraportada */}
         <div className="space-y-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Contraportada</p>
           <div
@@ -284,7 +279,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   );
 };
 
-// --- Mug Viewer ---
 const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
   <div className="space-y-6">
     <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
@@ -330,7 +324,6 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
   </div>
 );
 
-// --- Calendar Viewer ---
 const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
   const year = order.customization?.year || new Date().getFullYear();
   const orientation = order.customization?.orientation || 'vertical';

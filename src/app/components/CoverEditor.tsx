@@ -63,10 +63,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
-  // Lógica de validación requerida para Layout 5 en papel
+  // Lógica de validación: El lomo NO es obligatorio en Tela
   const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
   const isFormValid = coverTitle.trim() !== '' && 
-                      spineText.trim() !== '' && 
+                      (coverType === 'Papel' ? spineText.trim() !== '' : true) && 
                       (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
@@ -301,10 +301,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="NUESTRA HISTORIA" />
                 </div>
 
-                <div className="space-y-1 md:space-y-1.5">
-                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo *</label>
-                  <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
-                </div>
+                {/* SOLO SE MUESTRA EL LOMO SI ES DE PAPEL */}
+                {coverType === 'Papel' && (
+                  <div className="space-y-1 md:space-y-1.5">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo *</label>
+                    <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
+                  </div>
+                )}
 
                 {!( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
                   <div className="space-y-1 md:space-y-1.5">

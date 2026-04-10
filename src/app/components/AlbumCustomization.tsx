@@ -199,7 +199,6 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
           </p>
         </div>
 
-        {/* SELECTOR RÁPIDO DE LAYOUTS CON BOTONES REDUCIDOS */}
         <div className="mb-8">
           <div className="flex items-center justify-center gap-2 mb-4 text-gray-400">
             <Layout className="w-4 h-4" />

@@ -42,9 +42,12 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     return '1 / 1';
   }, [isVertical, isHorizontal]);
 
-  // --- ELIMINAR SOMBRAS SI ESTAMOS EN EL MODO DE IMPRESIÓN (hideSpine === true) ---
+  // --- ELIMINAR SOMBRAS SI ESTAMOS EN EL MODO DE IMPRESIÓN ---
   const containerShadow = hideSpine ? 'shadow-none' : 'shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)]';
   const floatingBoxShadow = hideSpine ? 'shadow-none' : 'shadow-2xl';
+
+  // --- VALIDACIÓN: LA TELA NO TIENE LOMO VISUAL ---
+  const showSpine = !hideSpine && coverType !== 'Tela';
 
   const renderImageSlot = () => {
     if (coverImage) {
@@ -242,6 +245,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
               </div>
+              {/* Le damos un padding de 10cqw para mantener el texto alejado de los bordes, pero la imagen llena todo el espacio */}
               <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
                   <h2 className="text-[6.4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
@@ -496,15 +500,15 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   return (
     <div className="flex w-full items-stretch justify-center h-full">
       
-      {/* Lomo (Spine) con el texto alineado a la parte superior */}
-      {!hideSpine && (
+      {/* Lomo (Spine) con el texto alineado a la parte superior - Oculto en TELA */}
+      {showSpine && (
         <div 
           className="w-[7%] mr-[3%] bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm" 
           style={{ containerType: 'inline-size' }}
         >
           <div className="absolute top-[10%] left-[50%]">
             <span 
-              className="block whitespace-nowrap text-[35cqw] tracking-widest font-bold opacity-80" 
+              className="block whitespace-nowrap text-[21cqw] tracking-widest font-bold opacity-80" 
               style={{ 
                 color: typographyColor,
                 transform: 'rotate(90deg) translateY(-50%)',
@@ -517,8 +521,8 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       )}
 
-      {/* Recuadro de la Portada */}
-      <div className={`${hideSpine ? 'w-full h-full' : 'w-[90%] shrink-0'} relative`}>
+      {/* Recuadro de la Portada. Si es Tela, toma el 100% de la caja visual */}
+      <div className={`${!showSpine ? 'w-full h-full' : 'w-[90%] shrink-0'} relative`}>
         {renderPreviewContent()}
       </div>
 

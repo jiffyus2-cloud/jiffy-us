@@ -5,18 +5,15 @@ import { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
-// --- IMPORTACIÓN DE IMÁGENES LOCALES PARA ESTILOS DE ÁLBUM ---
-import tela1 from '../../assets/TELA.jpg';
-import tela2 from '../../assets/TELA2.jpg';
-import tela3 from '../../assets/TELA3.jpg';
-
-import papel1 from '../../assets/PC100039 - Editado.jpg';
-import papel2 from '../../assets/PC100043 - Editado.jpg';
-import papel3 from '../../assets/PC100092 - Editado.jpg';
-
-// --- IMPORTACIÓN DINÁMICA DE LA CARPETA DE CLIENTES (Magia de Vite) ---
+// --- IMPORTACIÓN DINÁMICA DE CARPETAS (Magia de Vite) ---
 const clientImagesGlob = import.meta.glob('../../assets/Clientes/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
 const allClientImages = Object.values(clientImagesGlob).map((module: any) => module.default);
+
+const papelImagesGlob = import.meta.glob('../../assets/Papel/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
+const allPapelImages = Object.values(papelImagesGlob).map((module: any) => module.default);
+
+const telaImagesGlob = import.meta.glob('../../assets/Tela/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
+const allTelaImages = Object.values(telaImagesGlob).map((module: any) => module.default);
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -38,23 +35,34 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setCurrentIndex((prev) => (prev + 1) % images.length);
+    if (images.length > 0) {
+      setCurrentIndex((prev) => (prev + 1) % images.length);
+    }
   };
 
   const prevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+    if (images.length > 0) {
+      setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+    }
   };
 
   return (
     <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
-      <div className="relative aspect-square overflow-hidden bg-gray-50">
-        <img
-          src={images[currentIndex]}
-          alt={style.name}
-          className="w-full h-full object-cover transition-transform duration-500"
-        />
+      <div className="relative aspect-square overflow-hidden bg-gray-50 flex items-center justify-center">
+        {images.length > 0 ? (
+          <img
+            src={images[currentIndex]}
+            alt={style.name}
+            className="w-full h-full object-cover transition-transform duration-500"
+          />
+        ) : (
+          <div className="text-gray-400 flex flex-col items-center">
+            <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+            <span className="text-xs font-medium">Sin imágenes</span>
+          </div>
+        )}
         
         {images.length > 1 && (
           <>
@@ -174,12 +182,14 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const getProductData = () => {
     switch (productType) {
       case 'album':
+        const fallbackGallery = [allTelaImages[0], allPapelImages[0]].filter(Boolean);
+        
         return {
           title: t('product.album'),
           description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
-            { name: 'Papel', description: 'Portada personalizada con tu foto favorita', images: [papel1, papel2, papel3] },
-            { name: 'Tela', description: 'Acabado premium con textura de lino', images: [tela1, tela2, tela3] }
+            { name: 'Papel', description: 'Portada personalizada con tu foto favorita', images: allPapelImages },
+            { name: 'Tela', description: 'Acabado premium con textura de lino', images: allTelaImages }
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Tela, Papel' },
@@ -189,7 +199,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ],
           galleryTitle: 'Clientes Felices',
           gallerySubtitle: 'Historias reales, recuerdos que hoy se pueden volver a sentir',
-          gallery: randomClientImages.length > 0 ? randomClientImages : [tela1, papel1]
+          gallery: randomClientImages.length > 0 ? randomClientImages : fallbackGallery
         };
       case 'calendar':
         return {

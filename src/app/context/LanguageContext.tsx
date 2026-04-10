@@ -437,7 +437,7 @@ const translations = {
 
     // Photo Organizer Setup
     'organizer.uploadTitle': 'Sube Tus Fotos',
-    'organizer.uploadDesc': 'Selecciona al menos 40 fotos para empezar a crear tu álbum.',
+    'organizer.uploadDesc': 'Selecciona mínimo 40 fotos. Recuerda esperar entre 3-8 segundos después de tu seleccion para iniciar la carga',
     'organizer.photosSelected': 'fotos seleccionadas',
     'organizer.clickToSelect': 'Haz clic para seleccionar fotos',
     'organizer.selectMultiple': 'Puedes seleccionar varias imágenes a la vez',

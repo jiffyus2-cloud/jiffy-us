@@ -11,6 +11,9 @@ import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 
+// --- NUEVA IMAGEN DE JIFFY ---
+import jiffy2Img from '../../assets/Jiffy2.png';
+
 // ============================================================================
 // COMPONENTE DE CARGA PERSONALIZADO (JiffyLoader)
 // ============================================================================
@@ -222,6 +225,13 @@ export default function PhotoOrganizer({
   } | null>(null);
   const [selectedTargetPage, setSelectedTargetPage] = useState<number>(0);
 
+  // NUEVO ESTADO PARA EL MODAL DE PÁGINAS VACÍAS
+  const [emptyPagesModalData, setEmptyPagesModalData] = useState<{
+    indices: number[];
+    isOdd: boolean;
+    totalCurrent: number;
+  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isValidating, setIsValidating] = useState(false);
@@ -229,6 +239,9 @@ export default function PhotoOrganizer({
   const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
   const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
   const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
+  
+  const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
+  const [targetSlotInfo, setTargetSlotInfo] = useState<{pageIndex: number, photoIndex?: number} | null>(null);
 
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
@@ -312,6 +325,7 @@ export default function PhotoOrganizer({
       setLowResImages(lowRes);
       setCurrentLowResIndex(0);
       setApplyToAllLowRes(false);
+      setUploadMode('batch');
       setIsValidating(false);
     } else {
       setIsValidating(false);
@@ -322,6 +336,19 @@ export default function PhotoOrganizer({
   };
 
   const handleLowResDecision = (keep: boolean) => {
+    // LÓGICA PARA SUBIDA DE UNA SOLA FOTO DESDE EL EDITOR
+    if (uploadMode === 'specific') {
+      if (keep && lowResImages[0] && targetSlotInfo) {
+        processSpecificUpload(targetSlotInfo.pageIndex, lowResImages[0].file, targetSlotInfo.photoIndex);
+      }
+      setLowResImages([]);
+      setCurrentLowResIndex(0);
+      setUploadMode(null);
+      setTargetSlotInfo(null);
+      return;
+    }
+
+    // LÓGICA PARA SUBIDA POR LOTES DESDE EL INICIO
     let newApproved = [...approvedFiles];
     
     if (applyToAllLowRes) {
@@ -333,6 +360,7 @@ export default function PhotoOrganizer({
       setLowResImages([]);
       setCurrentLowResIndex(0);
       setApplyToAllLowRes(false);
+      setUploadMode(null);
       processUpload(newApproved);
     } else {
       const current = lowResImages[currentLowResIndex];
@@ -347,6 +375,7 @@ export default function PhotoOrganizer({
         setLowResImages([]);
         setCurrentLowResIndex(0);
         setApplyToAllLowRes(false);
+        setUploadMode(null);
         processUpload(newApproved);
       }
     }
@@ -363,6 +392,62 @@ export default function PhotoOrganizer({
 
     setPendingFilesData(prev => [...prev, ...newFilesData]);
     setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+  };
+
+  // NUEVA FUNCIÓN INTERCEPTORA PARA SUBIR UNA SOLA FOTO
+  const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
+    setUploadMode('specific');
+    setTargetSlotInfo({ pageIndex, photoIndex: targetPhotoIndex });
+    setIsValidating(true);
+    
+    const result = await checkImageDimensions(file);
+
+    if (result.isLowRes) {
+      setLowResImages([result]);
+      setCurrentLowResIndex(0);
+      setApplyToAllLowRes(false);
+      setIsValidating(false);
+    } else {
+      setIsValidating(false);
+      processSpecificUpload(pageIndex, file, targetPhotoIndex);
+      setUploadMode(null);
+      setTargetSlotInfo(null);
+    }
+  };
+
+  const processSpecificUpload = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
+    const newPhotos = [...photos];
+    const pagePhotos = [...newPhotos[pageIndex]];
+    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+
+    if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
+      while (pagePhotos.length <= targetPhotoIndex) {
+        pagePhotos.push('');
+      }
+      pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
+    } else {
+      const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
+      if (firstEmpty !== -1) {
+        pagePhotos[firstEmpty] = URL.createObjectURL(file);
+      } else {
+        if (pagePhotos.length >= maxAllowed) {
+          alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
+          return;
+        }
+        pagePhotos.push(URL.createObjectURL(file));
+      }
+    }
+
+    newPhotos[pageIndex] = pagePhotos;
+    
+    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+    const neededVariant = getNextAllowed(pagePhotos.length);
+    
+    if (currentVariant < neededVariant) {
+      onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
+    }
+
+    onPhotosChange(newPhotos);
   };
 
   const runAISortingAndDistribute = async () => {
@@ -514,41 +599,6 @@ export default function PhotoOrganizer({
     [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
     onPhotosChange(newPhotos);
     setEditingPageIndex(targetIndex);
-  };
-
-  const handleAddPhotoToPage = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
-    const newPhotos = [...photos];
-    const pagePhotos = [...newPhotos[pageIndex]];
-    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
-
-    if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
-      while (pagePhotos.length <= targetPhotoIndex) {
-        pagePhotos.push('');
-      }
-      pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
-    } else {
-      const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
-      if (firstEmpty !== -1) {
-        pagePhotos[firstEmpty] = URL.createObjectURL(file);
-      } else {
-        if (pagePhotos.length >= maxAllowed) {
-          alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
-          return;
-        }
-        pagePhotos.push(URL.createObjectURL(file));
-      }
-    }
-
-    newPhotos[pageIndex] = pagePhotos;
-    
-    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
-    const neededVariant = getNextAllowed(pagePhotos.length);
-    
-    if (currentVariant < neededVariant) {
-      onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
-    }
-
-    onPhotosChange(newPhotos);
   };
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
@@ -927,6 +977,98 @@ export default function PhotoOrganizer({
   };
 
   // ==========================================================================
+  // LÓGICA DE DETECCIÓN Y ELIMINACIÓN DE PÁGINAS VACÍAS
+  // ==========================================================================
+  const handleComplete = () => {
+    const emptyPageIndices = safePhotos.reduce((acc, pagePhotos, index) => {
+      // Verificamos si al menos una foto existe y no es un string vacío
+      const hasPhotos = pagePhotos.some(p => p && p.trim() !== '');
+      const hasText = textBoxSlots[index] && Object.keys(textBoxSlots[index]).length > 0;
+      if (!hasPhotos && !hasText) acc.push(index);
+      return acc;
+    }, [] as number[]);
+
+    if (emptyPageIndices.length > 0) {
+      setEmptyPagesModalData({
+        indices: emptyPageIndices,
+        isOdd: emptyPageIndices.length % 2 !== 0,
+        totalCurrent: safePhotos.length
+      });
+      return;
+    }
+    if (onComplete) onComplete();
+  };
+
+  const executeDeleteEmptyPages = (strategy: 'even' | 'delete-companion' | 'keep-one-blank') => {
+    if (!emptyPagesModalData) return;
+    let indicesToDelete = [...emptyPagesModalData.indices];
+
+    if (strategy === 'delete-companion') {
+       const blocks = new Map<number, number[]>();
+       indicesToDelete.forEach(idx => {
+          const block = Math.floor(idx / 2);
+          if (!blocks.has(block)) blocks.set(block, []);
+          blocks.get(block)!.push(idx);
+       });
+       
+       let found = false;
+       for (const [block, pages] of blocks.entries()) {
+          if (pages.length === 1) {
+             const companion = pages[0] % 2 === 0 ? pages[0] + 1 : pages[0] - 1;
+             if (companion < photos.length) {
+               indicesToDelete.push(companion);
+               found = true;
+               break;
+             }
+          }
+       }
+       if (!found) {
+          const lastEmpty = indicesToDelete[indicesToDelete.length - 1];
+          indicesToDelete.push(lastEmpty - 1);
+       }
+    } else if (strategy === 'keep-one-blank') {
+       indicesToDelete.pop(); 
+    }
+
+    if (photos.length - indicesToDelete.length < 40) {
+       alert("No se puede completar la acción porque el álbum quedaría con menos de 40 páginas.");
+       return;
+    }
+
+    indicesToDelete.sort((a, b) => b - a);
+
+    const mappedPhotos: string[][] = [];
+    const mappedLayouts: Record<number, any> = {};
+    const mappedVariants: Record<number, number> = {};
+    const mappedCrops: Record<string, any> = {};
+    const mappedTexts: Record<number, any> = {};
+
+    let newIdx = 0;
+    for (let oldIdx = 0; oldIdx < photos.length; oldIdx++) {
+       if (indicesToDelete.includes(oldIdx)) continue;
+       
+       mappedPhotos.push(photos[oldIdx]);
+       if (pageLayouts[oldIdx]) mappedLayouts[newIdx] = pageLayouts[oldIdx];
+       if (pageLayoutVariants[oldIdx]) mappedVariants[newIdx] = pageLayoutVariants[oldIdx];
+       if (textBoxSlots[oldIdx]) mappedTexts[newIdx] = textBoxSlots[oldIdx];
+
+       Object.keys(photoCrops).forEach(key => {
+          if (key.startsWith(`${oldIdx}-`)) {
+             const pIdx = key.split('-')[1];
+             mappedCrops[`${newIdx}-${pIdx}`] = photoCrops[key];
+          }
+       });
+       newIdx++;
+    }
+
+    onPhotosChange(mappedPhotos);
+    onPageLayoutsChange(mappedLayouts);
+    onPageLayoutVariantsChange(mappedVariants);
+    onTextBoxSlotsChange(mappedTexts);
+    onPhotoCropsChange(mappedCrops);
+    setNumPages(mappedPhotos.length);
+    setEmptyPagesModalData(null);
+  };
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
@@ -952,7 +1094,7 @@ export default function PhotoOrganizer({
             </div>
           </div>
 
-          {remainingCount > 1 && (
+          {remainingCount > 1 && uploadMode !== 'specific' && (
             <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer bg-gray-50 p-3 rounded-xl border border-gray-200 hover:border-black transition-colors">
               <input 
                 type="checkbox" 
@@ -1020,7 +1162,7 @@ export default function PhotoOrganizer({
                         handleRemovePhotoFromPage={handleRemovePhotoFromPage}
                         setEditingTextSlot={setEditingTextSlot}
                         handleRemoveTextBox={handleRemoveTextBox}
-                        handleAddPhotoToPage={handleAddPhotoToPage}
+                        handleAddPhotoToPage={handleSpecificFileSelection}
                         handleAddTextBox={handleAddTextBox}
                         onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
                         t={t}
@@ -1065,7 +1207,7 @@ export default function PhotoOrganizer({
                     <button onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }} disabled={pageIndex === safePhotos.length - 1} className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"><ChevronDown className="w-4 h-4"/></button>
                   </div>
                   
-                  <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
+                  <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
                   <button onClick={() => { handleDeletePage(pageIndex); setAdvancedSettingsModal(null); }} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>
                 </div>
               </div>
@@ -1086,8 +1228,8 @@ export default function PhotoOrganizer({
         {renderLowResModal()}
         
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Upload className="w-10 h-10" /></div>
-          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2><p className="text-gray-600">{t('organizer.uploadDesc')}</p>
+          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
+          <p className="text-gray-600">{t('organizer.uploadDesc')}</p>
         </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
@@ -1102,8 +1244,10 @@ export default function PhotoOrganizer({
             </div>
           ) : (
             <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
-              <ImageIcon className="w-16 h-16 text-gray-400 group-hover:text-black transition-colors" />
-              <div className="text-center"><p className="text-xl mb-2 font-medium">{t('organizer.clickToSelect')}</p><p className="text-sm text-gray-500 mb-4">{t('organizer.selectMultiple')}</p></div>
+              <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
+              <div className="text-center">
+                <p className="text-sm text-gray-500 mb-4">Haz clic para seleccionar tus fotos y empezar a revivir tus mejores recuerdos</p>
+              </div>
             </button>
           )}
           <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
@@ -1178,26 +1322,96 @@ export default function PhotoOrganizer({
     );
   }
 
-  const handleComplete = () => {
-    const emptyPageIndices = safePhotos.reduce((acc, pagePhotos, index) => {
-      const hasPhotos = pagePhotos.length > 0;
-      const hasText = textBoxSlots[index] && Object.keys(textBoxSlots[index]).length > 0;
-      if (!hasPhotos && !hasText) acc.push(index + 1);
-      return acc;
-    }, [] as number[]);
-
-    if (emptyPageIndices.length > 0) {
-      alert(t('organizer.emptyPagesAlert', { pages: emptyPageIndices.join(', ') }));
-      return;
-    }
-    if (onComplete) onComplete();
-  };
+  // Comprobaciones para saber qué opciones mostrar en el modal de vacías
+  const canDeleteEven = emptyPagesModalData && !emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - emptyPagesModalData.indices.length >= 40);
+  const canKeepOneBlank = emptyPagesModalData && emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - (emptyPagesModalData.indices.length - 1) >= 40);
+  const canDeleteCompanion = emptyPagesModalData && emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - (emptyPagesModalData.indices.length + 1) >= 40);
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
       
+      {/* CAPA DE CARGA PARA SUBIDA DE 1 FOTO ESPECÍFICA */}
+      {isValidating && step === 'editor' && (
+        <div className="fixed inset-0 z-[150] bg-white/50 backdrop-blur-sm flex flex-col items-center justify-center">
+           <Loader2 className="w-16 h-16 text-gray-900 animate-spin mb-4" />
+           <p className="text-xl font-bold">Verificando calidad de la imagen...</p>
+        </div>
+      )}
+
       {renderLowResModal()}
       {renderAdvancedSettingsModal()}
+
+      {/* MODAL INTELIGENTE DE PÁGINAS VACÍAS */}
+      {emptyPagesModalData && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Páginas Vacías Detectadas</h3>
+            </div>
+            
+            <p className="text-gray-600 text-sm mb-6">
+              Tienes <strong>{emptyPagesModalData.indices.length} página(s) vacía(s)</strong> en tu diseño (Págs: {emptyPagesModalData.indices.map(i => i+1).join(', ')}). ¿Qué deseas hacer antes de enviar a imprimir?
+            </p>
+
+            <div className="space-y-3">
+              <button 
+                onClick={() => { setEmptyPagesModalData(null); if(onComplete) onComplete(); }} 
+                className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm"
+              >
+                Continuar y dejarlas en blanco (Hoja blanca)
+              </button>
+
+              {/* Si al borrar cualquier cosa bajamos de 40, bloqueamos la eliminación */}
+              {(!canDeleteEven && !canKeepOneBlank && !canDeleteCompanion) ? (
+                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-medium border border-red-100">
+                  No puedes eliminar páginas porque el álbum debe mantener un mínimo de 40 páginas.
+                </div>
+              ) : (
+                <>
+                  {!emptyPagesModalData.isOdd ? (
+                    <button 
+                      onClick={() => executeDeleteEmptyPages('even')}
+                      className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-100 hover:border-red-500 hover:bg-red-50 font-medium transition-all text-sm text-red-600"
+                    >
+                      Eliminar las {emptyPagesModalData.indices.length} páginas vacías
+                    </button>
+                  ) : (
+                    <div className="space-y-3 border-t border-gray-100 pt-3">
+                      <p className="text-xs text-gray-500 font-bold uppercase">Opciones de Eliminación (Cantidad Impar)</p>
+                      <p className="text-[11px] text-gray-400 leading-tight">Los álbumes requieren páginas en pares. Elige cómo ajustar:</p>
+                      
+                      {canKeepOneBlank && (
+                        <button 
+                          onClick={() => executeDeleteEmptyPages('keep-one-blank')}
+                          className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-100 hover:border-red-500 hover:bg-red-50 font-medium transition-all text-sm text-red-600"
+                        >
+                          Eliminar {emptyPagesModalData.indices.length - 1} y dejar 1 en blanco al final
+                        </button>
+                      )}
+                      
+                      {canDeleteCompanion && (
+                        <button 
+                          onClick={() => executeDeleteEmptyPages('delete-companion')}
+                          className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-100 hover:border-red-500 hover:bg-red-50 font-medium transition-all text-sm text-red-600"
+                        >
+                          Eliminar {emptyPagesModalData.indices.length + 1} (Incluye borrar 1 pág. compañera con fotos)
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+               <button onClick={() => setEmptyPagesModalData(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-black">Volver a editar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE CONFLICTOS DE LAYOUT */}
       {layoutChangeModal && (
@@ -1318,7 +1532,7 @@ export default function PhotoOrganizer({
                           key={photoIndex} photo={photo} textBox={textBox} crop={crop}
                           isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
                           editingPageIndex={editingPageIndex}
-                          handleMovePhotoWithinPage={handleMovePhotoWithinPage} handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleAddPhotoToPage} handleAddTextBox={handleAddTextBox}
+                          handleMovePhotoWithinPage={handleMovePhotoWithinPage} handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
                           onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
                           t={t}
                         />
