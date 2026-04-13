@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { ChevronDown, ShoppingBag, Palette, Image as ImageIcon, BookImage, Calendar, Coffee, Tag, Truck, Gift, Star } from 'lucide-react';
+import { ChevronDown, ShoppingBag, Tag, Truck, Gift, Star } from 'lucide-react';
 import ProductDetailsModal from './ProductDetailsModal';
 import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
@@ -174,51 +174,49 @@ export default function LandingPage() {
       <Header />
       
       {/* Hero Carousel Section */}
-      <section className="relative h-[70vh] w-full overflow-hidden">
+      <section className="relative h-[60vh] w-full overflow-hidden">
         <motion.div
           key={currentSlide}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.7 }}
+          transition={{ duration: 0.6 }}
           className="absolute inset-0"
         >
-          <div className="relative h-full w-full">
-            <img
-              src={heroImages[currentSlide].url}
-              alt="Hero"
-              className="w-full h-full object-cover"
-            />
-          </div>
+          <img
+            src={heroImages[currentSlide].url}
+            alt="Hero"
+            className="w-full h-full object-cover"
+          />
         </motion.div>
 
         {/* Hero Content */}
-        <div className="absolute inset-0 flex items-center justify-start z-20">
-          <div className="text-left text-white pl-12 md:pl-24 pr-16 py-10 bg-white/40 max-w-4xl w-fit rounded-r-2xl backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-end z-20">
+          <div className="w-full px-8 md:px-16 py-10 bg-gradient-to-t from-black/60 to-transparent">
             <motion.h1
               key={`title-${currentSlide}`}
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className={`${DESIGN.text.h1} text-[var(--color-black)]`}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-3xl md:text-4xl font-medium mb-2 text-white max-w-2xl"
             >
               {heroImages[currentSlide].title}
             </motion.h1>
             <motion.p
               key={`desc-${currentSlide}`}
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-xl md:text-2xl mb-8 font-bold text-gray-800"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.35 }}
+              className="text-base text-white/80 mb-5 max-w-lg"
             >
               {heroImages[currentSlide].description}
             </motion.p>
             <motion.button
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.7 }}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
               onClick={() => navigate('/create')}
-              className={`${DESIGN.button.base} ${DESIGN.button.secondary}`}
+              className="px-6 py-2.5 rounded-lg bg-white text-black text-sm font-medium hover:bg-gray-100 transition-colors"
             >
               {heroImages[currentSlide].cta}
             </motion.button>
@@ -226,39 +224,39 @@ export default function LandingPage() {
         </div>
 
         {/* Slide Indicators */}
-        <div className="absolute bottom-8 left-12 md:left-24 z-30 flex gap-2">
+        <div className="absolute bottom-5 right-8 z-30 flex gap-1.5">
           {heroImages.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`h-2 transition-all rounded-full ${
-                currentSlide === index ? 'w-8 bg-white' : 'w-2 bg-white/50'
+              className={`h-1.5 transition-all rounded-full ${
+                currentSlide === index ? 'w-6 bg-white' : 'w-1.5 bg-white/40'
               }`}
             />
           ))}
         </div>
       </section>
 
-      {/* SECCIÓN DINÁMICA DE PROMOCIONES COMPACTA PARA MÓVIL */}
+      {/* Promociones */}
       {activePromotions.length > 0 && (
-        <section className="bg-white py-6 md:py-12 border-b border-gray-100">
+        <section className="bg-white py-5 border-b border-gray-100">
           <div className={DESIGN.layout.container}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-8">
+            <div className="flex flex-col md:flex-row gap-3">
               {activePromotions.map((promo, index) => (
                 <motion.div
                   key={promo.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  transition={{ delay: index * 0.08 }}
                   viewport={{ once: true }}
-                  className={`p-4 md:p-6 rounded-xl md:rounded-2xl border-2 ${getColorClasses(promo.colorTheme)} flex items-center gap-3 md:gap-5 shadow-sm hover:shadow-md transition-shadow`}
+                  className={`flex-1 px-4 py-3 rounded-lg border ${getColorClasses(promo.colorTheme)} flex items-center gap-3`}
                 >
-                  <div className="shrink-0 scale-75 md:scale-100 origin-left">
+                  <div className="shrink-0 opacity-70">
                     {getIconComponent(promo.icon)}
                   </div>
                   <div>
-                    <h3 className="text-base md:text-xl font-bold mb-0.5 md:mb-1 leading-tight">{promo.title}</h3>
-                    <p className="text-xs md:text-sm opacity-90 font-medium leading-snug">{promo.desc}</p>
+                    <h3 className="text-sm font-semibold leading-tight">{promo.title}</h3>
+                    <p className="text-xs opacity-80 leading-snug mt-0.5">{promo.desc}</p>
                   </div>
                 </motion.div>
               ))}
@@ -267,7 +265,7 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* Products Section - Bento Boxes */}
+      {/* Products Section */}
       <section className={DESIGN.layout.sectionGray}>
         <div className={DESIGN.layout.container}>
           <h2 className={DESIGN.text.h2}>{t('landing.ourProducts')}</h2>
@@ -278,14 +276,13 @@ export default function LandingPage() {
           <div className={DESIGN.layout.grid}>
             {/* Photo Album - Large */}
             <div className={`md:col-span-2 md:row-span-2 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
-              <div className="relative h-96 md:h-full">
+              <div className="relative h-72 md:h-full">
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
-                  <BookImage className="w-12 h-12 mb-4" />
-                  <h3 className={DESIGN.text.h3}>Álbumes de fotos</h3>
-                  <p className="text-lg mb-4 text-gray-200">Cada recuerdo es único y merece ser contado. Álbumes personalizados para tus momentos más importantes.</p>
-                  <button onClick={() => setSelectedProduct('album')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
+                  <h3 className="text-xl font-medium mb-1">Álbumes de fotos</h3>
+                  <p className="text-sm mb-4 text-white/70">Cada recuerdo es único y merece ser contado.</p>
+                  <button onClick={() => setSelectedProduct('album')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
                 </div>
@@ -294,31 +291,28 @@ export default function LandingPage() {
 
             {/* Calendar */}
             <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
-              <div className="relative h-96">
+              <div className="relative h-72">
                 <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
-                  <Calendar className="w-10 h-10 mb-3" />
-                  <h3 className="text-2xl mb-2 font-medium">Calendarios</h3>
-                  <p className="text-sm mb-3 text-gray-200">Tus días merecen la mejor sonrisa. Calendarios personalizados para recibir el día con la mejor actitud.</p>
-                  <button onClick={() => setSelectedProduct('calendar')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
+                  <h3 className="text-lg font-medium mb-1">Calendarios</h3>
+                  <p className="text-xs mb-3 text-white/70">Tus días con tus mejores recuerdos.</p>
+                  <button onClick={() => setSelectedProduct('calendar')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Mugs (Renderizado condicional) */}
             {showMugs && (
               <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
-                <div className="relative h-96">
+                <div className="relative h-72">
                   <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
-                    <Coffee className="w-10 h-10 mb-3" />
-                    <h3 className="text-2xl mb-2 font-medium">{t('product.mug')}</h3>
-                    <p className="text-sm mb-3 text-gray-200">{t('product.mugDesc')}</p>
-                    <button onClick={() => setSelectedProduct('mug')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
+                    <h3 className="text-lg font-medium mb-1">{t('product.mug')}</h3>
+                    <p className="text-xs mb-3 text-white/70">{t('product.mugDesc')}</p>
+                    <button onClick={() => setSelectedProduct('mug')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                       {t('landing.more')}
                     </button>
                   </div>
@@ -326,17 +320,15 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Photo Packs - Wide (Renderizado condicional) */}
             {showPhotoPacks && (
               <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
-                <div className="relative h-80">
+                <div className="relative h-56">
                   <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
-                    <ImageIcon className="w-10 h-10 mb-3" />
-                    <h3 className="text-2xl mb-2 font-medium">{t('product.photoPack')}</h3>
-                    <p className="text-sm mb-3 text-gray-200">{t('product.photoPackDesc')}</p>
-                    <button onClick={() => setSelectedProduct('photo-pack')} className={`${DESIGN.button.base} ${DESIGN.button.secondary} ${DESIGN.button.xs}`}>
+                    <h3 className="text-lg font-medium mb-1">{t('product.photoPack')}</h3>
+                    <p className="text-xs mb-3 text-white/70">{t('product.photoPackDesc')}</p>
+                    <button onClick={() => setSelectedProduct('photo-pack')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                       {t('landing.more')}
                     </button>
                   </div>
@@ -349,48 +341,37 @@ export default function LandingPage() {
 
       {/* Process Section */}
       <section className={DESIGN.layout.section}>
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h2 className={DESIGN.text.h2}>{t('landing.simpleProcess')}</h2>
           <p className={DESIGN.text.sectionSubtitle}>{t('landing.processSubtitle')}</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="relative mb-6">
-                <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
-                  <ShoppingBag className="w-20 h-20 text-white opacity-20 absolute" />
-                  <span className="text-6xl text-white font-bold relative z-10">1</span>
-                </div>
-                <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
+              <div className="w-10 h-10 mx-auto bg-black rounded-full flex items-center justify-center mb-4">
+                <span className="text-white text-sm font-semibold">1</span>
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step1Title')}</h3>
               <p className={DESIGN.text.body}>{t('landing.step1Desc')}</p>
             </div>
 
             <div className="text-center">
-              <div className="relative mb-6">
-                <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
-                  <Palette className="w-20 h-20 text-white opacity-20 absolute" />
-                  <span className="text-6xl text-white font-bold relative z-10">2</span>
-                </div>
-                <div className="hidden md:block absolute top-16 left-[50%] w-full h-0.5 bg-gray-300 -z-10" />
+              <div className="w-10 h-10 mx-auto bg-black rounded-full flex items-center justify-center mb-4">
+                <span className="text-white text-sm font-semibold">2</span>
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step2Title')}</h3>
               <p className={DESIGN.text.body}>{t('landing.step2Desc')}</p>
             </div>
 
             <div className="text-center">
-              <div className="relative mb-6">
-                <div className="w-32 h-32 mx-auto bg-black rounded-full flex items-center justify-center relative">
-                  <ImageIcon className="w-20 h-20 text-white opacity-20 absolute" />
-                  <span className="text-6xl text-white font-bold relative z-10">3</span>
-                </div>
+              <div className="w-10 h-10 mx-auto bg-black rounded-full flex items-center justify-center mb-4">
+                <span className="text-white text-sm font-semibold">3</span>
               </div>
               <h3 className={DESIGN.text.h3}>{t('landing.step3Title')}</h3>
               <p className={DESIGN.text.body}>{t('landing.step3Desc')}</p>
             </div>
           </div>
 
-          <div className="text-center mt-16">
+          <div className="text-center mt-10">
             <button onClick={() => navigate('/create')} className={`${DESIGN.button.base} ${DESIGN.button.primary}`}>
               {t('landing.startNow')}
             </button>
@@ -404,14 +385,19 @@ export default function LandingPage() {
           <h2 className={DESIGN.text.h2}>Preguntas Frecuentes</h2>
           <p className={DESIGN.text.sectionSubtitle}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
 
-          <div className="space-y-4">
+          <div className="divide-y divide-gray-200">
             {faqs.map((faq, index) => (
-              <div key={index} className="border-2 border-gray-200 bg-white rounded-lg overflow-hidden">
-                <button onClick={() => setOpenFaq(openFaq === index ? null : index)} className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors">
-                  <span className="text-xl font-medium">{faq.question}</span>
-                  <ChevronDown className={`w-6 h-6 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
+              <div key={index}>
+                <button
+                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                  className="w-full py-4 text-left flex items-center justify-between hover:text-gray-700 transition-colors"
+                >
+                  <span className="text-sm font-medium pr-4">{faq.question}</span>
+                  <ChevronDown className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
                 </button>
-                {openFaq === index && <div className={`px-6 pb-6 ${DESIGN.text.body}`}>{faq.answer}</div>}
+                {openFaq === index && (
+                  <div className="pb-4 text-sm text-gray-600">{faq.answer}</div>
+                )}
               </div>
             ))}
           </div>
@@ -421,10 +407,9 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className={DESIGN.footer.wrapper}>
         <div className={DESIGN.layout.container}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-            <div>
-              <h3 className="text-2xl mb-4 font-medium">Photo Creator</h3>
-              <p className="text-gray-400">{t('footer.description')}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+            <div className="col-span-2 md:col-span-1">
+              <p className="text-sm text-gray-500 mt-1">{t('footer.description')}</p>
             </div>
             <div>
               <h4 className={DESIGN.text.footerHeading}>{t('footer.products')}</h4>
@@ -454,7 +439,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={DESIGN.footer.bottom}>
-            <p>&copy; {new Date().getFullYear()} Photo Creator. {t('footer.rights')}</p>
+            <p>&copy; {new Date().getFullYear()} Jiffy. {t('footer.rights')}</p>
           </div>
         </div>
       </footer>
