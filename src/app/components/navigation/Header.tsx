@@ -1,10 +1,9 @@
 import { Link, useNavigate, useLocation } from 'react-router';
 import { Button } from '../ui/button';
-import { DESIGN } from '../../../styles/design-system';
 import React from 'react';
 import logo from '../../../assets/JiffyLogo.svg';
 import { useLanguage } from '../../context/LanguageContext';
-import { Globe, LogOut, User, Plus, Home } from 'lucide-react';
+import { Globe, LogOut, Plus } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 
 export function Header() {
@@ -21,83 +20,73 @@ export function Header() {
   const isDashboard = location.pathname === '/dashboard';
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-sm">
-      <div className="container mx-auto flex h-20 items-center justify-between px-4">
-        <div className="flex items-center gap-3 sm:gap-8">
-          <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0">
-            <img src={logo} alt="Jiffy" className="h-10 sm:h-12 w-auto" />
+    <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+      <div className="container mx-auto flex h-14 items-center justify-between px-4">
+        <div className="flex items-center gap-6">
+          <Link to="/" className="flex items-center hover:opacity-75 transition-opacity shrink-0">
+            <img src={logo} alt="Jiffy" className="h-8 w-auto" />
           </Link>
 
-          <nav className="flex items-center gap-3 sm:gap-6">
+          <nav className="flex items-center gap-1">
             {user && (
-              <div className={`px-3 py-1.5 rounded-lg transition-all ${isDashboard ? 'bg-primary/10 border border-primary/20' : 'hover:bg-gray-50'}`}>
-                <Link 
-                  to="/dashboard" 
-                  className={`text-xs sm:text-sm font-bold transition-colors ${isDashboard ? 'text-primary' : 'text-gray-600 hover:text-primary'}`}
-                >
-                  {t('nav.dashboard')}
-                </Link>
-              </div>
+              <Link
+                to="/dashboard"
+                className={`text-sm px-3 py-1.5 rounded-md transition-colors ${isDashboard ? 'bg-gray-100 text-black font-medium' : 'text-gray-500 hover:text-black hover:bg-gray-50'}`}
+              >
+                {t('nav.dashboard')}
+              </Link>
             )}
           </nav>
         </div>
 
-        <nav className="flex items-center gap-3 sm:gap-6">
-          {user && (
-            <div className="hidden lg:flex items-center gap-2 mr-2">
-              <span className="text-sm font-medium text-gray-700">
-                ¡Hola, <span className="text-primary font-bold">{userData?.name || user.displayName || 'Usuario'}</span>! 👋
-              </span>
-            </div>
-          )}
-
-          <Button 
-            variant="ghost" 
-            size="sm" 
+        <nav className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-            className="flex items-center gap-2 text-gray-600"
+            className="text-gray-400 hover:text-gray-700 text-xs gap-1.5 px-2"
           >
-            <Globe className="w-4 h-4" />
-            <span className="uppercase font-semibold">{language}</span>
+            <Globe className="w-3.5 h-3.5" />
+            <span className="uppercase">{language}</span>
           </Button>
-          
+
           {user ? (
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Button 
-                asChild 
-                size="sm" 
-                className={`${DESIGN.button.primary} hidden sm:flex items-center gap-2 shadow-sm`}
+            <div className="flex items-center gap-2">
+              <Button
+                asChild
+                size="sm"
+                className="hidden sm:flex items-center gap-1.5 bg-black text-white hover:bg-gray-800 text-sm px-4 py-2 h-8"
               >
                 <Link to="/create">
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Nuevo Pedido</span>
                 </Link>
               </Button>
 
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleLogout} 
-                className="flex items-center gap-2 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all"
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-gray-700 h-8 px-2"
               >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden md:inline">Cerrar sesión</span>
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline ml-1.5 text-sm">Salir</span>
               </Button>
-              
+
               <div className="sm:hidden">
-                 <Button asChild size="icon" variant="ghost" className="text-primary">
-                    <Link to="/create">
-                      <Plus className="w-5 h-5" />
-                    </Link>
-                 </Button>
+                <Button asChild size="icon" variant="ghost" className="h-8 w-8">
+                  <Link to="/create">
+                    <Plus className="w-4 h-4" />
+                  </Link>
+                </Button>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild size="sm" className="font-medium">
+              <Button variant="ghost" asChild size="sm" className="text-gray-600 text-sm h-8">
                 <Link to="/login">{t('nav.login')}</Link>
               </Button>
-              <Button asChild size="sm" className={`${DESIGN.button.primary} rounded-lg font-medium`}>
+              <Button asChild size="sm" className="bg-black text-white hover:bg-gray-800 text-sm h-8 px-4">
                 <Link to="/registro">{t('nav.signup')}</Link>
               </Button>
             </div>
