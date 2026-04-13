@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck } from 'lucide-react';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
@@ -342,6 +342,13 @@ export default function Checkout() {
                 <span className="text-lg font-bold">{t('checkout.total')}</span>
                 <span className="text-2xl font-bold">${total.toLocaleString('es-CO')} COP</span>
               </div>
+            </div>
+
+            <div className="mt-4 flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+              <Truck className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800 leading-snug">
+                <span className="font-semibold">Tiempo de entrega de los álbumes:</span> 12 días hábiles a partir de la confirmación de la compra.
+              </p>
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-200">
