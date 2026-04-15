@@ -83,6 +83,10 @@ export default function Checkout() {
   const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
   const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
   const isAlbum = productTypeStr.includes('album') || productTypeStr.includes('photobook');
+  const isTela = isAlbum && (
+    orderData?.customization?.coverType === 'Tela' ||
+    orderData?.customization?.material === 'Tela'
+  );
   
   const getMugCount = () => {
     const arr = orderData.items || orderData.mugItems || [];
@@ -102,17 +106,17 @@ export default function Checkout() {
     const basePages = 40;
 
     if (size.includes('20x20') || size.includes('2x2')) {
-      albumBasePrice = config.prices.album20x20;
+      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
       albumExtraPagePrice = config.prices.albumExtra20x20;
     } else if (size.includes('30x30')) {
-      albumBasePrice = config.prices.album30x30;
+      albumBasePrice = isTela ? config.prices.albumTela30x30 : config.prices.album30x30;
       albumExtraPagePrice = config.prices.albumExtra30x30;
     } else if (size.includes('28x21') || size.includes('21x28')) {
-      albumBasePrice = config.prices.albumRect;
+      albumBasePrice = isTela ? config.prices.albumTelaRect : config.prices.albumRect;
       albumExtraPagePrice = config.prices.albumExtraRect;
     } else {
-       albumBasePrice = config.prices.album20x20;
-       albumExtraPagePrice = config.prices.albumExtra20x20;
+      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
+      albumExtraPagePrice = config.prices.albumExtra20x20;
     }
 
     if (totalPageCount > basePages) {
@@ -144,8 +148,13 @@ export default function Checkout() {
 
   const subtotal = calculateSubtotal();
   const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
-  const shipping = 0; 
-  const tax = 0; 
+  const cityLower = formData.city.trim().toLowerCase();
+  const shipping = cityLower === ''
+    ? 0
+    : cityLower.includes('cali')
+      ? config.prices.shippingCali
+      : config.prices.shippingNational;
+  const tax = 0;
   const total = subtotal - discountAmount + shipping + tax;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -220,7 +229,6 @@ export default function Checkout() {
     if (arr.length > 0) displayImage = arr[0].photo || arr[0].photos?.[0];
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
-    const isTela = orderData.customization?.coverType === 'Tela' || orderData.customization?.material === 'Tela';
     if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
       let firstInnerPhoto = null;
       if (orderData.pages && orderData.pages.length > 0) {
@@ -332,8 +340,18 @@ export default function Checkout() {
                 </div>
               )}
 
-              <div className="flex justify-between">
-                <span className="text-gray-600">{t('checkout.shipping')}</span><span>${shipping.toLocaleString('es-CO')} COP</span>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">{t('checkout.shipping')}</span>
+                  <span>
+                    {formData.city.trim() === ''
+                      ? <span className="text-gray-400 italic text-xs">Por determinar</span>
+                      : `$${shipping.toLocaleString('es-CO')} COP`}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Cali: ${config.prices.shippingCali.toLocaleString('es-CO')} · Otras ciudades: ${config.prices.shippingNational.toLocaleString('es-CO')}
+                </p>
               </div>
             </div>
 
