@@ -1098,19 +1098,29 @@ const OwnerDashboard: React.FC = () => {
               
               <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2">
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-4">Álbumes Base (40 págs)</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">20x20 cm</label>
-                    <input type="number" value={localConfig.prices.album20x20} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, album20x20: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">30x30 cm</label>
-                    <input type="number" value={localConfig.prices.album30x30} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, album30x30: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">28x21 / 21x28 cm</label>
-                    <input type="number" value={localConfig.prices.albumRect} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, albumRect: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
+                {/* Encabezados de columna */}
+                <div className="grid grid-cols-3 gap-2 mb-1">
+                  <div className="text-xs font-bold text-gray-400 uppercase">Tamaño</div>
+                  <div className="text-xs font-bold text-blue-500 uppercase text-center">Papel</div>
+                  <div className="text-xs font-bold text-amber-600 uppercase text-center">Tela</div>
+                </div>
+                {/* Fila 20x20 */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <label className="text-xs font-bold text-gray-700">20x20 cm</label>
+                  <input type="number" value={localConfig.prices.album20x20} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, album20x20: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-blue-200 rounded-lg text-sm" />
+                  <input type="number" value={localConfig.prices.albumTela20x20} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, albumTela20x20: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-amber-200 rounded-lg text-sm" />
+                </div>
+                {/* Fila 30x30 */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <label className="text-xs font-bold text-gray-700">30x30 cm</label>
+                  <input type="number" value={localConfig.prices.album30x30} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, album30x30: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-blue-200 rounded-lg text-sm" />
+                  <input type="number" value={localConfig.prices.albumTela30x30} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, albumTela30x30: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-amber-200 rounded-lg text-sm" />
+                </div>
+                {/* Fila 28x21 */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <label className="text-xs font-bold text-gray-700">28x21 / 21x28</label>
+                  <input type="number" value={localConfig.prices.albumRect} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, albumRect: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-blue-200 rounded-lg text-sm" />
+                  <input type="number" value={localConfig.prices.albumTelaRect} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, albumTelaRect: parseInt(e.target.value)}})} className="w-full px-2 py-2 border-2 border-amber-200 rounded-lg text-sm" />
                 </div>
 
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-4">Página Extra de Álbum</h3>
@@ -1146,6 +1156,18 @@ const OwnerDashboard: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Pack Fotos (Por foto)</label>
                     <input type="number" value={localConfig.prices.photoPackBase} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, photoPackBase: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-4">Costos de Envío (COP)</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Cali</label>
+                    <input type="number" value={localConfig.prices.shippingCali} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, shippingCali: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Resto de Colombia</label>
+                    <input type="number" value={localConfig.prices.shippingNational} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, shippingNational: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
                   </div>
                 </div>
               </div>

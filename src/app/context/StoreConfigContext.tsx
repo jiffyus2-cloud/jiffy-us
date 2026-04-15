@@ -15,7 +15,10 @@ export interface StoreConfig {
   prices: {
     album20x20: number;
     album30x30: number;
-    albumRect: number; 
+    albumRect: number;
+    albumTela20x20: number;
+    albumTela30x30: number;
+    albumTelaRect: number;
     albumExtra20x20: number;
     albumExtra30x30: number;
     albumExtraRect: number;
@@ -23,6 +26,8 @@ export interface StoreConfig {
     calendarWall: number;
     calendarDesk: number;
     photoPackBase: number;
+    shippingCali: number;
+    shippingNational: number;
   };
   discounts: {
     active: boolean;
@@ -36,13 +41,18 @@ const defaultConfig: StoreConfig = {
     album20x20: 150000,
     album30x30: 190000,
     albumRect: 180000,
+    albumTela20x20: 170000,
+    albumTela30x30: 210000,
+    albumTelaRect: 200000,
     albumExtra20x20: 3750,
     albumExtra30x30: 4750,
     albumExtraRect: 4500,
     mug: 45000,
     calendarWall: 80000,
     calendarDesk: 60000,
-    photoPackBase: 1000
+    photoPackBase: 1000,
+    shippingCali: 15000,
+    shippingNational: 20000,
   },
   discounts: {
     active: false,
@@ -85,8 +95,13 @@ export const StoreConfigProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const configRef = doc(db, 'settings', 'store_config');
     const unsubscribe = onSnapshot(configRef, (docSnap) => {
       if (docSnap.exists()) {
-        // Fusionamos los datos por si agregas campos nuevos en el futuro
-        setConfig({ ...defaultConfig, ...docSnap.data() } as StoreConfig);
+        // Deep merge para que campos nuevos en defaultConfig no sean pisados por docs viejos de Firebase
+        const data = docSnap.data() as Partial<StoreConfig>;
+        setConfig({
+          ...defaultConfig,
+          ...data,
+          prices: { ...defaultConfig.prices, ...(data.prices || {}) },
+        } as StoreConfig);
       } else {
         setDoc(configRef, defaultConfig);
       }
