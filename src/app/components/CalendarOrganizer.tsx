@@ -27,6 +27,14 @@ const MONTHS_ES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+/** Genera los 12 meses del calendario a partir del mes de inicio (1-12) y año */
+const getCalendarMonths = (startMonth: number, startYear: number) =>
+  Array.from({ length: 12 }, (_, i) => {
+    const monthIndex = (startMonth - 1 + i) % 12;
+    const year = startYear + Math.floor((startMonth - 1 + i) / 12);
+    return { monthIndex, year, name: MONTHS_ES[monthIndex] };
+  });
+
 const generateCalendarGrid = (year: number, monthIndex: number) => {
   const date = new Date(year, monthIndex, 1);
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -61,10 +69,23 @@ export default function CalendarOrganizer({
   const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
   const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
 
+  // Firmas de archivo por slot (para detección de duplicados)
+  const [fileSignatures, setFileSignatures] = useState<string[]>([]);
+  // Modal de foto duplicada
+  const [duplicateModal, setDuplicateModal] = useState<{
+    file: File;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+
+  const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const specificFileInputRef = useRef<HTMLInputElement>(null);
 
   const year = customization.year || new Date().getFullYear();
+  const startMonth = customization.startMonth || 1;
+  const calendarMonths = getCalendarMonths(startMonth, year);
   const holidays = getColombianHolidays(year);
   const requiredPhotos = customization.imagesPerMonth === 4 ? 48 : 12;
 
@@ -202,41 +223,96 @@ export default function CalendarOrganizer({
 
   const processBatchUpload = async (finalFiles: File[]) => {
     if (finalFiles.length === 0) return;
-    setIsProcessingFiles(true);
-    await new Promise(resolve => setTimeout(resolve, 50));
 
-    const loadedPhotos = finalFiles.map(file => URL.createObjectURL(file));
-    const newPhotos = [...photos];
-    while(newPhotos.length < requiredPhotos) newPhotos.push('');
+    // Separar duplicados de nuevos
+    const newSigs = [...fileSignatures];
+    while (newSigs.length < requiredPhotos) newSigs.push('');
+    const existingKeys = new Set(newSigs.filter(Boolean));
 
-    let loadedIdx = 0;
-    for (let i = 0; i < requiredPhotos && loadedIdx < loadedPhotos.length; i++) {
-      if (!newPhotos[i] || newPhotos[i].trim() === '') {
-        newPhotos[i] = loadedPhotos[loadedIdx];
-        loadedIdx++;
-      }
+    const duplicates: File[] = [];
+    const unique: File[] = [];
+    for (const file of finalFiles) {
+      if (existingKeys.has(getFileKey(file))) duplicates.push(file);
+      else unique.push(file);
     }
 
-    onPhotosChange(newPhotos);
-    setStep('editor');
-    setIsProcessingFiles(false);
+    const doUpload = (filesToUpload: File[]) => {
+      if (filesToUpload.length === 0) return;
+      setIsProcessingFiles(true);
+      setTimeout(() => {
+        const newPhotos = [...photos];
+        while (newPhotos.length < requiredPhotos) newPhotos.push('');
+        const updatedSigs = [...newSigs];
+        let idx = 0;
+        for (let i = 0; i < requiredPhotos && idx < filesToUpload.length; i++) {
+          if (!newPhotos[i] || newPhotos[i].trim() === '') {
+            newPhotos[i] = URL.createObjectURL(filesToUpload[idx]);
+            updatedSigs[i] = getFileKey(filesToUpload[idx]);
+            idx++;
+          }
+        }
+        onPhotosChange(newPhotos);
+        setFileSignatures(updatedSigs);
+        setStep('editor');
+        setIsProcessingFiles(false);
+      }, 50);
+    };
+
+    if (duplicates.length > 0) {
+      // Mostrar modal para el primer duplicado; luego procesar los únicos
+      setDuplicateModal({
+        file: duplicates[0],
+        onConfirm: () => {
+          setDuplicateModal(null);
+          doUpload([...unique, ...duplicates]);
+        },
+        onCancel: () => {
+          setDuplicateModal(null);
+          doUpload(unique);
+        },
+      });
+    } else {
+      doUpload(unique);
+    }
   };
 
   const processSpecificUpload = (file: File) => {
     if (targetSlot === null) return;
-    const newPhotos = [...photos];
-    while(newPhotos.length < requiredPhotos) newPhotos.push('');
-    newPhotos[targetSlot] = URL.createObjectURL(file);
-    onPhotosChange(newPhotos);
-    setTargetSlot(null);
+    const key = getFileKey(file);
+    const existingKeys = new Set(fileSignatures.filter(Boolean));
+
+    const doUpload = () => {
+      const newPhotos = [...photos];
+      while (newPhotos.length < requiredPhotos) newPhotos.push('');
+      newPhotos[targetSlot!] = URL.createObjectURL(file);
+      const newSigs = [...fileSignatures];
+      while (newSigs.length < requiredPhotos) newSigs.push('');
+      newSigs[targetSlot!] = key;
+      onPhotosChange(newPhotos);
+      setFileSignatures(newSigs);
+      setTargetSlot(null);
+    };
+
+    if (existingKeys.has(key)) {
+      setDuplicateModal({
+        file,
+        onConfirm: () => { setDuplicateModal(null); doUpload(); },
+        onCancel: () => { setDuplicateModal(null); setTargetSlot(null); },
+      });
+    } else {
+      doUpload();
+    }
   };
 
   // ==========================================================================
 
   const removePhoto = (index: number) => {
     const newPhotos = [...photos];
-    newPhotos[index] = ''; 
+    newPhotos[index] = '';
     onPhotosChange(newPhotos);
+    const newSigs = [...fileSignatures];
+    if (newSigs[index]) newSigs[index] = '';
+    setFileSignatures(newSigs);
   };
 
   const handleCropChange = (index: number, crop: { x: number, y: number, zoom: number }) => {
@@ -247,6 +323,44 @@ export default function CalendarOrganizer({
   };
 
   const uploadedCount = photos.filter(p => p && p.trim() !== '').length;
+
+  const renderDuplicateModal = () => {
+    if (!duplicateModal) return null;
+    return (
+      <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+          <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Foto repetida</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            La foto <strong className="text-gray-800">"{duplicateModal.file.name}"</strong> ya fue añadida anteriormente al calendario.
+          </p>
+          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6">
+            <img
+              src={URL.createObjectURL(duplicateModal.file)}
+              className="w-full h-full object-contain"
+              alt="Foto duplicada"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={duplicateModal.onCancel}
+              className="flex-1 py-3 bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all"
+            >
+              Elegir otra
+            </button>
+            <button
+              onClick={duplicateModal.onConfirm}
+              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all"
+            >
+              Usar de todos modos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderLowResModal = () => {
     if (lowResImages.length === 0) return null;
@@ -351,6 +465,7 @@ export default function CalendarOrganizer({
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
+        {renderDuplicateModal()}
         {renderLowResModal()}
 
         <div className="text-center mb-8">
@@ -359,7 +474,7 @@ export default function CalendarOrganizer({
           </div>
           <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
           <p className="text-gray-600">
-            Necesitas {requiredPhotos} fotos para tu calendario del año {year}.
+            Necesitas {requiredPhotos} fotos para tu calendario de {MONTHS_ES[startMonth - 1]} {year} a {calendarMonths[11].name} {calendarMonths[11].year}.
           </p>
         </div>
 
@@ -420,6 +535,7 @@ export default function CalendarOrganizer({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
+      {renderDuplicateModal()}
       {renderLowResModal()}
 
       {/* OVERLAY DE VALIDACIÓN PARA SUBIDA ESPECÍFICA */}
@@ -445,16 +561,17 @@ export default function CalendarOrganizer({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-        {MONTHS_ES.map((month, monthIndex) => {
+        {calendarMonths.map(({ name, monthIndex, year: monthYear }, position) => {
           const requiredForThisMonth = customization.imagesPerMonth === 4 ? 4 : 1;
-          const startIndex = monthIndex * requiredForThisMonth;
+          const startIndex = position * requiredForThisMonth;
           const slots = Array.from({ length: requiredForThisMonth }, (_, i) => startIndex + i);
+          const monthHolidays = getColombianHolidays(monthYear);
 
           return (
-            <div key={monthIndex} className="space-y-3">
+            <div key={position} className="space-y-3">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <CalendarIcon className="w-4 h-4 text-gray-400" />
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{name} {monthYear}</p>
               </div>
 
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow" style={{ aspectRatio: customization.type === 'desk' ? '21/28' : '30/44' }}>
@@ -466,13 +583,13 @@ export default function CalendarOrganizer({
                   </div>
 
                   <div className="h-1/2 w-full p-4 flex flex-col justify-center bg-white relative">
-                    <div className="text-center mb-3"><span className="text-base sm:text-lg font-bold text-gray-900">{month} {year}</span></div>
+                    <div className="text-center mb-3"><span className="text-base sm:text-lg font-bold text-gray-900">{name} {monthYear}</span></div>
                     <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
                       {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (<div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>))}
-                      {generateCalendarGrid(year, monthIndex).map((day, i) => {
+                      {generateCalendarGrid(monthYear, monthIndex).map((day, i) => {
                         if (!day) return <div key={i} className="h-full min-h-[20px]" />;
-                        const date = new Date(year, monthIndex, day);
-                        const holiday = isHoliday(date, holidays);
+                        const date = new Date(monthYear, monthIndex, day);
+                        const holiday = isHoliday(date, monthHolidays);
                         return (
                           <div key={i} title={holiday ? holiday.name : undefined} className={`h-full min-h-[20px] flex items-center justify-center text-[10px] rounded cursor-default transition-colors ${holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100 hover:bg-red-100' : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'}`}>
                             {day}
