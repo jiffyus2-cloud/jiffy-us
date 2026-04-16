@@ -233,6 +233,8 @@ export default function PhotoOrganizer({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Mapa URL → clave de archivo, para trasladar firmas desde processUpload hasta handleFinalizeSetup
+  const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
@@ -412,6 +414,10 @@ export default function PhotoOrganizer({
         url: URL.createObjectURL(file),
         metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
       }));
+      // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
+      newFilesData.forEach(f => {
+        pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
+      });
       setPendingFilesData(prev => [...prev, ...newFilesData]);
       setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
     };
@@ -623,6 +629,13 @@ export default function PhotoOrganizer({
        newPhotos[totalPages - 1].push(photosToDistribute.shift()!);
     }
 
+    // Construir fileSignatures[][] desde el mapa URL→clave registrado en processUpload
+    const newSigs: string[][] = newPhotos.map(page =>
+      page.map(url => pendingFileKeysRef.current.get(url) ?? '')
+    );
+    setFileSignatures(newSigs);
+    pendingFileKeysRef.current.clear(); // consumido, limpiar para el siguiente lote
+
     onPhotosChange(newPhotos);
     setStep('editor');
   };
@@ -667,7 +680,7 @@ export default function PhotoOrganizer({
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
     const pagePhotos = [...newPhotos[pageIndex]];
-    pagePhotos[photoIndex] = ''; 
+    pagePhotos[photoIndex] = '';
 
     while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) {
       pagePhotos.pop();
@@ -675,6 +688,15 @@ export default function PhotoOrganizer({
 
     newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
+
+    // Limpiar la firma del slot eliminado para permitir re-subida sin falso positivo
+    const newSigs = [...fileSignatures];
+    if (newSigs[pageIndex]) {
+      const pageSigs = [...newSigs[pageIndex]];
+      pageSigs[photoIndex] = '';
+      newSigs[pageIndex] = pageSigs;
+      setFileSignatures(newSigs);
+    }
   };
 
   const handleMovePhotoWithinPage = (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => {
