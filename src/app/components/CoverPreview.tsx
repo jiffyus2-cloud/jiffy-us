@@ -147,7 +147,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' }}
             >
-              <div className="h-[20%] flex-shrink-0 flex flex-col items-center justify-center p-[10cqw] bg-white z-10">
+              <div className="h-[16%] flex-shrink-0 flex flex-col items-center justify-center p-[10cqw] bg-white z-10">
                 <div className="text-[4cqw] font-bold tracking-wide text-center leading-none" style={{ color: typographyColor }}>
                   {coverTitle}
                 </div>
@@ -155,7 +155,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   {coverSubtitle}
                 </div>
               </div>
-              <div className="relative w-full h-[80%] bg-white">
+              <div className="relative w-full h-[84%] bg-white">
                 <div className="absolute top-[0%] left-[10%] right-[10%] bottom-[10%] overflow-hidden">
                   {renderImageSlot()}
                 </div>
@@ -268,13 +268,13 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' }}
             >
-              <div className="h-[25%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
+              <div className="h-[20%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
                 <div className="absolute top-[8%]">
                   <div className="text-[4cqw] font-bold tracking-wide text-center leading-none" style={{ color: typographyColor }}>{coverTitle}</div>
                   <div className="text-[2.4cqw] text-center font-medium tracking-widest mt-[1cqw]" style={{ color: typographyColor }}>{coverSubtitle}</div>
                 </div>
               </div>
-              <div className="relative w-full h-[75%] bg-white">
+              <div className="relative w-full h-[80%] bg-white">
                 <div className="absolute top-[0%] left-[10%] right-[10%] bottom-[10%] overflow-hidden">
                   {renderImageSlot()}
                 </div>
@@ -386,12 +386,12 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`}
               style={{ width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' }}
             >
-              <div className="relative w-full h-[70%] bg-white">
+              <div className="relative w-full h-[76%] bg-white">
                 <div className="absolute top-[10%] left-[10%] right-[10%] bottom-0 overflow-hidden">
                   {renderImageSlot()}
                 </div>
               </div>
-              <div className="h-[30%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
+              <div className="h-[24%] flex-shrink-0 flex flex-col items-center justify-center p-[4cqw] bg-white z-10">
                 <div className="text-[4cqw] font-bold tracking-wide text-center leading-none" style={{ color: typographyColor }}>{coverTitle}</div>
                 <div className="w-[85%] h-[0.5cqw] my-[2cqw]" style={{ backgroundColor: typographyColor }}></div>
                 <div className="text-[2.4cqw] text-center font-medium tracking-widest" style={{ color: typographyColor }}>{coverSubtitle}</div>

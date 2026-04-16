@@ -1179,8 +1179,8 @@ export default function PhotoOrganizer({
                 <AlertCircle className="w-4 h-4 text-amber-500" /> Previsualización Interactiva
               </p>
               
-              <div className="bg-white rounded-none shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
-                <div className={`grid gap-2 p-3 sm:p-4 h-full ${getGridLayout(currentVariant, currentLayout)}`}>
+              <div className="bg-white rounded-none shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all flex flex-col items-center justify-center" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+                <div className={`grid gap-2 p-3 sm:p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, currentLayout)}`}>
                   {slots.map((photo, photoIndex) => {
                     const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                     const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
@@ -1557,13 +1557,12 @@ export default function PhotoOrganizer({
               </div>
             </div>
 
-            <div className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+            <div className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
               {(() => {
                 const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
                 const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
-                
                 return (
-                  <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
+                  <div className={`grid gap-2 p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
                     {slots.map((photo, photoIndex) => {
                       const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                       const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
