@@ -121,25 +121,25 @@ const AlbumEditorPhotoSlot: React.FC<{
               position={crop || { x: 50, y: 50, zoom: 1 }}
             />
             {editingPageIndex === pageIndex && (
-              <div className="absolute top-1 right-1 flex flex-wrap justify-end items-start gap-1 max-w-[85%] transition-opacity z-10 pointer-events-none">
+              <div className="absolute bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 transition-opacity z-10 pointer-events-none px-1 sm:px-0">
                 {/* GRUPO DE MOVIMIENTO */}
-                <div className="flex gap-1 pointer-events-auto bg-black/10 backdrop-blur-md rounded-full p-0.5 shrink-0">
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                <div className="flex gap-1 pointer-events-auto bg-black/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                 </div>
                 {/* GRUPO DE ACCIONES */}
                 <div className="flex gap-1 pointer-events-auto shrink-0">
-                  <button 
+                  <button
                      onClick={() => {
                         const aspect = containerRef.current ? containerRef.current.offsetWidth / containerRef.current.offsetHeight : 1;
                         onOpenCropModal(pageIndex, photoIndex, aspect);
-                     }} 
-                     className="p-1 sm:p-1.5 bg-blue-500 text-white hover:bg-blue-600 shadow-sm rounded-full" 
+                     }}
+                     className="p-2 sm:p-1.5 bg-blue-500 text-white hover:bg-blue-600 shadow-sm rounded-full"
                      title="Ajustar Recorte"
                   >
-                     <CropIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                     <CropIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                   </button>
-                  <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-1 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-sm rounded-full" title="Eliminar"><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-sm rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                 </div>
               </div>
             )}
@@ -161,17 +161,17 @@ const AlbumEditorPhotoSlot: React.FC<{
             {textBox.text || t('organizer.addText') + '...'}
           </div>
           {editingPageIndex === pageIndex && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 z-10">
-              <div className="flex flex-wrap justify-center items-center gap-1 sm:gap-2 w-full max-w-[95%] pointer-events-none">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 pb-2 sm:pb-1 z-10">
+              <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 w-full max-w-[95%] pointer-events-none">
                 {/* GRUPO DE MOVIMIENTO */}
                 <div className="flex gap-1 pointer-events-auto bg-white/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-1 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                 </div>
                 {/* GRUPO DE ACCIONES */}
                 <div className="flex gap-1 pointer-events-auto shrink-0">
-                  <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-1 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-1 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
+                  <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                 </div>
               </div>
             </div>
@@ -1262,12 +1262,15 @@ export default function PhotoOrganizer({
               <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center">
-                  <p className="text-sm text-gray-500 mb-4">Haz clic para seleccionar tus fotos y empezar a revivir tus mejores recuerdos</p>
+                  <p className="text-sm text-gray-500">Selecciona mínimo 40 fotos</p>
                 </div>
               </button>
-              <p className="text-xs text-gray-400 text-center mt-3 px-2">
-                ℹ️ En dispositivos iOS, el carrete puede tardar unos segundos en cerrarse al seleccionar muchas fotos. Es normal y no afecta a tus imágenes.
-              </p>
+              <div className="flex items-start gap-2.5 mt-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                <span className="text-amber-500 text-lg shrink-0 leading-tight">ℹ️</span>
+                <p className="text-xs text-amber-900 leading-snug">
+                  <span className="font-bold">Usuarios iOS:</span> al aceptar la selección de fotos, la galería puede tardar unos segundos en cerrarse. Es normal y no afecta a tus imágenes.
+                </p>
+              </div>
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
@@ -1294,7 +1297,7 @@ export default function PhotoOrganizer({
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderLowResModal()}
         
-        <div className="text-center mb-8"><div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4"><Grid3x3 className="w-10 h-10" /></div><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
+        <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
           {isSortingWithAI ? (
             <JiffyLoader t={t} />
