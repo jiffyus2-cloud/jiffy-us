@@ -321,30 +321,36 @@ export default function PhotoOrganizer({
     });
   };
 
-  const handleFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsValidating(true);
+    // Capturar archivos antes de que React limpie el evento sintético
     const filesArray = Array.from(files);
-    const results = await Promise.all(filesArray.map(checkImageDimensions));
 
-    const valid = results.filter(r => !r.isLowRes).map(r => r.file);
-    const lowRes = results.filter(r => r.isLowRes);
-
-    if (lowRes.length > 0) {
-      setApprovedFiles(valid);
-      setLowResImages(lowRes);
-      setCurrentLowResIndex(0);
-      setApplyToAllLowRes(false);
-      setUploadMode('batch');
-      setIsValidating(false);
-    } else {
-      setIsValidating(false);
-      processUpload(valid);
-    }
-    
+    // Limpiar el input y mostrar spinner antes de diferir
     if (fileInputRef.current) fileInputRef.current.value = '';
+    setIsValidating(true);
+
+    // Diferir el procesamiento para que iOS cierre el picker nativo de inmediato
+    setTimeout(async () => {
+      const results = await Promise.all(filesArray.map(checkImageDimensions));
+
+      const valid = results.filter(r => !r.isLowRes).map(r => r.file);
+      const lowRes = results.filter(r => r.isLowRes);
+
+      if (lowRes.length > 0) {
+        setApprovedFiles(valid);
+        setLowResImages(lowRes);
+        setCurrentLowResIndex(0);
+        setApplyToAllLowRes(false);
+        setUploadMode('batch');
+        setIsValidating(false);
+      } else {
+        setIsValidating(false);
+        processUpload(valid);
+      }
+    }, 0);
   };
 
   const handleLowResDecision = (keep: boolean) => {
