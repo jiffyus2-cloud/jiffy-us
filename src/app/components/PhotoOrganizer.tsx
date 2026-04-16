@@ -249,6 +249,7 @@ export default function PhotoOrganizer({
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [duplicateModal, setDuplicateModal] = useState<{
     file: File;
+    previewUrl: string;
     onConfirm: () => void;
     onCancel: () => void;
   } | null>(null);
@@ -423,13 +424,17 @@ export default function PhotoOrganizer({
     };
 
     if (duplicates.length > 0) {
+      const _dupPreviewUrl = URL.createObjectURL(duplicates[0]);
       setDuplicateModal({
         file: duplicates[0],
+        previewUrl: _dupPreviewUrl,
         onConfirm: () => {
+          URL.revokeObjectURL(_dupPreviewUrl);
           setDuplicateModal(null);
           doUpload([...unique, ...duplicates]);
         },
         onCancel: () => {
+          URL.revokeObjectURL(_dupPreviewUrl);
           setDuplicateModal(null);
           doUpload(unique);
         },
@@ -509,10 +514,12 @@ export default function PhotoOrganizer({
     };
 
     if (existingKeys.has(key)) {
+      const _slotPreviewUrl = URL.createObjectURL(file);
       setDuplicateModal({
         file,
-        onConfirm: () => { setDuplicateModal(null); doUpload(); },
-        onCancel: () => { setDuplicateModal(null); setTargetSlotInfo(null); },
+        previewUrl: _slotPreviewUrl,
+        onConfirm: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); doUpload(); },
+        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); setTargetSlotInfo(null); },
       });
     } else {
       doUpload();
@@ -1171,7 +1178,7 @@ export default function PhotoOrganizer({
           </p>
           <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6">
             <img
-              src={URL.createObjectURL(duplicateModal.file)}
+              src={duplicateModal.previewUrl}
               className="w-full h-full object-contain"
               alt="Foto duplicada"
             />
@@ -1463,6 +1470,7 @@ export default function PhotoOrganizer({
         </div>
       )}
 
+      {renderDuplicateModal()}
       {renderLowResModal()}
       {renderAdvancedSettingsModal()}
 
