@@ -179,7 +179,8 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
   const gridClass = getGridLayout(currentPhotosPerPage, layout, size);
 
   return (
-    <div className={`w-full h-full bg-white grid gap-[2%] p-[4%] ${gridClass}`}>
+    <div className={`w-full h-full bg-white ${currentPhotosPerPage === 3 ? 'flex flex-col items-center justify-center' : ''}`}>
+    <div className={`w-full ${currentPhotosPerPage === 3 ? 'h-4/5' : 'h-full'} grid gap-[2%] p-[4%] ${gridClass}`}>
       {slots.map((photo: string | null, photoIndex: number) => {
         const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
         const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
@@ -216,6 +217,7 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
           </div>
         );
       })}
+    </div>
     </div>
   );
 };
