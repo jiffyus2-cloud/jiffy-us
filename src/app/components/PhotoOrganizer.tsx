@@ -320,9 +320,18 @@ export default function PhotoOrganizer({
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsValidating(true);
 
-    // Diferir el procesamiento para que iOS cierre el picker nativo de inmediato
+    // Diferir el procesamiento para que iOS cierre el picker nativo de inmediato.
+    // Dentro del timeout, procesamos SECUENCIALMENTE (una imagen a la vez) y cedemos
+    // el event loop entre cada imagen para evitar bloquear el hilo principal.
     setTimeout(async () => {
-      const results = await Promise.all(filesArray.map(checkImageDimensions));
+      const results: Array<{file: File, url: string, isLowRes: boolean, width: number, height: number}> = [];
+
+      for (const file of filesArray) {
+        const result = await checkImageDimensions(file);
+        results.push(result);
+        // Ceder el event loop entre cada imagen para mantener la UI fluida
+        await new Promise<void>(r => setTimeout(r, 0));
+      }
 
       const valid = results.filter(r => !r.isLowRes).map(r => r.file);
       const lowRes = results.filter(r => r.isLowRes);
@@ -1249,12 +1258,17 @@ export default function PhotoOrganizer({
               </p>
             </div>
           ) : (
-            <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
-              <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
-              <div className="text-center">
-                <p className="text-sm text-gray-500 mb-4">Haz clic para seleccionar tus fotos y empezar a revivir tus mejores recuerdos</p>
-              </div>
-            </button>
+            <>
+              <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
+                <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
+                <div className="text-center">
+                  <p className="text-sm text-gray-500 mb-4">Haz clic para seleccionar tus fotos y empezar a revivir tus mejores recuerdos</p>
+                </div>
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-3 px-2">
+                ℹ️ En dispositivos iOS, el carrete puede tardar unos segundos en cerrarse al seleccionar muchas fotos. Es normal y no afecta a tus imágenes.
+              </p>
+            </>
           )}
           <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
           
