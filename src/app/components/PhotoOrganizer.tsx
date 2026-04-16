@@ -1393,7 +1393,7 @@ export default function PhotoOrganizer({
               <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center">
-                  <p className="text-sm text-gray-500">Selecciona mínimo 40 fotos</p>
+                  <p className="text-sm text-gray-500">Selecciona tus fotos y empieza a revivir tus mejores recuerdos</p>
                 </div>
               </button>
               <div className="flex items-start gap-2.5 mt-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
