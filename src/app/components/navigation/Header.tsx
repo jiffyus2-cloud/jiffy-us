@@ -3,11 +3,11 @@ import { Button } from '../ui/button';
 import React from 'react';
 import logo from '../../../assets/JiffyLogo.svg';
 import { useLanguage } from '../../context/LanguageContext';
-import { Globe, LogOut, Plus } from 'lucide-react';
+import { LogOut, Plus } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 
 export function Header() {
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const { user, userData, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,16 +40,6 @@ export function Header() {
         </div>
 
         <nav className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-            className="text-gray-400 hover:text-gray-700 text-xs gap-1.5 px-2"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span className="uppercase">{language}</span>
-          </Button>
-
           {user ? (
             <div className="flex items-center gap-2">
               <Button
