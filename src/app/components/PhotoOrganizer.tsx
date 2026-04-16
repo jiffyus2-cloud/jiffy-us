@@ -96,6 +96,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   isHalfHeightLayout: boolean;
   pageIndex: number;
   photoIndex: number;
+  photoCount: number;
   editingPageIndex: number | null;
   handleMovePhotoWithinPage: (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => void;
   handleRemovePhotoFromPage: (pageIndex: number, photoIndex: number) => void;
@@ -106,62 +107,79 @@ const AlbumEditorPhotoSlot: React.FC<{
   onOpenCropModal: (pageIndex: number, photoIndex: number, aspect: number) => void;
   t: (key: string) => string;
 }> = ({
-  photo, textBox, crop, isHalfHeightLayout, pageIndex, photoIndex, editingPageIndex,
+  photo, textBox, crop, isHalfHeightLayout, pageIndex, photoIndex, photoCount, editingPageIndex,
   handleMovePhotoWithinPage, handleRemovePhotoFromPage, setEditingTextSlot,
   handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal, t
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isCompact = photoCount >= 6;
+  const isEditing = editingPageIndex === pageIndex;
 
   return (
-    <div className={`relative group/photo overflow-hidden rounded-none bg-white flex items-center justify-center`}>
+    // Sin overflow-hidden: ImageCropper gestiona su propio clipping internamente.
+    // z-10 cuando está en edición para que los botones aparezcan sobre slots vecinos.
+    <div className={`relative group/photo rounded-none bg-white flex items-center justify-center ${isEditing ? 'z-10' : ''}`}>
       {photo ? (
-        <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
-            <ImageCropper 
-              src={photo} 
+        <>
+          {/* Contenido de la foto — sin botones dentro */}
+          <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
+            <ImageCropper
+              src={photo}
               position={crop || { x: 50, y: 50, zoom: 1 }}
             />
-            {editingPageIndex === pageIndex && (
-              <div className="absolute bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 transition-opacity z-10 pointer-events-none px-1 sm:px-0">
-                {/* GRUPO DE MOVIMIENTO */}
+          </div>
+
+          {/* Botones de edición — fuera del div interno, relativos al slot completo */}
+          {isEditing && (
+            <div className={`absolute z-20 pointer-events-none ${
+              isCompact
+                // Modo compacto (6–9 fotos): sólo crop+delete apilados a la derecha
+                ? 'top-1 right-1 flex flex-col items-end gap-1'
+                // Modo normal: abajo centrado en móvil, arriba-derecha en desktop
+                : 'bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0'
+            }`}>
+              {/* Botones de movimiento — sólo en layouts normales */}
+              {!isCompact && (
                 <div className="flex gap-1 pointer-events-auto bg-black/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
                   <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                   <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                 </div>
-                {/* GRUPO DE ACCIONES */}
-                <div className="flex gap-1 pointer-events-auto shrink-0">
-                  <button
-                     onClick={() => {
-                        const aspect = containerRef.current ? containerRef.current.offsetWidth / containerRef.current.offsetHeight : 1;
-                        onOpenCropModal(pageIndex, photoIndex, aspect);
-                     }}
-                     className="p-2 sm:p-1.5 bg-blue-500 text-white hover:bg-blue-600 shadow-sm rounded-full"
-                     title="Ajustar Recorte"
-                  >
-                     <CropIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                  </button>
-                  <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-sm rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                </div>
+              )}
+              {/* Botones de acción — siempre visibles */}
+              <div className={`flex pointer-events-auto shrink-0 ${isCompact ? 'flex-col gap-1' : 'gap-1'}`}>
+                <button
+                  onClick={() => {
+                    const aspect = containerRef.current ? containerRef.current.offsetWidth / containerRef.current.offsetHeight : 1;
+                    onOpenCropModal(pageIndex, photoIndex, aspect);
+                  }}
+                  className="p-2 sm:p-1.5 bg-blue-500 text-white hover:bg-blue-600 shadow-sm rounded-full"
+                  title="Ajustar Recorte"
+                >
+                  <CropIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                </button>
+                <button onClick={() => handleRemovePhotoFromPage(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-sm rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
               </div>
-            )}
-        </div>
+            </div>
+          )}
+        </>
       ) : textBox ? (
         <div className="w-full h-full flex flex-col items-center justify-center bg-white relative" style={{ containerType: 'inline-size' }}>
-          <div 
-            style={{ 
-              width: '90%', 
-              fontSize: `${textBox.fontSize * 0.25}cqi`, 
-              fontFamily: textBox.fontFamily, 
-              color: textBox.color, 
-              textAlign: 'center', 
+          <div
+            style={{
+              width: '90%',
+              fontSize: `${textBox.fontSize * 0.25}cqi`,
+              fontFamily: textBox.fontFamily,
+              color: textBox.color,
+              textAlign: 'center',
               wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap', 
-              lineHeight: '1.3'       
-            }} 
+              whiteSpace: 'pre-wrap',
+              lineHeight: '1.3'
+            }}
           >
             {textBox.text || t('organizer.addText') + '...'}
           </div>
-          {editingPageIndex === pageIndex && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 pb-2 sm:pb-1 z-10">
+          {isEditing && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 pb-2 sm:pb-1 z-20">
               <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 w-full max-w-[95%] pointer-events-none">
                 {/* GRUPO DE MOVIMIENTO */}
                 <div className="flex gap-1 pointer-events-auto bg-white/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
@@ -178,7 +196,7 @@ const AlbumEditorPhotoSlot: React.FC<{
           )}
         </div>
       ) : (
-        editingPageIndex === pageIndex && (
+        isEditing && (
           <div className="flex flex-col gap-1 sm:gap-2 p-1 items-center justify-center w-full h-full">
             <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
               <div className="p-1.5 sm:p-2 bg-gray-200 group-hover:bg-gray-300 rounded-full"><ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
@@ -1302,6 +1320,7 @@ export default function PhotoOrganizer({
                       <AlbumEditorPhotoSlot
                         key={photoIndex} photo={photo} textBox={textBox} crop={crop}
                         isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                        photoCount={currentVariant}
                         editingPageIndex={pageIndex}
                         handleMovePhotoWithinPage={handleMovePhotoWithinPage}
                         handleRemovePhotoFromPage={handleRemovePhotoFromPage}
@@ -1687,6 +1706,7 @@ export default function PhotoOrganizer({
                         <AlbumEditorPhotoSlot
                           key={photoIndex} photo={photo} textBox={textBox} crop={crop}
                           isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                          photoCount={currentVariant}
                           editingPageIndex={editingPageIndex}
                           handleMovePhotoWithinPage={handleMovePhotoWithinPage} handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
                           onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
