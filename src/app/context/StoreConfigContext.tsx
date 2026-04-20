@@ -86,10 +86,15 @@ const defaultConfig: StoreConfig = {
   ]
 };
 
-const StoreConfigContext = createContext<StoreConfig>(defaultConfig);
+interface StoreConfigContextValue extends StoreConfig {
+  configLoaded: boolean;
+}
+
+const StoreConfigContext = createContext<StoreConfigContextValue>({ ...defaultConfig, configLoaded: false });
 
 export const StoreConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [config, setConfig] = useState<StoreConfig>(defaultConfig);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
     const configRef = doc(db, 'settings', 'store_config');
@@ -105,13 +110,14 @@ export const StoreConfigProvider: React.FC<{ children: React.ReactNode }> = ({ c
       } else {
         setDoc(configRef, defaultConfig);
       }
+      setConfigLoaded(true);
     });
 
     return () => unsubscribe();
   }, []);
 
   return (
-    <StoreConfigContext.Provider value={config}>
+    <StoreConfigContext.Provider value={{ ...config, configLoaded }}>
       {children}
     </StoreConfigContext.Provider>
   );
