@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
-import { 
+import { useState, useRef, useEffect, useCallback } from 'react';
+import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
-  Image as ImageIcon, Grid3x3, Edit3, Check, 
-  ArrowLeft, ArrowRight, Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
+  Image as ImageIcon, Grid3x3, Edit3, Check,
+  GripVertical, Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -98,7 +98,9 @@ const AlbumEditorPhotoSlot: React.FC<{
   photoIndex: number;
   photoCount: number;
   editingPageIndex: number | null;
-  handleMovePhotoWithinPage: (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => void;
+  isDragging: boolean;
+  isDragTarget: boolean;
+  onDragStart: (pageIndex: number, photoIndex: number, e: React.PointerEvent) => void;
   handleRemovePhotoFromPage: (pageIndex: number, photoIndex: number) => void;
   setEditingTextSlot: (slot: { pageIndex: number, photoIndex: number } | null) => void;
   handleRemoveTextBox: (pageIndex: number, photoIndex: number) => void;
@@ -108,7 +110,8 @@ const AlbumEditorPhotoSlot: React.FC<{
   t: (key: string) => string;
 }> = ({
   photo, textBox, crop, isHalfHeightLayout, pageIndex, photoIndex, photoCount, editingPageIndex,
-  handleMovePhotoWithinPage, handleRemovePhotoFromPage, setEditingTextSlot,
+  isDragging, isDragTarget, onDragStart,
+  handleRemovePhotoFromPage, setEditingTextSlot,
   handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal, t
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,12 +119,15 @@ const AlbumEditorPhotoSlot: React.FC<{
   const isEditing = editingPageIndex === pageIndex;
 
   return (
-    // Sin overflow-hidden: ImageCropper gestiona su propio clipping internamente.
-    // z-10 cuando está en edición para que los botones aparezcan sobre slots vecinos.
-    <div className={`relative group/photo rounded-none bg-white flex items-center justify-center ${isEditing ? 'z-10' : ''}`}>
+    <div
+      data-photo-slot
+      data-page-index={pageIndex}
+      data-photo-index={photoIndex}
+      className={`relative group/photo rounded-none bg-white flex items-center justify-center transition-opacity ${isEditing ? 'z-10' : ''} ${isDragging ? 'opacity-40 ring-2 ring-dashed ring-gray-400' : ''} ${isDragTarget ? 'ring-2 ring-black' : ''}`}
+    >
       {photo ? (
         <>
-          {/* Contenido de la foto — sin botones dentro */}
+          {/* Contenido de la foto */}
           <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
             <ImageCropper
               src={photo}
@@ -129,23 +135,23 @@ const AlbumEditorPhotoSlot: React.FC<{
             />
           </div>
 
-          {/* Botones de edición — fuera del div interno, relativos al slot completo */}
+          {/* Botones de edición */}
           {isEditing && (
             <div className={`absolute z-20 pointer-events-none ${
               isCompact
-                // Modo compacto (6–9 fotos): sólo crop+delete apilados a la derecha
                 ? 'top-1 right-1 flex flex-col items-end gap-1'
-                // Modo normal: abajo centrado en móvil, arriba-derecha en desktop
                 : 'bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0'
             }`}>
-              {/* Botones de movimiento — sólo en layouts normales */}
-              {!isCompact && (
-                <div className="flex gap-1 pointer-events-auto bg-black/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                </div>
-              )}
-              {/* Botones de acción — siempre visibles */}
+              {/* Handle de arrastre */}
+              <button
+                onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
+                className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
+                title="Arrastrar para reordenar"
+                style={{ touchAction: 'none' }}
+              >
+                <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              </button>
+              {/* Botones de acción */}
               <div className={`flex pointer-events-auto shrink-0 ${isCompact ? 'flex-col gap-1' : 'gap-1'}`}>
                 <button
                   onClick={() => {
@@ -181,12 +187,16 @@ const AlbumEditorPhotoSlot: React.FC<{
           {isEditing && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 pb-2 sm:pb-1 z-20">
               <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 w-full max-w-[95%] pointer-events-none">
-                {/* GRUPO DE MOVIMIENTO */}
-                <div className="flex gap-1 pointer-events-auto bg-white/20 backdrop-blur-md rounded-full p-0.5 shrink-0">
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'left')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Izquierda"><ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleMovePhotoWithinPage(pageIndex, photoIndex, 'right')} className="p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full" title="Mover Derecha"><ArrowRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                </div>
-                {/* GRUPO DE ACCIONES */}
+                {/* Handle de arrastre */}
+                <button
+                  onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
+                  className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
+                  title="Arrastrar para reordenar"
+                  style={{ touchAction: 'none' }}
+                >
+                  <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                </button>
+                {/* Grupo de acciones */}
                 <div className="flex gap-1 pointer-events-auto shrink-0">
                   <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
                   <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
@@ -263,6 +273,8 @@ export default function PhotoOrganizer({
   const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
   const [targetSlotInfo, setTargetSlotInfo] = useState<{pageIndex: number, photoIndex?: number} | null>(null);
 
+  const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
+  const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [duplicateModal, setDuplicateModal] = useState<{
@@ -783,6 +795,67 @@ export default function PhotoOrganizer({
     if (Object.keys(newTexts[pageIndex]).length === 0) delete newTexts[pageIndex];
     onTextBoxSlotsChange(newTexts);
   };
+
+  const handleSwapPhotosOnPage = (pageIndex: number, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const newPhotos = [...photos];
+    const pagePhotos = [...newPhotos[pageIndex]];
+    while (pagePhotos.length <= Math.max(fromIndex, toIndex)) pagePhotos.push('');
+    [pagePhotos[fromIndex], pagePhotos[toIndex]] = [pagePhotos[toIndex], pagePhotos[fromIndex]];
+    while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) pagePhotos.pop();
+    newPhotos[pageIndex] = pagePhotos;
+    onPhotosChange(newPhotos);
+
+    const newCrops = { ...photoCrops };
+    const fromCrop = photoCrops[`${pageIndex}-${fromIndex}`];
+    const toCrop = photoCrops[`${pageIndex}-${toIndex}`];
+    if (fromCrop) newCrops[`${pageIndex}-${toIndex}`] = fromCrop; else delete newCrops[`${pageIndex}-${toIndex}`];
+    if (toCrop) newCrops[`${pageIndex}-${fromIndex}`] = toCrop; else delete newCrops[`${pageIndex}-${fromIndex}`];
+    onPhotoCropsChange(newCrops);
+
+    const newTexts = { ...textBoxSlots };
+    if (!newTexts[pageIndex]) newTexts[pageIndex] = {};
+    const fromText = textBoxSlots[pageIndex]?.[fromIndex];
+    const toText = textBoxSlots[pageIndex]?.[toIndex];
+    if (fromText) newTexts[pageIndex][toIndex] = fromText; else delete newTexts[pageIndex][toIndex];
+    if (toText) newTexts[pageIndex][fromIndex] = toText; else delete newTexts[pageIndex][fromIndex];
+    if (Object.keys(newTexts[pageIndex] || {}).length === 0) delete newTexts[pageIndex];
+    onTextBoxSlotsChange(newTexts);
+  };
+
+  const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    dragStateRef.current = { pageIndex, fromIndex: photoIndex, toIndex: null };
+    setDragVisual({ pageIndex, fromIndex: photoIndex, toIndex: null });
+
+    const onMove = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = el?.closest('[data-photo-slot]') as HTMLElement | null;
+      if (slot) {
+        const pIdx = parseInt(slot.dataset.pageIndex ?? '-1');
+        const phIdx = parseInt(slot.dataset.photoIndex ?? '-1');
+        if (pIdx === pageIndex && phIdx !== -1) {
+          if (dragStateRef.current) dragStateRef.current.toIndex = phIdx;
+          setDragVisual(prev => prev ? { ...prev, toIndex: phIdx } : null);
+        }
+      }
+    };
+
+    const onUp = () => {
+      const state = dragStateRef.current;
+      if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
+        handleSwapPhotosOnPage(state.pageIndex, state.fromIndex, state.toIndex);
+      }
+      dragStateRef.current = null;
+      setDragVisual(null);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos, photoCrops, textBoxSlots]);
 
   const handleAddTextBox = (pageIndex: number, photoIndex: number) => {
     const newSlots = { ...textBoxSlots };
@@ -1322,7 +1395,9 @@ export default function PhotoOrganizer({
                         isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
                         photoCount={currentVariant}
                         editingPageIndex={pageIndex}
-                        handleMovePhotoWithinPage={handleMovePhotoWithinPage}
+                        isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
+                        isDragTarget={dragVisual?.pageIndex === pageIndex && dragVisual?.toIndex === photoIndex && dragVisual?.fromIndex !== photoIndex}
+                        onDragStart={handleDragStart}
                         handleRemovePhotoFromPage={handleRemovePhotoFromPage}
                         setEditingTextSlot={setEditingTextSlot}
                         handleRemoveTextBox={handleRemoveTextBox}
@@ -1707,7 +1782,10 @@ export default function PhotoOrganizer({
                           isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
                           photoCount={currentVariant}
                           editingPageIndex={editingPageIndex}
-                          handleMovePhotoWithinPage={handleMovePhotoWithinPage} handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                          isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
+                          isDragTarget={dragVisual?.pageIndex === pageIndex && dragVisual?.toIndex === photoIndex && dragVisual?.fromIndex !== photoIndex}
+                          onDragStart={handleDragStart}
+                          handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
                           onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
                           t={t}
                         />
