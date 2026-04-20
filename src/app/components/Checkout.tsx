@@ -289,7 +289,7 @@ export default function Checkout() {
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12 relative">
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate('/create')} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
+        <button onClick={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
           <ArrowLeft className="w-5 h-5" /><span className="font-medium">{t('step.back')}</span>
         </button>
       </div>
