@@ -536,7 +536,7 @@ const OwnerDashboard: React.FC = () => {
                               transform: 'rotate(90deg) translateY(-50%)', 
                               transformOrigin: 'top left', 
                               whiteSpace: 'nowrap', 
-                              fontSize: `${spinePxWidth * 0.24}px`, 
+                              fontSize: `${spinePxWidth * 0.25}px`, 
                               fontWeight: 'bold', 
                               letterSpacing: '8px', 
                               color: textColor 
