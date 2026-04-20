@@ -31,8 +31,8 @@ export default function LandingPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
-  const { promotions } = useStoreConfig();
-  const activePromotions = (promotions || []).filter(p => p.active);
+  const { promotions, configLoaded } = useStoreConfig();
+  const activePromotions = configLoaded ? (promotions || []).filter(p => p.active) : [];
 
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
   const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
