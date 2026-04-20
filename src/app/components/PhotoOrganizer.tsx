@@ -283,16 +283,6 @@ export default function PhotoOrganizer({
   } | null>(null);
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
-  // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
-  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
-  const [duplicateModal, setDuplicateModal] = useState<{
-    file: File;
-    previewUrl: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-  } | null>(null);
-  const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
-
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
   const isVertical = sizeStr.includes('Vertical');
