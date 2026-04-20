@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
+import { sendOrderConfirmationToCustomer, sendNewOrderNotificationToOwner } from '../../services/emailService';
 
 export default function Success() {
   const navigate = useNavigate();
@@ -47,15 +48,30 @@ export default function Success() {
           }
 
           // El pago fue verificado por el backend. Ahora actualizamos Firestore.
+          const orderRef = doc(db, 'orders', orderId);
           try {
-            const orderRef = doc(db, 'orders', orderId);
-            await updateDoc(orderRef, { 
+            await updateDoc(orderRef, {
               status: 'paid',
-              updatedAt: new Date().toISOString() 
+              updatedAt: new Date().toISOString()
             });
           } catch (firestoreError) {
             console.error("Error de permisos en Firestore:", firestoreError);
             throw new Error(t('error.firestoreConnection'));
+          }
+
+          // Enviamos correos de confirmación en paralelo (sin bloquear el flujo si fallan)
+          try {
+            const orderSnap = await getDoc(orderRef);
+            if (orderSnap.exists()) {
+              const orderData = { id: orderId, ...orderSnap.data() };
+              await Promise.all([
+                sendOrderConfirmationToCustomer(orderData),
+                sendNewOrderNotificationToOwner(orderData),
+              ]);
+            }
+          } catch (emailError) {
+            console.error('Error al enviar correos de confirmación:', emailError);
+            // No relanzamos el error — el pago ya fue confirmado correctamente
           }
 
           localStorage.removeItem('pending_order_id');
