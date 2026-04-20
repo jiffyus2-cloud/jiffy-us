@@ -48,10 +48,14 @@ export async function createDraftOrder(
   userId: string,
   designData: any,
   product: any,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  existingOrderId?: string,
+  productType?: string
 ) {
-  const orderRef = doc(collection(db, 'orders'));
-  const orderId = orderRef.id;
+  const orderRef = existingOrderId
+    ? doc(db, 'orders', existingOrderId)
+    : doc(collection(db, 'orders'));
+  const orderId = existingOrderId || orderRef.id;
   const folderPath = `orders/${userId}/${orderId}`;
   
   const productString = String(product.type || product.id || product.name || '').toLowerCase();
@@ -193,7 +197,8 @@ export async function createDraftOrder(
     userId,
     status: 'draft',
     product,
-    total: 0, 
+    productType: productType || productString,
+    total: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     customization: cleanCustomization,

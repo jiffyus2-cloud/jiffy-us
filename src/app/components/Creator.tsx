@@ -14,7 +14,7 @@ import ProductDetailsModal from './ProductDetailsModal'; // <-- IMPORTAMOS EL MO
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
-import { createDraftOrder } from '../../services/orderService';
+import { createDraftOrder, getOrder } from '../../services/orderService';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -72,8 +72,9 @@ export default function Creator() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
-  const [isSaving, setIsSaving] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
 
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
 
@@ -139,14 +140,15 @@ export default function Creator() {
 
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
-      });
+      }, resumingOrderId || undefined, selectedProduct || undefined);
 
-      navigate('/checkout', { 
-        state: { 
+      setResumingOrderId(null);
+      navigate('/checkout', {
+        state: {
           orderId,
           product: activeProduct,
           productType: selectedProduct
-        } 
+        }
       });
 
     } catch (error) {
@@ -236,10 +238,45 @@ export default function Creator() {
   useEffect(() => {
     const restoreState = async () => {
       const state = location.state as any;
-      
+
+      if (state?.fromCheckout && state?.orderId && !selectedProduct) {
+        try {
+          const order = await getOrder(state.orderId) as any;
+          if (order) {
+            const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
+            let detectedType: ProductType = 'album';
+            if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
+            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
+            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
+
+            const photos = detectedType === 'album'
+              ? (order.pages?.map((p: any) => p.images || []) || [])
+              : (order.photos || []);
+
+            const designData = {
+              photos,
+              photoCrops: order.photoCrops || {},
+              textBoxSlots: order.textBoxSlots || {},
+              pageLayouts: order.pageLayouts || {},
+              pageLayoutVariants: order.pageLayoutVariants || {},
+              customization: order.customization,
+              coverData: order.coverData,
+              items: order.items || order.mugItems || [],
+              mugItems: order.items || order.mugItems || [],
+            };
+
+            restoreDesignToState(designData, order.product, detectedType);
+            setResumingOrderId(state.orderId);
+          }
+        } catch (e) {
+          console.error('Error al restaurar orden desde checkout', e);
+        }
+        return;
+      }
+
       if (state?.designData && !selectedProduct) {
         restoreDesignToState(state.designData, state.product, state.productType);
-      } 
+      }
       else if (user && !selectedProduct) {
         try {
           const draft = await loadDraftFromDB();
