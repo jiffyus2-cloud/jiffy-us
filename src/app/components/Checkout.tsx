@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown } from 'lucide-react';
+import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
@@ -27,9 +28,13 @@ export default function Checkout() {
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
   const [formData, setFormData] = useState({
-    name: '', email: user?.email || '', address: '', city: '', zipCode: '',
+    name: '', email: user?.email || '',
+    department: '', city: '', address: '', addressExtra: '', zipCode: '',
     billingName: '', billingAddress: '', billingCity: '', billingZipCode: '', sameAsShipping: true,
   });
+
+  // Ciudades disponibles según el departamento seleccionado
+  const availableCities = COLOMBIA_DEPARTMENTS.find(d => d.name === formData.department)?.cities ?? [];
 
   useEffect(() => {
     if (user?.email && !formData.email) {
@@ -83,6 +88,10 @@ export default function Checkout() {
   const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
   const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
   const isAlbum = productTypeStr.includes('album') || productTypeStr.includes('photobook');
+  const isTela = isAlbum && (
+    orderData?.customization?.coverType === 'Tela' ||
+    orderData?.customization?.material === 'Tela'
+  );
   
   const getMugCount = () => {
     const arr = orderData.items || orderData.mugItems || [];
@@ -102,17 +111,17 @@ export default function Checkout() {
     const basePages = 40;
 
     if (size.includes('20x20') || size.includes('2x2')) {
-      albumBasePrice = config.prices.album20x20;
+      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
       albumExtraPagePrice = config.prices.albumExtra20x20;
     } else if (size.includes('30x30')) {
-      albumBasePrice = config.prices.album30x30;
+      albumBasePrice = isTela ? config.prices.albumTela30x30 : config.prices.album30x30;
       albumExtraPagePrice = config.prices.albumExtra30x30;
     } else if (size.includes('28x21') || size.includes('21x28')) {
-      albumBasePrice = config.prices.albumRect;
+      albumBasePrice = isTela ? config.prices.albumTelaRect : config.prices.albumRect;
       albumExtraPagePrice = config.prices.albumExtraRect;
     } else {
-       albumBasePrice = config.prices.album20x20;
-       albumExtraPagePrice = config.prices.albumExtra20x20;
+      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
+      albumExtraPagePrice = config.prices.albumExtra20x20;
     }
 
     if (totalPageCount > basePages) {
@@ -144,8 +153,13 @@ export default function Checkout() {
 
   const subtotal = calculateSubtotal();
   const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
-  const shipping = 0; 
-  const tax = 0; 
+  const cityLower = formData.city.trim().toLowerCase();
+  const shipping = cityLower === ''
+    ? 0
+    : cityLower.includes('cali')
+      ? config.prices.shippingCali
+      : config.prices.shippingNational;
+  const tax = 0;
   const total = subtotal - discountAmount + shipping + tax;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,7 +174,15 @@ export default function Checkout() {
     setIsProcessing(true);
 
     try {
-      const shippingAddress = { name: formData.name, email: formData.email, address: formData.address, city: formData.city, zipCode: formData.zipCode };
+      const shippingAddress = {
+        name: formData.name,
+        email: formData.email,
+        department: formData.department,
+        city: formData.city,
+        address: formData.address,
+        addressExtra: formData.addressExtra,
+        zipCode: formData.zipCode,
+      };
       const billingAddress = formData.sameAsShipping ? shippingAddress : { name: formData.billingName, email: formData.email, address: formData.billingAddress, city: formData.billingCity, zipCode: formData.billingZipCode };
 
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
@@ -195,9 +217,16 @@ export default function Checkout() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    const type = e.target.type;
+    // Al cambiar departamento, resetear la ciudad seleccionada
+    if (name === 'department') {
+      setFormData(prev => ({ ...prev, department: value, city: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    }
   };
 
   const modalOrderData = { ...orderData, total: total, shippingAddress: null, billingAddress: null };
@@ -220,7 +249,6 @@ export default function Checkout() {
     if (arr.length > 0) displayImage = arr[0].photo || arr[0].photos?.[0];
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
-    const isTela = orderData.customization?.coverType === 'Tela' || orderData.customization?.material === 'Tela';
     if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
       let firstInnerPhoto = null;
       if (orderData.pages && orderData.pages.length > 0) {
@@ -332,8 +360,18 @@ export default function Checkout() {
                 </div>
               )}
 
-              <div className="flex justify-between">
-                <span className="text-gray-600">{t('checkout.shipping')}</span><span>${shipping.toLocaleString('es-CO')} COP</span>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">{t('checkout.shipping')}</span>
+                  <span>
+                    {formData.city.trim() === ''
+                      ? <span className="text-gray-400 italic text-xs">Por determinar</span>
+                      : `$${shipping.toLocaleString('es-CO')} COP`}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Cali: ${config.prices.shippingCali.toLocaleString('es-CO')} · Otras ciudades: ${config.prices.shippingNational.toLocaleString('es-CO')}
+                </p>
               </div>
             </div>
 
@@ -385,13 +423,104 @@ export default function Checkout() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>{t('checkout.shippingAddress')}</h3>
-              <div className="space-y-6">
-                <div className="space-y-2"><label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label><input type="text" id="address" name="address" required value={formData.address} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Calle, número, piso/depto" /></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2"><label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="city" name="city" required value={formData.city} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" /></div>
-                  <div className="space-y-2"><label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="zipCode" name="zipCode" required value={formData.zipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" /></div>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>
+                {t('checkout.shippingAddress')}
+              </h3>
+              <div className="space-y-5">
+
+                {/* Fila 1: Departamento + Ciudad */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label htmlFor="department" className="text-sm font-medium text-gray-700">Departamento *</label>
+                    <div className="relative">
+                      <select
+                        id="department"
+                        name="department"
+                        required
+                        value={formData.department}
+                        onChange={handleChange}
+                        className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800"
+                      >
+                        <option value="">Selecciona un departamento</option>
+                        {COLOMBIA_DEPARTMENTS.map(d => (
+                          <option key={d.name} value={d.name}>{d.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
+                    <div className="relative">
+                      <select
+                        id="city"
+                        name="city"
+                        required
+                        value={formData.city}
+                        onChange={handleChange}
+                        disabled={!formData.department}
+                        className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      >
+                        <option value="">
+                          {formData.department ? 'Selecciona una ciudad' : 'Primero elige un departamento'}
+                        </option>
+                        {availableCities.map(city => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Fila 2: Dirección principal */}
+                <div className="space-y-1.5">
+                  <label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label>
+                  <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    required
+                    value={formData.address}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
+                    placeholder="Ej. Calle 10 # 25-30"
+                  />
+                </div>
+
+                {/* Fila 3: Apto / Adicional + Código postal */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label htmlFor="addressExtra" className="text-sm font-medium text-gray-700">
+                      Apto, casa, barrio <span className="text-gray-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="addressExtra"
+                      name="addressExtra"
+                      value={formData.addressExtra}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
+                      placeholder="Ej. Apto 301, Barrio El Poblado"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
+                    <input
+                      type="text"
+                      id="zipCode"
+                      name="zipCode"
+                      required
+                      value={formData.zipCode}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
+                      placeholder="Ej. 760001"
+                    />
+                  </div>
+                </div>
+
               </div>
             </div>
 

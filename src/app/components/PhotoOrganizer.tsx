@@ -261,6 +261,8 @@ export default function PhotoOrganizer({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Mapa URL → clave de archivo, para trasladar firmas desde processUpload hasta handleFinalizeSetup
+  const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
@@ -273,6 +275,15 @@ export default function PhotoOrganizer({
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
+  // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
+  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
+  const [duplicateModal, setDuplicateModal] = useState<{
+    file: File;
+    previewUrl: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+  const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
@@ -428,16 +439,54 @@ export default function PhotoOrganizer({
   };
 
   const processUpload = (finalFiles: File[]) => {
-    if (finalFiles.length === 0) return; 
+    if (finalFiles.length === 0) return;
 
-    const newFilesData = finalFiles.map((file) => ({
-      id: Math.random().toString(36).substring(2, 11), 
-      url: URL.createObjectURL(file),
-      metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-    }));
+    // Colectar todas las firmas existentes en el álbum (flat)
+    const existingKeys = new Set(
+      fileSignatures.flat().filter(Boolean)
+    );
 
-    setPendingFilesData(prev => [...prev, ...newFilesData]);
-    setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+    const duplicates: File[] = [];
+    const unique: File[] = [];
+    for (const file of finalFiles) {
+      if (existingKeys.has(getFileKey(file))) duplicates.push(file);
+      else unique.push(file);
+    }
+
+    const doUpload = (files: File[]) => {
+      if (files.length === 0) return;
+      const newFilesData = files.map((file) => ({
+        id: Math.random().toString(36).substring(2, 11),
+        url: URL.createObjectURL(file),
+        metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+      }));
+      // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
+      newFilesData.forEach(f => {
+        pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
+      });
+      setPendingFilesData(prev => [...prev, ...newFilesData]);
+      setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+    };
+
+    if (duplicates.length > 0) {
+      const _dupPreviewUrl = URL.createObjectURL(duplicates[0]);
+      setDuplicateModal({
+        file: duplicates[0],
+        previewUrl: _dupPreviewUrl,
+        onConfirm: () => {
+          URL.revokeObjectURL(_dupPreviewUrl);
+          setDuplicateModal(null);
+          doUpload([...unique, ...duplicates]);
+        },
+        onCancel: () => {
+          URL.revokeObjectURL(_dupPreviewUrl);
+          setDuplicateModal(null);
+          doUpload(unique);
+        },
+      });
+    } else {
+      doUpload(unique);
+    }
   };
 
   // NUEVA FUNCIÓN INTERCEPTORA PARA SUBIR UNA SOLA FOTO
@@ -462,38 +511,64 @@ export default function PhotoOrganizer({
   };
 
   const processSpecificUpload = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
-    const newPhotos = [...photos];
-    const pagePhotos = [...newPhotos[pageIndex]];
-    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+    const key = getFileKey(file);
+    const existingKeys = new Set(fileSignatures.flat().filter(Boolean));
 
-    if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
-      while (pagePhotos.length <= targetPhotoIndex) {
-        pagePhotos.push('');
-      }
-      pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
-    } else {
-      const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
-      if (firstEmpty !== -1) {
-        pagePhotos[firstEmpty] = URL.createObjectURL(file);
+    const doUpload = () => {
+      const newPhotos = [...photos];
+      const pagePhotos = [...newPhotos[pageIndex]];
+      const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+      let slotIndex: number;
+
+      if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
+        while (pagePhotos.length <= targetPhotoIndex) pagePhotos.push('');
+        pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
+        slotIndex = targetPhotoIndex;
       } else {
-        if (pagePhotos.length >= maxAllowed) {
-          alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
-          return;
+        const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
+        if (firstEmpty !== -1) {
+          pagePhotos[firstEmpty] = URL.createObjectURL(file);
+          slotIndex = firstEmpty;
+        } else {
+          if (pagePhotos.length >= maxAllowed) {
+            alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
+            return;
+          }
+          pagePhotos.push(URL.createObjectURL(file));
+          slotIndex = pagePhotos.length - 1;
         }
-        pagePhotos.push(URL.createObjectURL(file));
       }
-    }
 
-    newPhotos[pageIndex] = pagePhotos;
-    
-    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
-    const neededVariant = getNextAllowed(pagePhotos.length);
-    
-    if (currentVariant < neededVariant) {
-      onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
-    }
+      newPhotos[pageIndex] = pagePhotos;
 
-    onPhotosChange(newPhotos);
+      // Actualizar firmas
+      const newSigs = [...fileSignatures];
+      while (newSigs.length <= pageIndex) newSigs.push([]);
+      const pageSigs = [...(newSigs[pageIndex] || [])];
+      while (pageSigs.length <= slotIndex) pageSigs.push('');
+      pageSigs[slotIndex] = key;
+      newSigs[pageIndex] = pageSigs;
+      setFileSignatures(newSigs);
+
+      const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+      const neededVariant = getNextAllowed(pagePhotos.length);
+      if (currentVariant < neededVariant) {
+        onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
+      }
+      onPhotosChange(newPhotos);
+    };
+
+    if (existingKeys.has(key)) {
+      const _slotPreviewUrl = URL.createObjectURL(file);
+      setDuplicateModal({
+        file,
+        previewUrl: _slotPreviewUrl,
+        onConfirm: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); doUpload(); },
+        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); setTargetSlotInfo(null); },
+      });
+    } else {
+      doUpload();
+    }
   };
 
   const runAISortingAndDistribute = async () => {
@@ -606,6 +681,13 @@ export default function PhotoOrganizer({
        newPhotos[totalPages - 1].push(photosToDistribute.shift()!);
     }
 
+    // Construir fileSignatures[][] desde el mapa URL→clave registrado en processUpload
+    const newSigs: string[][] = newPhotos.map(page =>
+      page.map(url => pendingFileKeysRef.current.get(url) ?? '')
+    );
+    setFileSignatures(newSigs);
+    pendingFileKeysRef.current.clear(); // consumido, limpiar para el siguiente lote
+
     onPhotosChange(newPhotos);
     setStep('editor');
   };
@@ -650,7 +732,7 @@ export default function PhotoOrganizer({
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
     const pagePhotos = [...newPhotos[pageIndex]];
-    pagePhotos[photoIndex] = ''; 
+    pagePhotos[photoIndex] = '';
 
     while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) {
       pagePhotos.pop();
@@ -658,6 +740,15 @@ export default function PhotoOrganizer({
 
     newPhotos[pageIndex] = pagePhotos;
     onPhotosChange(newPhotos);
+
+    // Limpiar la firma del slot eliminado para permitir re-subida sin falso positivo
+    const newSigs = [...fileSignatures];
+    if (newSigs[pageIndex]) {
+      const pageSigs = [...newSigs[pageIndex]];
+      pageSigs[photoIndex] = '';
+      newSigs[pageIndex] = pageSigs;
+      setFileSignatures(newSigs);
+    }
   };
 
   const handleMovePhotoWithinPage = (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => {
@@ -1179,6 +1270,44 @@ export default function PhotoOrganizer({
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
 
+  const renderDuplicateModal = () => {
+    if (!duplicateModal) return null;
+    return (
+      <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+          <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Foto repetida</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            La foto <strong className="text-gray-800">"{duplicateModal.file.name}"</strong> ya fue añadida anteriormente al álbum.
+          </p>
+          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6">
+            <img
+              src={duplicateModal.previewUrl}
+              className="w-full h-full object-contain"
+              alt="Foto duplicada"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={duplicateModal.onCancel}
+              className="flex-1 py-3 bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all"
+            >
+              Elegir otra
+            </button>
+            <button
+              onClick={duplicateModal.onConfirm}
+              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all"
+            >
+              Usar de todos modos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderLowResModal = () => {
     if (lowResImages.length === 0) return null;
     const remainingCount = lowResImages.length - currentLowResIndex;
@@ -1335,6 +1464,7 @@ export default function PhotoOrganizer({
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+        {renderDuplicateModal()}
         {renderLowResModal()}
         
         <div className="text-center mb-8">
@@ -1390,6 +1520,7 @@ export default function PhotoOrganizer({
     const maxP = getMaxPages(uploadedPhotos.length);
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+        {renderDuplicateModal()}
         {renderLowResModal()}
         
         <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
@@ -1456,6 +1587,7 @@ export default function PhotoOrganizer({
         </div>
       )}
 
+      {renderDuplicateModal()}
       {renderLowResModal()}
       {renderAdvancedSettingsModal()}
 

@@ -6,6 +6,7 @@ import { ImageIcon, RectangleVertical } from 'lucide-react';
 export interface CalendarCustomizationOptions {
   paperType: string;
   year: number;
+  startMonth: number; // 1-12
   type: 'desk' | 'wall';
   imagesPerMonth: 1 | 4;
 }
@@ -19,8 +20,18 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
   const { t } = useLanguage();
   const [paperType] = useState('Opalina'); // Fixed option
   const [year, setYear] = useState(2026);
+  const [startMonth, setStartMonth] = useState(1); // 1 = Enero
   const [type, setType] = useState<'desk' | 'wall'>('desk');
   const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
+
+  const MONTH_NAMES = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  // Calcula el mes y año de fin (11 meses después del inicio)
+  const endMonthIndex = (startMonth - 1 + 11) % 12;
+  const endYearActual = year + Math.floor((startMonth - 1 + 11) / 12);
 
   // Reset images per month if type is switched to desk
   useEffect(() => {
@@ -33,6 +44,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
     onCustomizationComplete({
       paperType,
       year,
+      startMonth,
       type,
       imagesPerMonth: type === 'wall' ? imagesPerMonth : 1,
     });
@@ -62,8 +74,8 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
                 )}
              </div>
              <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1 h-full w-full`}>
-                <div className="text-2xl font-bold">{year}</div>
-                <div className="text-[10px] uppercase tracking-widest text-gray-400">Calendar</div>
+                <div className="text-lg font-bold leading-tight text-center">{MONTH_NAMES[startMonth - 1]} {year}</div>
+                <div className="text-[9px] uppercase tracking-widest text-gray-400">hasta {MONTH_NAMES[endMonthIndex]} {endYearActual}</div>
                 {/* Mock grid */}
                 <div className="flex-1 grid grid-cols-7 gap-1 w-full mt-2 min-h-0">
                    {Array.from({ length: 35 }).map((_, i) => (
@@ -150,6 +162,29 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
               min="2024"
               max="2050"
             />
+          </div>
+        </div>
+
+        {/* Mes de Inicio */}
+        <div>
+          <h3 className="text-2xl mb-2 font-bold">Mes de inicio</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Tu calendario irá desde <strong>{MONTH_NAMES[startMonth - 1]} {year}</strong> hasta <strong>{MONTH_NAMES[endMonthIndex]} {endYearActual}</strong>.
+          </p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {MONTH_NAMES.map((name, idx) => (
+              <button
+                key={idx}
+                onClick={() => setStartMonth(idx + 1)}
+                className={`py-2.5 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                  startMonth === idx + 1
+                    ? 'bg-black text-white border-black'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-black'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
           </div>
         </div>
       </div>
