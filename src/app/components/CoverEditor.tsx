@@ -298,28 +298,28 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 
                 <div className="space-y-1 md:space-y-1.5">
                   <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
-                  <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="NUESTRA HISTORIA" />
+                  <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
                 </div>
 
                 {/* SOLO SE MUESTRA EL LOMO SI ES DE PAPEL */}
                 {coverType === 'Papel' && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo *</label>
-                    <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto lateral (lomo)" />
+                    <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto visible en el lomo" />
                   </div>
                 )}
 
                 {!( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción *</label>
-                    <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Un viaje inolvidable" />
+                    <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo o descripción breve" />
                   </div>
                 )}
 
                 {( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
-                    <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="2024" />
+                    <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Año o rango de fechas" />
                   </div>
                 )}
               </div>
