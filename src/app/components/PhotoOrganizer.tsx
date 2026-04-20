@@ -185,22 +185,20 @@ const AlbumEditorPhotoSlot: React.FC<{
             {textBox.text || t('organizer.addText') + '...'}
           </div>
           {isEditing && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity p-1 pb-2 sm:pb-1 z-20">
-              <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 w-full max-w-[95%] pointer-events-none">
-                {/* Handle de arrastre */}
-                <button
-                  onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
-                  className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
-                  title="Arrastrar para reordenar"
-                  style={{ touchAction: 'none' }}
-                >
-                  <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                </button>
-                {/* Grupo de acciones */}
-                <div className="flex gap-1 pointer-events-auto shrink-0">
-                  <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                  <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
-                </div>
+            <div className="absolute z-20 pointer-events-none bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0">
+              {/* Handle de arrastre */}
+              <button
+                onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
+                className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
+                title="Arrastrar para reordenar"
+                style={{ touchAction: 'none' }}
+              >
+                <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              </button>
+              {/* Grupo de acciones */}
+              <div className="flex gap-1 pointer-events-auto shrink-0">
+                <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
+                <button onClick={() => handleRemoveTextBox(pageIndex, photoIndex)} className="p-2 sm:p-1.5 bg-red-500 text-white hover:bg-red-600 shadow-md rounded-full" title="Eliminar"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
               </div>
             </div>
           )}
@@ -275,6 +273,16 @@ export default function PhotoOrganizer({
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
+  // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
+  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
+  const [duplicateModal, setDuplicateModal] = useState<{
+    file: File;
+    previewUrl: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+  const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [duplicateModal, setDuplicateModal] = useState<{
