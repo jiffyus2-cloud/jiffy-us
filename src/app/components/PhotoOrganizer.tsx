@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, Check,
-  GripVertical, Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
+  Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -127,8 +127,13 @@ const AlbumEditorPhotoSlot: React.FC<{
     >
       {photo ? (
         <>
-          {/* Contenido de la foto */}
-          <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
+          {/* Contenido de la foto — drag directo sobre la imagen */}
+          <div
+            ref={containerRef}
+            className={`${isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"} ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            onPointerDown={isEditing ? e => onDragStart(pageIndex, photoIndex, e) : undefined}
+            style={isEditing ? { touchAction: 'none', userSelect: 'none' } : undefined}
+          >
             <ImageCropper
               src={photo}
               position={crop || { x: 50, y: 50, zoom: 1 }}
@@ -142,15 +147,6 @@ const AlbumEditorPhotoSlot: React.FC<{
                 ? 'top-1 right-1 flex flex-col items-end gap-1'
                 : 'bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0'
             }`}>
-              {/* Handle de arrastre */}
-              <button
-                onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
-                className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
-                title="Arrastrar para reordenar"
-                style={{ touchAction: 'none' }}
-              >
-                <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-              </button>
               {/* Botones de acción */}
               <div className={`flex pointer-events-auto shrink-0 ${isCompact ? 'flex-col gap-1' : 'gap-1'}`}>
                 <button
@@ -171,6 +167,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       ) : textBox ? (
         <div className="w-full h-full flex flex-col items-center justify-center bg-white relative" style={{ containerType: 'inline-size' }}>
           <div
+            onPointerDown={isEditing ? e => onDragStart(pageIndex, photoIndex, e) : undefined}
             style={{
               width: '90%',
               fontSize: `${textBox.fontSize * 0.25}cqi`,
@@ -179,22 +176,14 @@ const AlbumEditorPhotoSlot: React.FC<{
               textAlign: 'center',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
-              lineHeight: '1.3'
+              lineHeight: '1.3',
+              ...(isEditing ? { touchAction: 'none', userSelect: 'none', cursor: 'grab' } : {})
             }}
           >
             {textBox.text || t('organizer.addText') + '...'}
           </div>
           {isEditing && (
             <div className="absolute z-20 pointer-events-none bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0">
-              {/* Handle de arrastre */}
-              <button
-                onPointerDown={e => onDragStart(pageIndex, photoIndex, e)}
-                className="pointer-events-auto p-2 sm:p-1.5 bg-white/90 hover:bg-white text-black shadow-sm rounded-full cursor-grab active:cursor-grabbing shrink-0"
-                title="Arrastrar para reordenar"
-                style={{ touchAction: 'none' }}
-              >
-                <GripVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-              </button>
               {/* Grupo de acciones */}
               <div className="flex gap-1 pointer-events-auto shrink-0">
                 <button onClick={() => setEditingTextSlot({ pageIndex, photoIndex })} className="p-2 sm:p-1.5 bg-white text-black hover:bg-gray-100 shadow-md rounded-full" title="Editar Texto"><Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
