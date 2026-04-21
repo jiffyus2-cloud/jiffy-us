@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload } from 'lucide-react';
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -10,11 +10,12 @@ import MugCustomization, { MugCustomizationOptions } from './MugCustomization';
 import MugOrganizer, { MugItem } from './MugOrganizer';
 import PhotoPackCustomization, { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
 import PhotoPackOrganizer from './PhotoPackOrganizer';
-import ProductDetailsModal from './ProductDetailsModal'; // <-- IMPORTAMOS EL MODAL
+import ProductDetailsModal from './ProductDetailsModal';
+import DraftPromptModal from './DraftPromptModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
-import { createDraftOrder, getOrder } from '../../services/orderService';
+import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft } from '../../services/orderService';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -76,12 +77,35 @@ export default function Creator() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
 
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<any[]>([]);
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSaveSuccess, setDraftSaveSuccess] = useState(false);
+
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
 
   // EFECTO PARA LLEVAR EL SCROLL SIEMPRE ARRIBA AL CAMBIAR DE PASO
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [currentStep, previewProduct]);
+
+  useEffect(() => {
+    const checkSavedDrafts = async () => {
+      if (!user) return;
+      if (selectedProduct) return;
+      try {
+        const drafts = await getUserSavedDrafts(user.uid);
+        if (drafts.length > 0) {
+          setSavedDrafts(drafts);
+          setShowDraftPrompt(true);
+        }
+      } catch (e) {
+        console.error('Error checking saved drafts', e);
+      }
+    };
+    checkSavedDrafts();
+  }, [user]);
 
   const handleCheckoutRedirect = async (finalData?: { 
     photos?: string[][] | string[], 
@@ -140,8 +164,9 @@ export default function Creator() {
 
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
-      }, resumingOrderId || undefined, selectedProduct || undefined);
+      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined);
 
+      setActiveDraftId(null);
       setResumingOrderId(null);
       navigate('/checkout', {
         state: {
@@ -239,6 +264,41 @@ export default function Creator() {
     const restoreState = async () => {
       const state = location.state as any;
 
+      if (state?.resumeSavedDraft && !selectedProduct) {
+        try {
+          const order = await getOrder(state.resumeSavedDraft) as any;
+          if (order && order.status === 'saved_draft') {
+            const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
+            let detectedType: ProductType = 'album';
+            if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
+            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
+            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
+
+            const photos = detectedType === 'album'
+              ? (order.pages?.map((p: any) => p.images || []) || [])
+              : (order.photos || []);
+
+            const designData = {
+              photos,
+              photoCrops: order.photoCrops || {},
+              textBoxSlots: order.textBoxSlots || {},
+              pageLayouts: order.pageLayouts || {},
+              pageLayoutVariants: order.pageLayoutVariants || {},
+              customization: order.customization,
+              coverData: order.coverData,
+              items: order.items || order.mugItems || [],
+              mugItems: order.items || order.mugItems || [],
+            };
+
+            restoreDesignToState(designData, order.product, detectedType);
+            setActiveDraftId(state.resumeSavedDraft);
+          }
+        } catch (e) {
+          console.error('Error restaurando saved draft', e);
+        }
+        return;
+      }
+
       if (state?.fromCheckout && state?.orderId && !selectedProduct) {
         try {
           const order = await getOrder(state.orderId) as any;
@@ -297,6 +357,133 @@ export default function Creator() {
 
     restoreState();
   }, [location.state, selectedProduct, user]);
+
+  const handleSaveDraft = async () => {
+    if (!user) return;
+    if (currentStep === 'product' || currentStep === 'checkout') return;
+
+    try {
+      const currentDrafts = await getUserSavedDrafts(user.uid);
+      const isUpdatingExisting = activeDraftId !== null;
+      if (!isUpdatingExisting && currentDrafts.length >= 3) {
+        alert(t('draft.limitReached'));
+        return;
+      }
+
+      setIsSavingDraft(true);
+
+      const activeProduct = getActiveProduct();
+      const activeCustomization = getActiveCustomization();
+
+      let coverData: any = { image: '', title: '' };
+      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
+        const content = (activeCustomization as any).coverContent;
+        coverData = {
+          image: content.coverImage || '',
+          title: content.coverTitle || '',
+          subtitle: content.coverSubtitle || '',
+          year: content.coverYear || '',
+          layout: content.selectedLayout || 1,
+          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
+        };
+      } else if (activeProduct) {
+        coverData = { image: '', title: activeProduct.name };
+      }
+
+      const activePhotoCrops = selectedProduct === 'album' ? photoCrops
+                             : selectedProduct === 'calendar' ? calendarPhotoCrops
+                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
+                             : {};
+
+      const currentMugItems = selectedProduct === 'mug' ? mugItems : [];
+
+      const designData = {
+        photos: getActivePhotos(),
+        pageLayouts,
+        pageLayoutVariants,
+        textBoxSlots,
+        customization: activeCustomization,
+        coverData,
+        photoCrops: activePhotoCrops,
+        items: currentMugItems,
+        mugItems: currentMugItems,
+      };
+
+      const newDraftId = await createDraftOrder(
+        user.uid,
+        designData,
+        activeProduct,
+        undefined,
+        activeDraftId || undefined,
+        selectedProduct || undefined,
+        'saved_draft'
+      );
+
+      setActiveDraftId(newDraftId);
+      setSavedDrafts(prev => {
+        const exists = prev.find(d => d.id === newDraftId);
+        if (exists) {
+          return prev.map(d => d.id === newDraftId ? { ...d, updatedAt: new Date().toISOString() } : d);
+        }
+        return [...prev, { id: newDraftId, updatedAt: new Date().toISOString() }];
+      });
+
+      setDraftSaveSuccess(true);
+      setTimeout(() => setDraftSaveSuccess(false), 2500);
+
+    } catch (e) {
+      console.error('Error saving draft', e);
+      alert(t('error.savingDraft'));
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleContinueDraft = (draft: any) => {
+    setShowDraftPrompt(false);
+
+    const productTypeStr = String(draft.productType || draft.product?.type || draft.product?.id || draft.product?.name || '').toLowerCase();
+    let detectedType: ProductType = 'album';
+    if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
+    else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
+    else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
+
+    const photos = detectedType === 'album'
+      ? (draft.pages?.map((p: any) => p.images || []) || [])
+      : (draft.photos || []);
+
+    const designData = {
+      photos,
+      photoCrops: draft.photoCrops || {},
+      textBoxSlots: draft.textBoxSlots || {},
+      pageLayouts: draft.pageLayouts || {},
+      pageLayoutVariants: draft.pageLayoutVariants || {},
+      customization: draft.customization,
+      coverData: draft.coverData,
+      items: draft.items || draft.mugItems || [],
+      mugItems: draft.items || draft.mugItems || [],
+    };
+
+    restoreDesignToState(designData, draft.product, detectedType);
+    setActiveDraftId(draft.id);
+  };
+
+  const handleStartNew = () => {
+    setShowDraftPrompt(false);
+    setActiveDraftId(null);
+  };
+
+  const handleDeleteDraftFromModal = async (draftId: string) => {
+    try {
+      await deleteSavedDraft(draftId);
+      const updated = savedDrafts.filter(d => d.id !== draftId);
+      setSavedDrafts(updated);
+      if (updated.length === 0) setShowDraftPrompt(false);
+      if (activeDraftId === draftId) setActiveDraftId(null);
+    } catch (e) {
+      console.error('Error deleting draft', e);
+    }
+  };
 
   const handleSelectProduct = (product: ProductType) => {
     setSelectedProduct(product);
@@ -541,6 +728,25 @@ export default function Creator() {
               {t('step.step')} {activeStepIndex + 1} {t('step.of')} {progressSteps.length}
             </div>
           )}
+
+          {user && currentStep !== 'product' && currentStep !== 'checkout' && (
+            <button
+              onClick={handleSaveDraft}
+              disabled={isSavingDraft}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-black border border-gray-200 hover:border-gray-400 rounded-lg transition-all disabled:opacity-50"
+            >
+              {isSavingDraft ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : draftSaveSuccess ? (
+                <Check className="w-4 h-4 text-green-600" />
+              ) : (
+                <BookMarked className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">
+                {isSavingDraft ? t('common.saving') : draftSaveSuccess ? t('draft.saved') : t('draft.saveDraft')}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -652,6 +858,14 @@ export default function Creator() {
           }
           setPreviewProduct(null);
         }}
+      />
+
+      <DraftPromptModal
+        isOpen={showDraftPrompt}
+        drafts={savedDrafts}
+        onContinue={handleContinueDraft}
+        onStartNew={handleStartNew}
+        onDeleteDraft={handleDeleteDraftFromModal}
       />
 
     </div>

@@ -1,5 +1,5 @@
 import { db, storage } from '../lib/firebase';
-import { collection, addDoc, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 export const sanitizeForFirestore = (obj: any): any => {
@@ -50,7 +50,8 @@ export async function createDraftOrder(
   product: any,
   onProgress?: (progress: number) => void,
   existingOrderId?: string,
-  productType?: string
+  productType?: string,
+  status: 'draft' | 'saved_draft' = 'draft'
 ) {
   const orderRef = existingOrderId
     ? doc(db, 'orders', existingOrderId)
@@ -195,7 +196,7 @@ export async function createDraftOrder(
   const orderPayload = {
     id: orderId,
     userId,
-    status: 'draft',
+    status,
     product,
     productType: productType || productString,
     total: 0,
@@ -261,6 +262,27 @@ export async function getUserOrders(userId: string) {
   });
 
   return orders;
+}
+
+export async function getUserSavedDrafts(userId: string) {
+  const ordersRef = collection(db, 'orders');
+  const q = query(
+    ordersRef,
+    where('userId', '==', userId),
+    where('status', '==', 'saved_draft'),
+    orderBy('updatedAt', 'desc')
+  );
+  const querySnapshot = await getDocs(q);
+  const drafts: any[] = [];
+  querySnapshot.forEach((doc) => {
+    drafts.push({ id: doc.id, ...doc.data() });
+  });
+  return drafts;
+}
+
+export async function deleteSavedDraft(draftId: string): Promise<void> {
+  const docRef = doc(db, 'orders', draftId);
+  await deleteDoc(docRef);
 }
 
 export async function saveCompleteOrder(
