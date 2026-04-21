@@ -82,6 +82,7 @@ export default function Creator() {
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSaveSuccess, setDraftSaveSuccess] = useState(false);
+  const [showDraftHint, setShowDraftHint] = useState(false);
 
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
 
@@ -89,6 +90,13 @@ export default function Creator() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [currentStep, previewProduct]);
+
+  useEffect(() => {
+    if (currentStep === 'customization' && user) {
+      const seen = localStorage.getItem('jiffy_draft_hint_seen');
+      if (!seen) setShowDraftHint(true);
+    }
+  }, [currentStep, user]);
 
   useEffect(() => {
     const checkSavedDrafts = async () => {
@@ -473,6 +481,11 @@ export default function Creator() {
     setActiveDraftId(null);
   };
 
+  const handleDismissDraftHint = () => {
+    setShowDraftHint(false);
+    localStorage.setItem('jiffy_draft_hint_seen', '1');
+  };
+
   const handleDeleteDraftFromModal = async (draftId: string) => {
     try {
       await deleteSavedDraft(draftId);
@@ -730,22 +743,50 @@ export default function Creator() {
           )}
 
           {user && currentStep !== 'product' && currentStep !== 'checkout' && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={isSavingDraft}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-black border border-gray-200 hover:border-gray-400 rounded-lg transition-all disabled:opacity-50"
-            >
-              {isSavingDraft ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : draftSaveSuccess ? (
-                <Check className="w-4 h-4 text-green-600" />
-              ) : (
-                <BookMarked className="w-4 h-4" />
+            <div className="relative">
+              <button
+                onClick={handleSaveDraft}
+                disabled={isSavingDraft}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-black border rounded-lg transition-all disabled:opacity-50 ${
+                  showDraftHint
+                    ? 'border-black bg-black text-white hover:text-white ring-4 ring-black/20 animate-pulse'
+                    : 'border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {isSavingDraft ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : draftSaveSuccess ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <BookMarked className={`w-4 h-4 ${showDraftHint ? 'text-white' : ''}`} />
+                )}
+                <span className="hidden sm:inline">
+                  {isSavingDraft ? t('common.saving') : draftSaveSuccess ? t('draft.saved') : t('draft.saveDraft')}
+                </span>
+              </button>
+
+              {showDraftHint && (
+                <div className="absolute right-0 top-full mt-3 w-72 bg-gray-900 text-white rounded-2xl shadow-2xl p-4 z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
+                  {/* Arrow pointing up-right */}
+                  <div className="absolute -top-2 right-4 w-4 h-4 bg-gray-900 rotate-45 rounded-sm" />
+                  <div className="flex items-start gap-3">
+                    <div className="bg-white/10 p-2 rounded-xl flex-shrink-0 mt-0.5">
+                      <BookMarked className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm leading-snug">{t('draft.hintTitle')}</p>
+                      <p className="text-xs text-gray-300 mt-1 leading-relaxed">{t('draft.hintBody')}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDismissDraftHint}
+                    className="mt-3 w-full py-2 bg-white text-gray-900 text-sm font-bold rounded-xl hover:bg-gray-100 transition-colors"
+                  >
+                    {t('draft.hintDismiss')}
+                  </button>
+                </div>
               )}
-              <span className="hidden sm:inline">
-                {isSavingDraft ? t('common.saving') : draftSaveSuccess ? t('draft.saved') : t('draft.saveDraft')}
-              </span>
-            </button>
+            </div>
           )}
         </div>
       </div>
@@ -867,6 +908,13 @@ export default function Creator() {
         onStartNew={handleStartNew}
         onDeleteDraft={handleDeleteDraftFromModal}
       />
+
+      {showDraftHint && (
+        <div
+          className="fixed inset-0 z-[40] bg-black/40 backdrop-blur-[1px]"
+          onClick={handleDismissDraftHint}
+        />
+      )}
 
     </div>
   );
