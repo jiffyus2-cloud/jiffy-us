@@ -218,7 +218,11 @@ const UserDashboard: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${
+              savedDrafts.length === 1 ? 'md:grid-cols-1 md:max-w-sm' :
+              savedDrafts.length === 2 ? 'md:grid-cols-2' :
+              'md:grid-cols-3'
+            }`}>
               {savedDrafts.map((draft) => {
                 const productString = String(draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || '').toLowerCase();
                 const isCalendar = productString.includes('calendar') || productString.includes('calendario');
