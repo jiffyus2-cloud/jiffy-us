@@ -274,9 +274,9 @@ export default function LandingPage() {
           </p>
 
           <div className={DESIGN.layout.grid}>
-            {/* Photo Album - Large */}
-            <div className={`md:col-span-2 md:row-span-2 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
-              <div className="relative h-72 md:h-full">
+            {/* Photo Album */}
+            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className="relative h-72">
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
