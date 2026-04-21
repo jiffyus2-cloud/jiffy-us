@@ -288,6 +288,22 @@ const translations = {
     'dashboard.product': 'Product',
     'dashboard.totalPages': 'Total Pages',
 
+    // Draft saving
+    'draft.saveDraft': 'Save Draft',
+    'draft.saved': 'Saved!',
+    'draft.sectionTitle': 'Saved Drafts',
+    'draft.sectionSubtitle': '{count} of {max} drafts used',
+    'draft.continueEditing': 'Continue Editing',
+    'draft.delete': 'Delete Draft',
+    'draft.limitWarning': 'Draft limit reached',
+    'draft.limitReached': 'You have reached the maximum of 3 drafts. Delete one to continue.',
+    'draft.modalTitle': 'You have saved drafts',
+    'draft.modalSubtitle': 'Continue a draft or start a new creation?',
+    'draft.modalContinue': 'Continue',
+    'draft.modalStartNew': 'Start New',
+    'draft.savedOn': 'Saved on {date}',
+    'error.savingDraft': 'Error saving draft. Please try again.',
+
     // Statuses
     'status.paid': 'Paid / In Production',
     'status.pending_payment': 'Pending Payment',
@@ -637,6 +653,22 @@ const translations = {
     'dashboard.total': 'Total',
     'dashboard.product': 'Producto',
     'dashboard.totalPages': 'Total Páginas',
+
+    // Draft saving
+    'draft.saveDraft': 'Guardar borrador',
+    'draft.saved': '¡Guardado!',
+    'draft.sectionTitle': 'Borradores guardados',
+    'draft.sectionSubtitle': '{count} de {max} borradores usados',
+    'draft.continueEditing': 'Continuar editando',
+    'draft.delete': 'Eliminar borrador',
+    'draft.limitWarning': 'Límite de borradores alcanzado',
+    'draft.limitReached': 'Has alcanzado el límite máximo de 3 borradores. Elimina uno para continuar.',
+    'draft.modalTitle': 'Tienes borradores guardados',
+    'draft.modalSubtitle': '¿Quieres continuar uno de tus borradores o empezar una nueva creación?',
+    'draft.modalContinue': 'Continuar',
+    'draft.modalStartNew': 'Empezar nuevo',
+    'draft.savedOn': 'Guardado el {date}',
+    'error.savingDraft': 'Error al guardar el borrador. Intenta de nuevo.',
 
     // Statuses
     'status.paid': 'Pagado / En Producción',
