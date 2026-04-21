@@ -302,6 +302,9 @@ const translations = {
     'draft.modalContinue': 'Continue',
     'draft.modalStartNew': 'Start New',
     'draft.savedOn': 'Saved on {date}',
+    'draft.hintTitle': 'Save your progress anytime!',
+    'draft.hintBody': 'Use this button to save your design as a draft. You can pick it up right where you left off from your dashboard.',
+    'draft.hintDismiss': 'Got it!',
     'error.savingDraft': 'Error saving draft. Please try again.',
 
     // Statuses
@@ -668,6 +671,9 @@ const translations = {
     'draft.modalContinue': 'Continuar',
     'draft.modalStartNew': 'Empezar nuevo',
     'draft.savedOn': 'Guardado el {date}',
+    'draft.hintTitle': '¡Guarda tu progreso cuando quieras!',
+    'draft.hintBody': 'Usa este botón para guardar tu diseño como borrador en cualquier momento. Puedes retomarlo desde tu perfil cuando quieras.',
+    'draft.hintDismiss': '¡Entendido!',
     'error.savingDraft': 'Error al guardar el borrador. Intenta de nuevo.',
 
     // Statuses
