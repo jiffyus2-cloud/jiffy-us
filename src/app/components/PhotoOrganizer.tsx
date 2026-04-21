@@ -251,6 +251,8 @@ export default function PhotoOrganizer({
   } | null>(null);
   const [selectedTargetPage, setSelectedTargetPage] = useState<number>(0);
 
+  const [deletePageConfirm, setDeletePageConfirm] = useState<{ pageIndex: number; photoCount: number; companionIndex: number | null; companionPhotoCount: number } | null>(null);
+
   // NUEVO ESTADO PARA EL MODAL DE PÁGINAS VACÍAS
   const [emptyPagesModalData, setEmptyPagesModalData] = useState<{
     indices: number[];
@@ -699,6 +701,21 @@ export default function PhotoOrganizer({
     newPhotos.splice(index + 1, 0, [], []);
     onPhotosChange(newPhotos);
     setNumPages(newPhotos.length);
+
+    // Shift pageLayouts and pageLayoutVariants for all pages after the insertion point
+    const insertAt = index + 1;
+    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
+    const newVariants: Record<number, number> = {};
+    for (const key of Object.keys(pageLayouts)) {
+      const k = Number(key);
+      newLayouts[k < insertAt ? k : k + 2] = pageLayouts[k];
+    }
+    for (const key of Object.keys(pageLayoutVariants)) {
+      const k = Number(key);
+      newVariants[k < insertAt ? k : k + 2] = pageLayoutVariants[k];
+    }
+    onPageLayoutsChange(newLayouts);
+    onPageLayoutVariantsChange(newVariants);
   };
 
   const handleDeletePage = (index: number) => {
@@ -706,15 +723,40 @@ export default function PhotoOrganizer({
       alert(t('organizer.minPagesReached') || 'Minimum of 40 pages required.');
       return;
     }
+    const photoCount = (photos[index] || []).filter(p => p && p.trim() !== '').length;
+    const willDeleteCompanion = photos.length > 41;
+    const companionIndex = willDeleteCompanion ? index + 1 : null;
+    const companionPhotoCount = companionIndex !== null
+      ? (photos[companionIndex] || []).filter(p => p && p.trim() !== '').length
+      : 0;
+    setDeletePageConfirm({ pageIndex: index, photoCount, companionIndex, companionPhotoCount });
+  };
+
+  const executeDeletePage = (index: number) => {
     const newPhotos = [...photos];
-    if (newPhotos.length > 41) {
-      newPhotos.splice(index, 2);
-    } else {
-      newPhotos.splice(index, 1);
-    }
+    const deleteCount = newPhotos.length > 41 ? 2 : 1;
+    newPhotos.splice(index, deleteCount);
     onPhotosChange(newPhotos);
     setNumPages(newPhotos.length);
     setEditingPageIndex(null);
+    setAdvancedSettingsModal(null);
+    setDeletePageConfirm(null);
+
+    // Remove deleted indices and shift remaining ones down
+    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
+    const newVariants: Record<number, number> = {};
+    for (const key of Object.keys(pageLayouts)) {
+      const k = Number(key);
+      if (k < index) newLayouts[k] = pageLayouts[k];
+      else if (k >= index + deleteCount) newLayouts[k - deleteCount] = pageLayouts[k];
+    }
+    for (const key of Object.keys(pageLayoutVariants)) {
+      const k = Number(key);
+      if (k < index) newVariants[k] = pageLayoutVariants[k];
+      else if (k >= index + deleteCount) newVariants[k - deleteCount] = pageLayoutVariants[k];
+    }
+    onPageLayoutsChange(newLayouts);
+    onPageLayoutVariantsChange(newVariants);
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
@@ -725,6 +767,22 @@ export default function PhotoOrganizer({
     [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
     onPhotosChange(newPhotos);
     setEditingPageIndex(targetIndex);
+
+    // Swap pageLayouts and pageLayoutVariants for the two pages
+    const newLayouts = { ...pageLayouts };
+    const newVariants = { ...pageLayoutVariants };
+    const tempLayout = newLayouts[index];
+    if (newLayouts[targetIndex] !== undefined) newLayouts[index] = newLayouts[targetIndex];
+    else delete newLayouts[index];
+    if (tempLayout !== undefined) newLayouts[targetIndex] = tempLayout;
+    else delete newLayouts[targetIndex];
+    const tempVariant = newVariants[index];
+    if (newVariants[targetIndex] !== undefined) newVariants[index] = newVariants[targetIndex];
+    else delete newVariants[index];
+    if (tempVariant !== undefined) newVariants[targetIndex] = tempVariant;
+    else delete newVariants[targetIndex];
+    onPageLayoutsChange(newLayouts);
+    onPageLayoutVariantsChange(newVariants);
   };
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
@@ -1445,7 +1503,7 @@ export default function PhotoOrganizer({
                   </div>
                   
                   <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
-                  <button onClick={() => { handleDeletePage(pageIndex); setAdvancedSettingsModal(null); }} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>
+                  <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>
                 </div>
               </div>
               
@@ -1656,6 +1714,61 @@ export default function PhotoOrganizer({
 
             <div className="mt-6 flex justify-end">
                <button onClick={() => setEmptyPagesModalData(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-black">Volver a editar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE PÁGINA */}
+      {deletePageConfirm && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Eliminar página {deletePageConfirm.pageIndex + 1}</h3>
+                <p className="text-sm text-gray-500">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {deletePageConfirm.pageIndex + 1}</p>
+                <p className="text-sm text-red-700">
+                  {deletePageConfirm.photoCount > 0
+                    ? <>Contiene <span className="font-bold">{deletePageConfirm.photoCount} foto{deletePageConfirm.photoCount !== 1 ? 's' : ''}</span> que se perderán permanentemente.</>
+                    : 'Página vacía — sin fotos.'}
+                </p>
+              </div>
+
+              {deletePageConfirm.companionIndex !== null && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {deletePageConfirm.companionIndex + 1} (compañera)</p>
+                  <p className="text-sm text-red-700">
+                    Los álbumes requieren páginas en pares, por lo que esta página también será eliminada.{' '}
+                    {deletePageConfirm.companionPhotoCount > 0
+                      ? <><span className="font-bold">{deletePageConfirm.companionPhotoCount} foto{deletePageConfirm.companionPhotoCount !== 1 ? 's' : ''}</span> se perderán permanentemente.</>
+                      : 'No tiene fotos.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletePageConfirm(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600 hover:border-gray-400 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => executeDeletePage(deletePageConfirm.pageIndex)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all"
+              >
+                Eliminar página
+              </button>
             </div>
           </div>
         </div>
