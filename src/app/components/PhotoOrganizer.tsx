@@ -264,6 +264,8 @@ export default function PhotoOrganizer({
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
+  const dragPageStateRef = useRef<{ fromIndex: number; toIndex: number | null } | null>(null);
+  const [dragPageVisual, setDragPageVisual] = useState<{ fromIndex: number; toIndex: number | null } | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [duplicateModal, setDuplicateModal] = useState<{
@@ -774,6 +776,63 @@ export default function PhotoOrganizer({
     onPageLayoutVariantsChange(newVariants);
   };
 
+  const handleMovePageToIndex = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const pageCount = photos.length;
+
+    const newPhotos = [...photos];
+    const [movedPage] = newPhotos.splice(fromIndex, 1);
+    newPhotos.splice(toIndex, 0, movedPage);
+    onPhotosChange(newPhotos);
+    setEditingPageIndex(toIndex);
+
+    const layoutsArr = Array.from({ length: pageCount }, (_, i) => pageLayouts[i]);
+    const [movedLayout] = layoutsArr.splice(fromIndex, 1);
+    layoutsArr.splice(toIndex, 0, movedLayout);
+    const newLayouts: Record<number, string> = {};
+    layoutsArr.forEach((v, i) => { if (v !== undefined) newLayouts[i] = v; });
+    onPageLayoutsChange(newLayouts);
+
+    const variantsArr = Array.from({ length: pageCount }, (_, i) => pageLayoutVariants[i]);
+    const [movedVariant] = variantsArr.splice(fromIndex, 1);
+    variantsArr.splice(toIndex, 0, movedVariant);
+    const newVariants: Record<number, number> = {};
+    variantsArr.forEach((v, i) => { if (v !== undefined) newVariants[i] = v; });
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const handlePageDragStart = useCallback((fromIndex: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    dragPageStateRef.current = { fromIndex, toIndex: null };
+    setDragPageVisual({ fromIndex, toIndex: null });
+
+    const onMove = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = el?.closest('[data-page-order-slot]') as HTMLElement | null;
+      if (slot) {
+        const idx = parseInt(slot.dataset.pageOrderIndex ?? '-1');
+        if (idx !== -1) {
+          if (dragPageStateRef.current) dragPageStateRef.current.toIndex = idx;
+          setDragPageVisual(prev => prev ? { ...prev, toIndex: idx } : null);
+        }
+      }
+    };
+
+    const onUp = () => {
+      const state = dragPageStateRef.current;
+      if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
+        handleMovePageToIndex(state.fromIndex, state.toIndex);
+      }
+      dragPageStateRef.current = null;
+      setDragPageVisual(null);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }, [photos, pageLayouts, pageLayoutVariants]);
+
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
     const pagePhotos = [...newPhotos[pageIndex]];
@@ -870,6 +929,7 @@ export default function PhotoOrganizer({
 
   const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     dragStateRef.current = { pageIndex, fromIndex: photoIndex, toIndex: null };
     setDragVisual({ pageIndex, fromIndex: photoIndex, toIndex: null });
 
@@ -1856,7 +1916,12 @@ export default function PhotoOrganizer({
 
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
         {safePhotos.map((pagePhotos, pageIndex) => (
-          <div key={pageIndex} className="relative group flex flex-col">
+          <div
+            key={pageIndex}
+            data-page-order-slot
+            data-page-order-index={pageIndex}
+            className={`relative group flex flex-col transition-opacity ${dragPageVisual && dragPageVisual.fromIndex === pageIndex ? 'opacity-40' : ''}`}
+          >
             <div className="flex items-center justify-between mb-4 h-10 md:h-12">
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página {pageIndex + 1}</span>
               <div className="flex gap-2">
@@ -1865,7 +1930,11 @@ export default function PhotoOrganizer({
               </div>
             </div>
 
-            <div className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'}`} style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
+            <div
+              className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center cursor-grab active:cursor-grabbing ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'} ${dragPageVisual && dragPageVisual.toIndex === pageIndex && dragPageVisual.fromIndex !== pageIndex ? 'ring-2 ring-black ring-offset-2' : ''}`}
+              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', touchAction: 'none', userSelect: 'none' }}
+              onPointerDown={e => handlePageDragStart(pageIndex, e)}
+            >
               {(() => {
                 const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
                 const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
