@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
-  Image as ImageIcon, Grid3x3, Edit3,
+  Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
@@ -266,6 +266,7 @@ export default function PhotoOrganizer({
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
   const [reorderTargetPage, setReorderTargetPage] = useState<number | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
@@ -1843,6 +1844,55 @@ export default function PhotoOrganizer({
         </div>
       )}
 
+      {/* MODAL DE AYUDA */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold">Cómo organizar tu álbum</h3>
+              <button onClick={() => setShowHelpModal(false)} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-5 text-sm text-gray-700">
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 text-base">↕</div>
+                <div>
+                  <p className="font-bold text-black mb-1">Reordenar páginas</p>
+                  <p>Mantén presionada una página <span className="font-semibold">1 segundo</span> hasta que vibre. La página queda seleccionada. Luego toca otra página y elige <span className="font-semibold">Intercambiar</span> (las dos páginas se cambian de lugar) o <span className="font-semibold">Insertar aquí</span> (la página se mueve a esa posición desplazando las demás).</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="font-bold text-black mb-1">Editar fotos de una página</p>
+                  <p>Toca el botón <span className="font-semibold">Ajustes</span> de cualquier página para abrir el panel de edición: añade, elimina o recorta fotos, cambia el diseño y el número de imágenes por página.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 text-base">⇄</div>
+                <div>
+                  <p className="font-bold text-black mb-1">Mover fotos dentro de una página</p>
+                  <p>Dentro del panel de ajustes, <span className="font-semibold">toca y arrastra</span> cualquier foto para cambiar su posición con otra dentro de la misma página.</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowHelpModal(false)}
+              className="mt-6 w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE CONFLICTOS DE LAYOUT */}
       {layoutChangeModal && (
         <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1911,20 +1961,36 @@ export default function PhotoOrganizer({
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div><h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2><p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p></div>
-        <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">{t('organizer.complete')}</button>
-      </div>
-
-      {/* Banner de modo reordenamiento — sticky, fuera del grid para no alterar el orden */}
-      {reorderSelectedPage !== null && (
-        <div className="sticky top-0 z-50 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-xl mb-4">
-          <span>📌 Pág. {reorderSelectedPage + 1} seleccionada — toca otra para moverla</span>
-          <button onClick={exitReorderMode} className="ml-3 p-0.5 hover:bg-white/20 rounded-full transition-colors flex-shrink-0">
-            <X className="w-3.5 h-3.5" />
-          </button>
+      <div className="flex flex-col mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
+            <p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="p-2 rounded-full border-2 border-gray-200 hover:border-black text-gray-400 hover:text-black transition-all"
+              title="Ayuda"
+            >
+              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">
+              {t('organizer.complete')}
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Banner de modo reordenamiento — dentro del bloque sticky, debajo del botón de confirmar */}
+        {reorderSelectedPage !== null && (
+          <div className="mt-2 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-inner">
+            <span>📌 Pág. {reorderSelectedPage + 1} seleccionada — toca otra página para moverla</span>
+            <button onClick={exitReorderMode} className="ml-3 p-0.5 hover:bg-white/20 rounded-full transition-colors flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16">
         
