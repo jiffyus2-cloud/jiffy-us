@@ -1916,6 +1916,16 @@ export default function PhotoOrganizer({
         <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">{t('organizer.complete')}</button>
       </div>
 
+      {/* Banner de modo reordenamiento — sticky, fuera del grid para no alterar el orden */}
+      {reorderSelectedPage !== null && (
+        <div className="sticky top-0 z-50 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-xl mb-4">
+          <span>📌 Pág. {reorderSelectedPage + 1} seleccionada — toca otra para moverla</span>
+          <button onClick={exitReorderMode} className="ml-3 p-0.5 hover:bg-white/20 rounded-full transition-colors flex-shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16">
         
         {/* CUADRO 1: Interior de la Portada Principal */}
@@ -1935,17 +1945,6 @@ export default function PhotoOrganizer({
         </div>
 
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
-
-        {/* Banner de modo reordenamiento */}
-        {reorderSelectedPage !== null && (
-          <div className="col-span-full flex items-center justify-between bg-black text-white rounded-xl px-4 py-3 text-sm font-bold shadow-lg -mb-2">
-            <span>Página {reorderSelectedPage + 1} seleccionada — toca otra página</span>
-            <button onClick={exitReorderMode} className="ml-4 p-1 hover:bg-white/20 rounded-full transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
         {safePhotos.map((pagePhotos, pageIndex) => {
           const isReorderMode = reorderSelectedPage !== null;
           const isSelected = reorderSelectedPage === pageIndex;
