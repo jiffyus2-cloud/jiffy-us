@@ -802,11 +802,35 @@ export default function PhotoOrganizer({
   };
 
   const handlePageDragStart = useCallback((fromIndex: number, e: React.PointerEvent) => {
-    e.preventDefault();
-    dragPageStateRef.current = { fromIndex, toIndex: null };
-    setDragPageVisual({ fromIndex, toIndex: null });
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const pointerId = e.pointerId;
+    const target = e.currentTarget as HTMLElement;
+    let dragActive = false;
+
+    const activate = () => {
+      dragActive = true;
+      target.setPointerCapture(pointerId);
+      dragPageStateRef.current = { fromIndex, toIndex: null };
+      setDragPageVisual({ fromIndex, toIndex: null });
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (dragActive && target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+      dragPageStateRef.current = null;
+      setDragPageVisual(null);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', cleanup);
+    };
 
     const onMove = (ev: PointerEvent) => {
+      if (!dragActive) {
+        // Cancela el long-press si el dedo se mueve antes de los 500ms (scroll)
+        if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) cleanup();
+        return;
+      }
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const slot = el?.closest('[data-page-order-slot]') as HTMLElement | null;
       if (slot) {
@@ -819,18 +843,20 @@ export default function PhotoOrganizer({
     };
 
     const onUp = () => {
-      const state = dragPageStateRef.current;
-      if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
-        handleMovePageToIndex(state.fromIndex, state.toIndex);
+      if (dragActive) {
+        const state = dragPageStateRef.current;
+        if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
+          handleMovePageToIndex(state.fromIndex, state.toIndex);
+        }
       }
-      dragPageStateRef.current = null;
-      setDragPageVisual(null);
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
+      cleanup();
     };
+
+    const timer = setTimeout(activate, 500);
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', cleanup);
   }, [photos, pageLayouts, pageLayoutVariants]);
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
@@ -1932,7 +1958,7 @@ export default function PhotoOrganizer({
 
             <div
               className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center cursor-grab active:cursor-grabbing ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'} ${dragPageVisual && dragPageVisual.toIndex === pageIndex && dragPageVisual.fromIndex !== pageIndex ? 'ring-2 ring-black ring-offset-2' : ''}`}
-              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', touchAction: 'none', userSelect: 'none' }}
+              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', userSelect: 'none' }}
               onPointerDown={e => handlePageDragStart(pageIndex, e)}
             >
               {(() => {
