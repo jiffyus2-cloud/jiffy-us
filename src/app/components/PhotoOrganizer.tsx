@@ -264,8 +264,9 @@ export default function PhotoOrganizer({
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
-  const dragPageStateRef = useRef<{ fromIndex: number; toIndex: number | null } | null>(null);
-  const [dragPageVisual, setDragPageVisual] = useState<{ fromIndex: number; toIndex: number | null } | null>(null);
+  const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
+  const [reorderTargetPage, setReorderTargetPage] = useState<number | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [duplicateModal, setDuplicateModal] = useState<{
@@ -789,8 +790,8 @@ export default function PhotoOrganizer({
     const layoutsArr = Array.from({ length: pageCount }, (_, i) => pageLayouts[i]);
     const [movedLayout] = layoutsArr.splice(fromIndex, 1);
     layoutsArr.splice(toIndex, 0, movedLayout);
-    const newLayouts: Record<number, string> = {};
-    layoutsArr.forEach((v, i) => { if (v !== undefined) newLayouts[i] = v; });
+    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
+    layoutsArr.forEach((v, i) => { if (v !== undefined) newLayouts[i] = v as 'grid' | 'row' | 'column'; });
     onPageLayoutsChange(newLayouts);
 
     const variantsArr = Array.from({ length: pageCount }, (_, i) => pageLayoutVariants[i]);
@@ -801,63 +802,56 @@ export default function PhotoOrganizer({
     onPageLayoutVariantsChange(newVariants);
   };
 
-  const handlePageDragStart = useCallback((fromIndex: number, e: React.PointerEvent) => {
+  const handleSwapTwoPages = (a: number, b: number) => {
+    if (a === b) return;
+    const newPhotos = [...photos];
+    [newPhotos[a], newPhotos[b]] = [newPhotos[b], newPhotos[a]];
+    onPhotosChange(newPhotos);
+
+    const newLayouts = { ...pageLayouts } as Record<number, 'grid' | 'row' | 'column'>;
+    const tempLayout = newLayouts[a];
+    if (newLayouts[b] !== undefined) newLayouts[a] = newLayouts[b]; else delete newLayouts[a];
+    if (tempLayout !== undefined) newLayouts[b] = tempLayout; else delete newLayouts[b];
+    onPageLayoutsChange(newLayouts);
+
+    const newVariants = { ...pageLayoutVariants };
+    const tempVariant = newVariants[a];
+    if (newVariants[b] !== undefined) newVariants[a] = newVariants[b]; else delete newVariants[a];
+    if (tempVariant !== undefined) newVariants[b] = tempVariant; else delete newVariants[b];
+    onPageLayoutVariantsChange(newVariants);
+  };
+
+  const exitReorderMode = () => {
+    setReorderSelectedPage(null);
+    setReorderTargetPage(null);
+  };
+
+  const handlePageLongPress = (pageIndex: number, e: React.PointerEvent) => {
     const startX = e.clientX;
     const startY = e.clientY;
-    const pointerId = e.pointerId;
-    const target = e.currentTarget as HTMLElement;
-    let dragActive = false;
 
-    const activate = () => {
-      dragActive = true;
-      target.setPointerCapture(pointerId);
-      dragPageStateRef.current = { fromIndex, toIndex: null };
-      setDragPageVisual({ fromIndex, toIndex: null });
-    };
-
-    const cleanup = () => {
-      clearTimeout(timer);
-      if (dragActive && target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
-      dragPageStateRef.current = null;
-      setDragPageVisual(null);
+    const cancel = () => {
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
       document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.removeEventListener('pointercancel', cleanup);
+      document.removeEventListener('pointerup', cancel);
+      document.removeEventListener('pointercancel', cancel);
     };
 
     const onMove = (ev: PointerEvent) => {
-      if (!dragActive) {
-        // Cancela el long-press si el dedo se mueve antes de los 500ms (scroll)
-        if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) cleanup();
-        return;
-      }
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const slot = el?.closest('[data-page-order-slot]') as HTMLElement | null;
-      if (slot) {
-        const idx = parseInt(slot.dataset.pageOrderIndex ?? '-1');
-        if (idx !== -1) {
-          if (dragPageStateRef.current) dragPageStateRef.current.toIndex = idx;
-          setDragPageVisual(prev => prev ? { ...prev, toIndex: idx } : null);
-        }
-      }
+      if (Math.abs(ev.clientX - startX) > 10 || Math.abs(ev.clientY - startY) > 10) cancel();
     };
 
-    const onUp = () => {
-      if (dragActive) {
-        const state = dragPageStateRef.current;
-        if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
-          handleMovePageToIndex(state.fromIndex, state.toIndex);
-        }
-      }
-      cleanup();
-    };
-
-    const timer = setTimeout(activate, 500);
+    longPressTimerRef.current = setTimeout(() => {
+      cancel();
+      if (navigator.vibrate) navigator.vibrate(60);
+      setReorderSelectedPage(pageIndex);
+      setReorderTargetPage(null);
+    }, 1000);
 
     document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.addEventListener('pointercancel', cleanup);
-  }, [photos, pageLayouts, pageLayoutVariants]);
+    document.addEventListener('pointerup', cancel);
+    document.addEventListener('pointercancel', cancel);
+  };
 
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
@@ -1941,62 +1935,131 @@ export default function PhotoOrganizer({
         </div>
 
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
-        {safePhotos.map((pagePhotos, pageIndex) => (
-          <div
-            key={pageIndex}
-            data-page-order-slot
-            data-page-order-index={pageIndex}
-            className={`relative group flex flex-col transition-opacity ${dragPageVisual && dragPageVisual.fromIndex === pageIndex ? 'opacity-40' : ''}`}
-          >
-            <div className="flex items-center justify-between mb-4 h-10 md:h-12">
-              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página {pageIndex + 1}</span>
-              <button
-                onClick={() => setAdvancedSettingsModal(pageIndex)}
-                className="flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
-              >
-                <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span className="text-xs md:text-sm font-bold uppercase tracking-tight hidden sm:inline">
-                  {t('organizer.pageSettings') || 'Ajustes'}
-                </span>
-              </button>
-            </div>
 
-            <div
-              className={`bg-white rounded-none shadow-sm border-2 border-gray-100 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center cursor-grab active:cursor-grabbing ${dragPageVisual && dragPageVisual.toIndex === pageIndex && dragPageVisual.fromIndex !== pageIndex ? 'ring-2 ring-black ring-offset-2' : ''}`}
-              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', userSelect: 'none' }}
-              onPointerDown={e => handlePageDragStart(pageIndex, e)}
-            >
-              {(() => {
-                const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
-                const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
-                return (
-                  <div className={`grid gap-2 p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
-                    {slots.map((photo, photoIndex) => {
-                      const textBox = textBoxSlots[pageIndex]?.[photoIndex];
-                      const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                      const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
-                      
-                      return (
-                        <AlbumEditorPhotoSlot
-                          key={photoIndex} photo={photo} textBox={textBox} crop={crop}
-                          isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
-                          photoCount={currentVariant}
-                          editingPageIndex={null}
-                          isDragging={false}
-                          isDragTarget={false}
-                          onDragStart={handleDragStart}
-                          handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
-                          onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
-                          t={t}
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
+        {/* Banner de modo reordenamiento */}
+        {reorderSelectedPage !== null && (
+          <div className="col-span-full flex items-center justify-between bg-black text-white rounded-xl px-4 py-3 text-sm font-bold shadow-lg -mb-2">
+            <span>Página {reorderSelectedPage + 1} seleccionada — toca otra página</span>
+            <button onClick={exitReorderMode} className="ml-4 p-1 hover:bg-white/20 rounded-full transition-colors">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-        ))}
+        )}
+
+        {safePhotos.map((pagePhotos, pageIndex) => {
+          const isReorderMode = reorderSelectedPage !== null;
+          const isSelected = reorderSelectedPage === pageIndex;
+          const isTarget = reorderTargetPage === pageIndex;
+
+          return (
+            <div
+              key={pageIndex}
+              className={`relative flex flex-col transition-all duration-200 ${isReorderMode && !isSelected && !isTarget ? 'opacity-50' : ''}`}
+            >
+              {/* Capa de toque para seleccionar destino (modo reordenamiento, páginas no seleccionadas) */}
+              {isReorderMode && !isSelected && reorderTargetPage === null && (
+                <button
+                  onClick={() => setReorderTargetPage(pageIndex)}
+                  className="absolute inset-0 z-20 w-full h-full cursor-pointer rounded-sm"
+                  aria-label={`Seleccionar página ${pageIndex + 1} como destino`}
+                />
+              )}
+
+              {/* Header de la página */}
+              <div className="flex items-center justify-between mb-4 h-10 md:h-12">
+                <span className={`text-sm font-bold uppercase tracking-widest ${isSelected ? 'text-black' : 'text-gray-400'}`}>
+                  Página {pageIndex + 1}
+                  {isSelected && <span className="ml-2 text-xs normal-case font-normal text-gray-500">— mantén 1s para reordenar</span>}
+                </span>
+                {!isReorderMode ? (
+                  <button
+                    onClick={() => setAdvancedSettingsModal(pageIndex)}
+                    className="flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
+                  >
+                    <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    <span className="text-xs md:text-sm font-bold uppercase tracking-tight hidden sm:inline">
+                      {t('organizer.pageSettings') || 'Ajustes'}
+                    </span>
+                  </button>
+                ) : isSelected ? (
+                  <button
+                    onClick={exitReorderMode}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
+                  >
+                    <X className="w-3 h-3" /> Cancelar
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Thumbnail de la página con overlay de acciones */}
+              <div className="relative mt-auto">
+                <div
+                  className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden flex flex-col items-center justify-center ${
+                    isSelected
+                      ? 'border-black ring-4 ring-black/15'
+                      : isTarget
+                      ? 'border-black ring-2 ring-black/30'
+                      : 'border-gray-100'
+                  }`}
+                  style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', userSelect: 'none' }}
+                  onPointerDown={!isReorderMode ? e => handlePageLongPress(pageIndex, e) : undefined}
+                >
+                  {(() => {
+                    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+                    const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
+                    return (
+                      <div className={`grid gap-2 p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
+                        {slots.map((photo, photoIndex) => {
+                          const textBox = textBoxSlots[pageIndex]?.[photoIndex];
+                          const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
+                          const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
+                          return (
+                            <AlbumEditorPhotoSlot
+                              key={photoIndex} photo={photo} textBox={textBox} crop={crop}
+                              isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                              photoCount={currentVariant}
+                              editingPageIndex={null}
+                              isDragging={false}
+                              isDragTarget={false}
+                              onDragStart={handleDragStart}
+                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                              onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                              t={t}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Overlay de acciones al seleccionar página destino */}
+                {isTarget && reorderSelectedPage !== null && (
+                  <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center gap-2.5 z-10 p-3">
+                    <button
+                      onClick={() => { handleSwapTwoPages(reorderSelectedPage!, pageIndex); exitReorderMode(); }}
+                      className="w-full py-3 bg-white text-black font-bold rounded-xl text-sm hover:bg-gray-100 transition-colors"
+                    >
+                      ↕ Intercambiar posiciones
+                    </button>
+                    <button
+                      onClick={() => { handleMovePageToIndex(reorderSelectedPage!, pageIndex); exitReorderMode(); }}
+                      className="w-full py-3 bg-transparent text-white font-bold rounded-xl text-sm border-2 border-white/70 hover:bg-white/10 transition-colors"
+                    >
+                      → Insertar en esta posición
+                    </button>
+                    <button
+                      onClick={() => setReorderTargetPage(null)}
+                      className="text-white/60 text-xs mt-1 hover:text-white/90 transition-colors"
+                    >
+                      ← Elegir otra página
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {/* PÁGINA EN BLANCO */}
         {safePhotos.length % 2 !== 0 && (
