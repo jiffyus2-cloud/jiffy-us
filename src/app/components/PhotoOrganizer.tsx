@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
-  Image as ImageIcon, Grid3x3, Edit3, Check,
+  Image as ImageIcon, Grid3x3, Edit3,
   Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
@@ -1950,14 +1950,19 @@ export default function PhotoOrganizer({
           >
             <div className="flex items-center justify-between mb-4 h-10 md:h-12">
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página {pageIndex + 1}</span>
-              <div className="flex gap-2">
-                {editingPageIndex === pageIndex && (<button onClick={() => setAdvancedSettingsModal(pageIndex)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"><Settings className="w-4 h-4"/><span className="text-xs font-bold uppercase hidden sm:inline">{t('organizer.pageSettings') || 'Ajustes'}</span></button>)}
-                <button onClick={() => { if (editingPageIndex === pageIndex) setEditingPageIndex(null); else { setEditingPageIndex(pageIndex); setAdvancedSettingsModal(pageIndex); } }} className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 transition-all ${editingPageIndex === pageIndex ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-200 hover:border-black'}`}>{editingPageIndex === pageIndex ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />}<span className="text-xs md:text-sm font-bold uppercase tracking-tight">{editingPageIndex === pageIndex ? <span className="hidden lg:inline">{t('organizer.finishEditing') || 'Listo'}</span> : <span className="hidden lg:inline">{t('organizer.enableEditing') || 'Editar'}</span>}{editingPageIndex === pageIndex ? <span className="lg:hidden">LISTO</span> : <span className="lg:hidden">EDITAR</span>}</span></button>
-              </div>
+              <button
+                onClick={() => setAdvancedSettingsModal(pageIndex)}
+                className="flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
+              >
+                <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span className="text-xs md:text-sm font-bold uppercase tracking-tight hidden sm:inline">
+                  {t('organizer.pageSettings') || 'Ajustes'}
+                </span>
+              </button>
             </div>
 
             <div
-              className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center cursor-grab active:cursor-grabbing ${editingPageIndex === pageIndex ? 'border-black ring-4 ring-black/5' : 'border-gray-100'} ${dragPageVisual && dragPageVisual.toIndex === pageIndex && dragPageVisual.fromIndex !== pageIndex ? 'ring-2 ring-black ring-offset-2' : ''}`}
+              className={`bg-white rounded-none shadow-sm border-2 border-gray-100 transition-all overflow-hidden mt-auto flex flex-col items-center justify-center cursor-grab active:cursor-grabbing ${dragPageVisual && dragPageVisual.toIndex === pageIndex && dragPageVisual.fromIndex !== pageIndex ? 'ring-2 ring-black ring-offset-2' : ''}`}
               style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', userSelect: 'none' }}
               onPointerDown={e => handlePageDragStart(pageIndex, e)}
             >
@@ -1976,9 +1981,9 @@ export default function PhotoOrganizer({
                           key={photoIndex} photo={photo} textBox={textBox} crop={crop}
                           isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
                           photoCount={currentVariant}
-                          editingPageIndex={editingPageIndex}
-                          isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
-                          isDragTarget={dragVisual?.pageIndex === pageIndex && dragVisual?.toIndex === photoIndex && dragVisual?.fromIndex !== photoIndex}
+                          editingPageIndex={null}
+                          isDragging={false}
+                          isDragTarget={false}
                           onDragStart={handleDragStart}
                           handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
                           onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
