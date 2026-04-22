@@ -219,24 +219,29 @@ export default function Creator() {
   useEffect(() => {
     const apiKey = import.meta.env.VITE_1CLIC_API_KEY;
 
-    if (!apiKey) {
-      console.warn("La variable VITE_1CLIC_API_KEY no está configurada. El widget de 1Clic no se cargará.");
+    if (!apiKey || currentStep !== 'organize') {
+      const existing = document.querySelector('script[src="https://www.1clic.ai/badge.js"]');
+      if (existing) existing.remove();
+      const badge = document.getElementById('oneclic-badge') || document.querySelector('[id*="1clic"]');
+      if (badge) badge.remove();
       return;
     }
 
     const script = document.createElement('script');
     script.src = "https://www.1clic.ai/badge.js";
     script.setAttribute('data-agent', "53893e5c-cc14-4432-b98b-88e8782b2f8b");
-    script.setAttribute('data-key', apiKey); 
+    script.setAttribute('data-key', apiKey);
     script.async = true;
     document.body.appendChild(script);
-    
+
     return () => {
       if (document.body.contains(script)) {
         document.body.removeChild(script);
       }
+      const badge = document.getElementById('oneclic-badge') || document.querySelector('[id*="1clic"]');
+      if (badge) badge.remove();
     };
-  }, []);
+  }, [currentStep]);
 
   const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
     setSelectedProduct(productType);
