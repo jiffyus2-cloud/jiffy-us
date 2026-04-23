@@ -188,8 +188,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           title: t('product.album'),
           description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
-            { name: 'Papel', description: 'Portada personalizada con tu foto favorita', images: allPapelImages },
-            { name: 'Tela', description: 'Acabado premium con textura de lino', images: allTelaImages }
+            { name: 'Papel', description: 'Portada de pasta dura personalizada con tu foto favorita. Páginas interiores en papel opalina.', images: allPapelImages },
+            { name: 'Tela', description: 'Acabado premium con textura de lino. Páginas interiores en papel opalina.', images: allTelaImages }
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Tela, Papel' },

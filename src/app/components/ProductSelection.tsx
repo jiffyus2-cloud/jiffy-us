@@ -44,7 +44,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>{t('product.album')}</h3>
             <p className="text-sm mb-4 text-gray-600">
-              Cada recuerdo es único y merece ser contado. Álbumes personalizados para tus momentos más importantes.
+              Cada recuerdo es único y merece ser contado. Álbumes con páginas en papel opalina para tus momentos más importantes.
             </p>
           </div>
         </button>
