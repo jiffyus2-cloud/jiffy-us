@@ -32,21 +32,30 @@ interface CoverEditorProps {
   };
 }
 
-const CoverEditor: React.FC<CoverEditorProps> = ({ 
-  coverSize, 
+const CoverEditor: React.FC<CoverEditorProps> = ({
+  coverSize,
   coverType,
   hidePhoto = false,
-  onClose, 
+  onClose,
   onSave,
-  initialData 
+  initialData
 }) => {
   const { t } = useLanguage();
-  
+
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || '');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || '');
   const [coverYear, setCoverYear] = useState(initialData?.coverYear || '');
   const [spineText, setSpineText] = useState(initialData?.spineText || '');
+
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
   
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
   const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1, rotation: 0 });
@@ -260,7 +269,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8 min-h-0" style={{ touchAction: 'pan-y' }}>
             
             <section>
               <div className="flex items-center gap-1.5 mb-3 text-gray-400">
@@ -372,7 +381,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
       </div>
 
-      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-24">
+      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <ActionButtons />
       </div>
 
