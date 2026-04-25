@@ -218,16 +218,16 @@ export default function PhotoOrganizer({
   onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete 
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
-  const { config } = useStoreConfig();
+  const storeConfig = useStoreConfig();
 
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
 
   const extraPagePrice = sizeStr.includes('30x30')
-    ? config.prices.albumExtra30x30
+    ? storeConfig.prices.albumExtra30x30
     : sizeStr.includes('21x28') || sizeStr.includes('28x21')
-    ? config.prices.albumExtraRect
-    : config.prices.albumExtra20x20;
+    ? storeConfig.prices.albumExtraRect
+    : storeConfig.prices.albumExtra20x20;
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
