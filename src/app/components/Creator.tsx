@@ -573,10 +573,7 @@ export default function Creator() {
       setSelectedPhotoPack(null);
     } else if (currentStep === 'organize') {
       setCurrentStep('customization');
-      setCustomization(null);
-      setCalendarCustomization(null);
-      setMugCustomization(null);
-      setPhotoPackCustomization(null);
+      // No limpiamos el estado para preservar los datos del cover al retroceder
     } else if (currentStep === 'checkout') {
       setCurrentStep('organize');
       setPhotos([]);
@@ -635,9 +632,10 @@ export default function Creator() {
   const renderCustomization = () => {
     if (selectedProduct === 'album' && selectedAlbum) {
       return (
-        <AlbumCustomization 
+        <AlbumCustomization
           album={selectedAlbum}
           onCustomizationComplete={handleCustomizationComplete}
+          initialData={customization}
         />
       );
     } else if (selectedProduct === 'calendar' && selectedCalendar) {

@@ -29,32 +29,35 @@ export interface CustomizationOptions {
 interface AlbumCustomizationProps {
   album: Album;
   onCustomizationComplete: (options: CustomizationOptions) => void;
+  initialData?: CustomizationOptions | null;
 }
 
-export default function AlbumCustomization({ album, onCustomizationComplete }: AlbumCustomizationProps) {
+export default function AlbumCustomization({ album, onCustomizationComplete, initialData }: AlbumCustomizationProps) {
   const { t } = useLanguage();
-  
-  // 1. Opciones por defecto: Papel y Blanco (Foto)
-  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Papel');
-  const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
-  const [coverColor, setCoverColor] = useState('#F5F5F5'); 
-  
-  const [isCoverEdited, setIsCoverEdited] = useState(false);
+
+  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>(initialData?.coverType || 'Papel');
+  const [size, setSize] = useState<CustomizationOptions['size']>(initialData?.size || 'Cuadrado 20x20 cm');
+  const [coverColor, setCoverColor] = useState(
+    initialData?.coverColor || (initialData?.coverType === 'Tela' ? '#E8DCC4' : '#F5F5F5')
+  );
+
+  const [isCoverEdited, setIsCoverEdited] = useState(!!(initialData?.coverContent?.coverTitle));
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
-  
-  // Iniciamos los campos de texto vacíos para obligar al usuario a personalizarlos
-  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
-    coverTitle: '',
-    coverSubtitle: '',
-    coverYear: '',
-    spineText: '',
-    coverImage: '',
-    selectedLayout: 1,
-    typographyColor: '#000000',
-    coverCrop: { x: 50, y: 50, zoom: 1 }
-  });
+
+  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>(
+    initialData?.coverContent || {
+      coverTitle: '',
+      coverSubtitle: '',
+      coverYear: '',
+      spineText: '',
+      coverImage: '',
+      selectedLayout: 1,
+      typographyColor: '#000000',
+      coverCrop: { x: 50, y: 50, zoom: 1 }
+    }
+  );
 
   const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
     setCoverType(type);
