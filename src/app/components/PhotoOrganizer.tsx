@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
+import { useStoreConfig } from '../context/StoreConfigContext';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -217,9 +218,16 @@ export default function PhotoOrganizer({
   onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete 
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
-  
+  const { config } = useStoreConfig();
+
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
+
+  const extraPagePrice = sizeStr.includes('30x30')
+    ? config.prices.albumExtra30x30
+    : sizeStr.includes('21x28') || sizeStr.includes('28x21')
+    ? config.prices.albumExtraRect
+    : config.prices.albumExtra20x20;
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
@@ -1683,8 +1691,24 @@ export default function PhotoOrganizer({
                   step={2} 
                   value={numPages === '' ? 40 : numPages} 
                   onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
-                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" 
+                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
                 />
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-amber-700">
+                      <span className="font-bold">Mínimo 40 páginas.</span> Los álbumes incluyen 40 páginas base.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-blue-700">
+                      Cada página adicional (más de 40) tiene un costo de{' '}
+                      <span className="font-bold">${extraPagePrice.toLocaleString('es-CO')} COP</span>.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-4">
                 <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>

@@ -224,14 +224,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       )}
 
       <div className="md:hidden p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-20">
-        <h2 className="text-lg font-black tracking-tighter">EDITOR DE PORTADA</h2>
+        <h2 className="text-lg font-black tracking-tighter">DISEÑA TU PORTADA</h2>
         <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
           <X size={24} />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden overscroll-contain">
-        <div className="relative w-full h-[350px] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-4 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden overscroll-contain min-h-0">
+        <div className="relative w-full h-[30vh] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
           <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
             <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
               <div className="md:hidden">
@@ -254,13 +254,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           </div>
         </div>
 
-        <div className="w-full md:w-[400px] flex flex-col bg-white md:shadow-xl z-10 order-2 md:order-1 md:h-full shrink-0 md:shrink">
+        <div className="w-full md:w-[400px] flex flex-col bg-white md:shadow-xl z-10 order-2 md:order-1 md:h-full flex-1 md:flex-none min-h-0">
           <div className="hidden md:flex p-6 border-b border-gray-100 items-center justify-between shrink-0">
-            <h2 className="text-xl font-black tracking-tighter">EDITOR DE PORTADA</h2>
+            <h2 className="text-xl font-black tracking-tighter">DISEÑA TU PORTADA</h2>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
           </div>
 
-          <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
             
             <section>
               <div className="flex items-center gap-1.5 mb-3 text-gray-400">

@@ -141,7 +141,7 @@ export default function LandingPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
-    }, 5000);
+    }, 1000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
 
@@ -223,18 +223,6 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Slide Indicators */}
-        <div className="absolute bottom-5 right-8 z-30 flex gap-1.5">
-          {heroImages.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentSlide(index)}
-              className={`h-1.5 transition-all rounded-full ${
-                currentSlide === index ? 'w-6 bg-white' : 'w-1.5 bg-white/40'
-              }`}
-            />
-          ))}
-        </div>
       </section>
 
       {/* Promociones */}
