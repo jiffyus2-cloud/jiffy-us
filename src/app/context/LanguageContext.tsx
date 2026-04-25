@@ -456,7 +456,7 @@ const translations = {
 
     // Photo Organizer Setup
     'organizer.uploadTitle': 'Sube Tus Fotos',
-    'organizer.uploadDesc': 'Selecciona mínimo 40 fotos. Recuerda esperar entre 3-8 segundos después de tu seleccion para iniciar la carga',
+    'organizer.uploadDesc': 'Selecciona mínimo 40 fotos',
     'organizer.photosSelected': 'fotos seleccionadas',
     'organizer.clickToSelect': 'Haz clic para seleccionar fotos',
     'organizer.selectMultiple': 'Puedes seleccionar varias imágenes a la vez',
@@ -597,7 +597,7 @@ const translations = {
     'auth.loginTitle': 'Bienvenido de nuevo',
     'auth.loginSubtitle': 'Ingresa tus credenciales para acceder a tu cuenta',
     'auth.registerTitle': 'Crear una cuenta',
-    'auth.registerSubtitle': 'Ingresa tus datos para comenzar a crear tus álbumes',
+    'auth.registerSubtitle': 'Ingresa tus datos y comienza a crear tus recuerdos',
     'auth.emailLabel': 'Correo electrónico',
     'auth.passwordLabel': 'Contraseña',
     'auth.confirmPasswordLabel': 'Confirmar contraseña',

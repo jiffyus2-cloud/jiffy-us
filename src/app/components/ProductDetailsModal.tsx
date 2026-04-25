@@ -90,9 +90,9 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
           </>
         )}
       </div>
-      <div className="p-4 bg-white flex-1">
-        <h4 className="font-bold text-gray-900 mb-1">{style.name}</h4>
-        <p className="text-xs text-gray-500 leading-relaxed">{style.description}</p>
+      <div className="p-2 md:p-4 bg-white flex-1">
+        <h4 className="font-semibold text-xs md:text-base text-gray-900 mb-0.5 md:mb-1">{style.name}</h4>
+        <p className="text-[10px] md:text-xs text-gray-500 leading-snug md:leading-relaxed">{style.description}</p>
       </div>
     </div>
   );
@@ -304,7 +304,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ) : (
             <div>
               <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
                 {productData.styles.map((style, index) => (
                   <StyleCarouselCard key={index} style={style} />
                 ))}

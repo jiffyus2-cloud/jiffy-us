@@ -287,14 +287,14 @@ export default function Checkout() {
   if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) displayImage = justWhiteImg;
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-12 relative">
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
+    <div className="w-full max-w-6xl mx-auto px-4 py-4 md:py-12 relative">
+      <div className="flex items-center gap-4 mb-3 md:mb-8">
+        <button onClick={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
           <ArrowLeft className="w-5 h-5" /><span className="font-medium">{t('step.back')}</span>
         </button>
       </div>
 
-      <h2 className="text-3xl font-bold mb-8">{t('checkout.title')}</h2>
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">{t('checkout.title')}</h2>
 
       {errorMessage && (
         <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-3">
@@ -302,12 +302,12 @@ export default function Checkout() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
         <div className="lg:col-span-1 lg:order-2">
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 lg:sticky lg:top-8">
-            <h3 className="text-xl font-bold mb-6">{t('checkout.summary')}</h3>
-            
-            <div className="space-y-4 mb-6">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 lg:sticky lg:top-8">
+            <h3 className="text-lg md:text-xl font-bold mb-3 md:mb-6">{t('checkout.summary')}</h3>
+
+            <div className="space-y-2 md:space-y-4 mb-3 md:mb-6">
               <div className="flex justify-between items-start gap-4">
                 <span className="text-gray-600">{t('dashboard.product')}</span>
                 <span className="font-medium text-right">{product.name}</span>
@@ -389,13 +389,13 @@ export default function Checkout() {
               </p>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-4">
+            <div className="mt-4 md:mt-8 pt-4 md:pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3 md:mb-4">
                 <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">{t('checkout.preview')}</p>
                 <button type="button" onClick={() => setIsModalOpen(true)} className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"><Eye className="w-4 h-4" /> Ver completo</button>
               </div>
 
-              <div className="aspect-square rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group" onClick={() => setIsModalOpen(true)}>
+              <div className="aspect-square max-h-40 md:max-h-none rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group" onClick={() => setIsModalOpen(true)}>
                 {displayImage && displayImage !== justWhiteImg ? (
                   <div className="w-full h-full relative">
                     <img src={displayImage} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -413,24 +413,24 @@ export default function Checkout() {
 
         {/* --- FORMULARIO DE CONTACTO --- */}
         <div className="lg:col-span-2 lg:order-1">
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">1</span>{t('checkout.contactInfo')}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-8">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">1</span>{t('checkout.contactInfo')}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
                 <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
                 <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">2</span>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
                 {t('checkout.shippingAddress')}
               </h3>
-              <div className="space-y-5">
+              <div className="space-y-3 md:space-y-5">
 
                 {/* Fila 1: Departamento + Ciudad */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                   <div className="space-y-1.5">
                     <label htmlFor="department" className="text-sm font-medium text-gray-700">Departamento *</label>
                     <div className="relative">
@@ -491,7 +491,7 @@ export default function Checkout() {
                 </div>
 
                 {/* Fila 3: Apto / Adicional + Código postal */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                   <div className="space-y-1.5">
                     <label htmlFor="addressExtra" className="text-sm font-medium text-gray-700">
                       Apto, casa, barrio <span className="text-gray-400 font-normal">(opcional)</span>
@@ -524,8 +524,8 @@ export default function Checkout() {
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-7 h-7 bg-black text-white rounded-full text-sm">3</span>{t('checkout.billingAddress')}</h3>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">3</span>{t('checkout.billingAddress')}</h3>
               <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -539,13 +539,13 @@ export default function Checkout() {
               )}
             </div>
 
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-6 h-6" /></div><h3 className="text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
-              <p className="text-gray-600 text-sm leading-relaxed mb-6">{t('checkout.securePaymentDesc')}</p>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
+              <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
               <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
             </div>
 
-            <button type="submit" disabled={isProcessing} className="w-full bg-black text-white py-5 rounded-xl hover:bg-gray-900 transition-all text-xl font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+            <button type="submit" disabled={isProcessing} className="w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
               {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
             </button>
             <p className="text-center text-xs text-gray-400">{t('checkout.terms')}</p>
