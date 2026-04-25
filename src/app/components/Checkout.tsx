@@ -303,6 +303,92 @@ export default function Checkout() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
+        {/* --- FORMULARIO — primero en DOM para que salga arriba en mobile --- */}
+        <div className="lg:col-span-2 lg:order-1">
+          <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4 md:space-y-8">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">1</span>{t('checkout.contactInfo')}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+                <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
+                <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
+                {t('checkout.shippingAddress')}
+              </h3>
+              <div className="space-y-3 md:space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
+                  <div className="space-y-1.5">
+                    <label htmlFor="department" className="text-sm font-medium text-gray-700">Departamento *</label>
+                    <div className="relative">
+                      <select id="department" name="department" required value={formData.department} onChange={handleChange} className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800">
+                        <option value="">Selecciona un departamento</option>
+                        {COLOMBIA_DEPARTMENTS.map(d => (<option key={d.name} value={d.name}>{d.name}</option>))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
+                    <div className="relative">
+                      <select id="city" name="city" required value={formData.city} onChange={handleChange} disabled={!formData.department} className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed">
+                        <option value="">{formData.department ? 'Selecciona una ciudad' : 'Primero elige un departamento'}</option>
+                        {availableCities.map(city => (<option key={city} value={city}>{city}</option>))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label>
+                  <input type="text" id="address" name="address" required value={formData.address} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Calle 10 # 25-30" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
+                  <div className="space-y-1.5">
+                    <label htmlFor="addressExtra" className="text-sm font-medium text-gray-700">Apto, casa, barrio <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <input type="text" id="addressExtra" name="addressExtra" value={formData.addressExtra} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Apto 301, Barrio El Poblado" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
+                    <input type="text" id="zipCode" name="zipCode" required value={formData.zipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. 760001" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">3</span>{t('checkout.billingAddress')}</h3>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
+              {!formData.sameAsShipping && (
+                <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-2"><label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label><input type="text" id="billingName" name="billingName" required value={formData.billingName} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                  <div className="space-y-2"><label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label><input type="text" id="billingAddress" name="billingAddress" required value={formData.billingAddress} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2"><label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="billingCity" name="billingCity" required value={formData.billingCity} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                    <div className="space-y-2"><label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="billingZipCode" name="billingZipCode" required value={formData.billingZipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
+              <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
+              <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
+            </div>
+
+            {/* Botón pagar — solo visible en desktop dentro del form */}
+            <button type="submit" disabled={isProcessing} className="hidden md:flex w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+              {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
+            </button>
+            <p className="hidden md:block text-center text-xs text-gray-400">{t('checkout.terms')}</p>
+          </form>
+        </div>
+
+        {/* --- RESUMEN — segundo en DOM, aparece después del formulario en mobile --- */}
         <div className="lg:col-span-1 lg:order-2">
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 lg:sticky lg:top-8">
             <h3 className="text-lg md:text-xl font-bold mb-3 md:mb-6">{t('checkout.summary')}</h3>
@@ -411,146 +497,14 @@ export default function Checkout() {
           </div>
         </div>
 
-        {/* --- FORMULARIO DE CONTACTO --- */}
-        <div className="lg:col-span-2 lg:order-1">
-          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-8">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">1</span>{t('checkout.contactInfo')}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
-                <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
-                <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
-              </div>
-            </div>
+      </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2">
-                <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
-                {t('checkout.shippingAddress')}
-              </h3>
-              <div className="space-y-3 md:space-y-5">
-
-                {/* Fila 1: Departamento + Ciudad */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-                  <div className="space-y-1.5">
-                    <label htmlFor="department" className="text-sm font-medium text-gray-700">Departamento *</label>
-                    <div className="relative">
-                      <select
-                        id="department"
-                        name="department"
-                        required
-                        value={formData.department}
-                        onChange={handleChange}
-                        className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800"
-                      >
-                        <option value="">Selecciona un departamento</option>
-                        {COLOMBIA_DEPARTMENTS.map(d => (
-                          <option key={d.name} value={d.name}>{d.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label htmlFor="city" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label>
-                    <div className="relative">
-                      <select
-                        id="city"
-                        name="city"
-                        required
-                        value={formData.city}
-                        onChange={handleChange}
-                        disabled={!formData.department}
-                        className="w-full appearance-none px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none bg-white text-gray-800 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
-                      >
-                        <option value="">
-                          {formData.department ? 'Selecciona una ciudad' : 'Primero elige un departamento'}
-                        </option>
-                        {availableCities.map(city => (
-                          <option key={city} value={city}>{city}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fila 2: Dirección principal */}
-                <div className="space-y-1.5">
-                  <label htmlFor="address" className="text-sm font-medium text-gray-700">{t('checkout.address')} *</label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    required
-                    value={formData.address}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                    placeholder="Ej. Calle 10 # 25-30"
-                  />
-                </div>
-
-                {/* Fila 3: Apto / Adicional + Código postal */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-                  <div className="space-y-1.5">
-                    <label htmlFor="addressExtra" className="text-sm font-medium text-gray-700">
-                      Apto, casa, barrio <span className="text-gray-400 font-normal">(opcional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="addressExtra"
-                      name="addressExtra"
-                      value={formData.addressExtra}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                      placeholder="Ej. Apto 301, Barrio El Poblado"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="zipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label>
-                    <input
-                      type="text"
-                      id="zipCode"
-                      name="zipCode"
-                      required
-                      value={formData.zipCode}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none"
-                      placeholder="Ej. 760001"
-                    />
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">3</span>{t('checkout.billingAddress')}</h3>
-              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
-              {!formData.sameAsShipping && (
-                <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="space-y-2"><label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label><input type="text" id="billingName" name="billingName" required value={formData.billingName} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
-                  <div className="space-y-2"><label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label><input type="text" id="billingAddress" name="billingAddress" required value={formData.billingAddress} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2"><label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="billingCity" name="billingCity" required value={formData.billingCity} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
-                    <div className="space-y-2"><label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="billingZipCode" name="billingZipCode" required value={formData.billingZipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
-              <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
-              <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
-            </div>
-
-            <button type="submit" disabled={isProcessing} className="w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
-              {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
-            </button>
-            <p className="text-center text-xs text-gray-400">{t('checkout.terms')}</p>
-          </form>
-        </div>
+      {/* Botón pagar mobile-only — aparece después del resumen */}
+      <div className="mt-4 md:hidden">
+        <button type="submit" form="checkout-form" disabled={isProcessing} className="w-full bg-black text-white py-4 rounded-xl hover:bg-gray-900 transition-all text-lg font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+          {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
+        </button>
+        <p className="text-center text-xs text-gray-400 mt-2">{t('checkout.terms')}</p>
       </div>
 
       <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={modalOrderData} hideAddressInfo={true} />
