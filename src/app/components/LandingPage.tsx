@@ -141,7 +141,7 @@ export default function LandingPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
-    }, 1000);
+    }, 10000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
 
