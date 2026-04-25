@@ -75,6 +75,23 @@ export default function Creator() {
   const [currentStep, setCurrentStep] = useState<Step>('product');
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const savingMessages = [
+    'Estamos preparando tu álbum ✨',
+    'Tus recuerdos están casi listos 📸',
+    'Optimizando la calidad de tus fotos 🖼️',
+    'Guardando cada detalle con cuidado 💛',
+    'Ya casi terminamos, un momento más...',
+  ];
+  const [savingMsgIndex, setSavingMsgIndex] = useState(0);
+  useEffect(() => {
+    if (!isSaving) return;
+    setSavingMsgIndex(0);
+    const interval = setInterval(() => {
+      setSavingMsgIndex(prev => (prev + 1) % savingMessages.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isSaving]);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
 
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
@@ -873,8 +890,8 @@ export default function Creator() {
             
             <div className="text-center w-full">
               <h3 className="text-2xl font-black text-gray-900 mb-2">{t('creator.savingTitle')}</h3>
-              <p className="text-gray-500 text-sm mb-6">
-                {user ? t('creator.savingDescUser') : t('creator.savingDescGuest')} 
+              <p className="text-gray-500 text-sm mb-6 transition-all duration-500 min-h-[20px]">
+                {savingMessages[savingMsgIndex]}
               </p>
               
               <div className="w-full bg-gray-100 rounded-full h-3 mb-3 overflow-hidden shadow-inner">
