@@ -74,9 +74,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   // Lógica de validación: El lomo NO es obligatorio en Tela
   const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
-  const isFormValid = coverTitle.trim() !== '' && 
-                      (coverType === 'Papel' ? spineText.trim() !== '' : true) && 
-                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
+  const requiresPhoto = coverType === 'Papel' && !hidePhoto;
+  const isFormValid = coverTitle.trim() !== '' &&
+                      (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
+                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '') &&
+                      (requiresPhoto ? coverImage !== '' : true);
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
   const displaySubtitle = coverSubtitle || 'Un viaje inolvidable';
