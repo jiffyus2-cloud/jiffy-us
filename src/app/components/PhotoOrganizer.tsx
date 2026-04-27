@@ -20,9 +20,19 @@ import jiffy2Img from '../../assets/Jiffy2.png';
 // ============================================================================
 interface JiffyLoaderProps {
   t?: (key: string) => string;
+  photoCount?: number;
 }
 
-const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
+const getEstimatedTime = (count: number): string => {
+  const seconds = Math.round(count * 0.45);
+  if (seconds < 60) return `~${seconds} seg`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `~${mins} min ${secs} seg` : `~${mins} min`;
+};
+
+const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
+  const estimated = photoCount ? getEstimatedTime(photoCount) : null;
   return (
     <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-none border border-gray-200 shadow-inner">
       <div className="relative w-24 h-24 flex items-center justify-center">
@@ -45,7 +55,7 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </div>
       </div>
 
-      <div className="text-center animate-pulse">
+      <div className="text-center animate-pulse px-6 py-3 bg-white rounded-lg border border-gray-200 shadow-sm mx-4">
         <p className="text-xl font-bold text-gray-900">
           {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
         </p>
@@ -53,6 +63,15 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
           {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
         </p>
       </div>
+
+      {estimated && (
+        <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border border-amber-200 rounded-lg mx-4 text-sm text-amber-800">
+          <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Tiempo estimado para {photoCount} fotos: <strong>{estimated}</strong></span>
+        </div>
+      )}
 
       <style>{`
         @keyframes spinRightT1 {
@@ -1657,10 +1676,12 @@ export default function PhotoOrganizer({
         {renderDuplicateModal()}
         {renderLowResModal()}
         
-        <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
+        {!isSortingWithAI && (
+          <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
+        )}
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
           {isSortingWithAI ? (
-            <JiffyLoader t={t} />
+            <JiffyLoader t={t} photoCount={uploadedPhotos.length} />
           ) : (
             <>
               <div>
