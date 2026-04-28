@@ -412,6 +412,25 @@ export default function Checkout() {
                 </div>
               )}
 
+              {/* Save address checkbox — before the form fields */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={shouldSaveAddress}
+                    onChange={e => setShouldSaveAddress(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                    <BookmarkCheck className="w-3.5 h-3.5 text-gray-400" />
+                    {t('checkout.saveAddress')}
+                  </span>
+                </label>
+                {shouldSaveAddress && savedAddresses.length >= 3 && (
+                  <p className="mt-1.5 ml-7 text-xs text-amber-600">{t('checkout.savedAddressesLimit')}</p>
+                )}
+              </div>
+
               <div className="space-y-3 md:space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                   <div className="space-y-1.5">
@@ -449,25 +468,6 @@ export default function Checkout() {
                     <input type="text" id="zipCode" name="zipCode" required value={formData.zipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. 760001" />
                   </div>
                 </div>
-              </div>
-
-              {/* Save address checkbox */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={shouldSaveAddress}
-                    onChange={e => setShouldSaveAddress(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
-                  />
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                    <BookmarkCheck className="w-3.5 h-3.5 text-gray-400" />
-                    {t('checkout.saveAddress')}
-                  </span>
-                </label>
-                {shouldSaveAddress && savedAddresses.length >= 3 && (
-                  <p className="mt-1.5 ml-7 text-xs text-amber-600">{t('checkout.savedAddressesLimit')}</p>
-                )}
               </div>
             </div>
 
