@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee, Image as ImageIcon, Pencil } from 'lucide-react';
+import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
@@ -35,8 +35,7 @@ interface OrderDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: Order | null;
-  hideAddressInfo?: boolean;
-  onGoToEdit?: () => void;
+  hideAddressInfo?: boolean; 
 }
 
 const MONTHS_ES = [
@@ -466,7 +465,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 // --- Main Modal Component ---
-const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false, onGoToEdit }) => {
+const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false }) => {
   if (!isOpen || !order) return null;
 
   const formatDate = (dateString: string) => {
@@ -748,16 +747,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-100 bg-white flex items-center justify-between gap-4">
-          {onGoToEdit ? (
-            <button
-              onClick={onGoToEdit}
-              className="flex items-center gap-2 px-6 py-3 border border-gray-300 hover:border-black text-gray-700 hover:text-black rounded-xl text-sm font-bold transition-all active:scale-95"
-            >
-              <Pencil className="w-4 h-4" />
-              Volver a editar
-            </button>
-          ) : <div />}
+        <div className="p-6 border-t border-gray-100 bg-white flex justify-end">
           <button
             onClick={onClose}
             className="px-8 py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-xl active:scale-95"
