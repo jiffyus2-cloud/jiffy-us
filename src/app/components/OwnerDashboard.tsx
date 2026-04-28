@@ -985,7 +985,7 @@ const OwnerDashboard: React.FC = () => {
                             <span className="text-sm font-bold text-gray-900">${order.total?.toFixed(2)}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-center gap-2">
                               <button onClick={() => handleViewDetails(order)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors title='Ver detalles'"><Eye className="w-5 h-5" /></button>
                               {downloadProgress.orderId === order.id ? (
                                 <div className="w-28 flex items-center gap-2" title={`Renderizando... ${downloadProgress.progress}%`}>
