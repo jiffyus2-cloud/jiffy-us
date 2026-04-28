@@ -15,6 +15,7 @@ export default function Success() {
   
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const hasAttempted = useRef(false);
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function Success() {
 
           localStorage.removeItem('pending_order_id');
           setVerificationError(null);
+          setCountdown(3);
         } catch (error: any) {
           console.error('Error al confirmar pago:', error);
           setVerificationError(error.message || t('error.confirmOrder'));
@@ -90,6 +92,13 @@ export default function Success() {
       setIsVerifying(false);
     }
   }, [isAuthLoading, location.search, t]);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown === 0) { navigate('/dashboard'); return; }
+    const timer = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [countdown, navigate]);
 
   const VerificationStatus = () => {
     if (isVerifying) {
@@ -112,6 +121,12 @@ export default function Success() {
       </p>
 
       <VerificationStatus />
+
+      {!isVerifying && !verificationError && countdown !== null && (
+        <p className="text-sm text-gray-400 mb-6 -mt-4">
+          Redirigiendo a tus pedidos en {countdown}...
+        </p>
+      )}
 
       {verificationError && (
         <div className="mt-4 mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center gap-3 max-w-md text-left animate-in zoom-in-95">
