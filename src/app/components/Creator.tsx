@@ -100,6 +100,7 @@ export default function Creator() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSaveSuccess, setDraftSaveSuccess] = useState(false);
   const [showDraftHint, setShowDraftHint] = useState(false);
+  const [autoSaveBanner, setAutoSaveBanner] = useState<string | null>(null);
 
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
 
@@ -189,7 +190,7 @@ export default function Creator() {
 
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
-      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined);
+      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined, 'saved_draft');
 
       setActiveDraftId(null);
       setResumingOrderId(null);
@@ -521,6 +522,10 @@ export default function Creator() {
   };
 
   const handleSelectProduct = (product: ProductType) => {
+    if (!user) {
+      navigate('/login', { state: { from: location.pathname, startProduct: product } });
+      return;
+    }
     setSelectedProduct(product);
     if (product === 'album') setSelectedAlbum(BASE_ALBUM);
     if (product === 'calendar') setSelectedCalendar(BASE_CALENDAR);
@@ -529,9 +534,64 @@ export default function Creator() {
     setCurrentStep('customization');
   };
 
+  const autoSaveDraftSilently = async (customizationOverride?: any) => {
+    if (!user) return;
+    try {
+      const activeProduct = getActiveProduct();
+      if (!activeProduct) return;
+      const effectiveCustomization = customizationOverride ?? getActiveCustomization();
+
+      let coverData: any = { image: '', title: activeProduct.name };
+      if (selectedProduct === 'album' && (effectiveCustomization as any)?.coverContent) {
+        const content = (effectiveCustomization as any).coverContent;
+        coverData = {
+          image: content.coverImage || '',
+          title: content.coverTitle || '',
+          subtitle: content.coverSubtitle || '',
+          year: content.coverYear || '',
+          layout: content.selectedLayout || 1,
+          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
+        };
+      }
+
+      const activePhotoCrops = selectedProduct === 'album' ? photoCrops
+                             : selectedProduct === 'calendar' ? calendarPhotoCrops
+                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
+                             : {};
+
+      const designData = {
+        photos: getActivePhotos(),
+        pageLayouts,
+        pageLayoutVariants,
+        textBoxSlots,
+        customization: effectiveCustomization,
+        coverData,
+        photoCrops: activePhotoCrops,
+        items: selectedProduct === 'mug' ? mugItems : [],
+        mugItems: selectedProduct === 'mug' ? mugItems : [],
+      };
+
+      const newDraftId = await createDraftOrder(
+        user.uid,
+        designData,
+        activeProduct,
+        undefined,
+        activeDraftId || undefined,
+        selectedProduct || undefined,
+        'saved_draft'
+      );
+      setActiveDraftId(newDraftId);
+      setAutoSaveBanner('Borrador guardado automáticamente');
+      setTimeout(() => setAutoSaveBanner(null), 3500);
+    } catch (e) {
+      console.error('Auto-save silencioso falló:', e);
+    }
+  };
+
   const handleCustomizationComplete = (options: CustomizationOptions) => {
     setCustomization(options);
     setCurrentStep('organize');
+    autoSaveDraftSilently(options);
   };
 
   const handleCalendarCustomizationComplete = (options: CalendarCustomizationOptions) => {
@@ -934,6 +994,13 @@ export default function Creator() {
           className="fixed inset-0 z-[40] bg-black/40 backdrop-blur-[1px]"
           onClick={handleDismissDraftHint}
         />
+      )}
+
+      {autoSaveBanner && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium pointer-events-none">
+          <Check className="w-4 h-4 text-green-400 shrink-0" />
+          {autoSaveBanner}
+        </div>
       )}
 
     </div>
