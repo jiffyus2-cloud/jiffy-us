@@ -431,6 +431,7 @@ export default function Checkout() {
                 )}
               </div>
 
+
               <div className="space-y-3 md:space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                   <div className="space-y-1.5">
@@ -476,46 +477,11 @@ export default function Checkout() {
               <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                  {/* Pre-fill from saved billing */}
-                  {savedBilling && !formData.billingName && !formData.billingAddress && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({
-                        ...prev,
-                        billingName: savedBilling.name,
-                        billingAddress: savedBilling.address,
-                        billingCity: savedBilling.city,
-                        billingZipCode: savedBilling.zipCode,
-                      }))}
-                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 hover:border-gray-400 transition-all text-sm text-gray-700"
-                    >
-                      <span className="font-semibold text-black">{t('checkout.useSavedAddress')}:</span>
-                      <span className="ml-2">{savedBilling.name} · {savedBilling.address}, {savedBilling.city}</span>
-                    </button>
-                  )}
                   <div className="space-y-2"><label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label><input type="text" id="billingName" name="billingName" required value={formData.billingName} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   <div className="space-y-2"><label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label><input type="text" id="billingAddress" name="billingAddress" required value={formData.billingAddress} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2"><label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="billingCity" name="billingCity" required value={formData.billingCity} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                     <div className="space-y-2"><label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="billingZipCode" name="billingZipCode" required value={formData.billingZipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
-                  </div>
-                  {/* Save billing checkbox */}
-                  <div className="pt-2 border-t border-gray-100">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={shouldSaveBilling}
-                        onChange={e => setShouldSaveBilling(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
-                      />
-                      <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                        <BookmarkCheck className="w-3.5 h-3.5 text-gray-400" />
-                        {t('checkout.saveBilling')}
-                      </span>
-                    </label>
-                    {shouldSaveBilling && savedBilling && (
-                      <p className="mt-1.5 ml-7 text-xs text-amber-600">{t('checkout.savedBillingExists')}</p>
-                    )}
                   </div>
                 </div>
               )}
