@@ -69,7 +69,7 @@ type Step = 'product' | 'customization' | 'organize' | 'checkout';
 
 export default function Creator() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
@@ -192,9 +192,10 @@ export default function Creator() {
         return;
       }
 
+      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
       const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
         setUploadProgress(progress);
-      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined, 'saved_draft');
+      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined, 'saved_draft', userInfo);
 
       setActiveDraftId(orderId);
       setResumingOrderId(null);
@@ -481,6 +482,7 @@ export default function Creator() {
         mugItems: currentMugItems,
       };
 
+      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
       const newDraftId = await createDraftOrder(
         user.uid,
         designData,
@@ -488,7 +490,8 @@ export default function Creator() {
         undefined,
         activeDraftId || resumingOrderId || undefined,
         selectedProduct || undefined,
-        'saved_draft'
+        'saved_draft',
+        userInfo
       );
 
       setActiveDraftId(newDraftId);
@@ -650,6 +653,7 @@ export default function Creator() {
         mugItems: selectedProduct === 'mug' ? mugItems : [],
       };
 
+      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
       const newDraftId = await createDraftOrder(
         user.uid,
         designData,
@@ -657,7 +661,8 @@ export default function Creator() {
         undefined,
         activeDraftId || undefined,
         selectedProduct || undefined,
-        'saved_draft'
+        'saved_draft',
+        userInfo
       );
       setActiveDraftId(newDraftId);
       setAutoSaveBanner('Borrador guardado automáticamente');

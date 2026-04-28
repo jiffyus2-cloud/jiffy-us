@@ -993,8 +993,8 @@ const OwnerDashboard: React.FC = () => {
                                   <span className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</span>
                                 </div>
                                 {/* Cliente */}
-                                <p className="text-sm font-semibold text-gray-900 truncate leading-none mb-0.5">{order.shippingAddress?.name || 'Invitado'}</p>
-                                <p className="text-xs text-gray-400 truncate mb-2">{order.shippingAddress?.email || '—'}</p>
+                                <p className="text-sm font-semibold text-gray-900 truncate leading-none mb-0.5">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
+                                <p className="text-xs text-gray-400 truncate mb-2">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
                                 {/* Monto */}
                                 <p className="text-sm font-bold text-gray-800 mb-3">{formatCOP(order.total)}</p>
                                 {/* Acciones */}
@@ -1054,8 +1054,8 @@ const OwnerDashboard: React.FC = () => {
                                   <p className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</p>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || 'Invitado'}</p>
-                                  <p className="text-xs text-gray-400">{order.shippingAddress?.email || '—'}</p>
+                                  <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
+                                  <p className="text-xs text-gray-400">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
