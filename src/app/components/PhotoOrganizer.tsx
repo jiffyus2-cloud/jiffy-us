@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
-  Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
+  Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
 import { Album } from '../types/products';
@@ -24,7 +24,7 @@ interface JiffyLoaderProps {
 }
 
 const getEstimatedTime = (count: number): string => {
-  const seconds = Math.round(count * 0.45);
+  const seconds = Math.round(count * 1);
   if (seconds < 60) return `~${seconds} seg`;
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -1705,15 +1705,30 @@ export default function PhotoOrganizer({
                     className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
                   />
                 </div>
-                <input 
-                  type="range" 
-                  min={40} 
-                  max={maxP} 
-                  step={2} 
-                  value={numPages === '' ? 40 : numPages} 
-                  onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
-                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
-                />
+                {uploadedPhotos.length === 40 ? (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, por lo que tu álbum tendrá exactamente <strong>40 páginas</strong>.</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. 40</span>
+                      <span>Máx. {maxP}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={40}
+                      max={maxP}
+                      step={2}
+                      value={numPages === '' ? 40 : numPages}
+                      onChange={(e) => setNumPages(parseInt(e.target.value, 10))}
+                      className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+                    />
+                  </>
+                )}
 
                 <div className="mt-4 flex flex-col gap-2">
                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
@@ -1911,7 +1926,7 @@ export default function PhotoOrganizer({
 
               <div className="flex gap-3">
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0">
-                  <Settings className="w-4 h-4" />
+                  <Pencil className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="font-bold text-black mb-1">Editar fotos de una página</p>
@@ -2086,7 +2101,7 @@ export default function PhotoOrganizer({
                     onClick={() => setAdvancedSettingsModal(pageIndex)}
                     className="flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
                   >
-                    <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     <span className="text-xs md:text-sm font-bold uppercase tracking-tight hidden sm:inline">
                       {t('organizer.pageSettings') || 'Ajustes'}
                     </span>
