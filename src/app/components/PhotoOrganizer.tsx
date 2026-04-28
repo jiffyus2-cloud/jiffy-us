@@ -777,6 +777,24 @@ export default function PhotoOrganizer({
     }
     onPageLayoutsChange(newLayouts);
     onPageLayoutVariantsChange(newVariants);
+
+    const newCrops: Record<string, any> = {};
+    for (const key of Object.keys(photoCrops)) {
+      const dashIdx = key.indexOf('-');
+      const pageNum = Number(key.substring(0, dashIdx));
+      const photoStr = key.substring(dashIdx + 1);
+      if (pageNum < index) newCrops[key] = photoCrops[key];
+      else if (pageNum >= index + deleteCount) newCrops[`${pageNum - deleteCount}-${photoStr}`] = photoCrops[key];
+    }
+    onPhotoCropsChange(newCrops);
+
+    const newTextsPage: Record<number, Record<number, any>> = {};
+    for (const pageKey of Object.keys(textBoxSlots)) {
+      const pageNum = Number(pageKey);
+      if (pageNum < index) newTextsPage[pageNum] = textBoxSlots[pageNum];
+      else if (pageNum >= index + deleteCount) newTextsPage[pageNum - deleteCount] = textBoxSlots[pageNum];
+    }
+    onTextBoxSlotsChange(newTextsPage);
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
@@ -803,6 +821,21 @@ export default function PhotoOrganizer({
     else delete newVariants[targetIndex];
     onPageLayoutsChange(newLayouts);
     onPageLayoutVariantsChange(newVariants);
+
+    const swappedCrops = { ...photoCrops };
+    const keysIndex = Object.keys(swappedCrops).filter(k => k.startsWith(`${index}-`));
+    const keysTarget = Object.keys(swappedCrops).filter(k => k.startsWith(`${targetIndex}-`));
+    keysIndex.forEach(k => delete swappedCrops[k]);
+    keysTarget.forEach(k => { swappedCrops[`${index}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swappedCrops[k]; });
+    keysIndex.forEach(k => { swappedCrops[`${targetIndex}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
+    onPhotoCropsChange(swappedCrops);
+
+    const swappedTexts = { ...textBoxSlots };
+    const textA = textBoxSlots[index];
+    const textB = textBoxSlots[targetIndex];
+    if (textB !== undefined) swappedTexts[index] = textB; else delete swappedTexts[index];
+    if (textA !== undefined) swappedTexts[targetIndex] = textA; else delete swappedTexts[targetIndex];
+    onTextBoxSlotsChange(swappedTexts);
   };
 
   const handleMovePageToIndex = (fromIndex: number, toIndex: number) => {
@@ -828,6 +861,27 @@ export default function PhotoOrganizer({
     const newVariants: Record<number, number> = {};
     variantsArr.forEach((v, i) => { if (v !== undefined) newVariants[i] = v; });
     onPageLayoutVariantsChange(newVariants);
+
+    const cropsPerPage: (Record<string, any>)[] = Array.from({ length: pageCount }, () => ({}));
+    for (const key of Object.keys(photoCrops)) {
+      const dashIdx = key.indexOf('-');
+      const pageNum = Number(key.substring(0, dashIdx));
+      if (pageNum < pageCount) cropsPerPage[pageNum][key.substring(dashIdx + 1)] = photoCrops[key];
+    }
+    const [movedCrops] = cropsPerPage.splice(fromIndex, 1);
+    cropsPerPage.splice(toIndex, 0, movedCrops);
+    const newCropsPage: Record<string, any> = {};
+    cropsPerPage.forEach((pageCrops, newPageIdx) => {
+      for (const photoStr of Object.keys(pageCrops)) newCropsPage[`${newPageIdx}-${photoStr}`] = pageCrops[photoStr];
+    });
+    onPhotoCropsChange(newCropsPage);
+
+    const textsArr: (Record<number, any> | undefined)[] = Array.from({ length: pageCount }, (_, i) => textBoxSlots[i]);
+    const [movedTexts] = textsArr.splice(fromIndex, 1);
+    textsArr.splice(toIndex, 0, movedTexts);
+    const newTextsMove: Record<number, Record<number, any>> = {};
+    textsArr.forEach((t, i) => { if (t !== undefined) newTextsMove[i] = t; });
+    onTextBoxSlotsChange(newTextsMove);
   };
 
   const handleSwapTwoPages = (a: number, b: number) => {
@@ -847,6 +901,21 @@ export default function PhotoOrganizer({
     if (newVariants[b] !== undefined) newVariants[a] = newVariants[b]; else delete newVariants[a];
     if (tempVariant !== undefined) newVariants[b] = tempVariant; else delete newVariants[b];
     onPageLayoutVariantsChange(newVariants);
+
+    const swapCrops = { ...photoCrops };
+    const keysA = Object.keys(swapCrops).filter(k => k.startsWith(`${a}-`));
+    const keysB = Object.keys(swapCrops).filter(k => k.startsWith(`${b}-`));
+    keysA.forEach(k => delete swapCrops[k]);
+    keysB.forEach(k => { swapCrops[`${a}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swapCrops[k]; });
+    keysA.forEach(k => { swapCrops[`${b}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
+    onPhotoCropsChange(swapCrops);
+
+    const swapTexts = { ...textBoxSlots };
+    const textsA = textBoxSlots[a];
+    const textsB = textBoxSlots[b];
+    if (textsB !== undefined) swapTexts[a] = textsB; else delete swapTexts[a];
+    if (textsA !== undefined) swapTexts[b] = textsA; else delete swapTexts[b];
+    onTextBoxSlotsChange(swapTexts);
   };
 
   const exitReorderMode = () => {
@@ -900,6 +969,19 @@ export default function PhotoOrganizer({
       pageSigs[photoIndex] = '';
       newSigs[pageIndex] = pageSigs;
       setFileSignatures(newSigs);
+    }
+
+    const newCropsRemove = { ...photoCrops };
+    delete newCropsRemove[`${pageIndex}-${photoIndex}`];
+    onPhotoCropsChange(newCropsRemove);
+
+    const newTextsRemove = { ...textBoxSlots };
+    if (newTextsRemove[pageIndex]) {
+      const pageTexts = { ...newTextsRemove[pageIndex] };
+      delete pageTexts[photoIndex];
+      if (Object.keys(pageTexts).length === 0) delete newTextsRemove[pageIndex];
+      else newTextsRemove[pageIndex] = pageTexts;
+      onTextBoxSlotsChange(newTextsRemove);
     }
   };
 
