@@ -192,8 +192,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
             { name: 'Tela', description: 'Acabado premium con textura de lino. Páginas interiores en papel opalina.', images: allTelaImages }
           ],
           specifications: [
-            { label: 'Tipos de carátula', value: 'Tela, Papel' },
-            { label: 'Tamaños', value: '20x20 Cuadrado, 30x30 Cuadrado, 21x28 Vertical, 28x21 Horizontal' },
+            { label: 'Tipos de carátula', value: 'Pasta Dura en Tela o Papel' },
+            { label: 'Tamaños', value: '20x20: Cuadrado - 30x30: Cuadrado - 21x28: Vertical - 28x21: Horizontal' },
             { label: 'Cantidad de páginas', value: 'Mínimo 40, máximo 250 (incrementos de 2)' },
             { label: 'Tipo de papel', value: 'Opalina Mate' }
           ],
