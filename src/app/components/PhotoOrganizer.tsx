@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
-  Layers, Type, ALargeSmall, Settings, Crop as CropIcon,
+  Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
   AlertCircle, Loader2
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
+import { useStoreConfig } from '../context/StoreConfigContext';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -19,9 +20,19 @@ import jiffy2Img from '../../assets/Jiffy2.png';
 // ============================================================================
 interface JiffyLoaderProps {
   t?: (key: string) => string;
+  photoCount?: number;
 }
 
-const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
+const getEstimatedTime = (count: number): string => {
+  const seconds = Math.round(count * 1);
+  if (seconds < 60) return `~${seconds} seg`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `~${mins} min ${secs} seg` : `~${mins} min`;
+};
+
+const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
+  const estimated = photoCount ? getEstimatedTime(photoCount) : null;
   return (
     <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-none border border-gray-200 shadow-inner">
       <div className="relative w-24 h-24 flex items-center justify-center">
@@ -44,7 +55,7 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
         </div>
       </div>
 
-      <div className="text-center animate-pulse">
+      <div className="text-center animate-pulse px-6 py-3 bg-white rounded-lg border border-gray-200 shadow-sm mx-4">
         <p className="text-xl font-bold text-gray-900">
           {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
         </p>
@@ -52,6 +63,15 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
           {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
         </p>
       </div>
+
+      {estimated && (
+        <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border border-amber-200 rounded-lg mx-4 text-sm text-amber-800">
+          <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Tiempo estimado para {photoCount} fotos: <strong>{estimated}</strong></span>
+        </div>
+      )}
 
       <style>{`
         @keyframes spinRightT1 {
@@ -85,6 +105,7 @@ interface PhotoOrganizerProps {
   pageLayoutVariants: Record<number, number>;
   onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
+  pagesLocked?: boolean;
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -211,15 +232,22 @@ const AlbumEditorPhotoSlot: React.FC<{
   );
 };
 
-export default function PhotoOrganizer({ 
+export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
-  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete 
+  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
-  
+  const storeConfig = useStoreConfig();
+
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
+
+  const extraPagePrice = sizeStr.includes('30x30')
+    ? storeConfig.prices.albumExtra30x30
+    : sizeStr.includes('21x28') || sizeStr.includes('28x21')
+    ? storeConfig.prices.albumExtraRect
+    : storeConfig.prices.albumExtra20x20;
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
@@ -686,6 +714,7 @@ export default function PhotoOrganizer({
   };
 
   const handleAddPage = (index: number) => {
+    if (pagesLocked) return;
     if (photos.length >= 249) {
       alert('Límite máximo de 250 páginas alcanzado.');
       return;
@@ -712,6 +741,7 @@ export default function PhotoOrganizer({
   };
 
   const handleDeletePage = (index: number) => {
+    if (pagesLocked) return;
     if (photos.length <= 40) {
       alert(t('organizer.minPagesReached') || 'Minimum of 40 pages required.');
       return;
@@ -750,6 +780,24 @@ export default function PhotoOrganizer({
     }
     onPageLayoutsChange(newLayouts);
     onPageLayoutVariantsChange(newVariants);
+
+    const newCrops: Record<string, any> = {};
+    for (const key of Object.keys(photoCrops)) {
+      const dashIdx = key.indexOf('-');
+      const pageNum = Number(key.substring(0, dashIdx));
+      const photoStr = key.substring(dashIdx + 1);
+      if (pageNum < index) newCrops[key] = photoCrops[key];
+      else if (pageNum >= index + deleteCount) newCrops[`${pageNum - deleteCount}-${photoStr}`] = photoCrops[key];
+    }
+    onPhotoCropsChange(newCrops);
+
+    const newTextsPage: Record<number, Record<number, any>> = {};
+    for (const pageKey of Object.keys(textBoxSlots)) {
+      const pageNum = Number(pageKey);
+      if (pageNum < index) newTextsPage[pageNum] = textBoxSlots[pageNum];
+      else if (pageNum >= index + deleteCount) newTextsPage[pageNum - deleteCount] = textBoxSlots[pageNum];
+    }
+    onTextBoxSlotsChange(newTextsPage);
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
@@ -776,6 +824,21 @@ export default function PhotoOrganizer({
     else delete newVariants[targetIndex];
     onPageLayoutsChange(newLayouts);
     onPageLayoutVariantsChange(newVariants);
+
+    const swappedCrops = { ...photoCrops };
+    const keysIndex = Object.keys(swappedCrops).filter(k => k.startsWith(`${index}-`));
+    const keysTarget = Object.keys(swappedCrops).filter(k => k.startsWith(`${targetIndex}-`));
+    keysIndex.forEach(k => delete swappedCrops[k]);
+    keysTarget.forEach(k => { swappedCrops[`${index}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swappedCrops[k]; });
+    keysIndex.forEach(k => { swappedCrops[`${targetIndex}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
+    onPhotoCropsChange(swappedCrops);
+
+    const swappedTexts = { ...textBoxSlots };
+    const textA = textBoxSlots[index];
+    const textB = textBoxSlots[targetIndex];
+    if (textB !== undefined) swappedTexts[index] = textB; else delete swappedTexts[index];
+    if (textA !== undefined) swappedTexts[targetIndex] = textA; else delete swappedTexts[targetIndex];
+    onTextBoxSlotsChange(swappedTexts);
   };
 
   const handleMovePageToIndex = (fromIndex: number, toIndex: number) => {
@@ -801,6 +864,27 @@ export default function PhotoOrganizer({
     const newVariants: Record<number, number> = {};
     variantsArr.forEach((v, i) => { if (v !== undefined) newVariants[i] = v; });
     onPageLayoutVariantsChange(newVariants);
+
+    const cropsPerPage: (Record<string, any>)[] = Array.from({ length: pageCount }, () => ({}));
+    for (const key of Object.keys(photoCrops)) {
+      const dashIdx = key.indexOf('-');
+      const pageNum = Number(key.substring(0, dashIdx));
+      if (pageNum < pageCount) cropsPerPage[pageNum][key.substring(dashIdx + 1)] = photoCrops[key];
+    }
+    const [movedCrops] = cropsPerPage.splice(fromIndex, 1);
+    cropsPerPage.splice(toIndex, 0, movedCrops);
+    const newCropsPage: Record<string, any> = {};
+    cropsPerPage.forEach((pageCrops, newPageIdx) => {
+      for (const photoStr of Object.keys(pageCrops)) newCropsPage[`${newPageIdx}-${photoStr}`] = pageCrops[photoStr];
+    });
+    onPhotoCropsChange(newCropsPage);
+
+    const textsArr: (Record<number, any> | undefined)[] = Array.from({ length: pageCount }, (_, i) => textBoxSlots[i]);
+    const [movedTexts] = textsArr.splice(fromIndex, 1);
+    textsArr.splice(toIndex, 0, movedTexts);
+    const newTextsMove: Record<number, Record<number, any>> = {};
+    textsArr.forEach((t, i) => { if (t !== undefined) newTextsMove[i] = t; });
+    onTextBoxSlotsChange(newTextsMove);
   };
 
   const handleSwapTwoPages = (a: number, b: number) => {
@@ -820,6 +904,21 @@ export default function PhotoOrganizer({
     if (newVariants[b] !== undefined) newVariants[a] = newVariants[b]; else delete newVariants[a];
     if (tempVariant !== undefined) newVariants[b] = tempVariant; else delete newVariants[b];
     onPageLayoutVariantsChange(newVariants);
+
+    const swapCrops = { ...photoCrops };
+    const keysA = Object.keys(swapCrops).filter(k => k.startsWith(`${a}-`));
+    const keysB = Object.keys(swapCrops).filter(k => k.startsWith(`${b}-`));
+    keysA.forEach(k => delete swapCrops[k]);
+    keysB.forEach(k => { swapCrops[`${a}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swapCrops[k]; });
+    keysA.forEach(k => { swapCrops[`${b}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
+    onPhotoCropsChange(swapCrops);
+
+    const swapTexts = { ...textBoxSlots };
+    const textsA = textBoxSlots[a];
+    const textsB = textBoxSlots[b];
+    if (textsB !== undefined) swapTexts[a] = textsB; else delete swapTexts[a];
+    if (textsA !== undefined) swapTexts[b] = textsA; else delete swapTexts[b];
+    onTextBoxSlotsChange(swapTexts);
   };
 
   const exitReorderMode = () => {
@@ -873,6 +972,19 @@ export default function PhotoOrganizer({
       pageSigs[photoIndex] = '';
       newSigs[pageIndex] = pageSigs;
       setFileSignatures(newSigs);
+    }
+
+    const newCropsRemove = { ...photoCrops };
+    delete newCropsRemove[`${pageIndex}-${photoIndex}`];
+    onPhotoCropsChange(newCropsRemove);
+
+    const newTextsRemove = { ...textBoxSlots };
+    if (newTextsRemove[pageIndex]) {
+      const pageTexts = { ...newTextsRemove[pageIndex] };
+      delete pageTexts[photoIndex];
+      if (Object.keys(pageTexts).length === 0) delete newTextsRemove[pageIndex];
+      else newTextsRemove[pageIndex] = pageTexts;
+      onTextBoxSlotsChange(newTextsRemove);
     }
   };
 
@@ -1573,7 +1685,7 @@ export default function PhotoOrganizer({
                   </div>
                   
                   <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
-                  <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>
+                  {!pagesLocked && <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>}
                 </div>
               </div>
               
@@ -1649,10 +1761,12 @@ export default function PhotoOrganizer({
         {renderDuplicateModal()}
         {renderLowResModal()}
         
-        <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
+        {!isSortingWithAI && (
+          <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
+        )}
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
           {isSortingWithAI ? (
-            <JiffyLoader t={t} />
+            <JiffyLoader t={t} photoCount={uploadedPhotos.length} />
           ) : (
             <>
               <div>
@@ -1676,15 +1790,46 @@ export default function PhotoOrganizer({
                     className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
                   />
                 </div>
-                <input 
-                  type="range" 
-                  min={40} 
-                  max={maxP} 
-                  step={2} 
-                  value={numPages === '' ? 40 : numPages} 
-                  onChange={(e) => setNumPages(parseInt(e.target.value, 10))} 
-                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black" 
-                />
+                {uploadedPhotos.length === 40 ? (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, por lo que tu álbum tendrá exactamente <strong>40 páginas</strong>.</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. 40</span>
+                      <span>Máx. {maxP}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={40}
+                      max={maxP}
+                      step={2}
+                      value={numPages === '' ? 40 : numPages}
+                      onChange={(e) => setNumPages(parseInt(e.target.value, 10))}
+                      className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+                    />
+                  </>
+                )}
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-amber-700">
+                      <span className="font-bold">Mínimo 40 páginas.</span> Los álbumes incluyen 40 páginas base.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-blue-700">
+                      Cada página adicional (más de 40) tiene un costo de{' '}
+                      <span className="font-bold">${extraPagePrice.toLocaleString('es-CO')} COP</span>.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-4">
                 <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>
@@ -1866,7 +2011,7 @@ export default function PhotoOrganizer({
 
               <div className="flex gap-3">
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0">
-                  <Settings className="w-4 h-4" />
+                  <Pencil className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="font-bold text-black mb-1">Editar fotos de una página</p>
@@ -2038,7 +2183,7 @@ export default function PhotoOrganizer({
                     onClick={() => setAdvancedSettingsModal(pageIndex)}
                     className="flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
                   >
-                    <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     <span className="text-xs md:text-sm font-bold uppercase tracking-tight hidden sm:inline">
                       {t('organizer.pageSettings') || 'Ajustes'}
                     </span>
@@ -2165,7 +2310,16 @@ export default function PhotoOrganizer({
         </button>
       </div>
 
-      <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button></div>
+      <div className="mt-20 text-center pb-20">
+        {pagesLocked ? (
+          <div className="inline-flex items-center gap-3 px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm font-medium">{t('creator.pagesLockedBanner')}</span>
+          </div>
+        ) : (
+          <button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button>
+        )}
+      </div>
 
       {cropModalData !== null && (
         <CropModal

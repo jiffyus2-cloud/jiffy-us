@@ -29,32 +29,35 @@ export interface CustomizationOptions {
 interface AlbumCustomizationProps {
   album: Album;
   onCustomizationComplete: (options: CustomizationOptions) => void;
+  initialData?: CustomizationOptions | null;
 }
 
-export default function AlbumCustomization({ album, onCustomizationComplete }: AlbumCustomizationProps) {
+export default function AlbumCustomization({ album, onCustomizationComplete, initialData }: AlbumCustomizationProps) {
   const { t } = useLanguage();
-  
-  // 1. Opciones por defecto: Papel y Blanco (Foto)
-  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>('Papel');
-  const [size, setSize] = useState<CustomizationOptions['size']>('Cuadrado 20x20 cm');
-  const [coverColor, setCoverColor] = useState('#F5F5F5'); 
-  
-  const [isCoverEdited, setIsCoverEdited] = useState(false);
+
+  const [coverType, setCoverType] = useState<'Tela' | 'Papel'>(initialData?.coverType || 'Papel');
+  const [size, setSize] = useState<CustomizationOptions['size']>(initialData?.size || 'Cuadrado 20x20 cm');
+  const [coverColor, setCoverColor] = useState(
+    initialData?.coverColor || (initialData?.coverType === 'Tela' ? '#E8DCC4' : '#F5F5F5')
+  );
+
+  const [isCoverEdited, setIsCoverEdited] = useState(!!(initialData?.coverContent?.coverTitle));
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
-  
-  // Iniciamos los campos de texto vacíos para obligar al usuario a personalizarlos
-  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>({
-    coverTitle: '',
-    coverSubtitle: '',
-    coverYear: '',
-    spineText: '',
-    coverImage: '',
-    selectedLayout: 1,
-    typographyColor: '#000000',
-    coverCrop: { x: 50, y: 50, zoom: 1 }
-  });
+
+  const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>(
+    initialData?.coverContent || {
+      coverTitle: '',
+      coverSubtitle: '',
+      coverYear: '',
+      spineText: '',
+      coverImage: '',
+      selectedLayout: 1,
+      typographyColor: '#000000',
+      coverCrop: { x: 50, y: 50, zoom: 1 }
+    }
+  );
 
   const handleCoverTypeChange = (type: 'Tela' | 'Papel') => {
     setCoverType(type);
@@ -107,17 +110,17 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
   const hidePhoto = coverType === 'Tela';
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-10">
-      
-      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 mb-10 space-y-8">
-        <div className="border-b border-gray-100 pb-4 mb-6">
+    <div className="w-full max-w-4xl mx-auto px-4 pt-3 pb-6">
+
+      <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 space-y-4">
+        <div className="border-b border-gray-100 pb-3 mb-3">
           <h2 className="text-xl font-bold text-gray-900">Configuración Básica del Álbum</h2>
           <p className="text-sm text-gray-500">Ajusta los materiales y dimensiones antes de diseñar la portada.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
-          <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div className="space-y-2">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.coverType')}</h3>
             <div className="flex gap-3">
               <button
@@ -143,7 +146,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.size')}</h3>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -191,16 +194,16 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         </div>
       </div>
 
-      <div className="mb-10">
-        <div className="text-center mb-6">
+      <div className="mb-6">
+        <div className="text-center mb-3">
           <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
           <p className="text-sm text-gray-500 mt-1">
             Elige el diseño que más te guste y luego haz clic en la portada para añadir tus textos y fotos.
           </p>
         </div>
 
-        <div className="mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4 text-gray-400">
+        <div className="mb-4">
+          <div className="flex items-center justify-center gap-2 mb-3 text-gray-400">
             <Layout className="w-4 h-4" />
             <h3 className="text-xs font-bold uppercase tracking-widest">Diseños Disponibles</h3>
           </div>
@@ -223,7 +226,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
 
         <button
           onClick={() => setShowCoverEditor(true)}
-          className={`w-full relative rounded-2xl p-6 md:p-12 flex items-center justify-center transition-all group overflow-hidden border-2 ${
+          className={`w-full relative rounded-2xl p-4 md:p-8 flex items-center justify-center transition-all group overflow-hidden border-2 ${
             !isCoverEdited ? 'bg-amber-50 border-dashed border-amber-300 hover:bg-amber-100 hover:border-amber-400' : 'bg-gray-50 border-solid border-gray-200 hover:border-gray-300'
           }`}
         >
@@ -253,7 +256,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete }: A
         </button>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-4">
         <button
           onClick={handleContinue}
           disabled={!isCoverEdited}

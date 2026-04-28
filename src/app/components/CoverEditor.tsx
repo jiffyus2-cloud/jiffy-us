@@ -32,21 +32,30 @@ interface CoverEditorProps {
   };
 }
 
-const CoverEditor: React.FC<CoverEditorProps> = ({ 
-  coverSize, 
+const CoverEditor: React.FC<CoverEditorProps> = ({
+  coverSize,
   coverType,
   hidePhoto = false,
-  onClose, 
+  onClose,
   onSave,
-  initialData 
+  initialData
 }) => {
   const { t } = useLanguage();
-  
+
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || '');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || '');
   const [coverYear, setCoverYear] = useState(initialData?.coverYear || '');
   const [spineText, setSpineText] = useState(initialData?.spineText || '');
+
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
   
   const [selectedLayout, setSelectedLayout] = useState(initialData?.selectedLayout || 1);
   const [coverCrop, setCoverCrop] = useState(initialData?.coverCrop || { x: 50, y: 50, zoom: 1, rotation: 0 });
@@ -65,9 +74,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   // Lógica de validación: El lomo NO es obligatorio en Tela
   const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
-  const isFormValid = coverTitle.trim() !== '' && 
-                      (coverType === 'Papel' ? spineText.trim() !== '' : true) && 
-                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '');
+  const requiresPhoto = coverType === 'Papel' && !hidePhoto;
+  const isFormValid = coverTitle.trim() !== '' &&
+                      (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
+                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '') &&
+                      (requiresPhoto ? coverImage !== '' : true);
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
   const displaySubtitle = coverSubtitle || 'Un viaje inolvidable';
@@ -224,14 +235,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       )}
 
       <div className="md:hidden p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-20">
-        <h2 className="text-lg font-black tracking-tighter">EDITOR DE PORTADA</h2>
+        <h2 className="text-lg font-black tracking-tighter">DISEÑA TU PORTADA</h2>
         <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
           <X size={24} />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden overscroll-contain">
-        <div className="relative w-full h-[350px] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-4 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden overscroll-contain min-h-0">
+        <div className="relative w-full h-[30vh] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
           <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
             <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
               <div className="md:hidden">
@@ -254,13 +265,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           </div>
         </div>
 
-        <div className="w-full md:w-[400px] flex flex-col bg-white md:shadow-xl z-10 order-2 md:order-1 md:h-full shrink-0 md:shrink">
+        <div className="w-full md:w-[400px] flex flex-col bg-white md:shadow-xl z-10 order-2 md:order-1 md:h-full flex-1 md:flex-none min-h-0">
           <div className="hidden md:flex p-6 border-b border-gray-100 items-center justify-between shrink-0">
-            <h2 className="text-xl font-black tracking-tighter">EDITOR DE PORTADA</h2>
+            <h2 className="text-xl font-black tracking-tighter">DISEÑA TU PORTADA</h2>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
           </div>
 
-          <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 min-h-0">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6 md:space-y-8 min-h-0" style={{ touchAction: 'pan-y' }}>
             
             <section>
               <div className="flex items-center gap-1.5 mb-3 text-gray-400">
@@ -280,6 +291,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
               </div>
             </section>
 
+            {coverType === 'Tela' && (
             <section>
               <div className="flex items-center gap-1.5 mb-3 text-gray-400"><Palette size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Color de Tipografía</h3></div>
               <div className="flex flex-wrap gap-3 md:gap-4">
@@ -291,6 +303,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 ))}
               </div>
             </section>
+            )}
 
             <section className="space-y-4 md:space-y-5">
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
@@ -372,7 +385,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
       </div>
 
-      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20 pb-24">
+      <div className="md:hidden p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0 z-20" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <ActionButtons />
       </div>
 

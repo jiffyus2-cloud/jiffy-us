@@ -1,23 +1,24 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Header } from './navigation/Header';
 import { useAuth } from '../../hooks/useAuth';
-import { getUserOrders } from '../../services/orderService';
+import { getUserOrders, getUserSavedDrafts, deleteSavedDraft } from '../../services/orderService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card';
 import { Badge } from './ui/badge';
 import { AspectRatio } from './ui/aspect-ratio';
 import { Skeleton } from './ui/skeleton';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
-import { Package, Calendar, FileText, Image as ImageIcon, AlertCircle, Coffee } from 'lucide-react';
+import { Package, Calendar, FileText, Image as ImageIcon, AlertCircle, Coffee, BookMarked, Trash2, Pencil } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import { useLanguage } from '../context/LanguageContext';
 
-// Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
 
 interface Order {
   id: string;
   createdAt: string;
+  updatedAt?: string;
   status: string;
   total: number;
   coverData?: {
@@ -30,8 +31,8 @@ interface Order {
     paper?: string;
     year?: number;
   };
-  pages?: Array<{ images?: string[]; image?: string }>; 
-  photos?: string[] | string[][]; 
+  pages?: Array<{ images?: string[]; image?: string }>;
+  photos?: string[] | string[][];
   items?: any[];
   product?: {
     id?: string;
@@ -41,14 +42,51 @@ interface Order {
   productType?: string;
 }
 
+function getPreviewImage(order: Order): string | null {
+  const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+  const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+  const isMug = productString.includes('mug') || productString.includes('taza');
+
+  let imageUrl: string | null = null;
+
+  if (isCalendar) {
+    const januaryPage = order.pages?.[0];
+    if (januaryPage) {
+      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) imageUrl = januaryPage.images[0];
+      else if (januaryPage.image) imageUrl = januaryPage.image;
+    }
+    if (!imageUrl && order.photos && order.photos.length > 0) {
+      const firstPhoto = order.photos[0];
+      imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
+    }
+  } else if (isMug) {
+    if (order.items && order.items.length > 0) {
+      imageUrl = order.items[0].photo || order.items[0].photos?.[0];
+    }
+  } else {
+    imageUrl = order.coverData?.image || null;
+    if (!imageUrl && order.photos && order.photos.length > 0) {
+      const firstPhoto = order.photos[0];
+      imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
+    }
+  }
+
+  if (!imageUrl) imageUrl = order.coverData?.image || null;
+  if (imageUrl && typeof imageUrl === 'string' && imageUrl.includes('justwhite')) imageUrl = justWhiteImg;
+  return imageUrl;
+}
+
 const UserDashboard: React.FC = () => {
   const { user } = useAuth();
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [savedDrafts, setSavedDrafts] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeletingDraftId, setIsDeletingDraftId] = useState<string | null>(null);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -57,12 +95,17 @@ const UserDashboard: React.FC = () => {
         return { text: t('status.paid'), className: 'bg-green-100 text-green-800 hover:bg-green-100' };
       case 'pending_payment':
         return { text: t('status.pending_payment'), className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' };
+      case 'en_produccion':
+        return { text: t('status.en_produccion'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
+      case 'enviado':
+        return { text: t('status.enviado'), className: 'bg-purple-100 text-purple-800 hover:bg-purple-100' };
+      case 'entregado':
+        return { text: t('status.entregado'), className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
       default:
         return { text: t('status.unknown'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
     }
   };
 
-  // Función para formatear el precio a Pesos Colombianos
   const formatPriceCOP = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -73,27 +116,49 @@ const UserDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchData = async () => {
       if (!user) return;
-      
       try {
         setIsLoading(true);
-        const userOrders = await getUserOrders(user.uid);
-        setOrders(userOrders);
+        const [userOrders, userDrafts] = await Promise.all([
+          getUserOrders(user.uid),
+          getUserSavedDrafts(user.uid),
+        ]);
+        setOrders(userOrders.filter((o: Order) => o.status !== 'saved_draft'));
+        setSavedDrafts(userDrafts);
       } catch (err: any) {
-        console.error('Error fetching orders:', err);
+        console.error('Error fetching data:', err);
         setError('error.fetchOrders');
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchOrders();
+    fetchData();
   }, [user]);
 
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
     setIsModalOpen(true);
+  };
+
+  const handleContinueDraft = (draft: Order) => {
+    navigate('/create', { state: { resumeSavedDraft: draft.id } });
+  };
+
+  const handleEditOrder = (order: Order) => {
+    navigate('/create', { state: { editPaidOrder: order.id, productType: order.productType } });
+  };
+
+  const handleDeleteDraft = async (draftId: string) => {
+    setIsDeletingDraftId(draftId);
+    try {
+      await deleteSavedDraft(draftId);
+      setSavedDrafts(prev => prev.filter(d => d.id !== draftId));
+    } catch (e) {
+      console.error('Error deleting draft', e);
+    } finally {
+      setIsDeletingDraftId(null);
+    }
   };
 
   const dateLocale = language === 'es' ? es : enUS;
@@ -138,160 +203,212 @@ const UserDashboard: React.FC = () => {
     <>
       <Header />
       <div className="container mx-auto py-10 px-4">
-      <header className="mb-10">
-        <h1 className="text-3xl font-bold text-gray-900">{t('dashboard.title')}</h1>
-        <p className="text-gray-500 mt-2">{t('dashboard.subtitle')}</p>
-      </header>
+        <header className="mb-10">
+          <h1 className="text-3xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+          <p className="text-gray-500 mt-2">{t('dashboard.subtitle')}</p>
+        </header>
 
-      {orders.length === 0 ? (
-        <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900">{t('dashboard.noOrders')}</h3>
-          <p className="text-gray-500 mt-1">{t('dashboard.noOrdersDesc')}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {orders.map((order) => {
-            const statusInfo = getStatusBadge(order.status);
-            
-            const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
-            const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
-            const isMug = productString.includes('mug') || productString.includes('taza');
-            
-            const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+        {/* SECCIÓN: Borradores guardados */}
+        {savedDrafts.length > 0 && (
+          <section className="mb-12">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <BookMarked className="h-5 w-5 text-gray-700" />
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{t('draft.sectionTitle')}</h2>
+                  <p className="text-sm text-gray-500">
+                    {t('draft.sectionSubtitle').replace('{count}', String(savedDrafts.length)).replace('{max}', '3')}
+                  </p>
+                </div>
+              </div>
+              {savedDrafts.length >= 3 && (
+                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                  {t('draft.limitWarning')}
+                </span>
+              )}
+            </div>
 
-            return (
-              <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">
-                <div className="relative overflow-hidden">
-                  <AspectRatio ratio={1 / 1}>
-                    {(() => {
-                      let imageUrl: string | null | undefined = null;
+            <div className={`grid grid-cols-1 gap-6 ${
+              savedDrafts.length === 1 ? 'md:grid-cols-1 md:max-w-sm' :
+              savedDrafts.length === 2 ? 'md:grid-cols-2' :
+              'md:grid-cols-3'
+            }`}>
+              {savedDrafts.map((draft) => {
+                const productString = String(draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || '').toLowerCase();
+                const isCalendar = productString.includes('calendar') || productString.includes('calendario');
+                const isMug = productString.includes('mug') || productString.includes('taza');
+                const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+                const imageUrl = getPreviewImage(draft);
+                const updatedDate = draft.updatedAt
+                  ? format(new Date(draft.updatedAt), 'PP', { locale: dateLocale })
+                  : '';
 
-                      if (isCalendar) {
-                        const januaryPage = order.pages?.[0];
-                        if (januaryPage) {
-                          if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) {
-                            imageUrl = januaryPage.images[0];
-                          } else if (januaryPage.image) {
-                            imageUrl = januaryPage.image;
-                          }
-                        }
-                        
-                        if (!imageUrl && order.photos && order.photos.length > 0) {
-                          const firstPhoto = order.photos[0];
-                          if (Array.isArray(firstPhoto) && firstPhoto.length > 0) {
-                            imageUrl = firstPhoto[0];
-                          } else if (typeof firstPhoto === 'string') {
-                            imageUrl = firstPhoto;
-                          }
-                        }
-                      } 
-                      else if (isMug) {
-                        if (order.items && order.items.length > 0) {
-                          imageUrl = order.items[0].photo || order.items[0].photos?.[0];
-                        }
-                      } 
-                      else {
-                        imageUrl = order.coverData?.image;
-                        if (!imageUrl && order.photos && order.photos.length > 0) {
-                          const firstPhoto = order.photos[0];
-                          imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
-                        }
-                      }
+                return (
+                  <div key={draft.id} className="group relative border border-dashed border-gray-300 rounded-2xl overflow-hidden hover:border-gray-400 hover:shadow-md transition-all duration-200 bg-white">
+                    {/* Thumbnail */}
+                    <AspectRatio ratio={16 / 9}>
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={draft.coverData?.title || draft.product?.name || 'Draft'}
+                          className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-50 flex items-center justify-center">
+                          <ProductIcon className="h-10 w-10 text-gray-300" />
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3">
+                        <span className="text-xs font-semibold bg-white/90 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
+                          {t('draft.savedOn').replace('{date}', updatedDate)}
+                        </span>
+                      </div>
+                    </AspectRatio>
 
-                      if (!imageUrl) {
-                        imageUrl = order.coverData?.image;
-                      }
+                    {/* Info */}
+                    <div className="p-4">
+                      <p className="font-bold text-gray-900 truncate">
+                        {draft.coverData?.title || draft.product?.name || 'Borrador'}
+                      </p>
+                      <p className="text-sm text-gray-400 mt-0.5 truncate">{draft.product?.name || ''}</p>
+                    </div>
 
-                      // Mapeo a imagen local si es blanco (justwhite)
-                      if (imageUrl && typeof imageUrl === 'string' && imageUrl.includes('justwhite')) {
-                        imageUrl = justWhiteImg;
-                      }
+                    {/* Actions */}
+                    <div className="px-4 pb-4 flex gap-2">
+                      <button
+                        onClick={() => handleContinueDraft(draft)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        {t('draft.continueEditing')}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDraft(draft.id)}
+                        disabled={isDeletingDraftId === draft.id}
+                        className="p-2 border border-gray-200 hover:border-red-200 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors disabled:opacity-50"
+                        title={t('draft.delete')}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-                      if (imageUrl) {
-                        return (
+        {/* SECCIÓN: Pedidos */}
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">{t('dashboard.title')}</h2>
+          {orders.length === 0 ? (
+            <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+              <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900">{t('dashboard.noOrders')}</h3>
+              <p className="text-gray-500 mt-1">{t('dashboard.noOrdersDesc')}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {orders.map((order) => {
+                const statusInfo = getStatusBadge(order.status);
+                const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
+                const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
+                const isMug = productString.includes('mug') || productString.includes('taza');
+                const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+                const imageUrl = getPreviewImage(order);
+
+                return (
+                  <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">
+                    <div className="relative overflow-hidden">
+                      <AspectRatio ratio={1 / 1}>
+                        {imageUrl ? (
                           <img
                             src={imageUrl}
                             alt={order.coverData?.title || order.product?.name || 'Preview'}
                             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                           />
-                        );
-                      } else {
-                        return (
+                        ) : (
                           <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                             <ProductIcon className="h-12 w-12 text-gray-300" />
                           </div>
-                        );
-                      }
-                    })()}
-                  </AspectRatio>
-                  <div className="absolute top-4 right-4">
-                    <Badge className={`${statusInfo.className} border-none font-medium px-3 py-1`}>
-                      {statusInfo.text}
-                    </Badge>
-                  </div>
-                </div>
-
-                <CardHeader className="p-5 pb-2">
-                  <div className="flex items-center text-xs text-gray-500 mb-2">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {order.createdAt ? t('dashboard.orderDate', { date: format(new Date(order.createdAt), "P", { locale: dateLocale }) }) : t('status.unknown')}
-                  </div>
-                  <CardTitle className="text-xl font-bold truncate leading-tight">
-                    {order.coverData?.title || order.product?.name || t('product.album')}
-                  </CardTitle>
-                  {order.coverData?.subtitle && (
-                    <CardDescription className="truncate text-gray-600">
-                      {order.coverData.subtitle}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-
-                <CardContent className="p-5 pt-0 space-y-4">
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.product')}</p>
-                      <p className="text-sm font-medium text-gray-700 truncate">{order.product?.name || 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.total')}</p>
-                      {/* Aquí se aplica el nuevo formato de Pesos Colombianos */}
-                      <p className="text-sm font-medium text-gray-700 truncate">
-                        {formatPriceCOP(order.total)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {productString.includes('album') && order.pages && (
-                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <FileText className="h-4 w-4 mr-2 text-primary" />
-                        <span>{t('dashboard.totalPages')}</span>
+                        )}
+                      </AspectRatio>
+                      <div className="absolute top-4 right-4">
+                        <Badge className={`${statusInfo.className} border-none font-medium px-3 py-1`}>
+                          {statusInfo.text}
+                        </Badge>
                       </div>
-                      <span className="font-bold text-gray-900">{order.pages.length}</span>
                     </div>
-                  )}
-                </CardContent>
 
-                <CardFooter className="p-5 pt-0">
-                  <button 
-                    onClick={() => handleViewDetails(order)}
-                    className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 "
-                  >
-                    {t('dashboard.viewDetails')}
-                  </button>
-                </CardFooter>
-              </Card>
-            )
-          })}
-        </div>
-      )}
+                    <CardHeader className="p-5 pb-2">
+                      <div className="flex items-center text-xs text-gray-500 mb-2">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {order.createdAt ? t('dashboard.orderDate', { date: format(new Date(order.createdAt), "P", { locale: dateLocale }) }) : t('status.unknown')}
+                      </div>
+                      <CardTitle className="text-xl font-bold truncate leading-tight">
+                        {order.coverData?.title || order.product?.name || t('product.album')}
+                      </CardTitle>
+                      {order.coverData?.subtitle && (
+                        <CardDescription className="truncate text-gray-600">
+                          {order.coverData.subtitle}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
 
-      <OrderDetailsModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        order={selectedOrder}
-      />
+                    <CardContent className="p-5 pt-0 space-y-4">
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                        <div className="space-y-1">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.product')}</p>
+                          <p className="text-sm font-medium text-gray-700 truncate">{order.product?.name || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.total')}</p>
+                          <p className="text-sm font-medium text-gray-700 truncate">
+                            {formatPriceCOP(order.total)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {productString.includes('album') && order.pages && (
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <FileText className="h-4 w-4 mr-2 text-primary" />
+                            <span>{t('dashboard.totalPages')}</span>
+                          </div>
+                          <span className="font-bold text-gray-900">{order.pages.length}</span>
+                        </div>
+                      )}
+                    </CardContent>
+
+                    <CardFooter className="p-5 pt-0 flex flex-col gap-2">
+                      {(order.status === 'paid' || order.status === 'mock_paid') && (
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="w-full py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          {t('dashboard.editOrder')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleViewDetails(order)}
+                        className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium active:scale-95"
+                      >
+                        {t('dashboard.viewDetails')}
+                      </button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <OrderDetailsModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          order={selectedOrder}
+        />
       </div>
     </>
   );
