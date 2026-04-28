@@ -105,6 +105,7 @@ interface PhotoOrganizerProps {
   pageLayoutVariants: Record<number, number>;
   onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
+  pagesLocked?: boolean;
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -231,10 +232,10 @@ const AlbumEditorPhotoSlot: React.FC<{
   );
 };
 
-export default function PhotoOrganizer({ 
+export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
-  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete 
+  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
@@ -713,6 +714,7 @@ export default function PhotoOrganizer({
   };
 
   const handleAddPage = (index: number) => {
+    if (pagesLocked) return;
     if (photos.length >= 249) {
       alert('Límite máximo de 250 páginas alcanzado.');
       return;
@@ -739,6 +741,7 @@ export default function PhotoOrganizer({
   };
 
   const handleDeletePage = (index: number) => {
+    if (pagesLocked) return;
     if (photos.length <= 40) {
       alert(t('organizer.minPagesReached') || 'Minimum of 40 pages required.');
       return;
@@ -1682,7 +1685,7 @@ export default function PhotoOrganizer({
                   </div>
                   
                   <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
-                  <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>
+                  {!pagesLocked && <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>}
                 </div>
               </div>
               
@@ -2301,7 +2304,16 @@ export default function PhotoOrganizer({
 
       </div>
 
-      <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button></div>
+      <div className="mt-20 text-center pb-20">
+        {pagesLocked ? (
+          <div className="inline-flex items-center gap-3 px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm font-medium">{t('creator.pagesLockedBanner')}</span>
+          </div>
+        ) : (
+          <button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button>
+        )}
+      </div>
 
       {cropModalData !== null && (
         <CropModal

@@ -8,7 +8,8 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Filter, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package } from 'lucide-react';
+import { updateOrderStatus } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
@@ -460,6 +461,16 @@ const OwnerDashboard: React.FC = () => {
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
     setIsModalOpen(true);
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      alert('No se pudo actualizar el estado del pedido.');
+    }
   };
 
   // ==========================================================================
@@ -914,103 +925,162 @@ const OwnerDashboard: React.FC = () => {
           <button onClick={() => setActiveTab('settings')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><SettingsIcon className="w-4 h-4" /> Ajustes de Tienda</button>
         </div>
 
-        {activeTab === 'orders' && (
-          <>
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input type="text" placeholder="Buscar por ID, Email o Nombre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Filter className="w-5 h-5 text-gray-400" />
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl px-4 py-2 focus:ring-2 focus:ring-black transition-all text-sm font-medium">
-                  <option value="all">Todos los estados</option>
-                  <option value="paid">Pagado</option>
-                  <option value="mock_paid">Mock Paid</option>
-                  <option value="pending_payment">Pendiente</option>
-                  <option value="draft">Borrador</option>
-                </select>
-              </div>
-            </div>
+        {activeTab === 'orders' && (() => {
+          const KANBAN_COLUMNS = [
+            { id: 'pagado', label: 'Pagado', statuses: ['paid', 'mock_paid'], headerBg: 'bg-green-500', badgeBg: 'bg-green-100 text-green-800', nextStatus: 'en_produccion', nextLabel: 'Poner en Producción' },
+            { id: 'en_produccion', label: 'En Producción', statuses: ['en_produccion'], headerBg: 'bg-blue-500', badgeBg: 'bg-blue-100 text-blue-800', nextStatus: 'enviado', nextLabel: 'Marcar Enviado' },
+            { id: 'enviado', label: 'Enviado', statuses: ['enviado'], headerBg: 'bg-purple-500', badgeBg: 'bg-purple-100 text-purple-800', nextStatus: 'entregado', nextLabel: 'Marcar Entregado' },
+            { id: 'entregado', label: 'Entregado', statuses: ['entregado'], headerBg: 'bg-gray-400', badgeBg: 'bg-gray-100 text-gray-700', nextStatus: null, nextLabel: null },
+          ];
 
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin mb-4" />
-                <p className="text-gray-500 font-medium text-lg">Cargando base de datos...</p>
-              </div>
-            ) : fetchError ? (
-              <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-dashed border-red-200 text-red-700">
-                <AlertCircle className="mx-auto h-12 w-12 mb-4" />
-                <h3 className="text-lg font-bold">Error de Conexión</h3>
-                <p className="mt-1 opacity-80">{fetchError}</p>
-              </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <p className="text-gray-400 text-lg">No se encontraron pedidos que coincidan con la búsqueda.</p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-100">
-                    <thead>
-                      <tr className="bg-gray-50/50">
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Info Pedido</th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Cliente</th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Estado</th>
-                        <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Monto</th>
-                        <th scope="col" className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {filteredOrders.map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50/50 transition-colors group">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-mono font-bold text-gray-900 mb-1">#{order.id.slice(0, 8)}...</span>
-                              <span className="text-xs text-gray-500">{format(new Date(order.createdAt), "d MMM, yyyy HH:mm", { locale: es })}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-semibold text-gray-900 leading-none mb-1">{order.shippingAddress?.name || 'Usuario Invitado'}</span>
-                              <span className="text-xs text-gray-500">{order.shippingAddress?.email || 'No email provided'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${order.status === 'paid' || order.status === 'mock_paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {order.status === 'mock_paid' || order.status === 'paid' ? 'PAGADO' : 'PENDIENTE'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <span className="text-sm font-bold text-gray-900">${order.total?.toFixed(2)}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => handleViewDetails(order)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors title='Ver detalles'"><Eye className="w-5 h-5" /></button>
-                              {downloadProgress.orderId === order.id ? (
-                                <div className="w-28 flex items-center gap-2" title={`Renderizando... ${downloadProgress.progress}%`}>
-                                  <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
-                                    <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${downloadProgress.progress}%` }}></div>
-                                  </div>
-                                  <span className="text-xs font-mono font-bold text-emerald-600 w-8 text-right">{downloadProgress.progress}%</span>
-                                </div>
-                              ) : (
-                                <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title={'Descargar ZIP con PDF'}><Download className="w-5 h-5" /></button>
-                              )}
-                              {(order.status === 'pending_payment' || order.status === 'draft') && (
-                                <button onClick={() => handleDeleteOrder(order.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar Pedido"><Trash2 className="w-5 h-5" /></button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          const searchLow = searchTerm.toLowerCase();
+          const matchesSearch = (order: Order) =>
+            !searchTerm ||
+            order.id.toLowerCase().includes(searchLow) ||
+            (order.shippingAddress?.email || '').toLowerCase().includes(searchLow) ||
+            (order.shippingAddress?.name || '').toLowerCase().includes(searchLow);
+
+          const pendingOrders = orders.filter(o => (o.status === 'pending_payment' || o.status === 'draft' || o.status === 'saved_draft') && matchesSearch(o));
+
+          const formatCOP = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
+
+          return (
+            <>
+              {/* Barra de búsqueda */}
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input type="text" placeholder="Buscar por ID, Email o Nombre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all" />
                 </div>
               </div>
-            )}
-          </>
-        )}
+
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin mb-4" />
+                  <p className="text-gray-500 font-medium text-lg">Cargando base de datos...</p>
+                </div>
+              ) : fetchError ? (
+                <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-dashed border-red-200 text-red-700">
+                  <AlertCircle className="mx-auto h-12 w-12 mb-4" />
+                  <h3 className="text-lg font-bold">Error de Conexión</h3>
+                  <p className="mt-1 opacity-80">{fetchError}</p>
+                </div>
+              ) : (
+                <>
+                  {/* KANBAN */}
+                  <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+                    {KANBAN_COLUMNS.map(col => {
+                      const colOrders = orders.filter(o => col.statuses.includes(o.status) && matchesSearch(o));
+                      return (
+                        <div key={col.id} className="min-w-[300px] flex-shrink-0 flex flex-col rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+                          {/* Header */}
+                          <div className={`${col.headerBg} px-4 py-3 flex items-center justify-between`}>
+                            <span className="text-white font-bold text-sm">{col.label}</span>
+                            <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">{colOrders.length}</span>
+                          </div>
+                          {/* Cards */}
+                          <div className="bg-gray-50 min-h-[200px] p-3 space-y-3 flex-1">
+                            {colOrders.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-10 text-gray-300">
+                                <Package className="w-8 h-8 mb-2" />
+                                <span className="text-xs">Sin pedidos</span>
+                              </div>
+                            ) : colOrders.map(order => (
+                              <div key={order.id} className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm hover:shadow-md transition-shadow">
+                                {/* ID + fecha */}
+                                <div className="flex items-start justify-between mb-2">
+                                  <span className="text-xs font-mono font-bold text-gray-700">#{order.id.slice(0, 8)}</span>
+                                  <span className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</span>
+                                </div>
+                                {/* Cliente */}
+                                <p className="text-sm font-semibold text-gray-900 truncate leading-none mb-0.5">{order.shippingAddress?.name || 'Invitado'}</p>
+                                <p className="text-xs text-gray-400 truncate mb-2">{order.shippingAddress?.email || '—'}</p>
+                                {/* Monto */}
+                                <p className="text-sm font-bold text-gray-800 mb-3">{formatCOP(order.total)}</p>
+                                {/* Acciones */}
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
+                                  {downloadProgress.orderId === order.id ? (
+                                    <div className="flex-1 flex items-center gap-1.5">
+                                      <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                        <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress.progress}%` }} />
+                                      </div>
+                                      <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                  )}
+                                  {col.nextStatus && (
+                                    <button
+                                      onClick={() => handleUpdateOrderStatus(order.id, col.nextStatus!)}
+                                      className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-lg transition-colors"
+                                      title={col.nextLabel!}
+                                    >
+                                      {col.nextLabel} <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {(order.status === 'pending_payment' || order.status === 'draft') && (
+                                    <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pedidos pendientes de pago (fuera del Kanban) */}
+                  {pendingOrders.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Pendientes de Pago / Borradores</h3>
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-100">
+                          <thead>
+                            <tr className="bg-gray-50/50">
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Pedido</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Estado</th>
+                              <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Monto</th>
+                              <th className="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {pendingOrders.map(order => (
+                              <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-4 py-3">
+                                  <span className="text-xs font-mono font-bold text-gray-700">#{order.id.slice(0, 8)}</span>
+                                  <p className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || 'Invitado'}</p>
+                                  <p className="text-xs text-gray-400">{order.shippingAddress?.email || '—'}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                                    <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          );
+        })()}
 
         {/* VISTA 2: AJUSTES DE TIENDA */}
         {activeTab === 'settings' && (

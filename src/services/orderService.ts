@@ -285,6 +285,125 @@ export async function deleteSavedDraft(draftId: string): Promise<void> {
   await deleteDoc(docRef);
 }
 
+export async function updateOrderStatus(orderId: string, status: string): Promise<void> {
+  const docRef = doc(db, 'orders', orderId);
+  await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
+}
+
+export async function updateOrderDesign(
+  orderId: string,
+  userId: string,
+  designData: any,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  const orderRef = doc(db, 'orders', orderId);
+  const folderPath = `orders/${userId}/${orderId}`;
+
+  const productSnap = await getDoc(orderRef);
+  if (!productSnap.exists()) throw new Error('Order not found');
+  const existingData = productSnap.data();
+  const productString = String(existingData.productType || existingData.product?.type || '').toLowerCase();
+  const isMugType = productString.includes('mug') || productString.includes('taza');
+
+  let totalUploads = 0;
+  let completedUploads = 0;
+  const updateProgress = () => {
+    completedUploads++;
+    if (onProgress && totalUploads > 0) onProgress(Math.min(95, Math.round((completedUploads / totalUploads) * 100)));
+  };
+
+  let coverData = { ...designData.coverData };
+  if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) totalUploads++;
+  const photosList = designData.photos || [];
+  photosList.forEach((item: any) => {
+    if (Array.isArray(item)) item.forEach((url: string) => { if (isBase64(url) || isBlobUrl(url)) totalUploads++; });
+    else if (typeof item === 'string' && (isBase64(item) || isBlobUrl(item))) totalUploads++;
+  });
+  const itemsToProcess = designData.items || designData.mugItems || [];
+  itemsToProcess.forEach((item: any) => {
+    (item.photos || []).forEach((photoUrl: string) => { if (isBase64(photoUrl) || isBlobUrl(photoUrl)) totalUploads++; });
+  });
+  if (totalUploads === 0 && onProgress) onProgress(50);
+
+  if (coverData.image && (isBase64(coverData.image) || isBlobUrl(coverData.image))) {
+    coverData.image = await uploadImage(`${folderPath}/cover_image`, coverData.image);
+    updateProgress();
+  }
+
+  let finalPages: any[] = [];
+  let finalItems: any[] = [];
+  let finalPhotos: string[] = [];
+
+  if (productString.includes('album') || productString.includes('photobook')) {
+    const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
+    for (let i = 0; i < photos.length; i++) {
+      const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
+      const uploadedPhotos: string[] = [];
+      const pageCrops: any = {};
+      for (let j = 0; j < pagePhotos.length; j++) {
+        let photoUrl = pagePhotos[j];
+        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
+          photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
+          updateProgress();
+        }
+        uploadedPhotos.push(photoUrl);
+        pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
+      }
+      finalPages.push({ pageIndex: i, images: uploadedPhotos, layout: pageLayouts[i] || 1, variant: pageLayoutVariants[i] || null, texts: textBoxSlots[i] || {}, crops: pageCrops });
+    }
+  } else if (isMugType) {
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      const item = itemsToProcess[i];
+      const uploadedItemPhotos: string[] = [];
+      for (let j = 0; j < (item.photos?.length || 0); j++) {
+        let photoUrl = item.photos[j];
+        if (photoUrl && (isBase64(photoUrl) || isBlobUrl(photoUrl))) {
+          photoUrl = await uploadImage(`${folderPath}/mugs/mug${i}_photo${j}`, photoUrl);
+          updateProgress();
+        }
+        if (photoUrl) uploadedItemPhotos.push(photoUrl);
+      }
+      finalItems.push({ ...item, photos: uploadedItemPhotos });
+    }
+  } else if (productString.includes('calendar') || productString.includes('calendario') || productString.includes('pack')) {
+    const photos = designData.photos || [];
+    for (let i = 0; i < photos.length; i++) {
+      let photoUrl = Array.isArray(photos[i]) ? photos[i][0] : photos[i];
+      if (photoUrl && (isBase64(photoUrl) || isBlobUrl(photoUrl))) {
+        photoUrl = await uploadImage(`${folderPath}/loose_photos/photo${i}`, photoUrl);
+        updateProgress();
+      }
+      if (photoUrl) finalPhotos.push(photoUrl);
+    }
+  }
+
+  let safePhotosToSave: any[] = [];
+  if (finalPhotos.length > 0) safePhotosToSave = finalPhotos;
+  else if (designData.photos) safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean);
+
+  let cleanCustomization = { ...designData.customization };
+  if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
+    cleanCustomization.coverContent.coverImage = 'uploaded';
+  }
+
+  const updatePayload = sanitizeForFirestore(JSON.parse(JSON.stringify({
+    coverData,
+    customization: cleanCustomization,
+    photoCrops: designData.photoCrops || {},
+    textBoxSlots: designData.textBoxSlots || {},
+    pageLayouts: designData.pageLayouts || {},
+    pageLayoutVariants: designData.pageLayoutVariants || {},
+    pages: finalPages,
+    items: finalItems.length > 0 ? finalItems : (designData.items || []),
+    mugItems: finalItems.length > 0 ? finalItems : (designData.mugItems || []),
+    photos: safePhotosToSave,
+    updatedAt: new Date().toISOString(),
+  })));
+
+  await updateDoc(orderRef, updatePayload);
+  if (onProgress) onProgress(100);
+}
+
 export async function saveCompleteOrder(
   userId: string,
   designData: any,
