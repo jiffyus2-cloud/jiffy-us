@@ -51,7 +51,8 @@ export async function createDraftOrder(
   onProgress?: (progress: number) => void,
   existingOrderId?: string,
   productType?: string,
-  status: 'draft' | 'saved_draft' = 'draft'
+  status: 'draft' | 'saved_draft' = 'draft',
+  userInfo?: { name?: string; email?: string }
 ) {
   const orderRef = existingOrderId
     ? doc(db, 'orders', existingOrderId)
@@ -196,6 +197,8 @@ export async function createDraftOrder(
   const orderPayload = {
     id: orderId,
     userId,
+    customerName: userInfo?.name || null,
+    customerEmail: userInfo?.email || null,
     status,
     product,
     productType: productType || productString,
