@@ -291,6 +291,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
               </div>
             </section>
 
+            {coverType === 'Tela' && (
             <section>
               <div className="flex items-center gap-1.5 mb-3 text-gray-400"><Palette size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Color de Tipografía</h3></div>
               <div className="flex flex-wrap gap-3 md:gap-4">
@@ -302,6 +303,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 ))}
               </div>
             </section>
+            )}
 
             <section className="space-y-4 md:space-y-5">
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>

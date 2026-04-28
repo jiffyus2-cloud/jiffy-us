@@ -368,7 +368,7 @@ const translations = {
     'step.step': 'Paso',
 
     // Album Customization
-    'album.coverType': 'Tipo de Carátula',
+    'album.coverType': 'Acabado de portada pasta dura',
     'album.tela': 'Tela',
     'album.papel': 'Papel',
     'album.size': 'Tamaño',
