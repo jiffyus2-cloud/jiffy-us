@@ -1975,9 +1975,6 @@ export default function PhotoOrganizer({
             >
               <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">
-              {t('organizer.complete')}
-            </button>
           </div>
         </div>
 
@@ -2157,6 +2154,15 @@ export default function PhotoOrganizer({
           </div>
         </div>
 
+      </div>
+
+      <div className="mt-12 flex justify-center">
+        <button
+          onClick={handleComplete}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-base"
+        >
+          {t('organizer.complete')}
+        </button>
       </div>
 
       <div className="mt-20 text-center pb-20"><button onClick={() => handleAddPage(safePhotos.length - 1)} className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-dashed border-gray-300 rounded-2xl hover:border-black hover:bg-gray-50 transition-all text-gray-500 hover:text-black"><Layers className="w-6 h-6" /><span className="text-lg font-medium">{t('organizer.addPageEnd') || 'Añadir páginas'} (+2)</span></button></div>
