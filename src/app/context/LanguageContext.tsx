@@ -342,6 +342,13 @@ const translations = {
     'checkout.loadingOrder': 'Retrieving your design...',
     'checkout.preparingSummary': 'We are preparing your purchase summary.',
     'checkout.noOrderData': 'Order data not found',
+    'checkout.savedAddresses': 'My saved addresses',
+    'checkout.useSavedAddress': 'Use',
+    'checkout.saveAddress': 'Save address for future purchases',
+    'checkout.saveBilling': 'Save billing info for future purchases',
+    'checkout.savedAddressesLimit': 'You have 3 saved addresses. The oldest will be replaced.',
+    'checkout.savedBillingExists': 'Your billing info will be updated.',
+    'checkout.newAddress': 'Use a different address',
 
     // Creator
     'creator.savingTitle': 'Saving Design',
@@ -711,6 +718,13 @@ const translations = {
     'checkout.loadingOrder': 'Recuperando tu diseño...',
     'checkout.preparingSummary': 'Estamos preparando tu resumen de compra.',
     'checkout.noOrderData': 'No se encontraron datos del pedido',
+    'checkout.savedAddresses': 'Mis direcciones guardadas',
+    'checkout.useSavedAddress': 'Usar',
+    'checkout.saveAddress': 'Guardar dirección para próximas compras',
+    'checkout.saveBilling': 'Guardar datos de facturación para próximas compras',
+    'checkout.savedAddressesLimit': 'Tienes 3 direcciones guardadas. La más antigua será reemplazada.',
+    'checkout.savedBillingExists': 'Tus datos de facturación guardados serán actualizados.',
+    'checkout.newAddress': 'Usar una dirección diferente',
 
     // Creator
     'creator.savingTitle': 'Guardando Diseño',

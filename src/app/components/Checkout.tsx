@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck } from 'lucide-react';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
+import { getSavedAddresses, saveAddress, getSavedBilling, saveBilling, type SavedAddress, type SavedBilling } from '../../services/userProfileService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import OrderDetailsModal from './OrderDetailsModal';
@@ -22,10 +23,17 @@ export default function Checkout() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Saved data from Firestore
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [savedBilling, setSavedBilling] = useState<SavedBilling | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [shouldSaveAddress, setShouldSaveAddress] = useState(true);
+  const [shouldSaveBilling, setShouldSaveBilling] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '', email: user?.email || '',
@@ -59,6 +67,37 @@ export default function Checkout() {
     };
     fetchOrderDetails();
   }, [state?.orderId]);
+
+  // Load saved addresses and billing from Firestore
+  useEffect(() => {
+    if (!user?.uid) return;
+    Promise.all([getSavedAddresses(user.uid), getSavedBilling(user.uid)]).then(([addresses, billing]) => {
+      setSavedAddresses(addresses);
+      setSavedBilling(billing);
+    }).catch(() => {});
+  }, [user?.uid]);
+
+  const applyAddress = (addr: SavedAddress) => {
+    setSelectedAddressId(addr.id);
+    setFormData(prev => ({
+      ...prev,
+      name: addr.name,
+      email: addr.email || prev.email,
+      department: addr.department,
+      city: addr.city,
+      address: addr.address,
+      addressExtra: addr.addressExtra || '',
+      zipCode: addr.zipCode,
+    }));
+  };
+
+  const clearSelectedAddress = () => {
+    setSelectedAddressId(null);
+    setFormData(prev => ({
+      ...prev,
+      name: '', department: '', city: '', address: '', addressExtra: '', zipCode: '',
+    }));
+  };
 
   if (isLoadingOrder) {
     return (
@@ -187,6 +226,31 @@ export default function Checkout() {
 
       await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
       localStorage.setItem('pending_order_id', state.orderId);
+
+      // Save address/billing to user profile if requested
+      if (user?.uid) {
+        const saves: Promise<void>[] = [];
+        if (shouldSaveAddress) {
+          saves.push(saveAddress(user.uid, {
+            name: shippingAddress.name,
+            email: shippingAddress.email,
+            department: shippingAddress.department,
+            city: shippingAddress.city,
+            address: shippingAddress.address,
+            addressExtra: shippingAddress.addressExtra || '',
+            zipCode: shippingAddress.zipCode,
+          }));
+        }
+        if (shouldSaveBilling && !formData.sameAsShipping) {
+          saves.push(saveBilling(user.uid, {
+            name: billingAddress.name,
+            address: billingAddress.address,
+            city: billingAddress.city,
+            zipCode: billingAddress.zipCode,
+          }));
+        }
+        await Promise.all(saves);
+      }
 
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://jiffy-backend-938778636106.europe-west1.run.app';
       const response = await fetch(`${backendUrl}/stripe/create-checkout`, {
@@ -319,6 +383,35 @@ export default function Checkout() {
                 <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
                 {t('checkout.shippingAddress')}
               </h3>
+
+              {/* Saved addresses */}
+              {savedAddresses.length > 0 && (
+                <div className="mb-4 md:mb-6">
+                  <p className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />{t('checkout.savedAddresses')}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {savedAddresses.map(addr => (
+                      <button
+                        key={addr.id}
+                        type="button"
+                        onClick={() => selectedAddressId === addr.id ? clearSelectedAddress() : applyAddress(addr)}
+                        className={`w-full text-left px-4 py-3 rounded-lg border transition-all text-sm ${selectedAddressId === addr.id ? 'border-black bg-black text-white' : 'border-gray-200 bg-gray-50 hover:border-gray-400 text-gray-700'}`}
+                      >
+                        <span className="font-semibold">{addr.name}</span>
+                        <span className="mx-1.5 opacity-50">·</span>
+                        <span>{addr.address}{addr.addressExtra ? `, ${addr.addressExtra}` : ''}</span>
+                        <span className="mx-1.5 opacity-50">·</span>
+                        <span>{addr.city}, {addr.department}</span>
+                        {selectedAddressId === addr.id && (
+                          <span className="ml-2 text-xs opacity-75">({t('checkout.newAddress')})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3 md:space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                   <div className="space-y-1.5">
@@ -357,6 +450,25 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
+
+              {/* Save address checkbox */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={shouldSaveAddress}
+                    onChange={e => setShouldSaveAddress(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                    <BookmarkCheck className="w-3.5 h-3.5 text-gray-400" />
+                    {t('checkout.saveAddress')}
+                  </span>
+                </label>
+                {shouldSaveAddress && savedAddresses.length >= 3 && (
+                  <p className="mt-1.5 ml-7 text-xs text-amber-600">{t('checkout.savedAddressesLimit')}</p>
+                )}
+              </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
@@ -364,11 +476,46 @@ export default function Checkout() {
               <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                  {/* Pre-fill from saved billing */}
+                  {savedBilling && !formData.billingName && !formData.billingAddress && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({
+                        ...prev,
+                        billingName: savedBilling.name,
+                        billingAddress: savedBilling.address,
+                        billingCity: savedBilling.city,
+                        billingZipCode: savedBilling.zipCode,
+                      }))}
+                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 hover:border-gray-400 transition-all text-sm text-gray-700"
+                    >
+                      <span className="font-semibold text-black">{t('checkout.useSavedAddress')}:</span>
+                      <span className="ml-2">{savedBilling.name} · {savedBilling.address}, {savedBilling.city}</span>
+                    </button>
+                  )}
                   <div className="space-y-2"><label htmlFor="billingName" className="text-sm font-medium text-gray-700">{t('checkout.billingName')} *</label><input type="text" id="billingName" name="billingName" required value={formData.billingName} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   <div className="space-y-2"><label htmlFor="billingAddress" className="text-sm font-medium text-gray-700">{t('checkout.billingAddress')} *</label><input type="text" id="billingAddress" name="billingAddress" required value={formData.billingAddress} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2"><label htmlFor="billingCity" className="text-sm font-medium text-gray-700">{t('checkout.city')} *</label><input type="text" id="billingCity" name="billingCity" required value={formData.billingCity} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
                     <div className="space-y-2"><label htmlFor="billingZipCode" className="text-sm font-medium text-gray-700">{t('checkout.zipCode')} *</label><input type="text" id="billingZipCode" name="billingZipCode" required value={formData.billingZipCode} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none" /></div>
+                  </div>
+                  {/* Save billing checkbox */}
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={shouldSaveBilling}
+                        onChange={e => setShouldSaveBilling(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                      />
+                      <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                        <BookmarkCheck className="w-3.5 h-3.5 text-gray-400" />
+                        {t('checkout.saveBilling')}
+                      </span>
+                    </label>
+                    {shouldSaveBilling && savedBilling && (
+                      <p className="mt-1.5 ml-7 text-xs text-amber-600">{t('checkout.savedBillingExists')}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -507,7 +654,13 @@ export default function Checkout() {
         <p className="text-center text-xs text-gray-400 mt-2">{t('checkout.terms')}</p>
       </div>
 
-      <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={modalOrderData} hideAddressInfo={true} />
+      <OrderDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        order={modalOrderData}
+        hideAddressInfo={true}
+        onGoToEdit={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })}
+      />
     </div>
   );
 }
