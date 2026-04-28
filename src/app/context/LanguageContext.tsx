@@ -308,10 +308,20 @@ const translations = {
     'error.savingDraft': 'Error saving draft. Please try again.',
 
     // Statuses
-    'status.paid': 'Paid / In Production',
+    'status.paid': 'Paid',
     'status.pending_payment': 'Pending Payment',
-    'status.shipped': 'Shipped',
+    'status.en_produccion': 'In Production',
+    'status.enviado': 'Shipped',
+    'status.entregado': 'Delivered',
     'status.unknown': 'Unknown',
+
+    // Dashboard - edit paid order
+    'dashboard.editOrder': 'Edit Order',
+
+    // Creator - edit paid order mode
+    'creator.saveChanges': 'Save Changes',
+    'creator.changesSaved': 'Changes saved!',
+    'creator.pagesLockedBanner': 'Page count is fixed for paid orders. You can change photos and content but cannot add or remove pages.',
 
     // Checkout
     'checkout.title': 'Checkout',
@@ -342,6 +352,10 @@ const translations = {
     'checkout.loadingOrder': 'Retrieving your design...',
     'checkout.preparingSummary': 'We are preparing your purchase summary.',
     'checkout.noOrderData': 'Order data not found',
+    'checkout.saveAddress': 'Save this address for future orders',
+    'checkout.savedAddresses': 'Saved addresses',
+    'checkout.newAddress': 'Use a new address',
+    'checkout.savedAddressesLimit': 'You can save up to 3 addresses. Remove one to save this address.',
 
     // Creator
     'creator.savingTitle': 'Saving Design',
@@ -677,10 +691,20 @@ const translations = {
     'error.savingDraft': 'Error al guardar el borrador. Intenta de nuevo.',
 
     // Statuses
-    'status.paid': 'Pagado / En Producción',
+    'status.paid': 'Pagado',
     'status.pending_payment': 'Pendiente de Pago',
-    'status.shipped': 'Enviado',
+    'status.en_produccion': 'En Producción',
+    'status.enviado': 'Enviado',
+    'status.entregado': 'Entregado',
     'status.unknown': 'Desconocido',
+
+    // Dashboard - edit paid order
+    'dashboard.editOrder': 'Editar Orden',
+
+    // Creator - edit paid order mode
+    'creator.saveChanges': 'Guardar Cambios',
+    'creator.changesSaved': '¡Cambios guardados!',
+    'creator.pagesLockedBanner': 'El número de páginas es fijo en órdenes pagadas. Puedes cambiar fotos y contenido pero no añadir ni eliminar páginas.',
 
     // Checkout
     'checkout.title': 'Finalizar Compra',
@@ -711,6 +735,10 @@ const translations = {
     'checkout.loadingOrder': 'Recuperando tu diseño...',
     'checkout.preparingSummary': 'Estamos preparando tu resumen de compra.',
     'checkout.noOrderData': 'No se encontraron datos del pedido',
+    'checkout.saveAddress': 'Guardar esta dirección para próximos pedidos',
+    'checkout.savedAddresses': 'Direcciones guardadas',
+    'checkout.newAddress': 'Usar una dirección nueva',
+    'checkout.savedAddressesLimit': 'Puedes guardar hasta 3 direcciones. Elimina una para guardar esta.',
 
     // Creator
     'creator.savingTitle': 'Guardando Diseño',

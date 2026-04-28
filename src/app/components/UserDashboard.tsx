@@ -95,6 +95,12 @@ const UserDashboard: React.FC = () => {
         return { text: t('status.paid'), className: 'bg-green-100 text-green-800 hover:bg-green-100' };
       case 'pending_payment':
         return { text: t('status.pending_payment'), className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' };
+      case 'en_produccion':
+        return { text: t('status.en_produccion'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
+      case 'enviado':
+        return { text: t('status.enviado'), className: 'bg-purple-100 text-purple-800 hover:bg-purple-100' };
+      case 'entregado':
+        return { text: t('status.entregado'), className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
       default:
         return { text: t('status.unknown'), className: 'bg-blue-100 text-blue-800 hover:bg-blue-100' };
     }
@@ -137,6 +143,10 @@ const UserDashboard: React.FC = () => {
 
   const handleContinueDraft = (draft: Order) => {
     navigate('/create', { state: { resumeSavedDraft: draft.id } });
+  };
+
+  const handleEditOrder = (order: Order) => {
+    navigate('/create', { state: { editPaidOrder: order.id, productType: order.productType } });
   };
 
   const handleDeleteDraft = async (draftId: string) => {
@@ -370,10 +380,19 @@ const UserDashboard: React.FC = () => {
                       )}
                     </CardContent>
 
-                    <CardFooter className="p-5 pt-0">
+                    <CardFooter className="p-5 pt-0 flex flex-col gap-2">
+                      {(order.status === 'paid' || order.status === 'mock_paid') && (
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="w-full py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          {t('dashboard.editOrder')}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleViewDetails(order)}
-                        className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95"
+                        className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium active:scale-95"
                       >
                         {t('dashboard.viewDetails')}
                       </button>

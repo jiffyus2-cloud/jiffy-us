@@ -25,8 +25,9 @@ service cloud.firestore {
       // Authenticated users can create orders with their own userId
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // Authenticated users can update their own orders
-      allow update: if isOwnerOfDoc();
+      // Authenticated users can update their own orders only when not in locked production states
+      allow update: if isOwnerOfDoc() &&
+        !(resource.data.status in ['en_produccion', 'enviado', 'entregado']);
 
       // Users can delete their own drafts
       allow delete: if isOwnerOfDoc();

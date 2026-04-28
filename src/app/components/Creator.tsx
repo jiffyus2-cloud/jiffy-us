@@ -15,7 +15,7 @@ import DraftPromptModal from './DraftPromptModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
-import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft } from '../../services/orderService';
+import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign } from '../../services/orderService';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -93,6 +93,8 @@ export default function Creator() {
     return () => clearInterval(interval);
   }, [isSaving]);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
+  const [editingPaidOrderId, setEditingPaidOrderId] = useState<string | null>(null);
+  const [isPageCountLocked, setIsPageCountLocked] = useState(false);
 
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [savedDrafts, setSavedDrafts] = useState<any[]>([]);
@@ -121,6 +123,7 @@ export default function Creator() {
       if (!user) return;
       if (selectedProduct) return;
       if (location.state?.fromCheckout) return;
+      if (location.state?.editPaidOrder) return;
       try {
         const drafts = await getUserSavedDrafts(user.uid);
         if (drafts.length > 0) {
@@ -193,7 +196,7 @@ export default function Creator() {
         setUploadProgress(progress);
       }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined, 'saved_draft');
 
-      setActiveDraftId(null);
+      setActiveDraftId(orderId);
       setResumingOrderId(null);
       navigate('/checkout', {
         state: {
@@ -331,6 +334,42 @@ export default function Creator() {
         return;
       }
 
+      if (state?.editPaidOrder && !selectedProduct) {
+        try {
+          const order = await getOrder(state.editPaidOrder) as any;
+          if (order && (order.status === 'paid' || order.status === 'mock_paid')) {
+            const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
+            let detectedType: ProductType = 'album';
+            if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
+            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
+            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
+
+            const photos = detectedType === 'album'
+              ? (order.pages?.map((p: any) => p.images || []) || [])
+              : (order.photos || []);
+
+            const designData = {
+              photos,
+              photoCrops: order.photoCrops || {},
+              textBoxSlots: order.textBoxSlots || {},
+              pageLayouts: order.pageLayouts || {},
+              pageLayoutVariants: order.pageLayoutVariants || {},
+              customization: order.customization,
+              coverData: order.coverData,
+              items: order.items || order.mugItems || [],
+              mugItems: order.items || order.mugItems || [],
+            };
+
+            restoreDesignToState(designData, order.product, detectedType);
+            setEditingPaidOrderId(state.editPaidOrder);
+            setIsPageCountLocked(true);
+          }
+        } catch (e) {
+          console.error('Error restaurando orden pagada para edición', e);
+        }
+        return;
+      }
+
       if (state?.fromCheckout && state?.orderId && !selectedProduct) {
         try {
           const order = await getOrder(state.orderId) as any;
@@ -359,6 +398,7 @@ export default function Creator() {
 
             restoreDesignToState(designData, order.product, detectedType);
             setResumingOrderId(state.orderId);
+            setActiveDraftId(state.orderId);
           }
         } catch (e) {
           console.error('Error al restaurar orden desde checkout', e);
@@ -446,7 +486,7 @@ export default function Creator() {
         designData,
         activeProduct,
         undefined,
-        activeDraftId || undefined,
+        activeDraftId || resumingOrderId || undefined,
         selectedProduct || undefined,
         'saved_draft'
       );
@@ -468,6 +508,44 @@ export default function Creator() {
       alert(t('error.savingDraft'));
     } finally {
       setIsSavingDraft(false);
+    }
+  };
+
+  const handleSavePaidOrderChanges = async () => {
+    if (!user || !editingPaidOrderId) return;
+    setIsSavingDraft(true);
+    setUploadProgress(0);
+    try {
+      const activeCustomization = getActiveCustomization();
+      let coverData: any = { image: '', title: '' };
+      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
+        const content = (activeCustomization as any).coverContent;
+        coverData = { image: content.coverImage || '', title: content.coverTitle || '', subtitle: content.coverSubtitle || '', year: content.coverYear || '', layout: content.selectedLayout || 1, crop: content.coverCrop || { x: 50, y: 50, zoom: 1 } };
+      } else if (getActiveProduct()) {
+        coverData = { image: '', title: getActiveProduct()?.name };
+      }
+      const activePhotoCrops = selectedProduct === 'album' ? photoCrops : selectedProduct === 'calendar' ? calendarPhotoCrops : selectedProduct === 'photo-pack' ? photoPackPhotoCrops : {};
+      const currentMugItems = selectedProduct === 'mug' ? mugItems : [];
+      const designData = {
+        photos: getActivePhotos(),
+        pageLayouts,
+        pageLayoutVariants,
+        textBoxSlots,
+        customization: activeCustomization,
+        coverData,
+        photoCrops: activePhotoCrops,
+        items: currentMugItems,
+        mugItems: currentMugItems,
+      };
+      await updateOrderDesign(editingPaidOrderId, user.uid, designData, setUploadProgress);
+      setDraftSaveSuccess(true);
+      setTimeout(() => setDraftSaveSuccess(false), 2500);
+    } catch (e) {
+      console.error('Error saving paid order changes', e);
+      alert(t('error.savingDraft'));
+    } finally {
+      setIsSavingDraft(false);
+      setUploadProgress(0);
     }
   };
 
@@ -740,7 +818,8 @@ export default function Creator() {
           onPageLayoutsChange={setPageLayouts}
           pageLayoutVariants={pageLayoutVariants}
           onPageLayoutVariantsChange={setPageLayoutVariants}
-          onComplete={() => handleCheckoutRedirect()}
+          onComplete={() => editingPaidOrderId ? handleSavePaidOrderChanges() : handleCheckoutRedirect()}
+          pagesLocked={isPageCountLocked}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
@@ -826,23 +905,29 @@ export default function Creator() {
           {user && currentStep !== 'product' && currentStep !== 'checkout' && (
             <div className="relative">
               <button
-                onClick={handleSaveDraft}
+                onClick={editingPaidOrderId ? handleSavePaidOrderChanges : handleSaveDraft}
                 disabled={isSavingDraft}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-black border rounded-lg transition-all disabled:opacity-50 ${
-                  showDraftHint
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-lg transition-all disabled:opacity-50 ${
+                  editingPaidOrderId
+                    ? 'border-black bg-black text-white hover:bg-gray-800'
+                    : showDraftHint
                     ? 'border-black bg-black text-white hover:text-white ring-4 ring-black/20 animate-pulse'
-                    : 'border-gray-200 hover:border-gray-400'
+                    : 'text-gray-600 hover:text-black border-gray-200 hover:border-gray-400'
                 }`}
               >
                 {isSavingDraft ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : draftSaveSuccess ? (
-                  <Check className="w-4 h-4 text-green-600" />
+                  <Check className="w-4 h-4 text-green-500" />
                 ) : (
-                  <BookMarked className={`w-4 h-4 ${showDraftHint ? 'text-white' : ''}`} />
+                  <BookMarked className="w-4 h-4" />
                 )}
                 <span className="hidden sm:inline">
-                  {isSavingDraft ? t('common.saving') : draftSaveSuccess ? t('draft.saved') : t('draft.saveDraft')}
+                  {isSavingDraft
+                    ? t('common.saving')
+                    : draftSaveSuccess
+                    ? (editingPaidOrderId ? t('creator.changesSaved') : t('draft.saved'))
+                    : (editingPaidOrderId ? t('creator.saveChanges') : t('draft.saveDraft'))}
                 </span>
               </button>
 
