@@ -120,6 +120,7 @@ export default function Creator() {
     const checkSavedDrafts = async () => {
       if (!user) return;
       if (selectedProduct) return;
+      if (location.state?.fromCheckout) return;
       try {
         const drafts = await getUserSavedDrafts(user.uid);
         if (drafts.length > 0) {
