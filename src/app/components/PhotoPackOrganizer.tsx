@@ -47,8 +47,12 @@ export default function PhotoPackOrganizer({
 
   const removePhoto = (index: number) => {
     onPhotosChange(photos.filter((_, i) => i !== index));
-    const newCrops = { ...photoCrops };
-    delete newCrops[index];
+    const newCrops: Record<number, any> = {};
+    for (const key of Object.keys(photoCrops)) {
+      const k = Number(key);
+      if (k < index) newCrops[k] = photoCrops[k];
+      else if (k > index) newCrops[k - 1] = photoCrops[k];
+    }
     onPhotoCropsChange(newCrops);
   };
 
