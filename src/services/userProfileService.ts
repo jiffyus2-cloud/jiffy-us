@@ -61,3 +61,35 @@ export async function saveBilling(userId: string, billing: Omit<SavedBilling, 's
   };
   await setDoc(docRef, { savedBilling }, { merge: true });
 }
+
+export async function updateUserName(userId: string, name: string): Promise<void> {
+  const docRef = doc(db, 'users', userId);
+  await setDoc(docRef, { name }, { merge: true });
+}
+
+export async function deleteAddress(userId: string, addressId: string): Promise<void> {
+  const docRef = doc(db, 'users', userId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) return;
+  const existing: SavedAddress[] = docSnap.data()?.savedAddresses || [];
+  const updated = existing.filter(a => a.id !== addressId);
+  await setDoc(docRef, { savedAddresses: updated }, { merge: true });
+}
+
+export async function updateAddress(
+  userId: string,
+  addressId: string,
+  updates: Partial<Omit<SavedAddress, 'id' | 'savedAt'>>
+): Promise<void> {
+  const docRef = doc(db, 'users', userId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) return;
+  const existing: SavedAddress[] = docSnap.data()?.savedAddresses || [];
+  const updated = existing.map(a => a.id === addressId ? { ...a, ...updates } : a);
+  await setDoc(docRef, { savedAddresses: updated }, { merge: true });
+}
+
+export async function deleteSavedBilling(userId: string): Promise<void> {
+  const docRef = doc(db, 'users', userId);
+  await setDoc(docRef, { savedBilling: null }, { merge: true });
+}
