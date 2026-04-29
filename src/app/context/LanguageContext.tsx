@@ -276,7 +276,7 @@ const translations = {
     'success.backHome': 'Back to home',
 
     // Dashboard
-    'dashboard.title': 'My Projects',
+    'dashboard.title': 'My Station',
     'dashboard.subtitle': 'Manage and review the status of your creations.',
     'dashboard.noOrders': 'You haven\'t created any projects yet.',
     'dashboard.noOrdersDesc': 'Start creating your first album today!',
@@ -287,6 +287,29 @@ const translations = {
     'dashboard.total': 'Total',
     'dashboard.product': 'Product',
     'dashboard.totalPages': 'Total Pages',
+    'dashboard.tab.projects': 'My Projects',
+    'dashboard.tab.account': 'My Information',
+
+    // Account / Mi Información
+    'account.personalInfo': 'Personal Info',
+    'account.name': 'Name',
+    'account.email': 'Email',
+    'account.emailNote': 'To change your email, contact support.',
+    'account.saveName': 'Save',
+    'account.nameSaved': 'Name updated!',
+    'account.security': 'Security',
+    'account.resetPassword': 'Send password reset email',
+    'account.resetSent': 'Email sent! Check your inbox.',
+    'account.addresses': 'Saved Addresses',
+    'account.noAddresses': 'No saved addresses yet.',
+    'account.deleteAddress': 'Delete',
+    'account.editAddress': 'Edit',
+    'account.saveAddress': 'Save changes',
+    'account.cancelEdit': 'Cancel',
+    'account.addressSaved': 'Address updated!',
+    'account.billing': 'Saved Billing',
+    'account.noBilling': 'No saved billing info.',
+    'account.deleteBilling': 'Delete',
 
     // Draft saving
     'draft.saveDraft': 'Save Draft',
@@ -659,7 +682,7 @@ const translations = {
     'success.backHome': 'Volver al inicio',
 
     // Dashboard
-    'dashboard.title': 'Mis Proyectos',
+    'dashboard.title': 'Mi Estación',
     'dashboard.subtitle': 'Gestiona y revisa el estado de tus creaciones.',
     'dashboard.noOrders': 'Aún no tienes pedidos',
     'dashboard.noOrdersDesc': '¡Empieza a crear tu primer álbum hoy mismo!',
@@ -670,6 +693,29 @@ const translations = {
     'dashboard.total': 'Total',
     'dashboard.product': 'Producto',
     'dashboard.totalPages': 'Total Páginas',
+    'dashboard.tab.projects': 'Mis Proyectos',
+    'dashboard.tab.account': 'Mi Información',
+
+    // Account / Mi Información
+    'account.personalInfo': 'Datos Personales',
+    'account.name': 'Nombre',
+    'account.email': 'Correo electrónico',
+    'account.emailNote': 'Para cambiar tu correo, contacta soporte.',
+    'account.saveName': 'Guardar',
+    'account.nameSaved': '¡Nombre actualizado!',
+    'account.security': 'Seguridad',
+    'account.resetPassword': 'Enviar correo para cambiar contraseña',
+    'account.resetSent': '¡Correo enviado! Revisa tu bandeja.',
+    'account.addresses': 'Direcciones Guardadas',
+    'account.noAddresses': 'No tienes direcciones guardadas aún.',
+    'account.deleteAddress': 'Eliminar',
+    'account.editAddress': 'Editar',
+    'account.saveAddress': 'Guardar cambios',
+    'account.cancelEdit': 'Cancelar',
+    'account.addressSaved': '¡Dirección actualizada!',
+    'account.billing': 'Facturación Guardada',
+    'account.noBilling': 'No tienes información de facturación guardada.',
+    'account.deleteBilling': 'Eliminar',
 
     // Draft saving
     'draft.saveDraft': 'Guardar borrador',

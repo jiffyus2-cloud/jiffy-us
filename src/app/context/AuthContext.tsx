@@ -18,7 +18,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<User>;
   logout: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>; // ✨ Nueva función
+  resetPassword: (email: string) => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -104,7 +105,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // ✨ Función nativa de Firebase para recuperar contraseña
+  const refreshUserData = async () => {
+    if (!user) return;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) setUserData(userDoc.data());
+    } catch (err) {
+      console.error('Error refreshing user data:', err);
+    }
+  };
+
   const resetPassword = async (email: string) => {
     setIsLoading(true);
     setError(null);
@@ -119,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, userData, error, isLoading, login, register, logout, resetPassword }}>
+    <AuthContext.Provider value={{ user, userData, error, isLoading, login, register, logout, resetPassword, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );
