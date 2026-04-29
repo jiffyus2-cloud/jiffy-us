@@ -2120,9 +2120,6 @@ export default function PhotoOrganizer({
             >
               <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <button onClick={handleComplete} className="px-6 sm:px-8 py-2 sm:py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-sm sm:text-base">
-              {t('organizer.complete')}
-            </button>
           </div>
         </div>
 
@@ -2302,6 +2299,15 @@ export default function PhotoOrganizer({
           </div>
         </div>
 
+      </div>
+
+      <div className="mt-12 flex justify-center">
+        <button
+          onClick={handleComplete}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-base"
+        >
+          {t('organizer.complete')}
+        </button>
       </div>
 
       <div className="mt-20 text-center pb-20">
