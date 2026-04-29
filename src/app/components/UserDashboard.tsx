@@ -56,6 +56,8 @@ interface Order {
     size?: string;
     paper?: string;
     year?: number;
+    material?: string;
+    coverType?: string;
   };
   pages?: Array<{ images?: string[]; image?: string }>;
   photos?: string[] | string[][];
@@ -90,7 +92,24 @@ function getPreviewImage(order: Order): string | null {
       imageUrl = order.items[0].photo || order.items[0].photos?.[0];
     }
   } else {
-    imageUrl = order.coverData?.image || null;
+    const isTela =
+      order.customization?.material === 'Tela' ||
+      order.customization?.coverType === 'Tela';
+
+    if (!isTela) {
+      imageUrl = order.coverData?.image || null;
+    }
+
+    if (!imageUrl) {
+      const firstPage = order.pages?.[0];
+      if (firstPage) {
+        if (Array.isArray(firstPage.images) && firstPage.images.length > 0) {
+          imageUrl = firstPage.images[0];
+        } else if (firstPage.image) {
+          imageUrl = firstPage.image;
+        }
+      }
+    }
     if (!imageUrl && order.photos && order.photos.length > 0) {
       const firstPhoto = order.photos[0];
       imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
@@ -115,6 +134,7 @@ const UserDashboard: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeletingDraftId, setIsDeletingDraftId] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'projects' | 'account'>('projects');
@@ -415,11 +435,12 @@ const UserDashboard: React.FC = () => {
                     return (
                       <div key={draft.id} className="group relative border border-dashed border-gray-300 rounded-2xl overflow-hidden hover:border-gray-400 hover:shadow-md transition-all duration-200 bg-white">
                         <AspectRatio ratio={16 / 9}>
-                          {imageUrl ? (
+                          {imageUrl && !failedImages.has(draft.id) ? (
                             <img
                               src={imageUrl}
                               alt={draft.coverData?.title || draft.product?.name || 'Draft'}
                               className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity"
+                              onError={() => setFailedImages(prev => new Set(prev).add(draft.id))}
                             />
                           ) : (
                             <div className="w-full h-full bg-gray-50 flex items-center justify-center">
@@ -487,11 +508,12 @@ const UserDashboard: React.FC = () => {
                       <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">
                         <div className="relative overflow-hidden">
                           <AspectRatio ratio={1 / 1}>
-                            {imageUrl ? (
+                            {imageUrl && !failedImages.has(order.id) ? (
                               <img
                                 src={imageUrl}
                                 alt={order.coverData?.title || order.product?.name || 'Preview'}
                                 className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                                onError={() => setFailedImages(prev => new Set(prev).add(order.id))}
                               />
                             ) : (
                               <div className="w-full h-full bg-gray-100 flex items-center justify-center">
