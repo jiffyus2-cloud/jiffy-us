@@ -391,7 +391,7 @@ const translations = {
     'nav.login': 'Iniciar Sesión',
     'nav.signup': 'Registrarse',
     'nav.home': 'Inicio',
-    'nav.dashboard': 'Proyectos',
+    'nav.dashboard': 'Mi Estación',
     
     // Creator Steps
     'step.product': 'Producto',
