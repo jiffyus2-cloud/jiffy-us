@@ -33,7 +33,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Album Image */}
-          <div className="w-full h-48 overflow-hidden">
+          <div className="w-full aspect-square overflow-hidden">
             <img 
               src={albumImage} 
               alt="Photo Albums" 
@@ -55,7 +55,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Calendar Image */}
-          <div className="w-full h-48 overflow-hidden">
+          <div className="w-full aspect-square overflow-hidden">
             <img 
               src={calendarImage} 
               alt="Photo Calendars" 
@@ -78,7 +78,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
             className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
           >
             {/* Mug Image */}
-            <div className="w-full h-48 overflow-hidden">
+            <div className="w-full aspect-square overflow-hidden">
               <img 
                 src={mugImage} 
                 alt="Photo Mugs" 
@@ -102,7 +102,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
             className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
           >
             {/* Photo Pack Image */}
-            <div className="w-full h-48 overflow-hidden bg-gray-100 flex items-center justify-center">
+            <div className="w-full aspect-square overflow-hidden bg-gray-100 flex items-center justify-center">
               <div className="relative w-32 h-32">
                 <div className="absolute inset-0 bg-white border border-gray-200 rotate-3 shadow-sm flex items-center justify-center overflow-hidden">
                   <img src="https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=200&h=200&fit=crop" alt="photo" className="w-full h-full object-cover" />
