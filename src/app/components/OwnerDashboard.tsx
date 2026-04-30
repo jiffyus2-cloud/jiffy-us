@@ -623,6 +623,27 @@ const OwnerDashboard: React.FC = () => {
         );
 
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
+
+        // ── Cm-space layout for cut lines ─────────────────────────────────────
+        const contentWCm = isTela ? wCm : (wCm * 2) + spineCm + (gapCm * 2);
+        const marginXCm  = isTela ? 0 : (totalWCm - contentWCm) / 2;
+        const marginYCm  = isTela ? 0 : (totalHCm - hCm) / 2;
+
+        // ── Segunda página: líneas de corte (vectores, sin JPEG) ──────────────
+        pdf.addPage();
+        pdf.setDrawColor(220, 30, 30);
+        pdf.setLineWidth(0.02);
+
+        if (isTela) {
+          pdf.rect(0, 0, wCm, hCm, 'S');
+        } else {
+          pdf.rect(marginXCm,                                   marginYCm, wCm,     hCm, 'S'); // contraportada
+          pdf.rect(marginXCm + wCm,                             marginYCm, gapCm,   hCm, 'S'); // gap 1
+          pdf.rect(marginXCm + wCm + gapCm,                    marginYCm, spineCm, hCm, 'S'); // lomo
+          pdf.rect(marginXCm + wCm + gapCm + spineCm,          marginYCm, gapCm,   hCm, 'S'); // gap 2
+          pdf.rect(marginXCm + wCm + gapCm + spineCm + gapCm,  marginYCm, wCm,     hCm, 'S'); // portada
+        }
+
         onProgress(100);
 
         root.unmount();
