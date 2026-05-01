@@ -268,7 +268,7 @@ export default function Creator() {
 
   const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
     setSelectedProduct(productType);
-    setCurrentStep('organize');
+    setCurrentStep('customization');
 
     if (productType === 'album') {
       setSelectedAlbum(product);
