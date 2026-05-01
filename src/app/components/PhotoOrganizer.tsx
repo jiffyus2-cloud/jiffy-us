@@ -1731,7 +1731,7 @@ export default function PhotoOrganizer({
               <div className="flex items-start gap-2.5 mt-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                 <span className="text-amber-500 text-lg shrink-0 leading-tight">ℹ️</span>
                 <p className="text-xs text-amber-900 leading-snug">
-                  <span className="font-bold">Usuarios iOS:</span> al aceptar la selección de fotos, la galería puede tardar unos segundos en cerrarse. Es normal y no afecta a tus imágenes.
+                  La carga puede tardar unos segundos. Por favor paciencia.
                 </p>
               </div>
             </>
