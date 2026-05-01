@@ -71,7 +71,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
     setCoverContent(prev => ({
       ...prev,
       typographyColor: type === 'Papel' ? '#000000' : '#D4AF37',
-      coverImage: isNoPhoto ? justWhiteImg : (prev.coverImage === justWhiteImg ? '' : prev.coverImage)
+      coverImage: isNoPhoto ? justWhiteImg : ''
     }));
   };
 
