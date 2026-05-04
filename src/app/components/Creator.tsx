@@ -272,7 +272,20 @@ export default function Creator() {
 
     if (productType === 'album') {
       setSelectedAlbum(product);
-      setCustomization(designData.customization);
+      let albumCustomization = designData.customization;
+      if (
+        albumCustomization?.coverContent?.coverImage === 'uploaded' &&
+        designData.coverData?.image
+      ) {
+        albumCustomization = {
+          ...albumCustomization,
+          coverContent: {
+            ...albumCustomization.coverContent,
+            coverImage: designData.coverData.image,
+          },
+        };
+      }
+      setCustomization(albumCustomization);
       setPhotos(designData.photos);
       setPhotoCrops(designData.photoCrops || {});
       setTextBoxSlots(designData.textBoxSlots || {});
