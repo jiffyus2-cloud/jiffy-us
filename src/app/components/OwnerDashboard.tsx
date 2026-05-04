@@ -868,22 +868,38 @@ const OwnerDashboard: React.FC = () => {
       }
       await Promise.all(imagePromises);
 
-      try {
-        if (isCalendar) {
+      if (isCalendar) {
+        try {
           const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
           folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
-        } else if (isAlbum) {
-          // Generar PDF 1: Portada (Frente únicamente si es tela, Completa si es Papel)
+        } catch (pdfError) {
+          console.error("Error al generar PDF de calendario:", pdfError);
+          alert("Advertencia: El PDF del calendario no se pudo crear. El resto del ZIP se descargará normalmente.");
+        }
+      } else if (isAlbum) {
+        const pdfErrors: string[] = [];
+
+        // PDF 1: Portada — independiente del interior
+        try {
           const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
           folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+        } catch (coverError) {
+          console.error("Error al generar PDF de portada:", coverError);
+          pdfErrors.push("portada");
+        }
 
-          // Generar PDF 2: Páginas Interiores (70%)
+        // PDF 2: Interior — se intenta siempre, independientemente del resultado de la portada
+        try {
           const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
           folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+        } catch (innerError) {
+          console.error("Error al generar PDF de páginas interiores:", innerError);
+          pdfErrors.push("páginas interiores");
         }
-      } catch (pdfError) {
-        console.error("Error al generar PDF de alta resolución:", pdfError);
-        alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");
+
+        if (pdfErrors.length > 0) {
+          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}. Los demás archivos se incluirán en el ZIP normalmente.`);
+        }
       }
       
       const content = await zip.generateAsync({ type: 'blob' });
