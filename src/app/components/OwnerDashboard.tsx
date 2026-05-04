@@ -1087,6 +1087,16 @@ const OwnerDashboard: React.FC = () => {
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
                                     <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                                    {downloadProgress.orderId === order.id ? (
+                                      <div className="flex items-center gap-1 px-1">
+                                        <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                          <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress.progress}%` }} />
+                                        </div>
+                                        <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                    )}
                                     <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </td>
