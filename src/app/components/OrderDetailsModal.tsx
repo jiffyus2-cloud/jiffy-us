@@ -169,9 +169,12 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const isHorizontal = size.includes('Horizontal');
   const isVertical = size.includes('Vertical');
 
-  const coverImageFixed = order.coverData?.image && typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') 
-    ? justWhiteImg 
-    : (order.coverData?.image || '');
+  const coverImageFixed = (() => {
+    const img = order.coverData?.image;
+    if (!img || typeof img !== 'string' || img === 'uploaded') return '';
+    if (img.includes('justwhite')) return justWhiteImg;
+    return img;
+  })();
 
   return (
     <div className="space-y-8">
@@ -530,7 +533,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
     const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
-    if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
+    if (isTela || !displayImage || (typeof displayImage === 'string' && (displayImage.includes('justwhite') || displayImage === 'uploaded'))) {
       let firstInnerPhoto = null;
       if (order.pages && order.pages.length > 0) {
         for (const page of order.pages) {
