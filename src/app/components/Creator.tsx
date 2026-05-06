@@ -275,7 +275,8 @@ export default function Creator() {
       let albumCustomization = designData.customization;
       if (
         albumCustomization?.coverContent?.coverImage === 'uploaded' &&
-        designData.coverData?.image
+        designData.coverData?.image &&
+        designData.coverData.image !== 'uploaded'
       ) {
         albumCustomization = {
           ...albumCustomization,

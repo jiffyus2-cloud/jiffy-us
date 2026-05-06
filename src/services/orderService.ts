@@ -182,7 +182,13 @@ export async function createDraftOrder(
   // ==========================================
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
-    cleanCustomization.coverContent.coverImage = "uploaded"; 
+    cleanCustomization = {
+      ...cleanCustomization,
+      coverContent: {
+        ...cleanCustomization.coverContent,
+        coverImage: 'uploaded',
+      },
+    };
   }
 
   // ESCUDO FIREBASE: Aplanamos a la fuerza para que Firebase no se queje por arreglos de 2D.
@@ -386,7 +392,13 @@ export async function updateOrderDesign(
 
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
-    cleanCustomization.coverContent.coverImage = 'uploaded';
+    cleanCustomization = {
+      ...cleanCustomization,
+      coverContent: {
+        ...cleanCustomization.coverContent,
+        coverImage: 'uploaded',
+      },
+    };
   }
 
   const updatePayload = sanitizeForFirestore(JSON.parse(JSON.stringify({
