@@ -420,32 +420,40 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      const ordersCollection = collection(db, 'orders');
+      const orderSnapshot = await getDocs(ordersCollection);
+      const ordersList = orderSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const normalizeDate = (dateVal: any) => {
+          if (dateVal instanceof Timestamp) return dateVal.toDate().toISOString();
+          if (dateVal && typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000).toISOString();
+          return dateVal;
+        };
+        return { id: doc.id, ...data, createdAt: normalizeDate(data.createdAt), updatedAt: normalizeDate(data.updatedAt) } as Order;
+      });
+
+      const sortedOrders = ordersList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      setOrders(sortedOrders);
+      setFilteredOrders(sortedOrders);
+    } catch (err: any) {
+      console.error('Error fetching orders from Firestore:', err);
+      const isPermission = err?.code === 'permission-denied' || err?.message?.includes('permission');
+      setFetchError(
+        isPermission
+          ? 'Acceso denegado. Asegúrate de estar autenticado como administrador (jiffyus2@gmail.com).'
+          : `No se pudieron cargar los pedidos desde Firestore. (${err?.code ?? err?.message ?? 'error desconocido'})`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    const fetchOrders = async () => {
-      try {
-        setIsLoading(true);
-        const ordersCollection = collection(db, 'orders');
-        const orderSnapshot = await getDocs(ordersCollection);
-        const ordersList = orderSnapshot.docs.map(doc => {
-          const data = doc.data();
-          const normalizeDate = (dateVal: any) => {
-            if (dateVal instanceof Timestamp) return dateVal.toDate().toISOString();
-            if (dateVal && typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000).toISOString();
-            return dateVal;
-          };
-          return { id: doc.id, ...data, createdAt: normalizeDate(data.createdAt), updatedAt: normalizeDate(data.updatedAt) } as Order;
-        });
-
-        const sortedOrders = ordersList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        setOrders(sortedOrders);
-        setFilteredOrders(sortedOrders);
-      } catch (err) {
-        setFetchError('No se pudieron cargar los pedidos desde Firestore.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchOrders();
   }, [isAuthenticated]);
 
@@ -1002,7 +1010,13 @@ const OwnerDashboard: React.FC = () => {
                 <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-dashed border-red-200 text-red-700">
                   <AlertCircle className="mx-auto h-12 w-12 mb-4" />
                   <h3 className="text-lg font-bold">Error de Conexión</h3>
-                  <p className="mt-1 opacity-80">{fetchError}</p>
+                  <p className="mt-1 opacity-80 text-sm max-w-md mx-auto">{fetchError}</p>
+                  <button
+                    onClick={fetchOrders}
+                    className="mt-4 px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                  >
+                    Reintentar
+                  </button>
                 </div>
               ) : (
                 <>
