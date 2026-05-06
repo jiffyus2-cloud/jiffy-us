@@ -8,7 +8,8 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap } from 'lucide-react';
+import ConnectionsSection from './ConnectionsSection';
 import { updateOrderStatus } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
@@ -341,7 +342,7 @@ const OwnerDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'settings' | 'connections'>('orders');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -960,6 +961,7 @@ const OwnerDashboard: React.FC = () => {
         <div className="flex gap-2 mb-6 border-b border-gray-200 pb-px">
           <button onClick={() => setActiveTab('orders')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'orders' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><ShoppingBag className="w-4 h-4" /> Pedidos Recibidos</button>
           <button onClick={() => setActiveTab('settings')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><SettingsIcon className="w-4 h-4" /> Ajustes de Tienda</button>
+          <button onClick={() => setActiveTab('connections')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'connections' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Zap className="w-4 h-4" /> Conexiones</button>
         </div>
 
         {activeTab === 'orders' && (() => {
@@ -1349,6 +1351,10 @@ const OwnerDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'connections' && (
+          <ConnectionsSection />
         )}
       </main>
 
