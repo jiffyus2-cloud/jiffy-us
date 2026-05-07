@@ -1722,12 +1722,12 @@ export default function PhotoOrganizer({
             </div>
           ) : (
             <>
-              <button onClick={() => fileInputRef.current?.click()} className="w-full py-10 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
+              <button onClick={() => fileInputRef.current?.click()} className="w-full py-10 px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
-                <div className="text-center flex flex-col items-center gap-3">
+                <div className="text-center flex flex-col items-center gap-3 w-full">
                   <p className="text-sm text-gray-500">Selecciona tus fotos y empieza a revivir tus mejores recuerdos</p>
-                  <span className="inline-flex items-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors">
-                    <Upload className="w-5 h-5" />
+                  <span className="inline-flex items-center justify-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors w-full max-w-xs">
+                    <Upload className="w-5 h-5 shrink-0" />
                     Toca aquí para seleccionar fotos
                   </span>
                 </div>
