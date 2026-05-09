@@ -5,6 +5,7 @@ export interface SavedAddress {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   department: string;
   city: string;
   address: string;

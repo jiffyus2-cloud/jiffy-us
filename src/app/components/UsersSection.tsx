@@ -18,6 +18,7 @@ interface UserRecord {
   uid: string;
   name: string;
   email: string;
+  phone?: string;
   createdAt: any;
   savedAddresses?: SavedAddress[];
   savedBilling?: SavedBilling | null;
@@ -27,6 +28,7 @@ interface SavedAddress {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   department: string;
   city: string;
   address: string;
@@ -211,6 +213,7 @@ const UserDetailModal: React.FC<{
             <div>
               <DetailRow label="Nombre" value={user.name || '—'} />
               <DetailRow label="Email" value={user.email || '—'} />
+              <DetailRow label="Teléfono" value={user.phone || '—'} />
               <DetailRow label="UID" value={user.uid} />
               <DetailRow label="Registrado" value={formatDate(user.createdAt)} />
               <DetailRow label="Direcciones" value={`${user.savedAddresses?.length ?? 0} guardada(s)`} />
@@ -233,6 +236,9 @@ const UserDetailModal: React.FC<{
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                     <div><span className="text-gray-400">Nombre: </span><span>{addr.name}</span></div>
                     <div><span className="text-gray-400">Email: </span><span>{addr.email}</span></div>
+                    {addr.phone && (
+                      <div><span className="text-gray-400">Teléfono: </span><span>{addr.phone}</span></div>
+                    )}
                     <div><span className="text-gray-400">Ciudad: </span><span>{addr.city}</span></div>
                     <div><span className="text-gray-400">Depto: </span><span>{addr.department}</span></div>
                     <div className="col-span-2"><span className="text-gray-400">Dirección: </span><span>{addr.address}</span></div>

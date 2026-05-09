@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { useAuth } from '../../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 import { mapAuthErrorToKey } from '../../utils/errorMapping';
+import { PhoneInput } from '../ui/PhoneInput';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -17,6 +18,8 @@ interface RegisterFormProps {
 export function RegisterForm({ onSuccess }: RegisterFormProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneCode, setPhoneCode] = useState('+57');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +41,8 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     }
 
     try {
-      await register(email, password, name);
+      const phone = phoneNumber.trim() ? `${phoneCode}${phoneNumber.trim()}` : undefined;
+      await register(email, password, name, phone);
       onSuccess?.();
       
       // --- CORRECCIÓN DE ENRUTAMIENTO ---
@@ -90,6 +94,13 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               required
             />
           </div>
+          <PhoneInput
+            phoneCode={phoneCode}
+            phoneNumber={phoneNumber}
+            onPhoneCodeChange={setPhoneCode}
+            onPhoneNumberChange={setPhoneNumber}
+            label="Teléfono"
+          />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
