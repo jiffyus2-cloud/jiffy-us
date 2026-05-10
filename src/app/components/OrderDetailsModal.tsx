@@ -723,8 +723,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                   <p className="font-bold text-gray-900 text-base mb-1">{order.shippingAddress?.name}</p>
                   <p className="font-medium text-gray-600">{order.shippingAddress?.address}</p>
                   <p className="font-medium text-gray-600">{order.shippingAddress?.city}, {order.shippingAddress?.zipCode}</p>
-                  <div className="pt-2 mt-2 border-t border-gray-50">
+                  <div className="pt-2 mt-2 border-t border-gray-50 space-y-0.5">
                     <p className="text-gray-400 font-medium italic">{order.shippingAddress?.email}</p>
+                    {order.shippingAddress?.phone && (
+                      <p className="text-gray-500 font-medium">{order.shippingAddress.phone}</p>
+                    )}
                   </div>
                 </div>
               </div>

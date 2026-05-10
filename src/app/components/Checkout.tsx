@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck } from 'lucide-react';
+import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { getSavedAddresses, saveAddress, getSavedBilling, saveBilling, type SavedAddress, type SavedBilling } from '../../services/userProfileService';
@@ -36,7 +37,7 @@ export default function Checkout() {
   const [shouldSaveBilling, setShouldSaveBilling] = useState(true);
 
   const [formData, setFormData] = useState({
-    name: '', email: user?.email || '',
+    name: '', email: user?.email || '', phoneCode: '+57', phone: '',
     department: '', city: '', address: '', addressExtra: '', zipCode: '',
     billingName: '', billingAddress: '', billingCity: '', billingZipCode: '', sameAsShipping: true,
   });
@@ -79,10 +80,17 @@ export default function Checkout() {
 
   const applyAddress = (addr: SavedAddress) => {
     setSelectedAddressId(addr.id);
+    const savedPhone = addr.phone || '';
+    const matchedCode = savedPhone.startsWith('+')
+      ? (['+1-809', '+593', '+591', '+595', '+598', '+506', '+502', '+503', '+504', '+505', '+507', '+351'].find(c => savedPhone.startsWith(c)) || (savedPhone.length > 3 ? savedPhone.slice(0, savedPhone.indexOf(' ') > 0 ? savedPhone.indexOf(' ') : 3) : '+57'))
+      : '+57';
+    const numberPart = savedPhone.startsWith(matchedCode) ? savedPhone.slice(matchedCode.length).trim() : savedPhone;
     setFormData(prev => ({
       ...prev,
       name: addr.name,
       email: addr.email || prev.email,
+      phoneCode: matchedCode,
+      phone: numberPart,
       department: addr.department,
       city: addr.city,
       address: addr.address,
@@ -95,7 +103,7 @@ export default function Checkout() {
     setSelectedAddressId(null);
     setFormData(prev => ({
       ...prev,
-      name: '', department: '', city: '', address: '', addressExtra: '', zipCode: '',
+      name: '', phoneCode: '+57', phone: '', department: '', city: '', address: '', addressExtra: '', zipCode: '',
     }));
   };
 
@@ -216,6 +224,7 @@ export default function Checkout() {
       const shippingAddress = {
         name: formData.name,
         email: formData.email,
+        phone: formData.phone.trim() ? `${formData.phoneCode}${formData.phone.trim()}` : '',
         department: formData.department,
         city: formData.city,
         address: formData.address,
@@ -234,6 +243,7 @@ export default function Checkout() {
           saves.push(saveAddress(user.uid, {
             name: shippingAddress.name,
             email: shippingAddress.email,
+            phone: shippingAddress.phone,
             department: shippingAddress.department,
             city: shippingAddress.city,
             address: shippingAddress.address,
@@ -375,6 +385,16 @@ export default function Checkout() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
                 <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
                 <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
+              </div>
+              <div className="mt-3 md:mt-4">
+                <PhoneInput
+                  phoneCode={formData.phoneCode}
+                  phoneNumber={formData.phone}
+                  onPhoneCodeChange={(code) => setFormData(prev => ({ ...prev, phoneCode: code }))}
+                  onPhoneNumberChange={(num) => setFormData(prev => ({ ...prev, phone: num }))}
+                  label="Teléfono *"
+                  required
+                />
               </div>
             </div>
 
