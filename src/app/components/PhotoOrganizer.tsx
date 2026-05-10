@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  fromPropsToAlbumState,
+  fromAlbumStateToProps,
+  swapPhotosOnPage as albumSwapPhotosOnPage,
+  swapPages as albumSwapPages,
+  movePageToIndex as albumMovePageToIndex,
+  rippleShift as albumRippleShift,
+  pullShift as albumPullShift,
+  deleteOverflow as albumDeleteOverflow,
+  moveOverflowToPage as albumMoveOverflowToPage,
+  type AlbumState,
+  type AlbumConfig,
+} from '../utils/albumStateUtils';
+import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
@@ -801,124 +814,21 @@ export default function PhotoOrganizer({
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === photos.length - 1) return;
-    const newPhotos = [...photos];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
-    onPhotosChange(newPhotos);
+    if (targetIndex < 0 || targetIndex >= photos.length) return;
+    applyAlbumState(albumSwapPages(currentAlbumState(), index, targetIndex));
     setEditingPageIndex(targetIndex);
-
-    // Swap pageLayouts and pageLayoutVariants for the two pages
-    const newLayouts = { ...pageLayouts };
-    const newVariants = { ...pageLayoutVariants };
-    const tempLayout = newLayouts[index];
-    if (newLayouts[targetIndex] !== undefined) newLayouts[index] = newLayouts[targetIndex];
-    else delete newLayouts[index];
-    if (tempLayout !== undefined) newLayouts[targetIndex] = tempLayout;
-    else delete newLayouts[targetIndex];
-    const tempVariant = newVariants[index];
-    if (newVariants[targetIndex] !== undefined) newVariants[index] = newVariants[targetIndex];
-    else delete newVariants[index];
-    if (tempVariant !== undefined) newVariants[targetIndex] = tempVariant;
-    else delete newVariants[targetIndex];
-    onPageLayoutsChange(newLayouts);
-    onPageLayoutVariantsChange(newVariants);
-
-    const swappedCrops = { ...photoCrops };
-    const keysIndex = Object.keys(swappedCrops).filter(k => k.startsWith(`${index}-`));
-    const keysTarget = Object.keys(swappedCrops).filter(k => k.startsWith(`${targetIndex}-`));
-    keysIndex.forEach(k => delete swappedCrops[k]);
-    keysTarget.forEach(k => { swappedCrops[`${index}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swappedCrops[k]; });
-    keysIndex.forEach(k => { swappedCrops[`${targetIndex}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
-    onPhotoCropsChange(swappedCrops);
-
-    const swappedTexts = { ...textBoxSlots };
-    const textA = textBoxSlots[index];
-    const textB = textBoxSlots[targetIndex];
-    if (textB !== undefined) swappedTexts[index] = textB; else delete swappedTexts[index];
-    if (textA !== undefined) swappedTexts[targetIndex] = textA; else delete swappedTexts[targetIndex];
-    onTextBoxSlotsChange(swappedTexts);
   };
 
   const handleMovePageToIndex = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
-    const pageCount = photos.length;
-
-    const newPhotos = [...photos];
-    const [movedPage] = newPhotos.splice(fromIndex, 1);
-    newPhotos.splice(toIndex, 0, movedPage);
-    onPhotosChange(newPhotos);
+    applyAlbumState(albumMovePageToIndex(currentAlbumState(), fromIndex, toIndex));
     setEditingPageIndex(toIndex);
-
-    const layoutsArr = Array.from({ length: pageCount }, (_, i) => pageLayouts[i]);
-    const [movedLayout] = layoutsArr.splice(fromIndex, 1);
-    layoutsArr.splice(toIndex, 0, movedLayout);
-    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
-    layoutsArr.forEach((v, i) => { if (v !== undefined) newLayouts[i] = v as 'grid' | 'row' | 'column'; });
-    onPageLayoutsChange(newLayouts);
-
-    const variantsArr = Array.from({ length: pageCount }, (_, i) => pageLayoutVariants[i]);
-    const [movedVariant] = variantsArr.splice(fromIndex, 1);
-    variantsArr.splice(toIndex, 0, movedVariant);
-    const newVariants: Record<number, number> = {};
-    variantsArr.forEach((v, i) => { if (v !== undefined) newVariants[i] = v; });
-    onPageLayoutVariantsChange(newVariants);
-
-    const cropsPerPage: (Record<string, any>)[] = Array.from({ length: pageCount }, () => ({}));
-    for (const key of Object.keys(photoCrops)) {
-      const dashIdx = key.indexOf('-');
-      const pageNum = Number(key.substring(0, dashIdx));
-      if (pageNum < pageCount) cropsPerPage[pageNum][key.substring(dashIdx + 1)] = photoCrops[key];
-    }
-    const [movedCrops] = cropsPerPage.splice(fromIndex, 1);
-    cropsPerPage.splice(toIndex, 0, movedCrops);
-    const newCropsPage: Record<string, any> = {};
-    cropsPerPage.forEach((pageCrops, newPageIdx) => {
-      for (const photoStr of Object.keys(pageCrops)) newCropsPage[`${newPageIdx}-${photoStr}`] = pageCrops[photoStr];
-    });
-    onPhotoCropsChange(newCropsPage);
-
-    const textsArr: (Record<number, any> | undefined)[] = Array.from({ length: pageCount }, (_, i) => textBoxSlots[i]);
-    const [movedTexts] = textsArr.splice(fromIndex, 1);
-    textsArr.splice(toIndex, 0, movedTexts);
-    const newTextsMove: Record<number, Record<number, any>> = {};
-    textsArr.forEach((t, i) => { if (t !== undefined) newTextsMove[i] = t; });
-    onTextBoxSlotsChange(newTextsMove);
   };
 
   const handleSwapTwoPages = (a: number, b: number) => {
     if (a === b) return;
-    const newPhotos = [...photos];
-    [newPhotos[a], newPhotos[b]] = [newPhotos[b], newPhotos[a]];
-    onPhotosChange(newPhotos);
-
-    const newLayouts = { ...pageLayouts } as Record<number, 'grid' | 'row' | 'column'>;
-    const tempLayout = newLayouts[a];
-    if (newLayouts[b] !== undefined) newLayouts[a] = newLayouts[b]; else delete newLayouts[a];
-    if (tempLayout !== undefined) newLayouts[b] = tempLayout; else delete newLayouts[b];
-    onPageLayoutsChange(newLayouts);
-
-    const newVariants = { ...pageLayoutVariants };
-    const tempVariant = newVariants[a];
-    if (newVariants[b] !== undefined) newVariants[a] = newVariants[b]; else delete newVariants[a];
-    if (tempVariant !== undefined) newVariants[b] = tempVariant; else delete newVariants[b];
-    onPageLayoutVariantsChange(newVariants);
-
-    const swapCrops = { ...photoCrops };
-    const keysA = Object.keys(swapCrops).filter(k => k.startsWith(`${a}-`));
-    const keysB = Object.keys(swapCrops).filter(k => k.startsWith(`${b}-`));
-    keysA.forEach(k => delete swapCrops[k]);
-    keysB.forEach(k => { swapCrops[`${a}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swapCrops[k]; });
-    keysA.forEach(k => { swapCrops[`${b}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
-    onPhotoCropsChange(swapCrops);
-
-    const swapTexts = { ...textBoxSlots };
-    const textsA = textBoxSlots[a];
-    const textsB = textBoxSlots[b];
-    if (textsB !== undefined) swapTexts[a] = textsB; else delete swapTexts[a];
-    if (textsA !== undefined) swapTexts[b] = textsA; else delete swapTexts[b];
-    onTextBoxSlotsChange(swapTexts);
+    applyAlbumState(albumSwapPages(currentAlbumState(), a, b));
   };
 
   const exitReorderMode = () => {
@@ -1035,29 +945,7 @@ export default function PhotoOrganizer({
 
   const handleSwapPhotosOnPage = (pageIndex: number, fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
-    const newPhotos = [...photos];
-    const pagePhotos = [...newPhotos[pageIndex]];
-    while (pagePhotos.length <= Math.max(fromIndex, toIndex)) pagePhotos.push('');
-    [pagePhotos[fromIndex], pagePhotos[toIndex]] = [pagePhotos[toIndex], pagePhotos[fromIndex]];
-    while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) pagePhotos.pop();
-    newPhotos[pageIndex] = pagePhotos;
-    onPhotosChange(newPhotos);
-
-    const newCrops = { ...photoCrops };
-    const fromCrop = photoCrops[`${pageIndex}-${fromIndex}`];
-    const toCrop = photoCrops[`${pageIndex}-${toIndex}`];
-    if (fromCrop) newCrops[`${pageIndex}-${toIndex}`] = fromCrop; else delete newCrops[`${pageIndex}-${toIndex}`];
-    if (toCrop) newCrops[`${pageIndex}-${fromIndex}`] = toCrop; else delete newCrops[`${pageIndex}-${fromIndex}`];
-    onPhotoCropsChange(newCrops);
-
-    const newTexts = { ...textBoxSlots };
-    if (!newTexts[pageIndex]) newTexts[pageIndex] = {};
-    const fromText = textBoxSlots[pageIndex]?.[fromIndex];
-    const toText = textBoxSlots[pageIndex]?.[toIndex];
-    if (fromText) newTexts[pageIndex][toIndex] = fromText; else delete newTexts[pageIndex][toIndex];
-    if (toText) newTexts[pageIndex][fromIndex] = toText; else delete newTexts[pageIndex][fromIndex];
-    if (Object.keys(newTexts[pageIndex] || {}).length === 0) delete newTexts[pageIndex];
-    onTextBoxSlotsChange(newTexts);
+    applyAlbumState(albumSwapPhotosOnPage(currentAlbumState(), pageIndex, fromIndex, toIndex));
   };
 
   const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
@@ -1120,264 +1008,51 @@ export default function PhotoOrganizer({
     }
   };
 
-  const isLastPageWithContent = (pageIdx: number, currentPhotos: string[][]) => {
-    for (let i = pageIdx + 1; i < currentPhotos.length; i++) {
-        if (currentPhotos[i].some(p => p && p.trim() !== '')) return false;
-    }
-    return true;
-  };
-  
+  // ── Unified album-state helpers ──────────────────────────────────────────────
+
+  const albumConfig: AlbumConfig = { allowedPhotosPerPage, maxPages: 250 };
+
+  const currentAlbumState = (): AlbumState =>
+    fromPropsToAlbumState(photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants, fileSignatures);
+
+  // Fires all 6 onChange callbacks in one React 18 auto-batched update so the
+  // parent never reads a partially-updated state between callbacks.
+  const applyAlbumState = useCallback((newState: AlbumState) => {
+    const p = fromAlbumStateToProps(newState);
+    onPhotosChange(p.photos);
+    onPhotoCropsChange(p.photoCrops);
+    onTextBoxSlotsChange(p.textBoxSlots);
+    onPageLayoutsChange(p.pageLayouts);
+    onPageLayoutVariantsChange(p.pageLayoutVariants);
+    setFileSignatures(p.fileSignatures);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onPhotosChange, onPhotoCropsChange, onTextBoxSlotsChange, onPageLayoutsChange, onPageLayoutVariantsChange]);
+
+  // ── End unified helpers ──────────────────────────────────────────────────────
+
   const applyRippleShift = (startIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
-
-    let currentOverflow = newPhotos[startIndex].splice(newVariant);
-
-    let movingData = currentOverflow.map((_, idx) => {
-        let oldIdx = newVariant + idx;
-        let crop = newCrops[`${startIndex}-${oldIdx}`];
-        let text = newTexts[startIndex]?.[oldIdx];
-        delete newCrops[`${startIndex}-${oldIdx}`];
-        if (newTexts[startIndex]) delete newTexts[startIndex][oldIdx];
-        return { crop, text };
-    });
-
-    let p = startIndex + 1;
-    while(currentOverflow.length > 0) {
-        if (p >= newPhotos.length) {
-            if (newPhotos.length >= 250) {
-                alert("Límite máximo de 250 páginas alcanzado. Algunas fotos no se pudieron acomodar.");
-                currentOverflow = [];
-                break;
-            }
-            newPhotos.push([], []); 
-            setNumPages(newPhotos.length);
-        }
-
-        let insertCount = currentOverflow.length;
-        let existingLength = newPhotos[p].length;
-
-        let lastWithContent = isLastPageWithContent(p, newPhotos);
-        let capacity = newVariants[p] || getNextAllowed(existingLength);
-        
-        if (existingLength === 0 || lastWithContent) {
-            capacity = getNextAllowed(existingLength + insertCount);
-        }
-
-        for (let i = existingLength - 1; i >= 0; i--) {
-            if (newCrops[`${p}-${i}`]) {
-                newCrops[`${p}-${i + insertCount}`] = newCrops[`${p}-${i}`];
-                delete newCrops[`${p}-${i}`];
-            }
-            if (newTexts[p]?.[i]) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][i + insertCount] = newTexts[p][i];
-                delete newTexts[p][i];
-            }
-        }
-
-        newPhotos[p].unshift(...currentOverflow);
-
-        movingData.forEach((data, idx) => {
-            if (data.crop) newCrops[`${p}-${idx}`] = data.crop;
-            if (data.text) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][idx] = data.text;
-            }
-        });
-
-        if (newPhotos[p].length > capacity) {
-            currentOverflow = newPhotos[p].splice(capacity);
-            movingData = currentOverflow.map((_, idx) => {
-                let oldIdx = capacity + idx;
-                let crop = newCrops[`${p}-${oldIdx}`];
-                let text = newTexts[p]?.[oldIdx];
-                delete newCrops[`${p}-${oldIdx}`];
-                if (newTexts[p]) delete newTexts[p][oldIdx];
-                return { crop, text };
-            });
-            newVariants[p] = capacity;
-        } else {
-            currentOverflow = [];
-            newVariants[p] = getNextAllowed(newPhotos[p].length);
-        }
-        p++;
-    }
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumRippleShift(currentAlbumState(), startIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyPullShift = (startIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
-
-    let gap = newVariant - newPhotos[startIndex].length;
-    let p = startIndex;
-
-    while (gap > 0 && p < newPhotos.length - 1) {
-        let nextPage = p + 1;
-        let pullCount = Math.min(gap, newPhotos[nextPage].length);
-        if (pullCount === 0) break; 
-
-        let pulledPhotos = newPhotos[nextPage].splice(0, pullCount);
-        let currentLen = newPhotos[p].length;
-        newPhotos[p].push(...pulledPhotos);
-
-        for (let i = 0; i < pullCount; i++) {
-            if (newCrops[`${nextPage}-${i}`]) {
-                newCrops[`${p}-${currentLen + i}`] = newCrops[`${nextPage}-${i}`];
-                delete newCrops[`${nextPage}-${i}`];
-            }
-            if (newTexts[nextPage]?.[i]) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][currentLen + i] = newTexts[nextPage][i];
-                delete newTexts[nextPage][i];
-            }
-        }
-
-        let nextLenAfterPull = newPhotos[nextPage].length;
-        for (let i = 0; i < nextLenAfterPull; i++) {
-            let oldIdx = i + pullCount;
-            if (newCrops[`${nextPage}-${oldIdx}`]) {
-                newCrops[`${nextPage}-${i}`] = newCrops[`${nextPage}-${oldIdx}`];
-                delete newCrops[`${nextPage}-${oldIdx}`];
-            }
-            if (newTexts[nextPage]?.[oldIdx]) {
-                if (!newTexts[nextPage]) newTexts[nextPage] = {};
-                newTexts[nextPage][i] = newTexts[nextPage][oldIdx];
-                delete newTexts[nextPage][oldIdx];
-            }
-        }
-        
-        newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
-        gap = pullCount; 
-        p++;
-    }
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumPullShift(currentAlbumState(), startIndex, newVariant, albumConfig));
   };
 
   const applyIncreaseVariantOnly = (pageIndex: number, newVariant: number) => {
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-    onPageLayoutVariantsChange(newVariants);
+    onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: newVariant });
   };
 
+  // Treated as a bounded ripple: cascade stops naturally when no more overflow.
   const applyIncreaseNextPageVariant = (pageIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    let nextPage = pageIndex + 1;
-
-    if (nextPage >= newPhotos.length) {
-        if (newPhotos.length >= 250) {
-            alert("Límite máximo de 250 páginas alcanzado.");
-            return;
-        }
-        newPhotos.push([], []);
-        setNumPages(newPhotos.length);
-    }
-
-    let insertCount = overflow.length;
-    let existingLength = newPhotos[nextPage].length;
-
-    for (let i = existingLength - 1; i >= 0; i--) {
-        if (newCrops[`${nextPage}-${i}`]) {
-            newCrops[`${nextPage}-${i + insertCount}`] = newCrops[`${nextPage}-${i}`];
-            delete newCrops[`${nextPage}-${i}`];
-        }
-        if (newTexts[nextPage]?.[i]) {
-            if (!newTexts[nextPage]) newTexts[nextPage] = {};
-            newTexts[nextPage][i + insertCount] = newTexts[nextPage][i];
-            delete newTexts[nextPage][i];
-        }
-    }
-
-    newPhotos[nextPage].unshift(...overflow);
-
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        if (newCrops[`${pageIndex}-${oldIdx}`]) {
-            newCrops[`${nextPage}-${idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
-            delete newCrops[`${pageIndex}-${oldIdx}`];
-        }
-        if (newTexts[pageIndex]?.[oldIdx]) {
-            if (!newTexts[nextPage]) newTexts[nextPage] = {};
-            newTexts[nextPage][idx] = newTexts[pageIndex][oldIdx];
-            delete newTexts[pageIndex][oldIdx];
-        }
-    });
-
-    newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumRippleShift(currentAlbumState(), pageIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyDeleteOverflow = (pageIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        delete newCrops[`${pageIndex}-${oldIdx}`];
-        if (newTexts[pageIndex]) delete newTexts[pageIndex][oldIdx];
-    });
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumDeleteOverflow(currentAlbumState(), pageIndex, newVariant));
   };
 
   const applyMoveToSpecificPage = (pageIndex: number, newVariant: number, targetPage: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    let targetLen = newPhotos[targetPage].length;
-
-    newPhotos[targetPage].push(...overflow);
-
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        if (newCrops[`${pageIndex}-${oldIdx}`]) {
-            newCrops[`${targetPage}-${targetLen + idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
-            delete newCrops[`${pageIndex}-${oldIdx}`];
-        }
-        if (newTexts[pageIndex]?.[oldIdx]) {
-            if (!newTexts[targetPage]) newTexts[targetPage] = {};
-            newTexts[targetPage][targetLen + idx] = newTexts[pageIndex][oldIdx];
-            delete newTexts[pageIndex][oldIdx];
-        }
-    });
-
-    newVariants[targetPage] = getNextAllowed(newPhotos[targetPage].length);
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumMoveOverflowToPage(currentAlbumState(), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
   };
 
   const handleVariantSelect = (opt: number) => {
@@ -1675,20 +1350,6 @@ export default function PhotoOrganizer({
                 </div>
               </div>
 
-              <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Acciones de Página</h4>
-                <div className="flex flex-wrap gap-2">
-                  <div className="flex bg-gray-50 rounded-lg border border-gray-200 p-0.5">
-                    <button onClick={() => { handleMovePage(pageIndex, 'up'); setAdvancedSettingsModal(pageIndex - 1); }} disabled={pageIndex === 0} className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"><ChevronUp className="w-4 h-4"/></button>
-                    <div className="w-px h-4 bg-gray-200 my-auto" />
-                    <button onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }} disabled={pageIndex === safePhotos.length - 1} className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"><ChevronDown className="w-4 h-4"/></button>
-                  </div>
-                  
-                  <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
-                  {!pagesLocked && <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>}
-                </div>
-              </div>
-              
               <div className="pt-2 flex justify-end w-full">
                 <button onClick={() => { setAdvancedSettingsModal(null); setEditingPageIndex(null); }} className="px-6 py-2.5 sm:py-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors w-full shadow-md text-sm">Guardar y Cerrar</button>
               </div>
@@ -2115,6 +1776,7 @@ export default function PhotoOrganizer({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
             <p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2193,12 +1855,22 @@ export default function PhotoOrganizer({
                     </span>
                   </button>
                 ) : isSelected ? (
-                  <button
-                    onClick={exitReorderMode}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
-                  >
-                    <X className="w-3 h-3" /> Cancelar
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {!pagesLocked && (
+                      <button
+                        onClick={() => { exitReorderMode(); handleDeletePage(pageIndex); }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border-2 bg-red-600 text-white border-red-600 text-xs font-bold uppercase hover:bg-red-700 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" /> Eliminar
+                      </button>
+                    )}
+                    <button
+                      onClick={exitReorderMode}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
+                    >
+                      <X className="w-3 h-3" /> Cancelar
+                    </button>
+                  </div>
                 ) : null}
               </div>
 
