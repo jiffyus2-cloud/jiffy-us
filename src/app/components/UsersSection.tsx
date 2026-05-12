@@ -9,6 +9,7 @@ import {
   ChevronDown, ChevronRight, AlertCircle, Check, RefreshCw,
   Package, Clock, CheckCircle2, Truck, Home
 } from 'lucide-react';
+import { PhoneInput, COUNTRY_CODES } from './ui/PhoneInput';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -83,7 +84,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 // ─── Create User via Firebase Auth REST API ───────────────────────────────────
 
-async function createUserViaRest(email: string, password: string, name: string): Promise<string> {
+async function createUserViaRest(email: string, password: string, name: string, phone?: string): Promise<string> {
   const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
   const res = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
@@ -108,6 +109,7 @@ async function createUserViaRest(email: string, password: string, name: string):
     name,
     email,
     createdAt: new Date().toISOString(),
+    ...(phone ? { phone } : {}),
   });
   return uid;
 }
@@ -332,6 +334,20 @@ const UserFormModal: React.FC<{
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [phoneCode, setPhoneCode] = useState(() => {
+    if (!user?.phone) return '+57';
+    const match = [...COUNTRY_CODES]
+      .sort((a, b) => b.code.length - a.code.length)
+      .find(c => user.phone!.startsWith(c.code));
+    return match?.code ?? '+57';
+  });
+  const [phoneNumber, setPhoneNumber] = useState(() => {
+    if (!user?.phone) return '';
+    const match = [...COUNTRY_CODES]
+      .sort((a, b) => b.code.length - a.code.length)
+      .find(c => user.phone!.startsWith(c.code));
+    return match ? user.phone!.slice(match.code.length) : user.phone!;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -340,10 +356,15 @@ const UserFormModal: React.FC<{
     if (!isEdit && password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
     setSaving(true);
     try {
+      const phoneValue = phoneNumber.trim() ? phoneCode + phoneNumber.trim() : undefined;
       if (isEdit) {
-        await setDoc(doc(db, 'users', user!.uid), { name: name.trim(), email: email.trim() }, { merge: true });
+        await setDoc(doc(db, 'users', user!.uid), {
+          name: name.trim(),
+          email: email.trim(),
+          ...(phoneValue !== undefined ? { phone: phoneValue } : {}),
+        }, { merge: true });
       } else {
-        await createUserViaRest(email.trim(), password, name.trim());
+        await createUserViaRest(email.trim(), password, name.trim(), phoneValue);
       }
       onSaved();
       onClose();
@@ -385,6 +406,19 @@ const UserFormModal: React.FC<{
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 disabled:bg-gray-50 disabled:text-gray-400"
             />
             {isEdit && <p className="text-xs text-gray-400 mt-1">El correo no se puede modificar desde aquí.</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Teléfono <span className="font-normal text-gray-400">(opcional)</span>
+            </label>
+            <PhoneInput
+              phoneCode={phoneCode}
+              phoneNumber={phoneNumber}
+              onPhoneCodeChange={setPhoneCode}
+              onPhoneNumberChange={setPhoneNumber}
+              label=""
+              inputClassName="py-2 text-sm border-gray-200"
+            />
           </div>
           {!isEdit && (
             <div>
