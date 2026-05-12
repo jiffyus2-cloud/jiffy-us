@@ -10,9 +10,11 @@ import {
   updateAddress,
   deleteSavedBilling,
   updateUserName,
+  updateUserPhone,
   SavedAddress,
   SavedBilling,
 } from '../../services/userProfileService';
+import { PhoneInput, COUNTRY_CODES } from './ui/PhoneInput';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card';
 import { Badge } from './ui/badge';
 import { AspectRatio } from './ui/aspect-ratio';
@@ -145,6 +147,10 @@ const UserDashboard: React.FC = () => {
   const [nameInput, setNameInput] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
+  const [phoneCode, setPhoneCode] = useState('+57');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [phoneSaved, setPhoneSaved] = useState(false);
   const [isResetSent, setIsResetSent] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -211,6 +217,21 @@ const UserDashboard: React.FC = () => {
     if (userData?.name) setNameInput(userData.name);
   }, [userData]);
 
+  useEffect(() => {
+    if (userData?.phone) {
+      const phone: string = userData.phone;
+      const match = [...COUNTRY_CODES]
+        .sort((a, b) => b.code.length - a.code.length)
+        .find(c => phone.startsWith(c.code));
+      if (match) {
+        setPhoneCode(match.code);
+        setPhoneNumber(phone.slice(match.code.length));
+      } else {
+        setPhoneNumber(phone);
+      }
+    }
+  }, [userData]);
+
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
     setIsModalOpen(true);
@@ -248,6 +269,21 @@ const UserDashboard: React.FC = () => {
       console.error('Error saving name', e);
     } finally {
       setIsSavingName(false);
+    }
+  };
+
+  const handleSavePhone = async () => {
+    if (!user || !phoneNumber.trim()) return;
+    setIsSavingPhone(true);
+    try {
+      await updateUserPhone(user.uid, phoneCode + phoneNumber.trim());
+      await refreshUserData();
+      setPhoneSaved(true);
+      setTimeout(() => setPhoneSaved(false), 3000);
+    } catch (e) {
+      console.error('Error saving phone', e);
+    } finally {
+      setIsSavingPhone(false);
     }
   };
 
@@ -640,6 +676,33 @@ const UserDashboard: React.FC = () => {
                     {user?.email || '—'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">{t('account.emailNote')}</p>
+                </div>
+
+                {/* Teléfono */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    {t('account.phone')}
+                  </label>
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <PhoneInput
+                        phoneCode={phoneCode}
+                        phoneNumber={phoneNumber}
+                        onPhoneCodeChange={setPhoneCode}
+                        onPhoneNumberChange={setPhoneNumber}
+                        label=""
+                        inputClassName="py-2 text-sm border-gray-200 focus:ring-black/10 focus:border-gray-400"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSavePhone}
+                      disabled={isSavingPhone || !phoneNumber.trim()}
+                      className="px-4 py-2 bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      {phoneSaved ? <Check className="w-4 h-4" /> : null}
+                      {phoneSaved ? t('account.phoneSaved') : t('account.savePhone')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
