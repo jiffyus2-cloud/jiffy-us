@@ -1365,11 +1365,6 @@ export default function PhotoOrganizer({
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
         {renderLowResModal()}
-        
-        <div className="text-center mb-8">
-          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
-          <p className="text-gray-600">{t('organizer.uploadDesc')}</p>
-        </div>
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
@@ -1383,26 +1378,20 @@ export default function PhotoOrganizer({
             </div>
           ) : (
             <>
-              <button onClick={() => fileInputRef.current?.click()} className="w-full py-10 px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
+              <button onClick={() => fileInputRef.current?.click()} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center flex flex-col items-center gap-3 w-full">
-                  <p className="text-sm text-gray-500">Selecciona tus fotos y empieza a revivir tus mejores recuerdos</p>
+                  <p className="text-sm text-gray-500">Según la cantidad de fotos seleccionadas, el tiempo de carga puede variar</p>
                   <span className="inline-flex items-center justify-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors w-full max-w-xs">
                     <Upload className="w-5 h-5 shrink-0" />
                     Toca aquí para seleccionar fotos
                   </span>
                 </div>
               </button>
-              <div className="flex items-start gap-2.5 mt-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-                <span className="text-amber-500 text-lg shrink-0 leading-tight">ℹ️</span>
-                <p className="text-xs text-amber-900 leading-snug">
-                  La carga puede tardar unos segundos. Por favor paciencia.
-                </p>
-              </div>
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
-          
+
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">

@@ -14,7 +14,7 @@ const translations = {
     'nav.login': 'Log In',
     'nav.signup': 'Sign Up',
     'nav.home': 'Home',
-    'nav.dashboard': 'Projects',
+    'nav.dashboard': 'My Account',
     
     // Creator Steps
     'step.product': 'Product',
@@ -276,7 +276,7 @@ const translations = {
     'success.backHome': 'Back to home',
 
     // Dashboard
-    'dashboard.title': 'My Station',
+    'dashboard.title': 'My Account',
     'dashboard.subtitle': 'Manage and review the status of your creations.',
     'dashboard.noOrders': 'You haven\'t created any projects yet.',
     'dashboard.noOrdersDesc': 'Start creating your first album today!',
@@ -394,7 +394,7 @@ const translations = {
     'nav.login': 'Iniciar Sesión',
     'nav.signup': 'Registrarse',
     'nav.home': 'Inicio',
-    'nav.dashboard': 'Mi Estación',
+    'nav.dashboard': 'Mi Cuenta',
     
     // Creator Steps
     'step.product': 'Producto',
@@ -403,7 +403,7 @@ const translations = {
     'step.photos': 'Fotos',
     'step.design': 'Diseño',
     'step.checkout': 'Pagar',
-    'step.back': 'Atrás',
+    'step.back': 'Volver',
     'step.of': 'de',
     'step.step': 'Paso',
 
@@ -685,7 +685,7 @@ const translations = {
     'success.backHome': 'Volver al inicio',
 
     // Dashboard
-    'dashboard.title': 'Mi Estación',
+    'dashboard.title': 'Mi Cuenta',
     'dashboard.subtitle': 'Gestiona y revisa el estado de tus creaciones.',
     'dashboard.noOrders': 'Aún no tienes pedidos',
     'dashboard.noOrdersDesc': '¡Empieza a crear tu primer álbum hoy mismo!',
