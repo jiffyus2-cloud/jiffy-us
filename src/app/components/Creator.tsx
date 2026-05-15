@@ -1034,7 +1034,7 @@ export default function Creator() {
             className="flex items-center gap-1 text-gray-500 hover:text-black font-semibold transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span className="hidden md:inline">{t('step.back')}</span>
+            <span>{t('step.back')}</span>
           </button>
         </div>
       )}

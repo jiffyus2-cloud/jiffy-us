@@ -1,4 +1,4 @@
-import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState, useMemo } from 'react';
@@ -49,7 +49,7 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
   };
 
   return (
-    <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+    <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
       <div className="relative aspect-square overflow-hidden bg-gray-50 flex items-center justify-center">
         {images.length > 0 ? (
           <img
@@ -63,7 +63,11 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
             <span className="text-xs font-medium">Sin imágenes</span>
           </div>
         )}
-        
+
+        <div className="absolute bottom-0 left-0 right-0 px-2 py-2 md:px-3 md:py-3 bg-gradient-to-t from-black/60 to-transparent">
+          <h4 className="font-semibold text-lg md:text-xl text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{style.name}</h4>
+        </div>
+
         {images.length > 1 && (
           <>
             <button
@@ -78,8 +82,8 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
             >
               <ChevronRight className="w-5 h-5 md:w-5 md:h-5" />
             </button>
-            
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {images.map((_: any, idx: number) => (
                 <div
                   key={idx}
@@ -90,10 +94,6 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
           </>
         )}
       </div>
-      <div className="p-2 md:p-4 bg-white flex-1">
-        <h4 className="font-semibold text-xs md:text-base text-gray-900 mb-0.5 md:mb-1">{style.name}</h4>
-        <p className="text-[10px] md:text-xs text-gray-500 leading-snug md:leading-relaxed">{style.description}</p>
-      </div>
     </div>
   );
 };
@@ -102,6 +102,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isSpecsOpen, setIsSpecsOpen] = useState(false);
 
   const randomClientImages = useMemo(() => {
     if (!isOpen || allClientImages.length === 0) return [];
@@ -188,8 +189,8 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           title: t('product.album'),
           description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
-            { name: 'Papel', description: 'Portada de pasta dura personalizada con tu foto favorita. Páginas interiores en papel opalina.', images: allPapelImages },
-            { name: 'Tela', description: 'Acabado premium con textura de lino. Páginas interiores en papel opalina.', images: allTelaImages }
+            { name: 'Carátula Pasta Dura con foto', description: 'Portada de pasta dura personalizada con tu foto favorita. Páginas interiores en papel opalina.', images: allPapelImages },
+            { name: 'Carátula Pasta Dura en Tela (solo texto)', description: 'Acabado premium con textura de lino. Páginas interiores en papel opalina.', images: allTelaImages }
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Pasta Dura en Tela o Papel' },
@@ -285,8 +286,6 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
         <div className="bg-white/95 backdrop-blur-md border-b border-gray-100 p-4 md:p-6 relative shrink-0 z-20">
           <div className="pr-12 md:pr-16">
             <h2 className="text-xl md:text-3xl font-black tracking-tight">{productData.title}</h2>
-            {/* Se removió la clase que truncaba el texto (line-clamp) para que fluya hacia abajo */}
-            <p className="text-xs md:text-sm text-gray-500 font-medium mt-1.5">{productData.description}</p>
           </div>
           <button
             onClick={onClose}
@@ -304,7 +303,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ) : (
             <div>
               <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+              <div className="grid grid-cols-1 gap-3 md:gap-6">
                 {productData.styles.map((style, index) => (
                   <StyleCarouselCard key={index} style={style} />
                 ))}
@@ -314,17 +313,25 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
 
           {/* Especificaciones */}
           <div>
-            <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.specifications')}</h3>
-            <div className="bg-gray-50 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-100">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-                {productData.specifications.map((spec, index) => (
-                  <div key={index} className="flex flex-col">
-                    <span className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 md:mb-2">{spec.label}</span>
-                    <span className="text-sm md:text-base font-bold text-gray-900">{spec.value}</span>
-                  </div>
-                ))}
+            <button
+              onClick={() => setIsSpecsOpen(p => !p)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <h3 className="text-xl md:text-2xl font-bold">{t('details.specifications')}</h3>
+              <ChevronDown className={`w-6 h-6 text-gray-500 transition-transform duration-300 ${isSpecsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isSpecsOpen && (
+              <div className="mt-4 md:mt-6 bg-gray-50 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-100">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+                  {productData.specifications.map((spec, index) => (
+                    <div key={index} className="flex flex-col">
+                      <span className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 md:mb-2">{spec.label}</span>
+                      <span className="text-sm md:text-base font-bold text-gray-900">{spec.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Galería de Ejemplos */}
