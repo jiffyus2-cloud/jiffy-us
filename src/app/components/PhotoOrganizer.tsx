@@ -157,7 +157,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       data-photo-slot
       data-page-index={pageIndex}
       data-photo-index={photoIndex}
-      className={`relative group/photo rounded-none bg-white flex items-center justify-center transition-opacity ${isEditing ? 'z-10' : ''} ${isDragging ? 'opacity-40 ring-2 ring-dashed ring-gray-400' : ''} ${isDragTarget ? 'ring-2 ring-black' : ''}`}
+      className={`relative group/photo rounded-none bg-white flex items-center justify-center transition-opacity h-full ${isEditing ? 'z-10' : ''} ${isDragging ? 'opacity-40 ring-2 ring-dashed ring-gray-400' : ''} ${isDragTarget ? 'ring-2 ring-black' : ''}`}
     >
       {photo ? (
         <>
@@ -1832,7 +1832,7 @@ export default function PhotoOrganizer({
                           const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
                           const isPhotoLowRes = photo && lowResInfo[photo];
                           return (
-                            <div key={photoIndex} className="relative">
+                            <div key={photoIndex} className="relative h-full">
                               <AlbumEditorPhotoSlot
                                 photo={photo} textBox={textBox} crop={crop}
                                 isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
