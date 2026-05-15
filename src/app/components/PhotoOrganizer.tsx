@@ -293,15 +293,12 @@ export default function PhotoOrganizer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Mapa URL → clave de archivo, para trasladar firmas desde processUpload hasta handleFinalizeSetup
   const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
+  // Mapa clave de archivo → info de baja resolución, para aplicarla cuando se crea la URL definitiva
+  const pendingLowResRef = useRef<Map<string, {width: number, height: number}>>(new Map());
 
   const [isValidating, setIsValidating] = useState(false);
-  const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
-  const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
-  const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
-  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
-  
-  const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
-  const [targetSlotInfo, setTargetSlotInfo] = useState<{pageIndex: number, photoIndex?: number} | null>(null);
+  const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
+  const [selectedLowResWarning, setSelectedLowResWarning] = useState<{url: string, pageIndex: number, photoIndex: number, width: number, height: number} | null>(null);
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
@@ -389,88 +386,30 @@ export default function PhotoOrganizer({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Capturar archivos antes de que React limpie el evento sintético
     const filesArray = Array.from(files);
 
-    // Limpiar el input y mostrar spinner antes de diferir
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsValidating(true);
 
-    // Diferir el procesamiento para que iOS cierre el picker nativo de inmediato.
-    // Dentro del timeout, procesamos SECUENCIALMENTE (una imagen a la vez) y cedemos
-    // el event loop entre cada imagen para evitar bloquear el hilo principal.
     setTimeout(async () => {
       const results: Array<{file: File, url: string, isLowRes: boolean, width: number, height: number}> = [];
 
       for (const file of filesArray) {
         const result = await checkImageDimensions(file);
         results.push(result);
-        // Ceder el event loop entre cada imagen para mantener la UI fluida
         await new Promise<void>(r => setTimeout(r, 0));
       }
 
-      const valid = results.filter(r => !r.isLowRes).map(r => r.file);
-      const lowRes = results.filter(r => r.isLowRes);
+      // Guardar info de baja resolución para mostrar el ícono después
+      results.filter(r => r.isLowRes).forEach(r => {
+        pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
+      });
 
-      if (lowRes.length > 0) {
-        setApprovedFiles(valid);
-        setLowResImages(lowRes);
-        setCurrentLowResIndex(0);
-        setApplyToAllLowRes(false);
-        setUploadMode('batch');
-        setIsValidating(false);
-      } else {
-        setIsValidating(false);
-        processUpload(valid);
-      }
+      setIsValidating(false);
+      processUpload(results.map(r => r.file));
     }, 0);
   };
 
-  const handleLowResDecision = (keep: boolean) => {
-    // LÓGICA PARA SUBIDA DE UNA SOLA FOTO DESDE EL EDITOR
-    if (uploadMode === 'specific') {
-      if (keep && lowResImages[0] && targetSlotInfo) {
-        processSpecificUpload(targetSlotInfo.pageIndex, lowResImages[0].file, targetSlotInfo.photoIndex);
-      }
-      setLowResImages([]);
-      setCurrentLowResIndex(0);
-      setUploadMode(null);
-      setTargetSlotInfo(null);
-      return;
-    }
-
-    // LÓGICA PARA SUBIDA POR LOTES DESDE EL INICIO
-    let newApproved = [...approvedFiles];
-    
-    if (applyToAllLowRes) {
-      if (keep) {
-        for (let i = currentLowResIndex; i < lowResImages.length; i++) {
-          newApproved.push(lowResImages[i].file);
-        }
-      }
-      setLowResImages([]);
-      setCurrentLowResIndex(0);
-      setApplyToAllLowRes(false);
-      setUploadMode(null);
-      processUpload(newApproved);
-    } else {
-      const current = lowResImages[currentLowResIndex];
-      if (keep) {
-        newApproved.push(current.file);
-      }
-      
-      if (currentLowResIndex + 1 < lowResImages.length) {
-        setApprovedFiles(newApproved);
-        setCurrentLowResIndex(currentLowResIndex + 1);
-      } else {
-        setLowResImages([]);
-        setCurrentLowResIndex(0);
-        setApplyToAllLowRes(false);
-        setUploadMode(null);
-        processUpload(newApproved);
-      }
-    }
-  };
 
   const processUpload = (finalFiles: File[]) => {
     if (finalFiles.length === 0) return;
@@ -498,6 +437,18 @@ export default function PhotoOrganizer({
       newFilesData.forEach(f => {
         pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
       });
+      // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
+      const newLowResInfo: Record<string, {width: number, height: number}> = {};
+      files.forEach((file, i) => {
+        const fk = getFileKey(file);
+        if (pendingLowResRef.current.has(fk)) {
+          newLowResInfo[newFilesData[i].url] = pendingLowResRef.current.get(fk)!;
+          pendingLowResRef.current.delete(fk);
+        }
+      });
+      if (Object.keys(newLowResInfo).length > 0) {
+        setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
+      }
       setPendingFilesData(prev => [...prev, ...newFilesData]);
       setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
     };
@@ -523,25 +474,14 @@ export default function PhotoOrganizer({
     }
   };
 
-  // NUEVA FUNCIÓN INTERCEPTORA PARA SUBIR UNA SOLA FOTO
   const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
-    setUploadMode('specific');
-    setTargetSlotInfo({ pageIndex, photoIndex: targetPhotoIndex });
     setIsValidating(true);
-    
     const result = await checkImageDimensions(file);
-
     if (result.isLowRes) {
-      setLowResImages([result]);
-      setCurrentLowResIndex(0);
-      setApplyToAllLowRes(false);
-      setIsValidating(false);
-    } else {
-      setIsValidating(false);
-      processSpecificUpload(pageIndex, file, targetPhotoIndex);
-      setUploadMode(null);
-      setTargetSlotInfo(null);
+      pendingLowResRef.current.set(getFileKey(file), { width: result.width, height: result.height });
     }
+    setIsValidating(false);
+    processSpecificUpload(pageIndex, file, targetPhotoIndex);
   };
 
   const processSpecificUpload = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
@@ -553,24 +493,34 @@ export default function PhotoOrganizer({
       const pagePhotos = [...newPhotos[pageIndex]];
       const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
       let slotIndex: number;
+      const newUrl = URL.createObjectURL(file);
 
       if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
         while (pagePhotos.length <= targetPhotoIndex) pagePhotos.push('');
-        pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
+        pagePhotos[targetPhotoIndex] = newUrl;
         slotIndex = targetPhotoIndex;
       } else {
         const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
         if (firstEmpty !== -1) {
-          pagePhotos[firstEmpty] = URL.createObjectURL(file);
+          pagePhotos[firstEmpty] = newUrl;
           slotIndex = firstEmpty;
         } else {
           if (pagePhotos.length >= maxAllowed) {
+            URL.revokeObjectURL(newUrl);
             alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
             return;
           }
-          pagePhotos.push(URL.createObjectURL(file));
+          pagePhotos.push(newUrl);
           slotIndex = pagePhotos.length - 1;
         }
+      }
+
+      // Aplicar info de baja resolución a la URL recién creada
+      const lrKey = getFileKey(file);
+      if (pendingLowResRef.current.has(lrKey)) {
+        const info = pendingLowResRef.current.get(lrKey)!;
+        pendingLowResRef.current.delete(lrKey);
+        setLowResInfo(prev => ({ ...prev, [newUrl]: info }));
       }
 
       newPhotos[pageIndex] = pagePhotos;
@@ -598,7 +548,7 @@ export default function PhotoOrganizer({
         file,
         previewUrl: _slotPreviewUrl,
         onConfirm: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); doUpload(); },
-        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); setTargetSlotInfo(null); },
+        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); },
       });
     } else {
       doUpload();
@@ -1221,45 +1171,40 @@ export default function PhotoOrganizer({
     );
   };
 
-  const renderLowResModal = () => {
-    if (lowResImages.length === 0) return null;
-    const remainingCount = lowResImages.length - currentLowResIndex;
-
+  const renderLowResWarningModal = () => {
+    if (!selectedLowResWarning) return null;
+    const { url, pageIndex, photoIndex, width, height } = selectedLowResWarning;
     return (
       <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-          <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
           <p className="text-sm text-gray-500 mb-6">
-            Esta imagen mide <strong>{lowResImages[currentLowResIndex].width}x{lowResImages[currentLowResIndex].height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
+            Esta imagen mide <strong>{width}x{height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
           </p>
-
-          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
-            <img src={lowResImages[currentLowResIndex].url} className="w-full h-full object-contain" alt="Low res preview" />
-            <div className="absolute top-3 right-3 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full font-mono font-bold shadow-lg">
-              {currentLowResIndex + 1} / {lowResImages.length}
-            </div>
+          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
+            <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
           </div>
-
-          {remainingCount > 1 && uploadMode !== 'specific' && (
-            <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer bg-gray-50 p-3 rounded-xl border border-gray-200 hover:border-black transition-colors">
-              <input 
-                type="checkbox" 
-                checked={applyToAllLowRes} 
-                onChange={(e) => setApplyToAllLowRes(e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black accent-black"
-              />
-              <span className="text-sm font-bold text-gray-700">Aplicar a las {remainingCount} fotos restantes</span>
-            </label>
-          )}
-
           <div className="flex gap-3">
-            <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
+            <button
+              onClick={() => {
+                handleRemovePhotoFromPage(pageIndex, photoIndex);
+                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
+                setSelectedLowResWarning(null);
+              }}
+              className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
+            >
               Descartar
             </button>
-            <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+            <button
+              onClick={() => {
+                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
+                setSelectedLowResWarning(null);
+              }}
+              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
+            >
               Usar de todos modos
             </button>
           </div>
@@ -1364,7 +1309,7 @@ export default function PhotoOrganizer({
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
-        {renderLowResModal()}
+        {renderLowResWarningModal()}
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
@@ -1413,7 +1358,7 @@ export default function PhotoOrganizer({
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
-        {renderLowResModal()}
+        {renderLowResWarningModal()}
         
         {!isSortingWithAI && (
           <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
@@ -1513,7 +1458,7 @@ export default function PhotoOrganizer({
       )}
 
       {renderDuplicateModal()}
-      {renderLowResModal()}
+      {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
 
       {/* MODAL INTELIGENTE DE PÁGINAS VACÍAS */}
@@ -1885,19 +1830,34 @@ export default function PhotoOrganizer({
                           const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                           const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
                           const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
+                          const isPhotoLowRes = photo && lowResInfo[photo];
                           return (
-                            <AlbumEditorPhotoSlot
-                              key={photoIndex} photo={photo} textBox={textBox} crop={crop}
-                              isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
-                              photoCount={currentVariant}
-                              editingPageIndex={null}
-                              isDragging={false}
-                              isDragTarget={false}
-                              onDragStart={handleDragStart}
-                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
-                              onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
-                              t={t}
-                            />
+                            <div key={photoIndex} className="relative">
+                              <AlbumEditorPhotoSlot
+                                photo={photo} textBox={textBox} crop={crop}
+                                isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                                photoCount={currentVariant}
+                                editingPageIndex={null}
+                                isDragging={false}
+                                isDragTarget={false}
+                                onDragStart={handleDragStart}
+                                handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                                onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                                t={t}
+                              />
+                              {isPhotoLowRes && (
+                                <button
+                                  className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLowResWarning({ url: photo!, pageIndex, photoIndex, ...lowResInfo[photo!] });
+                                  }}
+                                  title="Advertencia de resolución"
+                                >
+                                  !
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

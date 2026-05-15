@@ -64,7 +64,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const [isValidating, setIsValidating] = useState(false);
-  const [lowResImage, setLowResImage] = useState<{file: File, url: string, width: number, height: number} | null>(null);
+  const [coverImageLowResInfo, setCoverImageLowResInfo] = useState<{width: number, height: number} | null>(null);
+  const [showLowResWarning, setShowLowResWarning] = useState(false);
 
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -145,26 +146,18 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
     setIsValidating(true);
     const result = await checkImageDimensions(file);
-
+    setIsValidating(false);
+    processCoverUpload(file);
     if (result.isLowRes) {
-      setLowResImage(result);
-      setIsValidating(false);
+      setCoverImageLowResInfo({ width: result.width, height: result.height });
     } else {
-      processCoverUpload(file);
-      setIsValidating(false);
+      setCoverImageLowResInfo(null);
     }
   };
 
   const processCoverUpload = (file: File) => {
     setCoverImage(URL.createObjectURL(file));
-    setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 }); 
-  };
-
-  const handleLowResDecision = (keep: boolean) => {
-    if (keep && lowResImage) {
-      processCoverUpload(lowResImage.file);
-    }
-    setLowResImage(null);
+    setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 });
   };
 
   const getTypographyColors = () => {
@@ -207,26 +200,30 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         }
       `}</style>
 
-      {lowResImage && (
+      {showLowResWarning && coverImageLowResInfo && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
             <p className="text-sm text-gray-500 mb-6">
-              Esta imagen mide <strong>{lowResImage.width}x{lowResImage.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
+              Esta imagen mide <strong>{coverImageLowResInfo.width}x{coverImageLowResInfo.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
             </p>
-
-            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
-              <img src={lowResImage.url} className="w-full h-full object-contain" alt="Low res preview" />
+            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
+              <img src={coverImage} className="w-full h-full object-contain" alt="Low res preview" />
             </div>
-
             <div className="flex gap-3">
-              <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
-                Elegir otra
+              <button
+                onClick={() => { setCoverImage(''); setCoverCrop({x:50,y:50,zoom:1,rotation:0}); setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
+                className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
+              >
+                Descartar
               </button>
-              <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+              <button
+                onClick={() => { setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
+                className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
+              >
                 Usar de todos modos
               </button>
             </div>
@@ -359,10 +356,19 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                         position={coverCrop} 
                       />
                       <div className="absolute top-2 right-2 md:top-2 md:right-2 z-10 flex gap-2.5 md:gap-2">
+                        {coverImageLowResInfo && (
+                          <button
+                            onClick={() => setShowLowResWarning(true)}
+                            className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-sm md:text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
+                            title="Advertencia de resolución"
+                          >
+                            !
+                          </button>
+                        )}
                         <button onClick={() => setIsCropModalOpen(true)} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte">
                           <CropIcon className="w-6 h-6 md:w-4 md:h-4" />
                         </button>
-                        <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); }} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto">
+                        <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); setCoverImageLowResInfo(null); }} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto">
                           <X className="w-6 h-6 md:w-4 md:h-4" />
                         </button>
                       </div>
