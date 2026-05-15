@@ -362,7 +362,7 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section className={DESIGN.layout.sectionGray}>
+      <section className={`px-4 bg-gray-50 ${isFaqOpen ? 'py-16' : 'py-2'}`}>
         <div className={DESIGN.layout.containerNarrow}>
           <button
             onClick={() => setIsFaqOpen(p => !p)}
