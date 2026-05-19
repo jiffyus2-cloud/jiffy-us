@@ -1415,17 +1415,16 @@ export default function PhotoOrganizer({
                 )}
 
                 <div className="mt-4 flex flex-col gap-2">
-                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-700">
-                      <span className="font-bold">Mínimo 40 páginas.</span> Los álbumes incluyen 40 páginas base.
+                  <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-purple-700">
+                      Tu álbum incluye 40 páginas base.
                     </p>
                   </div>
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                    <p className="text-sm text-blue-700">
-                      Cada página adicional (más de 40) tiene un costo de{' '}
-                      <span className="font-bold">${extraPagePrice.toLocaleString('es-CO')} COP</span>.
+                  <div className="flex items-start gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-fuchsia-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-fuchsia-700">
+                      Cada página adicional cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
                     </p>
                   </div>
                 </div>
