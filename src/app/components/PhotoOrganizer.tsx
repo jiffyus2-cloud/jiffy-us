@@ -1684,14 +1684,14 @@ export default function PhotoOrganizer({
             ) : (
               <div className="space-y-6">
                 <p className="text-gray-600 text-sm">
-                  Has aumentado el diseño y ahora tienes más espacio. ¿Deseas reajustar trayendo fotos de las páginas siguientes para llenar el vacío?
+                  El nuevo diseño quedó con espacios en blanco. ¿Quieres que organicemos las fotos automáticamente para llenarlos?
                 </p>
                 <div className="space-y-3">
                   <button onClick={() => { applyPullShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
-                    Sí, reajustar fotos (Traer siguientes)
+                    Sí, reorganizar fotos
                   </button>
                   <button onClick={() => { applyIncreaseVariantOnly(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
-                    No, dejar los espacios vacíos
+                    No, dejar espacios vacíos
                   </button>
                 </div>
               </div>
