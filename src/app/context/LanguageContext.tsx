@@ -522,7 +522,7 @@ const translations = {
     'organizer.minPagesReached': 'Se requiere un mínimo de 40 páginas.',
     'organizer.emptyPagesAlert': 'Tu álbum contiene páginas vacías (Página {pages}). Por favor, añade al menos una foto o un texto a cada página antes de continuar al checkout.',
     'organizer.aiSorting': 'Ordenando tus fotos con 1clic.IA',
-    'organizer.aiSortingDesc': 'Analizando metadatos para encontrar la mejor secuencia',
+    'organizer.aiSortingDesc': 'Estamos creando la mejor secuencia para tu álbum.',
     'organizer.aiSmartSort': 'Ordenando tus fotos con 1clic.IA',
     'organizer.clearAll': 'Limpiar todo',
     'organizer.addPageEnd': 'Añadir nueva página al final',

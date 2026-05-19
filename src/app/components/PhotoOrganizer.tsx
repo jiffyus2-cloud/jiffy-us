@@ -38,7 +38,7 @@ interface JiffyLoaderProps {
 
 const getEstimatedTime = (count: number): string => {
   const seconds = Math.round(count * 1);
-  if (seconds < 60) return `~${seconds} seg`;
+  if (seconds < 60) return `~${seconds} segundos`;
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return secs > 0 ? `~${mins} min ${secs} seg` : `~${mins} min`;
@@ -82,7 +82,7 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
           <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Tiempo estimado para {photoCount} fotos: <strong>{estimated}</strong></span>
+          <span>Tiempo estimado: <strong>{estimated}</strong></span>
         </div>
       )}
 
