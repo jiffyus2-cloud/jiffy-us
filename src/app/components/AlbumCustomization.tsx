@@ -236,7 +236,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
               coverType={coverType}
               coverImage={coverContent.coverImage}
               coverTitle={coverContent.coverTitle || 'NUESTRA HISTORIA'}
-              coverSubtitle={coverContent.coverSubtitle || 'Un viaje inolvidable'}
+              coverSubtitle={coverContent.coverSubtitle}
               coverYear={coverContent.coverYear || new Date().getFullYear().toString()}
               spineText={coverContent.spineText || coverContent.coverTitle || 'NUESTRA HISTORIA'}
               selectedLayout={coverContent.selectedLayout}
