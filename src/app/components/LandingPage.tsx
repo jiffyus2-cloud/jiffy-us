@@ -261,7 +261,7 @@ export default function LandingPage() {
 
           <div className={DESIGN.layout.grid}>
             {/* Photo Album */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('album')}>
               <div className="relative h-72">
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
@@ -275,7 +275,7 @@ export default function LandingPage() {
             </div>
 
             {/* Calendar */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('calendar')}>
               <div className="relative h-72">
                 <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
@@ -289,7 +289,7 @@ export default function LandingPage() {
             </div>
 
             {showMugs && (
-              <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
                 <div className="relative h-72">
                   <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
@@ -304,7 +304,7 @@ export default function LandingPage() {
             )}
 
             {showPhotoPacks && (
-              <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
                 <div className="relative h-56">
                   <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
