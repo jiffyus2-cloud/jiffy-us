@@ -1,7 +1,7 @@
 import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
@@ -47,6 +47,14 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
       setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
     }
   };
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % images.length);
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [images.length]);
 
   return (
     <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
