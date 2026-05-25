@@ -82,7 +82,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       (requiresPhoto ? coverImage !== '' : true);
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
-  const displaySubtitle = coverSubtitle || 'Un viaje inolvidable';
+  const displaySubtitle = coverSubtitle;
   const displayYear = coverYear || new Date().getFullYear().toString();
   const displaySpine = spineText || displayTitle;
 
