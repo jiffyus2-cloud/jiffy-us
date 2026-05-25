@@ -300,6 +300,10 @@ export default function PhotoOrganizer({
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
   const [selectedLowResWarning, setSelectedLowResWarning] = useState<{url: string, pageIndex: number, photoIndex: number, width: number, height: number} | null>(null);
 
+  const [showPickerWarning, setShowPickerWarning] = useState(false);
+  const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
+
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
@@ -373,41 +377,99 @@ export default function PhotoOrganizer({
       const img = new Image();
       img.onload = () => {
         const minDim = Math.min(img.width, img.height);
-        resolve({ file, url, isLowRes: minDim < 1080, width: img.width, height: img.height });
+        URL.revokeObjectURL(url);
+        resolve({ file, url: '', isLowRes: minDim < 1080, width: img.width, height: img.height });
       };
       img.onerror = () => {
-        resolve({ file, url, isLowRes: false, width: 0, height: 0 }); 
+        URL.revokeObjectURL(url);
+        resolve({ file, url: '', isLowRes: false, width: 0, height: 0 });
       };
       img.src = url;
     });
   };
 
-  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const convertToCompatibleFormat = async (files: File[]): Promise<File[]> => {
+    const BATCH_SIZE = 5;
+    const converted: File[] = [];
 
-    const filesArray = Array.from(files);
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(async (file) => {
+        const isHeic = /\.(heic|heif)$/i.test(file.name) ||
+                       file.type.includes('heic') || file.type.includes('heif');
+        if (!isHeic) return file;
 
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    setIsValidating(true);
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = url;
+        });
+        URL.revokeObjectURL(url);
 
-    setTimeout(async () => {
-      const results: Array<{file: File, url: string, isLowRes: boolean, width: number, height: number}> = [];
+        const canvas = document.createElement('canvas');
+        const maxDim = 4096;
+        let w = img.naturalWidth || 1;
+        let h = img.naturalHeight || 1;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
 
-      for (const file of filesArray) {
-        const result = await checkImageDimensions(file);
-        results.push(result);
-        await new Promise<void>(r => setTimeout(r, 0));
-      }
+        return new Promise<File>((resolve) => {
+          canvas.toBlob((blob) => {
+            const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+            resolve(blob ? new File([blob], name, { type: 'image/jpeg' }) : file);
+          }, 'image/jpeg', 0.88);
+        });
+      }));
 
-      // Guardar info de baja resolución para mostrar el ícono después
+      converted.push(...results);
+      setConversionProgress({ done: Math.min(i + BATCH_SIZE, files.length), total: files.length });
+      await new Promise<void>(r => setTimeout(r, 50));
+    }
+
+    return converted;
+  };
+
+  const checkDimensionsInBackground = async (files: File[]) => {
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(checkImageDimensions));
       results.filter(r => r.isLowRes).forEach(r => {
         pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
       });
+      await new Promise<void>(r => setTimeout(r, 100));
+    }
+  };
 
-      setIsValidating(false);
-      processUpload(results.map(r => r.file));
-    }, 0);
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const filesArray = Array.from(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    const hasHeic = filesArray.some(f =>
+      /\.(heic|heif)$/i.test(f.name) || f.type.includes('heic') || f.type.includes('heif')
+    );
+
+    if (hasHeic) {
+      setConversionProgress({ done: 0, total: filesArray.length });
+      (async () => {
+        const compatibleFiles = await convertToCompatibleFormat(filesArray);
+        setConversionProgress(null);
+        processUpload(compatibleFiles);
+        checkDimensionsInBackground(compatibleFiles);
+      })();
+    } else {
+      processUpload(filesArray);
+      checkDimensionsInBackground(filesArray);
+    }
   };
 
 
@@ -581,10 +643,8 @@ export default function PhotoOrganizer({
             if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
           });
           
-          finalUrls = orderedIdsFromAI.map((id: string) => {
-            const matchedFile = pendingFilesData.find(f => f.id === id);
-            return matchedFile ? matchedFile.url : '';
-          }).filter(Boolean);
+          const urlById = new Map(pendingFilesData.map(f => [f.id, f.url]));
+          finalUrls = orderedIdsFromAI.map((id: string) => urlById.get(id) ?? '').filter(Boolean);
 
           const missingUrls = pendingFilesData.filter(f => !orderedIdsFromAI.includes(f.id)).map(f => f.url);
           finalUrls = [...finalUrls, ...missingUrls];
@@ -1323,7 +1383,7 @@ export default function PhotoOrganizer({
             </div>
           ) : (
             <>
-              <button onClick={() => fileInputRef.current?.click()} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
+              <button onClick={() => setShowPickerWarning(true)} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center flex flex-col items-center gap-3 w-full">
                   <p className="text-sm text-gray-500">Según la cantidad de fotos seleccionadas, el tiempo de carga puede variar</p>
@@ -1335,7 +1395,7 @@ export default function PhotoOrganizer({
               </button>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
+          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
@@ -1344,7 +1404,7 @@ export default function PhotoOrganizer({
                 <button onClick={() => { setUploadedPhotos([]); setPendingFilesData([]); }} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
               </div>
             )}
-            <button disabled={uploadedPhotos.length < 40 || isValidating} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+            <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
@@ -1447,7 +1507,74 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
-      
+
+      {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
+      {showPickerWarning && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+            <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+            <p className="text-gray-600 text-sm text-center">
+              Al seleccionar muchas fotos desde el carrete, la app puede parecer congelada
+              por unos segundos mientras carga las imágenes. <strong>Esto es normal.</strong> Por favor, espera sin cerrar la app.
+            </p>
+            <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <input
+                type="checkbox"
+                className="mt-0.5 w-5 h-5 accent-black cursor-pointer shrink-0"
+                checked={pickerWarningAccepted}
+                onChange={e => setPickerWarningAccepted(e.target.checked)}
+              />
+              <span className="text-sm font-medium text-gray-800">
+                Entiendo que el proceso puede tardar unos segundos y no cerraré la app
+              </span>
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowPickerWarning(false); setPickerWarningAccepted(false); }}
+                className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!pickerWarningAccepted}
+                onClick={() => {
+                  setShowPickerWarning(false);
+                  setPickerWarningAccepted(false);
+                  fileInputRef.current?.click();
+                }}
+                className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
+                  pickerWarningAccepted ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed'
+                }`}
+              >
+                Seleccionar fotos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PANTALLA DE CONVERSIÓN HEIC→JPEG */}
+      {conversionProgress && (
+        <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+          <Loader2 className="w-16 h-16 text-black animate-spin" />
+          <div className="text-center">
+            <p className="text-2xl font-bold">Preparando tus fotos</p>
+            <p className="text-gray-500 mt-2">
+              Convirtiendo foto {conversionProgress.done} de {conversionProgress.total}
+            </p>
+          </div>
+          <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-black h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(conversionProgress.done / conversionProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-sm text-gray-400 text-center max-w-xs">
+            Por favor espera sin cerrar la app
+          </p>
+        </div>
+      )}
+
       {/* CAPA DE CARGA PARA SUBIDA DE 1 FOTO ESPECÍFICA */}
       {isValidating && step === 'editor' && (
         <div className="fixed inset-0 z-[150] bg-white/50 backdrop-blur-sm flex flex-col items-center justify-center">
