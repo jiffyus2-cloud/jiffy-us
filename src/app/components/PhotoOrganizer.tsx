@@ -303,6 +303,7 @@ export default function PhotoOrganizer({
   const [showPickerWarning, setShowPickerWarning] = useState(false);
   const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
   const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
+  const [isTransferringFiles, setIsTransferringFiles] = useState(false);
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
@@ -388,52 +389,37 @@ export default function PhotoOrganizer({
     });
   };
 
-  const convertToCompatibleFormat = async (files: File[]): Promise<File[]> => {
-    const BATCH_SIZE = 5;
-    const converted: File[] = [];
+  const convertFileIfHeic = async (file: File): Promise<File> => {
+    const isHeic = /\.(heic|heif)$/i.test(file.name) ||
+                   file.type.includes('heic') || file.type.includes('heif');
+    if (!isHeic) return file;
 
-    for (let i = 0; i < files.length; i += BATCH_SIZE) {
-      const batch = files.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map(async (file) => {
-        const isHeic = /\.(heic|heif)$/i.test(file.name) ||
-                       file.type.includes('heic') || file.type.includes('heif');
-        if (!isHeic) return file;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = url;
+    });
+    URL.revokeObjectURL(url);
 
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          img.src = url;
-        });
-        URL.revokeObjectURL(url);
-
-        const canvas = document.createElement('canvas');
-        const maxDim = 4096;
-        let w = img.naturalWidth || 1;
-        let h = img.naturalHeight || 1;
-        if (w > maxDim || h > maxDim) {
-          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-          else { w = Math.round(w * maxDim / h); h = maxDim; }
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-
-        return new Promise<File>((resolve) => {
-          canvas.toBlob((blob) => {
-            const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-            resolve(blob ? new File([blob], name, { type: 'image/jpeg' }) : file);
-          }, 'image/jpeg', 0.88);
-        });
-      }));
-
-      converted.push(...results);
-      setConversionProgress({ done: Math.min(i + BATCH_SIZE, files.length), total: files.length });
-      await new Promise<void>(r => setTimeout(r, 50));
+    const canvas = document.createElement('canvas');
+    const maxDim = 4096;
+    let w = img.naturalWidth || 1;
+    let h = img.naturalHeight || 1;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else { w = Math.round(w * maxDim / h); h = maxDim; }
     }
-
-    return converted;
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+    return new Promise<File>((resolve) => {
+      canvas.toBlob((blob) => {
+        const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        resolve(blob ? new File([blob], name, { type: 'image/jpeg' }) : file);
+      }, 'image/jpeg', 0.88);
+    });
   };
 
   const checkDimensionsInBackground = async (files: File[]) => {
@@ -449,27 +435,41 @@ export default function PhotoOrganizer({
   };
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Ocultar overlay de "transferring" en cuanto iOS nos entrega los archivos
+    setIsTransferringFiles(false);
+
     const files = event.target.files;
     if (!files || files.length === 0) return;
     const filesArray = Array.from(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    const hasHeic = filesArray.some(f =>
-      /\.(heic|heif)$/i.test(f.name) || f.type.includes('heic') || f.type.includes('heif')
-    );
+    // Mostrar progreso SIEMPRE, para todo tipo de archivo.
+    // Esto previene el congelamiento al procesar las fotos en lotes de 5
+    // en lugar de crear todos los ObjectURLs y renderizar todas las imágenes a la vez.
+    setConversionProgress({ done: 0, total: filesArray.length });
 
-    if (hasHeic) {
-      setConversionProgress({ done: 0, total: filesArray.length });
-      (async () => {
-        const compatibleFiles = await convertToCompatibleFormat(filesArray);
-        setConversionProgress(null);
-        processUpload(compatibleFiles);
-        checkDimensionsInBackground(compatibleFiles);
-      })();
-    } else {
-      processUpload(filesArray);
-      checkDimensionsInBackground(filesArray);
-    }
+    const BATCH_SIZE = 5;
+    const allProcessed: File[] = [];
+
+    (async () => {
+      for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
+        const batch = filesArray.slice(i, i + BATCH_SIZE);
+
+        // Convertir HEIC si iOS lo entregó sin convertir (edge case en algunos dispositivos)
+        const processedBatch = await Promise.all(batch.map(convertFileIfHeic));
+        allProcessed.push(...processedBatch);
+
+        // Subir este lote: crea ObjectURLs y añade al estado → React renderiza solo 5 imágenes
+        processUpload(processedBatch);
+
+        setConversionProgress({ done: Math.min(i + BATCH_SIZE, filesArray.length), total: filesArray.length });
+        // Ceder control al navegador para renderizar el lote y liberar memoria (GC de iOS)
+        await new Promise<void>(r => setTimeout(r, 80));
+      }
+
+      setConversionProgress(null);
+      checkDimensionsInBackground(allProcessed);
+    })();
   };
 
 
@@ -1376,10 +1376,22 @@ export default function PhotoOrganizer({
           <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
               <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-2">
+                <p className="text-amber-800 text-sm font-semibold">⏳ El carrete de iOS puede tardar 1–3 minutos</p>
+                <p className="text-amber-700 text-xs">
+                  Al pulsar <strong>"Añadir"</strong> en el carrete, el propio carrete de iOS puede parecer
+                  congelado mientras procesa las imágenes. <strong>Esto es normal — no es un fallo de la app.</strong>
+                </p>
+              </div>
               <p className="text-gray-600 text-sm text-center">
-                Al seleccionar muchas fotos desde el carrete, la app puede parecer congelada
-                por unos segundos mientras carga las imágenes. <strong>Esto es normal.</strong> Por favor, espera sin cerrar la app.
+                Espera dentro del carrete sin tocarlo. Se cerrará solo cuando iOS termine y la app continuará automáticamente.
               </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-blue-800 text-xs text-center">
+                  💡 <strong>Consejo:</strong> Selecciona entre <strong>40 y 70 fotos</strong> a la vez para reducir la espera.
+                  Puedes repetir la subida para añadir más fotos.
+                </p>
+              </div>
               <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <input
                   type="checkbox"
@@ -1388,7 +1400,7 @@ export default function PhotoOrganizer({
                   onChange={e => setPickerWarningAccepted(e.target.checked)}
                 />
                 <span className="text-sm font-medium text-gray-800">
-                  Entiendo que el proceso puede tardar unos segundos y no cerraré la app
+                  Entiendo que el carrete puede tardar varios minutos. Esperaré sin cerrar la app.
                 </span>
               </label>
               <div className="flex gap-3">
@@ -1403,6 +1415,10 @@ export default function PhotoOrganizer({
                   onClick={() => {
                     setShowPickerWarning(false);
                     setPickerWarningAccepted(false);
+                    // Activar pantalla de espera ANTES de abrir el picker.
+                    // Así cuando iOS termina su procesamiento interno y el picker se cierra,
+                    // el usuario ya ve el spinner animado (no una pantalla congelada).
+                    setIsTransferringFiles(true);
                     fileInputRef.current?.click();
                   }}
                   className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
@@ -1416,7 +1432,22 @@ export default function PhotoOrganizer({
           </div>
         )}
 
-        {/* PANTALLA DE CONVERSIÓN HEIC→JPEG */}
+        {/* PANTALLA DE ESPERA MIENTRAS iOS TRANSFIERE LAS FOTOS */}
+        {/* Se muestra desde que el usuario pulsa confirmar hasta que JS recibe los archivos */}
+        {isTransferringFiles && (
+          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+            <Loader2 className="w-16 h-16 text-black animate-spin" />
+            <div className="text-center">
+              <p className="text-2xl font-bold">Cargando fotos del carrete...</p>
+              <p className="text-gray-500 mt-2">Esto puede tardar unos segundos</p>
+            </div>
+            <p className="text-sm text-gray-400 text-center max-w-xs">
+              Por favor espera sin cerrar la app
+            </p>
+          </div>
+        )}
+
+        {/* PANTALLA DE PROGRESO AL PROCESAR LAS FOTOS EN LOTES */}
         {conversionProgress && (
           <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
             <Loader2 className="w-16 h-16 text-black animate-spin" />
@@ -1462,7 +1493,7 @@ export default function PhotoOrganizer({
               </button>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+          <input ref={fileInputRef} type="file" multiple accept="image/heic,image/heif,image/jpeg,image/png,image/webp,image/gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
