@@ -1371,6 +1371,73 @@ export default function PhotoOrganizer({
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
 
+        {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
+        {showPickerWarning && (
+          <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+              <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+              <p className="text-gray-600 text-sm text-center">
+                Al seleccionar muchas fotos desde el carrete, la app puede parecer congelada
+                por unos segundos mientras carga las imágenes. <strong>Esto es normal.</strong> Por favor, espera sin cerrar la app.
+              </p>
+              <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 w-5 h-5 accent-black cursor-pointer shrink-0"
+                  checked={pickerWarningAccepted}
+                  onChange={e => setPickerWarningAccepted(e.target.checked)}
+                />
+                <span className="text-sm font-medium text-gray-800">
+                  Entiendo que el proceso puede tardar unos segundos y no cerraré la app
+                </span>
+              </label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowPickerWarning(false); setPickerWarningAccepted(false); }}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={!pickerWarningAccepted}
+                  onClick={() => {
+                    setShowPickerWarning(false);
+                    setPickerWarningAccepted(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
+                    pickerWarningAccepted ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  Seleccionar fotos
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PANTALLA DE CONVERSIÓN HEIC→JPEG */}
+        {conversionProgress && (
+          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+            <Loader2 className="w-16 h-16 text-black animate-spin" />
+            <div className="text-center">
+              <p className="text-2xl font-bold">Preparando tus fotos</p>
+              <p className="text-gray-500 mt-2">
+                Convirtiendo foto {conversionProgress.done} de {conversionProgress.total}
+              </p>
+            </div>
+            <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-black h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(conversionProgress.done / conversionProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-sm text-gray-400 text-center max-w-xs">
+              Por favor espera sin cerrar la app
+            </p>
+          </div>
+        )}
+
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
@@ -1507,73 +1574,6 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
-
-      {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
-      {showPickerWarning && (
-        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-            <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
-            <p className="text-gray-600 text-sm text-center">
-              Al seleccionar muchas fotos desde el carrete, la app puede parecer congelada
-              por unos segundos mientras carga las imágenes. <strong>Esto es normal.</strong> Por favor, espera sin cerrar la app.
-            </p>
-            <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <input
-                type="checkbox"
-                className="mt-0.5 w-5 h-5 accent-black cursor-pointer shrink-0"
-                checked={pickerWarningAccepted}
-                onChange={e => setPickerWarningAccepted(e.target.checked)}
-              />
-              <span className="text-sm font-medium text-gray-800">
-                Entiendo que el proceso puede tardar unos segundos y no cerraré la app
-              </span>
-            </label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowPickerWarning(false); setPickerWarningAccepted(false); }}
-                className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                disabled={!pickerWarningAccepted}
-                onClick={() => {
-                  setShowPickerWarning(false);
-                  setPickerWarningAccepted(false);
-                  fileInputRef.current?.click();
-                }}
-                className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
-                  pickerWarningAccepted ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed'
-                }`}
-              >
-                Seleccionar fotos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PANTALLA DE CONVERSIÓN HEIC→JPEG */}
-      {conversionProgress && (
-        <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
-          <Loader2 className="w-16 h-16 text-black animate-spin" />
-          <div className="text-center">
-            <p className="text-2xl font-bold">Preparando tus fotos</p>
-            <p className="text-gray-500 mt-2">
-              Convirtiendo foto {conversionProgress.done} de {conversionProgress.total}
-            </p>
-          </div>
-          <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-black h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(conversionProgress.done / conversionProgress.total) * 100}%` }}
-            />
-          </div>
-          <p className="text-sm text-gray-400 text-center max-w-xs">
-            Por favor espera sin cerrar la app
-          </p>
-        </div>
-      )}
 
       {/* CAPA DE CARGA PARA SUBIDA DE 1 FOTO ESPECÍFICA */}
       {isValidating && step === 'editor' && (
