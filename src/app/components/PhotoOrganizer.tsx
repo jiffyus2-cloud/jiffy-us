@@ -305,6 +305,20 @@ export default function PhotoOrganizer({
   const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
   const [isTransferringFiles, setIsTransferringFiles] = useState(false);
 
+  // Debug mode: activar con ?debug=1 en la URL. Sin impacto en producción.
+  const debugMode = useRef(
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('debug') === '1'
+  ).current;
+  const [debugFileReport, setDebugFileReport] = useState<{
+    total: number;
+    heicCount: number;
+    jpegCount: number;
+    otherCount: number;
+    convertedCount: number;
+    files: Array<{ name: string; originalType: string; size: number; wasHeic: boolean; wasConverted: boolean }>;
+  } | null>(null);
+
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
@@ -450,6 +464,7 @@ export default function PhotoOrganizer({
 
     const BATCH_SIZE = 5;
     const allProcessed: File[] = [];
+    const debugFiles: Array<{ name: string; originalType: string; size: number; wasHeic: boolean; wasConverted: boolean }> = [];
 
     (async () => {
       for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
@@ -458,6 +473,22 @@ export default function PhotoOrganizer({
         // Convertir HEIC si iOS lo entregó sin convertir (edge case en algunos dispositivos)
         const processedBatch = await Promise.all(batch.map(convertFileIfHeic));
         allProcessed.push(...processedBatch);
+
+        // Capturar info de debug por lote (solo cuando debugMode está activo)
+        if (debugMode) {
+          processedBatch.forEach((processed, idx) => {
+            const original = batch[idx];
+            const isHeic = /\.(heic|heif)$/i.test(original.name) ||
+                           original.type.includes('heic') || original.type.includes('heif');
+            debugFiles.push({
+              name: original.name,
+              originalType: original.type || '(vacío)',
+              size: original.size,
+              wasHeic: isHeic,
+              wasConverted: processed !== original, // distinta referencia → canvas lo convirtió
+            });
+          });
+        }
 
         // Subir este lote: crea ObjectURLs y añade al estado → React renderiza solo 5 imágenes
         processUpload(processedBatch);
@@ -469,6 +500,28 @@ export default function PhotoOrganizer({
 
       setConversionProgress(null);
       checkDimensionsInBackground(allProcessed);
+
+      // Publicar reporte de debug
+      if (debugMode && debugFiles.length > 0) {
+        const heicCount = debugFiles.filter(f => f.wasHeic).length;
+        const convertedCount = debugFiles.filter(f => f.wasConverted).length;
+        const jpegCount = debugFiles.filter(f =>
+          f.originalType.includes('jpeg') || f.originalType.includes('jpg')
+        ).length;
+        setDebugFileReport({
+          total: debugFiles.length,
+          heicCount,
+          jpegCount,
+          otherCount: debugFiles.length - heicCount - jpegCount,
+          convertedCount,
+          files: debugFiles,
+        });
+        console.group('%c[DEBUG iOS HEIC]', 'color: #facc15; font-weight: bold; font-size: 14px');
+        console.log(`Total: ${debugFiles.length} | HEIC: ${heicCount} | JPEG: ${jpegCount} | Otros: ${debugFiles.length - heicCount - jpegCount} | Convertidos por app: ${convertedCount}`);
+        console.log(heicCount > 0 ? '✅ Fix v4 FUNCIONÓ — iOS entregó HEIC directamente' : '❌ Fix v4 sin efecto — iOS convirtió todo a JPEG antes de entregar');
+        console.table(debugFiles);
+        console.groupEnd();
+      }
     })();
   };
 
@@ -1466,6 +1519,54 @@ export default function PhotoOrganizer({
             <p className="text-sm text-gray-400 text-center max-w-xs">
               Por favor espera sin cerrar la app
             </p>
+          </div>
+        )}
+
+        {/* ── PANEL DE DEBUG (?debug=1) ── */}
+        {debugMode && debugFileReport && (
+          <div className="fixed inset-x-0 bottom-0 z-[300] bg-gray-900 text-white text-xs font-mono p-4 max-h-[60vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-yellow-400 font-bold text-sm">🔍 DEBUG iOS — Tipos entregados por el carrete</span>
+              <button onClick={() => setDebugFileReport(null)} className="text-gray-400 hover:text-white text-lg leading-none px-2">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className={`p-2 rounded ${debugFileReport.heicCount > 0 ? 'bg-green-800' : 'bg-red-800'}`}>
+                <div className="text-lg font-bold">{debugFileReport.heicCount}</div>
+                <div className="text-gray-300">HEIC/HEIF entregados</div>
+                <div className="text-xs mt-0.5">{debugFileReport.heicCount > 0 ? '✅ iOS entregó HEIC directo' : '❌ iOS convirtió a JPEG'}</div>
+              </div>
+              <div className="p-2 rounded bg-gray-700">
+                <div className="text-lg font-bold">{debugFileReport.jpegCount}</div>
+                <div className="text-gray-300">JPEG entregados</div>
+                <div className="text-xs mt-0.5">{debugFileReport.convertedCount} convertidos por la app</div>
+              </div>
+            </div>
+            <div className={`p-2 rounded mb-3 text-sm font-bold ${debugFileReport.heicCount > 0 ? 'bg-green-700' : 'bg-red-700'}`}>
+              {debugFileReport.heicCount > 0
+                ? `✅ Fix v4 FUNCIONÓ — iOS entregó ${debugFileReport.heicCount} de ${debugFileReport.total} archivos en HEIC`
+                : `❌ Fix v4 sin efecto — iOS convirtió ${debugFileReport.total} archivos a JPEG antes de entregar`}
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex gap-2 py-0.5 text-gray-500 border-b border-gray-600 mb-1">
+                <span className="w-6">#</span>
+                <span className="flex-1">Nombre</span>
+                <span className="w-32 text-right">MIME type</span>
+                <span className="w-16 text-right">Tamaño</span>
+                <span className="w-8 text-center">Conv.</span>
+              </div>
+              {debugFileReport.files.slice(0, 30).map((f, i) => (
+                <div key={i} className={`flex gap-2 py-0.5 border-b border-gray-800 ${f.wasHeic ? 'text-green-400' : 'text-gray-300'}`}>
+                  <span className="w-6 text-gray-500">{i + 1}</span>
+                  <span className="flex-1 truncate">{f.name}</span>
+                  <span className="w-32 text-right">{f.originalType}</span>
+                  <span className="w-16 text-right text-gray-500">{(f.size / 1024).toFixed(0)} KB</span>
+                  <span className="w-8 text-center">{f.wasConverted ? '🔄' : '—'}</span>
+                </div>
+              ))}
+              {debugFileReport.files.length > 30 && (
+                <div className="text-gray-500 pt-1 text-center">… y {debugFileReport.files.length - 30} archivos más — ver consola del navegador</div>
+              )}
+            </div>
           </div>
         )}
 
