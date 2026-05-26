@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Loader2 } from 'lucide-react';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
@@ -66,6 +66,8 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [coverImageLowResInfo, setCoverImageLowResInfo] = useState<{width: number, height: number} | null>(null);
   const [showLowResWarning, setShowLowResWarning] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -241,7 +243,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden overscroll-contain min-h-0">
         <div className="relative w-full h-[30vh] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
           <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
-            <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
+            <div
+              className={`w-full relative group ${!hidePhoto ? 'cursor-pointer' : ''}`}
+              style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}
+              onClick={() => { if (!hidePhoto) fileInputRef.current?.click(); }}
+            >
               <div className="md:hidden">
                 <CoverPreview
                   coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
@@ -254,6 +260,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
                 />
               </div>
+              {!hidePhoto && (
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none rounded-sm">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-3 shadow-md">
+                    <Upload className="w-6 h-6 text-black" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -374,12 +387,12 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       </div>
                     </div>
                  ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group">
+                    <div className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group" onClick={() => fileInputRef.current?.click()}>
                       <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors"><Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" /></div>
                       <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
-                    </label>
+                    </div>
                  )}
+                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
               </section>
             )}
           </div>
