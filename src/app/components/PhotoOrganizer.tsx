@@ -305,11 +305,17 @@ export default function PhotoOrganizer({
   const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
   const [isTransferringFiles, setIsTransferringFiles] = useState(false);
 
-  // Debug mode: activar con ?debug=1 en la URL. Sin impacto en producción.
-  const debugMode = useRef(
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('debug') === '1'
-  ).current;
+  // Debug mode: activar con 5 taps en el área inferior de la pantalla de subida,
+  // o con ?debug=1 en la URL. Se guarda en localStorage para sobrevivir recargas y PWA.
+  const [debugMode, setDebugMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      new URLSearchParams(window.location.search).get('debug') === '1' ||
+      localStorage.getItem('debugMode') === '1'
+    );
+  });
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const debugTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debugFileReport, setDebugFileReport] = useState<{
     total: number;
     heicCount: number;
@@ -318,6 +324,23 @@ export default function PhotoOrganizer({
     convertedCount: number;
     files: Array<{ name: string; originalType: string; size: number; wasHeic: boolean; wasConverted: boolean }>;
   } | null>(null);
+
+  const handleDebugTap = () => {
+    if (debugTapTimerRef.current) clearTimeout(debugTapTimerRef.current);
+    setDebugTapCount(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        const newMode = !debugMode;
+        if (newMode) { localStorage.setItem('debugMode', '1'); }
+        else { localStorage.removeItem('debugMode'); }
+        setDebugMode(newMode);
+        if (!newMode) setDebugFileReport(null);
+        return 0;
+      }
+      debugTapTimerRef.current = setTimeout(() => setDebugTapCount(0), 3000);
+      return next;
+    });
+  };
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
@@ -1527,7 +1550,15 @@ export default function PhotoOrganizer({
           <div className="fixed inset-x-0 bottom-0 z-[300] bg-gray-900 text-white text-xs font-mono p-4 max-h-[60vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between mb-3">
               <span className="text-yellow-400 font-bold text-sm">🔍 DEBUG iOS — Tipos entregados por el carrete</span>
-              <button onClick={() => setDebugFileReport(null)} className="text-gray-400 hover:text-white text-lg leading-none px-2">✕</button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { localStorage.removeItem('debugMode'); setDebugMode(false); setDebugFileReport(null); }}
+                  className="text-xs text-red-400 hover:text-red-300 underline"
+                >
+                  Desactivar
+                </button>
+                <button onClick={() => setDebugFileReport(null)} className="text-gray-400 hover:text-white text-lg leading-none px-1">✕</button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className={`p-2 rounded ${debugFileReport.heicCount > 0 ? 'bg-green-800' : 'bg-red-800'}`}>
@@ -1607,6 +1638,19 @@ export default function PhotoOrganizer({
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
+        </div>
+
+        {/* Zona de activación de debug — 5 taps activan/desactivan el modo debug */}
+        <div
+          className="w-full h-8 mt-1 flex items-center justify-center cursor-default select-none"
+          onClick={handleDebugTap}
+        >
+          {debugTapCount >= 2 && debugTapCount < 5 && (
+            <span className="text-xs text-gray-300">{5 - debugTapCount} taps más para debug</span>
+          )}
+          {debugMode && (
+            <span className="text-xs text-yellow-500 font-mono">🔍 debug activo</span>
+          )}
         </div>
       </div>
     );
