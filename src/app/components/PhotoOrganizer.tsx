@@ -1376,10 +1376,22 @@ export default function PhotoOrganizer({
           <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
               <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-2">
+                <p className="text-amber-800 text-sm font-semibold">⏳ El carrete de iOS puede tardar 1–3 minutos</p>
+                <p className="text-amber-700 text-xs">
+                  Al pulsar <strong>"Añadir"</strong> en el carrete, el propio carrete de iOS puede parecer
+                  congelado mientras procesa las imágenes. <strong>Esto es normal — no es un fallo de la app.</strong>
+                </p>
+              </div>
               <p className="text-gray-600 text-sm text-center">
-                Al seleccionar muchas fotos desde el carrete, la app puede parecer congelada
-                por unos segundos mientras carga las imágenes. <strong>Esto es normal.</strong> Por favor, espera sin cerrar la app.
+                Espera dentro del carrete sin tocarlo. Se cerrará solo cuando iOS termine y la app continuará automáticamente.
               </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-blue-800 text-xs text-center">
+                  💡 <strong>Consejo:</strong> Selecciona entre <strong>40 y 70 fotos</strong> a la vez para reducir la espera.
+                  Puedes repetir la subida para añadir más fotos.
+                </p>
+              </div>
               <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <input
                   type="checkbox"
@@ -1388,7 +1400,7 @@ export default function PhotoOrganizer({
                   onChange={e => setPickerWarningAccepted(e.target.checked)}
                 />
                 <span className="text-sm font-medium text-gray-800">
-                  Entiendo que el proceso puede tardar unos segundos y no cerraré la app
+                  Entiendo que el carrete puede tardar varios minutos. Esperaré sin cerrar la app.
                 </span>
               </label>
               <div className="flex gap-3">
