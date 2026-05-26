@@ -1493,7 +1493,7 @@ export default function PhotoOrganizer({
               </button>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+          <input ref={fileInputRef} type="file" multiple accept="image/heic,image/heif,image/jpeg,image/png,image/webp,image/gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
