@@ -52,7 +52,7 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
     if (images.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % images.length);
-    }, 20000);
+    }, 5000);
     return () => clearInterval(timer);
   }, [images.length]);
 
