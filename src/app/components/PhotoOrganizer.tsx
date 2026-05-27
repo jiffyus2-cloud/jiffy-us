@@ -1451,23 +1451,27 @@ export default function PhotoOrganizer({
         {showPickerWarning && (
           <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-              <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-2">
-                <p className="text-amber-800 text-sm font-semibold">⏳ El carrete de iOS puede tardar 1–3 minutos</p>
-                <p className="text-amber-700 text-xs">
-                  Al pulsar <strong>"Añadir"</strong> en el carrete, el propio carrete de iOS puede parecer
-                  congelado mientras procesa las imágenes. <strong>Esto es normal — no es un fallo de la app.</strong>
-                </p>
+              <h3 className="text-xl font-bold text-center">Selecciona las fotos en tandas</h3>
+
+              {/* Consejo principal — número de fotos */}
+              <div className="bg-black rounded-xl p-4 flex flex-col gap-1 text-center">
+                <p className="text-white text-2xl font-black">15 – 20 fotos</p>
+                <p className="text-gray-300 text-xs">por cada tanda · espera ~30 segundos</p>
               </div>
+
               <p className="text-gray-600 text-sm text-center">
-                Espera dentro del carrete sin tocarlo. Se cerrará solo cuando iOS termine y la app continuará automáticamente.
+                Puedes repetir la subida las veces que necesites hasta completar tu álbum.
               </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                <p className="text-blue-800 text-xs text-center">
-                  💡 <strong>Consejo:</strong> Selecciona entre <strong>40 y 70 fotos</strong> a la vez para reducir la espera.
-                  Puedes repetir la subida para añadir más fotos.
+
+              {/* Advertencia iOS */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-1">
+                <p className="text-amber-800 text-xs font-semibold">⚠️ Por qué el carrete parece congelado</p>
+                <p className="text-amber-700 text-xs">
+                  Al pulsar <strong>"Añadir"</strong>, iOS procesa cada foto internamente antes de cerrar el carrete.
+                  Con más de 20 fotos esto puede tardar <strong>varios minutos</strong>. No es un fallo — solo espera sin cerrar la app.
                 </p>
               </div>
+
               <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <input
                   type="checkbox"
@@ -1476,7 +1480,7 @@ export default function PhotoOrganizer({
                   onChange={e => setPickerWarningAccepted(e.target.checked)}
                 />
                 <span className="text-sm font-medium text-gray-800">
-                  Entiendo que el carrete puede tardar varios minutos. Esperaré sin cerrar la app.
+                  Entendido — seleccionaré 15–20 fotos y esperaré sin cerrar la app.
                 </span>
               </label>
               <div className="flex gap-3">
@@ -1625,7 +1629,7 @@ export default function PhotoOrganizer({
               </button>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/heic,image/heif,image/jpeg,image/png,image/webp,image/gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+          <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
