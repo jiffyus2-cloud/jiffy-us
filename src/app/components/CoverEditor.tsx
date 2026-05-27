@@ -76,9 +76,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
   // Lógica de validación: El lomo NO es obligatorio en Tela
-  const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
+  const isSquareLayout5 = isSquare && selectedLayout === 5;
+  const isLayout5 = isHorizontal && selectedLayout === 5 && coverType === 'Papel';
   const requiresPhoto = coverType === 'Papel' && !hidePhoto;
-  const isFormValid = coverTitle.trim() !== '' &&
+  const isFormValid = (isSquareLayout5 ? true : coverTitle.trim() !== '') &&
                       (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
                       (isLayout5 ? coverYear.trim() !== '' : true) &&
                       (requiresPhoto ? coverImage !== '' : true);
@@ -318,11 +319,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <section className="space-y-4 md:space-y-5">
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
               <div className="space-y-3 md:space-y-4">
-                
-                <div className="space-y-1 md:space-y-1.5">
-                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
-                  <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
-                </div>
+
+                {!isSquareLayout5 && (
+                  <div className="space-y-1 md:space-y-1.5">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
+                    <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
+                  </div>
+                )}
 
                 {/* SOLO SE MUESTRA EL LOMO SI ES DE PAPEL */}
                 {coverType === 'Papel' && (
@@ -332,14 +335,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   </div>
                 )}
 
-                {!( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
+                {!isSquareLayout5 && !(isHorizontal && selectedLayout === 5 && coverType === 'Papel') && !(isVertical && selectedLayout === 1) && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
                     <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo o descripción breve" />
                   </div>
                 )}
 
-                {( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
+                {isLayout5 && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
                     <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Año o rango de fechas" />
