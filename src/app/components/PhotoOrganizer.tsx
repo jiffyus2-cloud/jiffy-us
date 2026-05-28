@@ -295,6 +295,9 @@ export default function PhotoOrganizer({
   const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
   // Mapa clave de archivo → info de baja resolución, para aplicarla cuando se crea la URL definitiva
   const pendingLowResRef = useRef<Map<string, {width: number, height: number}>>(new Map());
+  // Para detectar cancelación del picker de iOS vía recuperación de foco
+  const pickerFocusHandlerRef = useRef<(() => void) | null>(null);
+  const pickerFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
@@ -471,8 +474,20 @@ export default function PhotoOrganizer({
     }
   };
 
+  const cleanupPickerFocusListener = () => {
+    if (pickerFocusHandlerRef.current) {
+      window.removeEventListener('focus', pickerFocusHandlerRef.current);
+      pickerFocusHandlerRef.current = null;
+    }
+    if (pickerFocusTimerRef.current) {
+      clearTimeout(pickerFocusTimerRef.current);
+      pickerFocusTimerRef.current = null;
+    }
+  };
+
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     // Ocultar overlay de "transferring" en cuanto iOS nos entrega los archivos
+    cleanupPickerFocusListener();
     setIsTransferringFiles(false);
 
     const files = event.target.files;
@@ -1493,6 +1508,21 @@ export default function PhotoOrganizer({
                     // Así cuando iOS termina su procesamiento interno y el picker se cierra,
                     // el usuario ya ve el spinner animado (no una pantalla congelada).
                     setIsTransferringFiles(true);
+
+                    // Detectar si el usuario cancela el picker sin seleccionar fotos.
+                    // Cuando el picker se cierra (sea por selección o por cancelación),
+                    // la ventana recupera el foco. Si 1s después isTransferringFiles sigue
+                    // activo, ningún archivo fue entregado → resetear la pantalla de carga.
+                    const handleFocus = () => {
+                      pickerFocusTimerRef.current = setTimeout(() => {
+                        setIsTransferringFiles(false);
+                        pickerFocusHandlerRef.current = null;
+                        pickerFocusTimerRef.current = null;
+                      }, 1000);
+                    };
+                    pickerFocusHandlerRef.current = handleFocus;
+                    window.addEventListener('focus', handleFocus, { once: true });
+
                     fileInputRef.current?.click();
                   }}
                   className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
@@ -1518,6 +1548,15 @@ export default function PhotoOrganizer({
             <p className="text-sm text-gray-400 text-center max-w-xs">
               Por favor espera sin cerrar la app
             </p>
+            <button
+              onClick={() => {
+                cleanupPickerFocusListener();
+                setIsTransferringFiles(false);
+              }}
+              className="mt-2 px-6 py-2 border border-gray-300 rounded-xl text-gray-500 text-sm"
+            >
+              Cancelar
+            </button>
           </div>
         )}
 
