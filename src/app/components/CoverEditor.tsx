@@ -81,7 +81,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const requiresPhoto = coverType === 'Papel' && !hidePhoto;
   const isFormValid = (isSquareLayout5 ? true : coverTitle.trim() !== '') &&
                       (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
-                      (isLayout5 ? coverYear.trim() !== '' : true) &&
                       (requiresPhoto ? coverImage !== '' : true);
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
@@ -344,7 +343,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
                 {isLayout5 && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
                     <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Año o rango de fechas" />
                   </div>
                 )}

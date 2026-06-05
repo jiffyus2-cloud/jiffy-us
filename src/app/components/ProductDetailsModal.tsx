@@ -311,7 +311,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ) : (
             <div>
               <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
-              <div className="grid grid-cols-1 gap-3 md:gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 {productData.styles.map((style, index) => (
                   <StyleCarouselCard key={index} style={style} />
                 ))}
