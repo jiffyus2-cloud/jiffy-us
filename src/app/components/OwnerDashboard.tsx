@@ -356,6 +356,20 @@ const OwnerDashboard: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
+  const [isTabHidden, setIsTabHidden] = useState(false);
+
+  // --- Detectar cambio de pestaña durante la descarga ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsTabHidden(true);
+      } else {
+        setIsTabHidden(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // --- CONTEXTO GLOBAL DE LA TIENDA ---
   const storeConfig = useStoreConfig();
@@ -1377,6 +1391,34 @@ const OwnerDashboard: React.FC = () => {
           <ConnectionsSection />
         )}
       </main>
+
+      {/* Indicador flotante de descarga — visible en cualquier pestaña */}
+      {downloadProgress.orderId && (
+        <div className={`fixed bottom-6 right-6 z-50 bg-white shadow-2xl rounded-2xl px-5 py-4 flex flex-col gap-3 min-w-[280px] transition-all duration-300 ${isTabHidden ? 'border-2 border-amber-400' : 'border border-gray-200'}`}>
+          <div className="flex items-center gap-3">
+            <Loader2 className={`w-5 h-5 animate-spin shrink-0 ${isTabHidden ? 'text-amber-500' : 'text-emerald-500'}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-black uppercase tracking-widest mb-1.5 ${isTabHidden ? 'text-amber-600' : 'text-gray-500'}`}>
+                {isTabHidden ? '⚠ Generación pausada' : 'Generando PDF…'}
+              </p>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${isTabHidden ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                  style={{ width: `${downloadProgress.progress}%` }}
+                />
+              </div>
+            </div>
+            <span className={`text-sm font-black tabular-nums shrink-0 ${isTabHidden ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {downloadProgress.progress}%
+            </span>
+          </div>
+          {isTabHidden && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 leading-snug">
+              El navegador pausa la generación en pestañas inactivas. <strong>Vuelve a esta pestaña</strong> para que continúe.
+            </p>
+          )}
+        </div>
+      )}
 
       <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={selectedOrder} />
       <footer className="py-6 text-center text-gray-400 text-xs border-t border-gray-100 bg-white">
