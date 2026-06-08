@@ -119,6 +119,7 @@ interface PhotoOrganizerProps {
   onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
   pagesLocked?: boolean;
+  initialFileSignatures?: string[][];
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -248,7 +249,8 @@ const AlbumEditorPhotoSlot: React.FC<{
 export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
-  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false
+  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false,
+  initialFileSignatures,
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
@@ -352,7 +354,7 @@ export default function PhotoOrganizer({
   const [showHelpModal, setShowHelpModal] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
-  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
+  const [fileSignatures, setFileSignatures] = useState<string[][]>(() => initialFileSignatures ?? []);
   const [duplicateModal, setDuplicateModal] = useState<{
     file: File;
     previewUrl: string;
@@ -581,11 +583,22 @@ export default function PhotoOrganizer({
 
     const doUpload = (files: File[]) => {
       if (files.length === 0) return;
-      const newFilesData = files.map((file) => ({
-        id: Math.random().toString(36).substring(2, 11),
-        url: URL.createObjectURL(file),
-        metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-      }));
+      const newFilesData: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      for (const file of files) {
+        let url: string;
+        try {
+          url = URL.createObjectURL(file);
+          if (!url) continue;
+        } catch {
+          continue;
+        }
+        newFilesData.push({
+          id: Math.random().toString(36).substring(2, 11),
+          url,
+          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+        });
+      }
+      if (newFilesData.length === 0) return;
       // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
       newFilesData.forEach(f => {
         pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
@@ -646,7 +659,13 @@ export default function PhotoOrganizer({
       const pagePhotos = [...newPhotos[pageIndex]];
       const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
       let slotIndex: number;
-      const newUrl = URL.createObjectURL(file);
+      let newUrl: string;
+      try {
+        newUrl = URL.createObjectURL(file);
+        if (!newUrl) return;
+      } catch {
+        return;
+      }
 
       if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
         while (pagePhotos.length <= targetPhotoIndex) pagePhotos.push('');
