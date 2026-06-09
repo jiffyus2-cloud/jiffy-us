@@ -614,7 +614,10 @@ export default function PhotoOrganizer({
           })
         });
 
-        if (!aiResponse.ok) throw new Error('Error IA');
+        if (!aiResponse.ok) {
+          const errData = await aiResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Error del servidor IA (HTTP ${aiResponse.status})`);
+        }
         const responseData = await aiResponse.json();
 
         let finalUrls: string[] = [];
