@@ -1497,15 +1497,19 @@ export default function PhotoOrganizer({
         {showPickerWarning && (
           <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-              <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+              <h3 className="text-xl font-bold text-center">Antes de subir tus fotos</h3>
 
-              {/* Advertencia iOS */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-1">
-                <p className="text-amber-800 text-xs font-semibold">⚠️ El carrete puede parecer congelado</p>
-                <p className="text-amber-700 text-xs">
-                  Al pulsar <strong>"Añadir"</strong>, iOS procesa las fotos internamente antes de cerrar el carrete.
-                  Esto puede tardar <strong>unos minutos</strong>. No es un fallo — solo espera sin cerrar la app.
-                </p>
+              {/* Video explicativo iOS */}
+              <div className="rounded-xl overflow-hidden border border-amber-300">
+                <video
+                  src={iosAnimVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  className="w-full block"
+                />
               </div>
 
               <p className="text-gray-600 text-sm text-center">
@@ -1691,24 +1695,6 @@ export default function PhotoOrganizer({
                   </span>
                 </div>
               </button>
-              {/* Video explicativo iOS */}
-              <div className="mt-4 rounded-xl overflow-hidden border border-amber-300">
-                <video
-                  src={iosAnimVideo}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="auto"
-                  className="w-full block"
-                />
-              </div>
-              <div className="flex items-start gap-2.5 mt-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-                <span className="text-amber-500 text-lg shrink-0 leading-tight">ℹ️</span>
-                <p className="text-xs text-amber-900 leading-snug">
-                  <span className="font-bold">Usuarios iOS:</span> al aceptar la selección de fotos, la galería puede tardar unos segundos en cerrarse. Es normal y no afecta a tus imágenes.
-                </p>
-              </div>
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
