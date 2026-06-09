@@ -15,6 +15,7 @@ import CropModal from './CropModal';
 
 // --- NUEVA IMAGEN DE JIFFY ---
 import jiffy2Img from '../../assets/Jiffy2.png';
+import iosAnimVideo from '../../assets/Anim_IOS.mp4';
 
 // ============================================================================
 // COMPONENTE DE CARGA PERSONALIZADO (JiffyLoader)
@@ -1739,7 +1740,19 @@ export default function PhotoOrganizer({
                   <p className="text-sm text-gray-500">Selecciona tus fotos y empieza a revivir tus mejores recuerdos</p>
                 </div>
               </button>
-              <div className="flex items-start gap-2.5 mt-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+              {/* Video explicativo iOS */}
+              <div className="mt-4 rounded-xl overflow-hidden border border-amber-300">
+                <video
+                  src={iosAnimVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  className="w-full block"
+                />
+              </div>
+              <div className="flex items-start gap-2.5 mt-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                 <span className="text-amber-500 text-lg shrink-0 leading-tight">ℹ️</span>
                 <p className="text-xs text-amber-900 leading-snug">
                   <span className="font-bold">Usuarios iOS:</span> al aceptar la selección de fotos, la galería puede tardar unos segundos en cerrarse. Es normal y no afecta a tus imágenes.
