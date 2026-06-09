@@ -253,12 +253,16 @@ export default function Checkout() {
       }
 
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://jiffy-backend-938778636106.europe-west1.run.app';
+      const idToken = await user.getIdToken();
       const response = await fetch(`${backendUrl}/stripe/create-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
-          amount: Math.round(total * 100), 
-          title: product.name || 'Pedido Jiffy', 
+          amount: Math.round(total * 100),
+          title: product.name || 'Pedido Jiffy',
           orderId: state.orderId,
         }),
       });

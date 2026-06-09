@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
@@ -34,45 +34,34 @@ export default function Success() {
     if (sessionId && orderId) {
       const confirmPayment = async () => {
         try {
-          // Llamada a tu backend en la nube
-          const response = await fetch('https://jiffy-backend-938778636106.europe-west1.run.app/stripe/confirm-payment', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ sessionId, orderId }),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || t('error.verifyPayment'));
-          }
-
-          // El pago fue verificado por el backend. Ahora actualizamos Firestore.
+          // Esperamos a que el webhook de Stripe actualice el status en Firestore
           const orderRef = doc(db, 'orders', orderId);
-          try {
-            await updateDoc(orderRef, {
-              status: 'paid',
-              updatedAt: new Date().toISOString()
-            });
-          } catch (firestoreError) {
-            console.error("Error de permisos en Firestore:", firestoreError);
-            throw new Error(t('error.firestoreConnection'));
+          const POLL_INTERVAL = 2000;
+          const MAX_ATTEMPTS = 15; // 30 segundos máximo
+
+          let paid = false;
+          for (let i = 0; i < MAX_ATTEMPTS; i++) {
+            const orderSnap = await getDoc(orderRef);
+            if (orderSnap.exists() && orderSnap.data()?.status === 'paid') {
+              paid = true;
+
+              // Enviamos correos de confirmación (sin bloquear el flujo si fallan)
+              try {
+                const orderData = { id: orderId, ...orderSnap.data() };
+                await Promise.all([
+                  sendOrderConfirmationToCustomer(orderData),
+                  sendNewOrderNotificationToOwner(orderData),
+                ]);
+              } catch (emailError) {
+                console.error('Error al enviar correos de confirmación:', emailError);
+              }
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
           }
 
-          // Enviamos correos de confirmación en paralelo (sin bloquear el flujo si fallan)
-          try {
-            const orderSnap = await getDoc(orderRef);
-            if (orderSnap.exists()) {
-              const orderData = { id: orderId, ...orderSnap.data() };
-              await Promise.all([
-                sendOrderConfirmationToCustomer(orderData),
-                sendNewOrderNotificationToOwner(orderData),
-              ]);
-            }
-          } catch (emailError) {
-            console.error('Error al enviar correos de confirmación:', emailError);
-            // No relanzamos el error — el pago ya fue confirmado correctamente
+          if (!paid) {
+            throw new Error(t('error.verifyPayment'));
           }
 
           localStorage.removeItem('pending_order_id');

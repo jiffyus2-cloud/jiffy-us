@@ -8,6 +8,7 @@ import {
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
+import { useAuth } from '../../hooks/useAuth';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -239,6 +240,7 @@ export default function PhotoOrganizer({
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
+  const { user } = useAuth();
 
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
@@ -597,10 +599,14 @@ export default function PhotoOrganizer({
 
     setTimeout(async () => {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; 
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+        const idToken = user ? await user.getIdToken() : null;
         const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {}),
+          },
           body: JSON.stringify({
             photos_data: pendingFilesData.map(f => ({ id: f.id, ...f.metadata })),
             page_count: typeof numPages === 'number' ? numPages : 40,
