@@ -11,6 +11,13 @@ RUN npm install
 
 # Copy project files and build the app
 COPY . .
+
+# Recibe variables VITE_* como build args para que Vite las inyecte en el bundle.
+# Pasar al hacer: docker build --build-arg VITE_1CLIC_API_KEY=xxx ...
+# En Cloud Run: configurar como substitution variable en el trigger de Cloud Build.
+ARG VITE_1CLIC_API_KEY
+ENV VITE_1CLIC_API_KEY=$VITE_1CLIC_API_KEY
+
 RUN npm run build
 
 # Production stage
