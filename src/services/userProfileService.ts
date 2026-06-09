@@ -5,6 +5,7 @@ export interface SavedAddress {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   department: string;
   city: string;
   address: string;
@@ -92,4 +93,9 @@ export async function updateAddress(
 export async function deleteSavedBilling(userId: string): Promise<void> {
   const docRef = doc(db, 'users', userId);
   await setDoc(docRef, { savedBilling: null }, { merge: true });
+}
+
+export async function updateUserPhone(userId: string, phone: string): Promise<void> {
+  const docRef = doc(db, 'users', userId);
+  await setDoc(docRef, { phone }, { merge: true });
 }

@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  fromPropsToAlbumState,
+  fromAlbumStateToProps,
+  swapPhotosOnPage as albumSwapPhotosOnPage,
+  swapPages as albumSwapPages,
+  movePageToIndex as albumMovePageToIndex,
+  rippleShift as albumRippleShift,
+  pullShift as albumPullShift,
+  deleteOverflow as albumDeleteOverflow,
+  moveOverflowToPage as albumMoveOverflowToPage,
+  type AlbumState,
+  type AlbumConfig,
+} from '../utils/albumStateUtils';
+import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
@@ -27,7 +40,7 @@ interface JiffyLoaderProps {
 
 const getEstimatedTime = (count: number): string => {
   const seconds = Math.round(count * 1);
-  if (seconds < 60) return `~${seconds} seg`;
+  if (seconds < 60) return `~${seconds} segundos`;
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return secs > 0 ? `~${mins} min ${secs} seg` : `~${mins} min`;
@@ -71,7 +84,7 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
           <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Tiempo estimado para {photoCount} fotos: <strong>{estimated}</strong></span>
+          <span>Tiempo estimado: <strong>{estimated}</strong></span>
         </div>
       )}
 
@@ -108,6 +121,7 @@ interface PhotoOrganizerProps {
   onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
   pagesLocked?: boolean;
+  initialFileSignatures?: string[][];
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -146,7 +160,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       data-photo-slot
       data-page-index={pageIndex}
       data-photo-index={photoIndex}
-      className={`relative group/photo rounded-none bg-white flex items-center justify-center transition-opacity ${isEditing ? 'z-10' : ''} ${isDragging ? 'opacity-40 ring-2 ring-dashed ring-gray-400' : ''} ${isDragTarget ? 'ring-2 ring-black' : ''}`}
+      className={`relative group/photo rounded-none bg-white flex items-center justify-center transition-opacity h-full ${isEditing ? 'z-10' : ''} ${isDragging ? 'opacity-40 ring-2 ring-dashed ring-gray-400' : ''} ${isDragTarget ? 'ring-2 ring-black' : ''}`}
     >
       {photo ? (
         <>
@@ -237,7 +251,8 @@ const AlbumEditorPhotoSlot: React.FC<{
 export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
-  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false
+  onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false,
+  initialFileSignatures,
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
@@ -283,15 +298,57 @@ export default function PhotoOrganizer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Mapa URL → clave de archivo, para trasladar firmas desde processUpload hasta handleFinalizeSetup
   const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
+  // Mapa clave de archivo → info de baja resolución, para aplicarla cuando se crea la URL definitiva
+  const pendingLowResRef = useRef<Map<string, {width: number, height: number}>>(new Map());
+  // Para detectar cancelación del picker de iOS vía recuperación de foco
+  const pickerFocusHandlerRef = useRef<(() => void) | null>(null);
+  const pickerFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isValidating, setIsValidating] = useState(false);
-  const [lowResImages, setLowResImages] = useState<{file: File, url: string, width: number, height: number}[]>([]);
-  const [currentLowResIndex, setCurrentLowResIndex] = useState(0);
-  const [approvedFiles, setApprovedFiles] = useState<File[]>([]);
-  const [applyToAllLowRes, setApplyToAllLowRes] = useState(false); 
-  
-  const [uploadMode, setUploadMode] = useState<'batch' | 'specific' | null>(null);
-  const [targetSlotInfo, setTargetSlotInfo] = useState<{pageIndex: number, photoIndex?: number} | null>(null);
+  const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
+  const [selectedLowResWarning, setSelectedLowResWarning] = useState<{url: string, pageIndex: number, photoIndex: number, width: number, height: number} | null>(null);
+
+  const [showPickerWarning, setShowPickerWarning] = useState(false);
+  const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
+  const [isTransferringFiles, setIsTransferringFiles] = useState(false);
+
+  // Debug mode: activar con 5 taps en el área inferior de la pantalla de subida,
+  // o con ?debug=1 en la URL. Se guarda en localStorage para sobrevivir recargas y PWA.
+  const [debugMode, setDebugMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      new URLSearchParams(window.location.search).get('debug') === '1' ||
+      localStorage.getItem('debugMode') === '1'
+    );
+  });
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const debugTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debugFileReport, setDebugFileReport] = useState<{
+    total: number;
+    heicCount: number;
+    jpegCount: number;
+    otherCount: number;
+    convertedCount: number;
+    files: Array<{ name: string; originalType: string; size: number; wasHeic: boolean; wasConverted: boolean }>;
+  } | null>(null);
+
+  const handleDebugTap = () => {
+    if (debugTapTimerRef.current) clearTimeout(debugTapTimerRef.current);
+    setDebugTapCount(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        const newMode = !debugMode;
+        if (newMode) { localStorage.setItem('debugMode', '1'); }
+        else { localStorage.removeItem('debugMode'); }
+        setDebugMode(newMode);
+        if (!newMode) setDebugFileReport(null);
+        return 0;
+      }
+      debugTapTimerRef.current = setTimeout(() => setDebugTapCount(0), 3000);
+      return next;
+    });
+  };
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
@@ -300,7 +357,7 @@ export default function PhotoOrganizer({
   const [showHelpModal, setShowHelpModal] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
-  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
+  const [fileSignatures, setFileSignatures] = useState<string[][]>(() => initialFileSignatures ?? []);
   const [duplicateModal, setDuplicateModal] = useState<{
     file: File;
     previewUrl: string;
@@ -366,101 +423,151 @@ export default function PhotoOrganizer({
       const img = new Image();
       img.onload = () => {
         const minDim = Math.min(img.width, img.height);
-        resolve({ file, url, isLowRes: minDim < 1080, width: img.width, height: img.height });
+        URL.revokeObjectURL(url);
+        resolve({ file, url: '', isLowRes: minDim < 1080, width: img.width, height: img.height });
       };
       img.onerror = () => {
-        resolve({ file, url, isLowRes: false, width: 0, height: 0 }); 
+        URL.revokeObjectURL(url);
+        resolve({ file, url: '', isLowRes: false, width: 0, height: 0 });
       };
       img.src = url;
     });
   };
 
+  const convertFileIfHeic = async (file: File): Promise<File> => {
+    const isHeic = /\.(heic|heif)$/i.test(file.name) ||
+                   file.type.includes('heic') || file.type.includes('heif');
+    if (!isHeic) return file;
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = url;
+    });
+    URL.revokeObjectURL(url);
+
+    const canvas = document.createElement('canvas');
+    const maxDim = 4096;
+    let w = img.naturalWidth || 1;
+    let h = img.naturalHeight || 1;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+    return new Promise<File>((resolve) => {
+      canvas.toBlob((blob) => {
+        const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        resolve(blob ? new File([blob], name, { type: 'image/jpeg' }) : file);
+      }, 'image/jpeg', 0.88);
+    });
+  };
+
+  const checkDimensionsInBackground = async (files: File[]) => {
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(checkImageDimensions));
+      results.filter(r => r.isLowRes).forEach(r => {
+        pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
+      });
+      await new Promise<void>(r => setTimeout(r, 100));
+    }
+  };
+
+  const cleanupPickerFocusListener = () => {
+    if (pickerFocusHandlerRef.current) {
+      window.removeEventListener('focus', pickerFocusHandlerRef.current);
+      pickerFocusHandlerRef.current = null;
+    }
+    if (pickerFocusTimerRef.current) {
+      clearTimeout(pickerFocusTimerRef.current);
+      pickerFocusTimerRef.current = null;
+    }
+  };
+
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Ocultar overlay de "transferring" en cuanto iOS nos entrega los archivos
+    cleanupPickerFocusListener();
+    setIsTransferringFiles(false);
+
     const files = event.target.files;
     if (!files || files.length === 0) return;
-
-    // Capturar archivos antes de que React limpie el evento sintético
     const filesArray = Array.from(files);
-
-    // Limpiar el input y mostrar spinner antes de diferir
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setIsValidating(true);
 
-    // Diferir el procesamiento para que iOS cierre el picker nativo de inmediato.
-    // Dentro del timeout, procesamos SECUENCIALMENTE (una imagen a la vez) y cedemos
-    // el event loop entre cada imagen para evitar bloquear el hilo principal.
-    setTimeout(async () => {
-      const results: Array<{file: File, url: string, isLowRes: boolean, width: number, height: number}> = [];
+    // Mostrar progreso SIEMPRE, para todo tipo de archivo.
+    // Esto previene el congelamiento al procesar las fotos en lotes de 5
+    // en lugar de crear todos los ObjectURLs y renderizar todas las imágenes a la vez.
+    setConversionProgress({ done: 0, total: filesArray.length });
 
-      for (const file of filesArray) {
-        const result = await checkImageDimensions(file);
-        results.push(result);
-        // Ceder el event loop entre cada imagen para mantener la UI fluida
-        await new Promise<void>(r => setTimeout(r, 0));
-      }
+    const BATCH_SIZE = 5;
+    const allProcessed: File[] = [];
+    const debugFiles: Array<{ name: string; originalType: string; size: number; wasHeic: boolean; wasConverted: boolean }> = [];
 
-      const valid = results.filter(r => !r.isLowRes).map(r => r.file);
-      const lowRes = results.filter(r => r.isLowRes);
+    (async () => {
+      for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
+        const batch = filesArray.slice(i, i + BATCH_SIZE);
 
-      if (lowRes.length > 0) {
-        setApprovedFiles(valid);
-        setLowResImages(lowRes);
-        setCurrentLowResIndex(0);
-        setApplyToAllLowRes(false);
-        setUploadMode('batch');
-        setIsValidating(false);
-      } else {
-        setIsValidating(false);
-        processUpload(valid);
-      }
-    }, 0);
-  };
+        // Convertir HEIC si iOS lo entregó sin convertir (edge case en algunos dispositivos)
+        const processedBatch = await Promise.all(batch.map(convertFileIfHeic));
+        allProcessed.push(...processedBatch);
 
-  const handleLowResDecision = (keep: boolean) => {
-    // LÓGICA PARA SUBIDA DE UNA SOLA FOTO DESDE EL EDITOR
-    if (uploadMode === 'specific') {
-      if (keep && lowResImages[0] && targetSlotInfo) {
-        processSpecificUpload(targetSlotInfo.pageIndex, lowResImages[0].file, targetSlotInfo.photoIndex);
-      }
-      setLowResImages([]);
-      setCurrentLowResIndex(0);
-      setUploadMode(null);
-      setTargetSlotInfo(null);
-      return;
-    }
-
-    // LÓGICA PARA SUBIDA POR LOTES DESDE EL INICIO
-    let newApproved = [...approvedFiles];
-    
-    if (applyToAllLowRes) {
-      if (keep) {
-        for (let i = currentLowResIndex; i < lowResImages.length; i++) {
-          newApproved.push(lowResImages[i].file);
+        // Capturar info de debug por lote (solo cuando debugMode está activo)
+        if (debugMode) {
+          processedBatch.forEach((processed, idx) => {
+            const original = batch[idx];
+            const isHeic = /\.(heic|heif)$/i.test(original.name) ||
+                           original.type.includes('heic') || original.type.includes('heif');
+            debugFiles.push({
+              name: original.name,
+              originalType: original.type || '(vacío)',
+              size: original.size,
+              wasHeic: isHeic,
+              wasConverted: processed !== original, // distinta referencia → canvas lo convirtió
+            });
+          });
         }
+
+        // Subir este lote: crea ObjectURLs y añade al estado → React renderiza solo 5 imágenes
+        processUpload(processedBatch);
+
+        setConversionProgress({ done: Math.min(i + BATCH_SIZE, filesArray.length), total: filesArray.length });
+        // Ceder control al navegador para renderizar el lote y liberar memoria (GC de iOS)
+        await new Promise<void>(r => setTimeout(r, 80));
       }
-      setLowResImages([]);
-      setCurrentLowResIndex(0);
-      setApplyToAllLowRes(false);
-      setUploadMode(null);
-      processUpload(newApproved);
-    } else {
-      const current = lowResImages[currentLowResIndex];
-      if (keep) {
-        newApproved.push(current.file);
+
+      setConversionProgress(null);
+      checkDimensionsInBackground(allProcessed);
+
+      // Publicar reporte de debug
+      if (debugMode && debugFiles.length > 0) {
+        const heicCount = debugFiles.filter(f => f.wasHeic).length;
+        const convertedCount = debugFiles.filter(f => f.wasConverted).length;
+        const jpegCount = debugFiles.filter(f =>
+          f.originalType.includes('jpeg') || f.originalType.includes('jpg')
+        ).length;
+        setDebugFileReport({
+          total: debugFiles.length,
+          heicCount,
+          jpegCount,
+          otherCount: debugFiles.length - heicCount - jpegCount,
+          convertedCount,
+          files: debugFiles,
+        });
+        console.group('%c[DEBUG iOS HEIC]', 'color: #facc15; font-weight: bold; font-size: 14px');
+        console.log(`Total: ${debugFiles.length} | HEIC: ${heicCount} | JPEG: ${jpegCount} | Otros: ${debugFiles.length - heicCount - jpegCount} | Convertidos por app: ${convertedCount}`);
+        console.log(heicCount > 0 ? '✅ Fix v4 FUNCIONÓ — iOS entregó HEIC directamente' : '❌ Fix v4 sin efecto — iOS convirtió todo a JPEG antes de entregar');
+        console.table(debugFiles);
+        console.groupEnd();
       }
-      
-      if (currentLowResIndex + 1 < lowResImages.length) {
-        setApprovedFiles(newApproved);
-        setCurrentLowResIndex(currentLowResIndex + 1);
-      } else {
-        setLowResImages([]);
-        setCurrentLowResIndex(0);
-        setApplyToAllLowRes(false);
-        setUploadMode(null);
-        processUpload(newApproved);
-      }
-    }
+    })();
   };
+
 
   const processUpload = (finalFiles: File[]) => {
     if (finalFiles.length === 0) return;
@@ -479,15 +586,38 @@ export default function PhotoOrganizer({
 
     const doUpload = (files: File[]) => {
       if (files.length === 0) return;
-      const newFilesData = files.map((file) => ({
-        id: Math.random().toString(36).substring(2, 11),
-        url: URL.createObjectURL(file),
-        metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-      }));
+      const newFilesData: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      for (const file of files) {
+        let url: string;
+        try {
+          url = URL.createObjectURL(file);
+          if (!url) continue;
+        } catch {
+          continue;
+        }
+        newFilesData.push({
+          id: Math.random().toString(36).substring(2, 11),
+          url,
+          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+        });
+      }
+      if (newFilesData.length === 0) return;
       // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
       newFilesData.forEach(f => {
         pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
       });
+      // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
+      const newLowResInfo: Record<string, {width: number, height: number}> = {};
+      files.forEach((file, i) => {
+        const fk = getFileKey(file);
+        if (pendingLowResRef.current.has(fk)) {
+          newLowResInfo[newFilesData[i].url] = pendingLowResRef.current.get(fk)!;
+          pendingLowResRef.current.delete(fk);
+        }
+      });
+      if (Object.keys(newLowResInfo).length > 0) {
+        setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
+      }
       setPendingFilesData(prev => [...prev, ...newFilesData]);
       setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
     };
@@ -513,25 +643,14 @@ export default function PhotoOrganizer({
     }
   };
 
-  // NUEVA FUNCIÓN INTERCEPTORA PARA SUBIR UNA SOLA FOTO
   const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
-    setUploadMode('specific');
-    setTargetSlotInfo({ pageIndex, photoIndex: targetPhotoIndex });
     setIsValidating(true);
-    
     const result = await checkImageDimensions(file);
-
     if (result.isLowRes) {
-      setLowResImages([result]);
-      setCurrentLowResIndex(0);
-      setApplyToAllLowRes(false);
-      setIsValidating(false);
-    } else {
-      setIsValidating(false);
-      processSpecificUpload(pageIndex, file, targetPhotoIndex);
-      setUploadMode(null);
-      setTargetSlotInfo(null);
+      pendingLowResRef.current.set(getFileKey(file), { width: result.width, height: result.height });
     }
+    setIsValidating(false);
+    processSpecificUpload(pageIndex, file, targetPhotoIndex);
   };
 
   const processSpecificUpload = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
@@ -543,24 +662,40 @@ export default function PhotoOrganizer({
       const pagePhotos = [...newPhotos[pageIndex]];
       const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
       let slotIndex: number;
+      let newUrl: string;
+      try {
+        newUrl = URL.createObjectURL(file);
+        if (!newUrl) return;
+      } catch {
+        return;
+      }
 
       if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
         while (pagePhotos.length <= targetPhotoIndex) pagePhotos.push('');
-        pagePhotos[targetPhotoIndex] = URL.createObjectURL(file);
+        pagePhotos[targetPhotoIndex] = newUrl;
         slotIndex = targetPhotoIndex;
       } else {
         const firstEmpty = pagePhotos.findIndex(p => !p || p.trim() === '');
         if (firstEmpty !== -1) {
-          pagePhotos[firstEmpty] = URL.createObjectURL(file);
+          pagePhotos[firstEmpty] = newUrl;
           slotIndex = firstEmpty;
         } else {
           if (pagePhotos.length >= maxAllowed) {
+            URL.revokeObjectURL(newUrl);
             alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
             return;
           }
-          pagePhotos.push(URL.createObjectURL(file));
+          pagePhotos.push(newUrl);
           slotIndex = pagePhotos.length - 1;
         }
+      }
+
+      // Aplicar info de baja resolución a la URL recién creada
+      const lrKey = getFileKey(file);
+      if (pendingLowResRef.current.has(lrKey)) {
+        const info = pendingLowResRef.current.get(lrKey)!;
+        pendingLowResRef.current.delete(lrKey);
+        setLowResInfo(prev => ({ ...prev, [newUrl]: info }));
       }
 
       newPhotos[pageIndex] = pagePhotos;
@@ -588,7 +723,7 @@ export default function PhotoOrganizer({
         file,
         previewUrl: _slotPreviewUrl,
         onConfirm: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); doUpload(); },
-        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); setTargetSlotInfo(null); },
+        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); },
       });
     } else {
       doUpload();
@@ -630,10 +765,8 @@ export default function PhotoOrganizer({
             if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
           });
           
-          finalUrls = orderedIdsFromAI.map((id: string) => {
-            const matchedFile = pendingFilesData.find(f => f.id === id);
-            return matchedFile ? matchedFile.url : '';
-          }).filter(Boolean);
+          const urlById = new Map(pendingFilesData.map(f => [f.id, f.url]));
+          finalUrls = orderedIdsFromAI.map((id: string) => urlById.get(id) ?? '').filter(Boolean);
 
           const missingUrls = pendingFilesData.filter(f => !orderedIdsFromAI.includes(f.id)).map(f => f.url);
           finalUrls = [...finalUrls, ...missingUrls];
@@ -813,124 +946,21 @@ export default function PhotoOrganizer({
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === photos.length - 1) return;
-    const newPhotos = [...photos];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
-    onPhotosChange(newPhotos);
+    if (targetIndex < 0 || targetIndex >= photos.length) return;
+    applyAlbumState(albumSwapPages(currentAlbumState(), index, targetIndex));
     setEditingPageIndex(targetIndex);
-
-    // Swap pageLayouts and pageLayoutVariants for the two pages
-    const newLayouts = { ...pageLayouts };
-    const newVariants = { ...pageLayoutVariants };
-    const tempLayout = newLayouts[index];
-    if (newLayouts[targetIndex] !== undefined) newLayouts[index] = newLayouts[targetIndex];
-    else delete newLayouts[index];
-    if (tempLayout !== undefined) newLayouts[targetIndex] = tempLayout;
-    else delete newLayouts[targetIndex];
-    const tempVariant = newVariants[index];
-    if (newVariants[targetIndex] !== undefined) newVariants[index] = newVariants[targetIndex];
-    else delete newVariants[index];
-    if (tempVariant !== undefined) newVariants[targetIndex] = tempVariant;
-    else delete newVariants[targetIndex];
-    onPageLayoutsChange(newLayouts);
-    onPageLayoutVariantsChange(newVariants);
-
-    const swappedCrops = { ...photoCrops };
-    const keysIndex = Object.keys(swappedCrops).filter(k => k.startsWith(`${index}-`));
-    const keysTarget = Object.keys(swappedCrops).filter(k => k.startsWith(`${targetIndex}-`));
-    keysIndex.forEach(k => delete swappedCrops[k]);
-    keysTarget.forEach(k => { swappedCrops[`${index}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swappedCrops[k]; });
-    keysIndex.forEach(k => { swappedCrops[`${targetIndex}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
-    onPhotoCropsChange(swappedCrops);
-
-    const swappedTexts = { ...textBoxSlots };
-    const textA = textBoxSlots[index];
-    const textB = textBoxSlots[targetIndex];
-    if (textB !== undefined) swappedTexts[index] = textB; else delete swappedTexts[index];
-    if (textA !== undefined) swappedTexts[targetIndex] = textA; else delete swappedTexts[targetIndex];
-    onTextBoxSlotsChange(swappedTexts);
   };
 
   const handleMovePageToIndex = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
-    const pageCount = photos.length;
-
-    const newPhotos = [...photos];
-    const [movedPage] = newPhotos.splice(fromIndex, 1);
-    newPhotos.splice(toIndex, 0, movedPage);
-    onPhotosChange(newPhotos);
+    applyAlbumState(albumMovePageToIndex(currentAlbumState(), fromIndex, toIndex));
     setEditingPageIndex(toIndex);
-
-    const layoutsArr = Array.from({ length: pageCount }, (_, i) => pageLayouts[i]);
-    const [movedLayout] = layoutsArr.splice(fromIndex, 1);
-    layoutsArr.splice(toIndex, 0, movedLayout);
-    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
-    layoutsArr.forEach((v, i) => { if (v !== undefined) newLayouts[i] = v as 'grid' | 'row' | 'column'; });
-    onPageLayoutsChange(newLayouts);
-
-    const variantsArr = Array.from({ length: pageCount }, (_, i) => pageLayoutVariants[i]);
-    const [movedVariant] = variantsArr.splice(fromIndex, 1);
-    variantsArr.splice(toIndex, 0, movedVariant);
-    const newVariants: Record<number, number> = {};
-    variantsArr.forEach((v, i) => { if (v !== undefined) newVariants[i] = v; });
-    onPageLayoutVariantsChange(newVariants);
-
-    const cropsPerPage: (Record<string, any>)[] = Array.from({ length: pageCount }, () => ({}));
-    for (const key of Object.keys(photoCrops)) {
-      const dashIdx = key.indexOf('-');
-      const pageNum = Number(key.substring(0, dashIdx));
-      if (pageNum < pageCount) cropsPerPage[pageNum][key.substring(dashIdx + 1)] = photoCrops[key];
-    }
-    const [movedCrops] = cropsPerPage.splice(fromIndex, 1);
-    cropsPerPage.splice(toIndex, 0, movedCrops);
-    const newCropsPage: Record<string, any> = {};
-    cropsPerPage.forEach((pageCrops, newPageIdx) => {
-      for (const photoStr of Object.keys(pageCrops)) newCropsPage[`${newPageIdx}-${photoStr}`] = pageCrops[photoStr];
-    });
-    onPhotoCropsChange(newCropsPage);
-
-    const textsArr: (Record<number, any> | undefined)[] = Array.from({ length: pageCount }, (_, i) => textBoxSlots[i]);
-    const [movedTexts] = textsArr.splice(fromIndex, 1);
-    textsArr.splice(toIndex, 0, movedTexts);
-    const newTextsMove: Record<number, Record<number, any>> = {};
-    textsArr.forEach((t, i) => { if (t !== undefined) newTextsMove[i] = t; });
-    onTextBoxSlotsChange(newTextsMove);
   };
 
   const handleSwapTwoPages = (a: number, b: number) => {
     if (a === b) return;
-    const newPhotos = [...photos];
-    [newPhotos[a], newPhotos[b]] = [newPhotos[b], newPhotos[a]];
-    onPhotosChange(newPhotos);
-
-    const newLayouts = { ...pageLayouts } as Record<number, 'grid' | 'row' | 'column'>;
-    const tempLayout = newLayouts[a];
-    if (newLayouts[b] !== undefined) newLayouts[a] = newLayouts[b]; else delete newLayouts[a];
-    if (tempLayout !== undefined) newLayouts[b] = tempLayout; else delete newLayouts[b];
-    onPageLayoutsChange(newLayouts);
-
-    const newVariants = { ...pageLayoutVariants };
-    const tempVariant = newVariants[a];
-    if (newVariants[b] !== undefined) newVariants[a] = newVariants[b]; else delete newVariants[a];
-    if (tempVariant !== undefined) newVariants[b] = tempVariant; else delete newVariants[b];
-    onPageLayoutVariantsChange(newVariants);
-
-    const swapCrops = { ...photoCrops };
-    const keysA = Object.keys(swapCrops).filter(k => k.startsWith(`${a}-`));
-    const keysB = Object.keys(swapCrops).filter(k => k.startsWith(`${b}-`));
-    keysA.forEach(k => delete swapCrops[k]);
-    keysB.forEach(k => { swapCrops[`${a}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; delete swapCrops[k]; });
-    keysA.forEach(k => { swapCrops[`${b}-${k.substring(k.indexOf('-') + 1)}`] = photoCrops[k]; });
-    onPhotoCropsChange(swapCrops);
-
-    const swapTexts = { ...textBoxSlots };
-    const textsA = textBoxSlots[a];
-    const textsB = textBoxSlots[b];
-    if (textsB !== undefined) swapTexts[a] = textsB; else delete swapTexts[a];
-    if (textsA !== undefined) swapTexts[b] = textsA; else delete swapTexts[b];
-    onTextBoxSlotsChange(swapTexts);
+    applyAlbumState(albumSwapPages(currentAlbumState(), a, b));
   };
 
   const exitReorderMode = () => {
@@ -1047,29 +1077,7 @@ export default function PhotoOrganizer({
 
   const handleSwapPhotosOnPage = (pageIndex: number, fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
-    const newPhotos = [...photos];
-    const pagePhotos = [...newPhotos[pageIndex]];
-    while (pagePhotos.length <= Math.max(fromIndex, toIndex)) pagePhotos.push('');
-    [pagePhotos[fromIndex], pagePhotos[toIndex]] = [pagePhotos[toIndex], pagePhotos[fromIndex]];
-    while (pagePhotos.length > 0 && (!pagePhotos[pagePhotos.length - 1] || pagePhotos[pagePhotos.length - 1].trim() === '')) pagePhotos.pop();
-    newPhotos[pageIndex] = pagePhotos;
-    onPhotosChange(newPhotos);
-
-    const newCrops = { ...photoCrops };
-    const fromCrop = photoCrops[`${pageIndex}-${fromIndex}`];
-    const toCrop = photoCrops[`${pageIndex}-${toIndex}`];
-    if (fromCrop) newCrops[`${pageIndex}-${toIndex}`] = fromCrop; else delete newCrops[`${pageIndex}-${toIndex}`];
-    if (toCrop) newCrops[`${pageIndex}-${fromIndex}`] = toCrop; else delete newCrops[`${pageIndex}-${fromIndex}`];
-    onPhotoCropsChange(newCrops);
-
-    const newTexts = { ...textBoxSlots };
-    if (!newTexts[pageIndex]) newTexts[pageIndex] = {};
-    const fromText = textBoxSlots[pageIndex]?.[fromIndex];
-    const toText = textBoxSlots[pageIndex]?.[toIndex];
-    if (fromText) newTexts[pageIndex][toIndex] = fromText; else delete newTexts[pageIndex][toIndex];
-    if (toText) newTexts[pageIndex][fromIndex] = toText; else delete newTexts[pageIndex][fromIndex];
-    if (Object.keys(newTexts[pageIndex] || {}).length === 0) delete newTexts[pageIndex];
-    onTextBoxSlotsChange(newTexts);
+    applyAlbumState(albumSwapPhotosOnPage(currentAlbumState(), pageIndex, fromIndex, toIndex));
   };
 
   const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
@@ -1132,264 +1140,51 @@ export default function PhotoOrganizer({
     }
   };
 
-  const isLastPageWithContent = (pageIdx: number, currentPhotos: string[][]) => {
-    for (let i = pageIdx + 1; i < currentPhotos.length; i++) {
-        if (currentPhotos[i].some(p => p && p.trim() !== '')) return false;
-    }
-    return true;
-  };
-  
+  // ── Unified album-state helpers ──────────────────────────────────────────────
+
+  const albumConfig: AlbumConfig = { allowedPhotosPerPage, maxPages: 250 };
+
+  const currentAlbumState = (): AlbumState =>
+    fromPropsToAlbumState(photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants, fileSignatures);
+
+  // Fires all 6 onChange callbacks in one React 18 auto-batched update so the
+  // parent never reads a partially-updated state between callbacks.
+  const applyAlbumState = useCallback((newState: AlbumState) => {
+    const p = fromAlbumStateToProps(newState);
+    onPhotosChange(p.photos);
+    onPhotoCropsChange(p.photoCrops);
+    onTextBoxSlotsChange(p.textBoxSlots);
+    onPageLayoutsChange(p.pageLayouts);
+    onPageLayoutVariantsChange(p.pageLayoutVariants);
+    setFileSignatures(p.fileSignatures);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onPhotosChange, onPhotoCropsChange, onTextBoxSlotsChange, onPageLayoutsChange, onPageLayoutVariantsChange]);
+
+  // ── End unified helpers ──────────────────────────────────────────────────────
+
   const applyRippleShift = (startIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
-
-    let currentOverflow = newPhotos[startIndex].splice(newVariant);
-
-    let movingData = currentOverflow.map((_, idx) => {
-        let oldIdx = newVariant + idx;
-        let crop = newCrops[`${startIndex}-${oldIdx}`];
-        let text = newTexts[startIndex]?.[oldIdx];
-        delete newCrops[`${startIndex}-${oldIdx}`];
-        if (newTexts[startIndex]) delete newTexts[startIndex][oldIdx];
-        return { crop, text };
-    });
-
-    let p = startIndex + 1;
-    while(currentOverflow.length > 0) {
-        if (p >= newPhotos.length) {
-            if (newPhotos.length >= 250) {
-                alert("Límite máximo de 250 páginas alcanzado. Algunas fotos no se pudieron acomodar.");
-                currentOverflow = [];
-                break;
-            }
-            newPhotos.push([], []); 
-            setNumPages(newPhotos.length);
-        }
-
-        let insertCount = currentOverflow.length;
-        let existingLength = newPhotos[p].length;
-
-        let lastWithContent = isLastPageWithContent(p, newPhotos);
-        let capacity = newVariants[p] || getNextAllowed(existingLength);
-        
-        if (existingLength === 0 || lastWithContent) {
-            capacity = getNextAllowed(existingLength + insertCount);
-        }
-
-        for (let i = existingLength - 1; i >= 0; i--) {
-            if (newCrops[`${p}-${i}`]) {
-                newCrops[`${p}-${i + insertCount}`] = newCrops[`${p}-${i}`];
-                delete newCrops[`${p}-${i}`];
-            }
-            if (newTexts[p]?.[i]) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][i + insertCount] = newTexts[p][i];
-                delete newTexts[p][i];
-            }
-        }
-
-        newPhotos[p].unshift(...currentOverflow);
-
-        movingData.forEach((data, idx) => {
-            if (data.crop) newCrops[`${p}-${idx}`] = data.crop;
-            if (data.text) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][idx] = data.text;
-            }
-        });
-
-        if (newPhotos[p].length > capacity) {
-            currentOverflow = newPhotos[p].splice(capacity);
-            movingData = currentOverflow.map((_, idx) => {
-                let oldIdx = capacity + idx;
-                let crop = newCrops[`${p}-${oldIdx}`];
-                let text = newTexts[p]?.[oldIdx];
-                delete newCrops[`${p}-${oldIdx}`];
-                if (newTexts[p]) delete newTexts[p][oldIdx];
-                return { crop, text };
-            });
-            newVariants[p] = capacity;
-        } else {
-            currentOverflow = [];
-            newVariants[p] = getNextAllowed(newPhotos[p].length);
-        }
-        p++;
-    }
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumRippleShift(currentAlbumState(), startIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyPullShift = (startIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [startIndex]: newVariant };
-
-    let gap = newVariant - newPhotos[startIndex].length;
-    let p = startIndex;
-
-    while (gap > 0 && p < newPhotos.length - 1) {
-        let nextPage = p + 1;
-        let pullCount = Math.min(gap, newPhotos[nextPage].length);
-        if (pullCount === 0) break; 
-
-        let pulledPhotos = newPhotos[nextPage].splice(0, pullCount);
-        let currentLen = newPhotos[p].length;
-        newPhotos[p].push(...pulledPhotos);
-
-        for (let i = 0; i < pullCount; i++) {
-            if (newCrops[`${nextPage}-${i}`]) {
-                newCrops[`${p}-${currentLen + i}`] = newCrops[`${nextPage}-${i}`];
-                delete newCrops[`${nextPage}-${i}`];
-            }
-            if (newTexts[nextPage]?.[i]) {
-                if (!newTexts[p]) newTexts[p] = {};
-                newTexts[p][currentLen + i] = newTexts[nextPage][i];
-                delete newTexts[nextPage][i];
-            }
-        }
-
-        let nextLenAfterPull = newPhotos[nextPage].length;
-        for (let i = 0; i < nextLenAfterPull; i++) {
-            let oldIdx = i + pullCount;
-            if (newCrops[`${nextPage}-${oldIdx}`]) {
-                newCrops[`${nextPage}-${i}`] = newCrops[`${nextPage}-${oldIdx}`];
-                delete newCrops[`${nextPage}-${oldIdx}`];
-            }
-            if (newTexts[nextPage]?.[oldIdx]) {
-                if (!newTexts[nextPage]) newTexts[nextPage] = {};
-                newTexts[nextPage][i] = newTexts[nextPage][oldIdx];
-                delete newTexts[nextPage][oldIdx];
-            }
-        }
-        
-        newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
-        gap = pullCount; 
-        p++;
-    }
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumPullShift(currentAlbumState(), startIndex, newVariant, albumConfig));
   };
 
   const applyIncreaseVariantOnly = (pageIndex: number, newVariant: number) => {
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-    onPageLayoutVariantsChange(newVariants);
+    onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: newVariant });
   };
 
+  // Treated as a bounded ripple: cascade stops naturally when no more overflow.
   const applyIncreaseNextPageVariant = (pageIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    let nextPage = pageIndex + 1;
-
-    if (nextPage >= newPhotos.length) {
-        if (newPhotos.length >= 250) {
-            alert("Límite máximo de 250 páginas alcanzado.");
-            return;
-        }
-        newPhotos.push([], []);
-        setNumPages(newPhotos.length);
-    }
-
-    let insertCount = overflow.length;
-    let existingLength = newPhotos[nextPage].length;
-
-    for (let i = existingLength - 1; i >= 0; i--) {
-        if (newCrops[`${nextPage}-${i}`]) {
-            newCrops[`${nextPage}-${i + insertCount}`] = newCrops[`${nextPage}-${i}`];
-            delete newCrops[`${nextPage}-${i}`];
-        }
-        if (newTexts[nextPage]?.[i]) {
-            if (!newTexts[nextPage]) newTexts[nextPage] = {};
-            newTexts[nextPage][i + insertCount] = newTexts[nextPage][i];
-            delete newTexts[nextPage][i];
-        }
-    }
-
-    newPhotos[nextPage].unshift(...overflow);
-
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        if (newCrops[`${pageIndex}-${oldIdx}`]) {
-            newCrops[`${nextPage}-${idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
-            delete newCrops[`${pageIndex}-${oldIdx}`];
-        }
-        if (newTexts[pageIndex]?.[oldIdx]) {
-            if (!newTexts[nextPage]) newTexts[nextPage] = {};
-            newTexts[nextPage][idx] = newTexts[pageIndex][oldIdx];
-            delete newTexts[pageIndex][oldIdx];
-        }
-    });
-
-    newVariants[nextPage] = getNextAllowed(newPhotos[nextPage].length);
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumRippleShift(currentAlbumState(), pageIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyDeleteOverflow = (pageIndex: number, newVariant: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        delete newCrops[`${pageIndex}-${oldIdx}`];
-        if (newTexts[pageIndex]) delete newTexts[pageIndex][oldIdx];
-    });
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumDeleteOverflow(currentAlbumState(), pageIndex, newVariant));
   };
 
   const applyMoveToSpecificPage = (pageIndex: number, newVariant: number, targetPage: number) => {
-    let newPhotos = [...photos.map(p => [...p])];
-    let newCrops = { ...photoCrops };
-    let newTexts = { ...textBoxSlots };
-    let newVariants = { ...pageLayoutVariants, [pageIndex]: newVariant };
-
-    let overflow = newPhotos[pageIndex].splice(newVariant);
-    let targetLen = newPhotos[targetPage].length;
-
-    newPhotos[targetPage].push(...overflow);
-
-    overflow.forEach((_, idx) => {
-        let oldIdx = newVariant + idx;
-        if (newCrops[`${pageIndex}-${oldIdx}`]) {
-            newCrops[`${targetPage}-${targetLen + idx}`] = newCrops[`${pageIndex}-${oldIdx}`];
-            delete newCrops[`${pageIndex}-${oldIdx}`];
-        }
-        if (newTexts[pageIndex]?.[oldIdx]) {
-            if (!newTexts[targetPage]) newTexts[targetPage] = {};
-            newTexts[targetPage][targetLen + idx] = newTexts[pageIndex][oldIdx];
-            delete newTexts[pageIndex][oldIdx];
-        }
-    });
-
-    newVariants[targetPage] = getNextAllowed(newPhotos[targetPage].length);
-
-    onPhotosChange(newPhotos);
-    onPhotoCropsChange(newCrops);
-    onTextBoxSlotsChange(newTexts);
-    onPageLayoutVariantsChange(newVariants);
+    applyAlbumState(albumMoveOverflowToPage(currentAlbumState(), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
   };
 
   const handleVariantSelect = (opt: number) => {
@@ -1558,45 +1353,40 @@ export default function PhotoOrganizer({
     );
   };
 
-  const renderLowResModal = () => {
-    if (lowResImages.length === 0) return null;
-    const remainingCount = lowResImages.length - currentLowResIndex;
-
+  const renderLowResWarningModal = () => {
+    if (!selectedLowResWarning) return null;
+    const { url, pageIndex, photoIndex, width, height } = selectedLowResWarning;
     return (
       <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-          <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
           <p className="text-sm text-gray-500 mb-6">
-            Esta imagen mide <strong>{lowResImages[currentLowResIndex].width}x{lowResImages[currentLowResIndex].height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
+            Esta imagen mide <strong>{width}x{height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
           </p>
-
-          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
-            <img src={lowResImages[currentLowResIndex].url} className="w-full h-full object-contain" alt="Low res preview" />
-            <div className="absolute top-3 right-3 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full font-mono font-bold shadow-lg">
-              {currentLowResIndex + 1} / {lowResImages.length}
-            </div>
+          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
+            <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
           </div>
-
-          {remainingCount > 1 && uploadMode !== 'specific' && (
-            <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer bg-gray-50 p-3 rounded-xl border border-gray-200 hover:border-black transition-colors">
-              <input 
-                type="checkbox" 
-                checked={applyToAllLowRes} 
-                onChange={(e) => setApplyToAllLowRes(e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black accent-black"
-              />
-              <span className="text-sm font-bold text-gray-700">Aplicar a las {remainingCount} fotos restantes</span>
-            </label>
-          )}
-
           <div className="flex gap-3">
-            <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
+            <button
+              onClick={() => {
+                handleRemovePhotoFromPage(pageIndex, photoIndex);
+                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
+                setSelectedLowResWarning(null);
+              }}
+              className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
+            >
               Descartar
             </button>
-            <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+            <button
+              onClick={() => {
+                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
+                setSelectedLowResWarning(null);
+              }}
+              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
+            >
               Usar de todos modos
             </button>
           </div>
@@ -1687,20 +1477,6 @@ export default function PhotoOrganizer({
                 </div>
               </div>
 
-              <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Acciones de Página</h4>
-                <div className="flex flex-wrap gap-2">
-                  <div className="flex bg-gray-50 rounded-lg border border-gray-200 p-0.5">
-                    <button onClick={() => { handleMovePage(pageIndex, 'up'); setAdvancedSettingsModal(pageIndex - 1); }} disabled={pageIndex === 0} className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"><ChevronUp className="w-4 h-4"/></button>
-                    <div className="w-px h-4 bg-gray-200 my-auto" />
-                    <button onClick={() => { handleMovePage(pageIndex, 'down'); setAdvancedSettingsModal(pageIndex + 1); }} disabled={pageIndex === safePhotos.length - 1} className="p-1.5 hover:bg-white rounded-md transition-all disabled:opacity-30"><ChevronDown className="w-4 h-4"/></button>
-                  </div>
-                  
-                  <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleSpecificFileSelection(pageIndex, file); }; input.click(); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-all text-xs"><Plus className="w-3.5 h-3.5"/> Foto</button>
-                  {!pagesLocked && <button onClick={() => handleDeletePage(pageIndex)} className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 transition-all"><Trash2 className="w-4 h-4"/></button>}
-                </div>
-              </div>
-              
               <div className="pt-2 flex justify-end w-full">
                 <button onClick={() => { setAdvancedSettingsModal(null); setEditingPageIndex(null); }} className="px-6 py-2.5 sm:py-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors w-full shadow-md text-sm">Guardar y Cerrar</button>
               </div>
@@ -1715,12 +1491,183 @@ export default function PhotoOrganizer({
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
-        {renderLowResModal()}
-        
-        <div className="text-center mb-8">
-          <h2 className="text-3xl mb-2">{t('organizer.uploadTitle')}</h2>
-          <p className="text-gray-600">{t('organizer.uploadDesc')}</p>
-        </div>
+        {renderLowResWarningModal()}
+
+        {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
+        {showPickerWarning && (
+          <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+              <h3 className="text-xl font-bold text-center">Antes de seleccionar tus fotos</h3>
+
+              {/* Advertencia iOS */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col gap-1">
+                <p className="text-amber-800 text-xs font-semibold">⚠️ El carrete puede parecer congelado</p>
+                <p className="text-amber-700 text-xs">
+                  Al pulsar <strong>"Añadir"</strong>, iOS procesa las fotos internamente antes de cerrar el carrete.
+                  Esto puede tardar <strong>unos minutos</strong>. No es un fallo — solo espera sin cerrar la app.
+                </p>
+              </div>
+
+              <p className="text-gray-600 text-sm text-center">
+                El carrete se cerrará solo cuando iOS termine y la app continuará automáticamente.
+              </p>
+
+              <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 w-5 h-5 accent-black cursor-pointer shrink-0"
+                  checked={pickerWarningAccepted}
+                  onChange={e => setPickerWarningAccepted(e.target.checked)}
+                />
+                <span className="text-sm font-medium text-gray-800">
+                  Entendido — esperaré sin cerrar la app hasta que el carrete se cierre solo.
+                </span>
+              </label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowPickerWarning(false); setPickerWarningAccepted(false); }}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={!pickerWarningAccepted}
+                  onClick={() => {
+                    setShowPickerWarning(false);
+                    setPickerWarningAccepted(false);
+                    // Activar pantalla de espera ANTES de abrir el picker.
+                    // Así cuando iOS termina su procesamiento interno y el picker se cierra,
+                    // el usuario ya ve el spinner animado (no una pantalla congelada).
+                    setIsTransferringFiles(true);
+
+                    // Detectar si el usuario cancela el picker sin seleccionar fotos.
+                    // Cuando el picker se cierra (sea por selección o por cancelación),
+                    // la ventana recupera el foco. Si 1s después isTransferringFiles sigue
+                    // activo, ningún archivo fue entregado → resetear la pantalla de carga.
+                    const handleFocus = () => {
+                      pickerFocusTimerRef.current = setTimeout(() => {
+                        setIsTransferringFiles(false);
+                        pickerFocusHandlerRef.current = null;
+                        pickerFocusTimerRef.current = null;
+                      }, 1000);
+                    };
+                    pickerFocusHandlerRef.current = handleFocus;
+                    window.addEventListener('focus', handleFocus, { once: true });
+
+                    fileInputRef.current?.click();
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white transition-all ${
+                    pickerWarningAccepted ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  Seleccionar fotos
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PANTALLA DE ESPERA MIENTRAS iOS TRANSFIERE LAS FOTOS */}
+        {/* Se muestra desde que el usuario pulsa confirmar hasta que JS recibe los archivos */}
+        {isTransferringFiles && (
+          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+            <Loader2 className="w-16 h-16 text-black animate-spin" />
+            <div className="text-center">
+              <p className="text-2xl font-bold">Cargando fotos del carrete...</p>
+              <p className="text-gray-500 mt-2">Esto puede tardar unos segundos</p>
+            </div>
+            <p className="text-sm text-gray-400 text-center max-w-xs">
+              Por favor espera sin cerrar la app
+            </p>
+            <button
+              onClick={() => {
+                cleanupPickerFocusListener();
+                setIsTransferringFiles(false);
+              }}
+              className="mt-2 px-6 py-2 border border-gray-300 rounded-xl text-gray-500 text-sm"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {/* PANTALLA DE PROGRESO AL PROCESAR LAS FOTOS EN LOTES */}
+        {conversionProgress && (
+          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+            <Loader2 className="w-16 h-16 text-black animate-spin" />
+            <div className="text-center">
+              <p className="text-2xl font-bold">Preparando tus fotos</p>
+              <p className="text-gray-500 mt-2">
+                Convirtiendo foto {conversionProgress.done} de {conversionProgress.total}
+              </p>
+            </div>
+            <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-black h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(conversionProgress.done / conversionProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-sm text-gray-400 text-center max-w-xs">
+              Por favor espera sin cerrar la app
+            </p>
+          </div>
+        )}
+
+        {/* ── PANEL DE DEBUG (?debug=1) ── */}
+        {debugMode && debugFileReport && (
+          <div className="fixed inset-x-0 bottom-0 z-[300] bg-gray-900 text-white text-xs font-mono p-4 max-h-[60vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-yellow-400 font-bold text-sm">🔍 DEBUG iOS — Tipos entregados por el carrete</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { localStorage.removeItem('debugMode'); setDebugMode(false); setDebugFileReport(null); }}
+                  className="text-xs text-red-400 hover:text-red-300 underline"
+                >
+                  Desactivar
+                </button>
+                <button onClick={() => setDebugFileReport(null)} className="text-gray-400 hover:text-white text-lg leading-none px-1">✕</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className={`p-2 rounded ${debugFileReport.heicCount > 0 ? 'bg-green-800' : 'bg-red-800'}`}>
+                <div className="text-lg font-bold">{debugFileReport.heicCount}</div>
+                <div className="text-gray-300">HEIC/HEIF entregados</div>
+                <div className="text-xs mt-0.5">{debugFileReport.heicCount > 0 ? '✅ iOS entregó HEIC directo' : '❌ iOS convirtió a JPEG'}</div>
+              </div>
+              <div className="p-2 rounded bg-gray-700">
+                <div className="text-lg font-bold">{debugFileReport.jpegCount}</div>
+                <div className="text-gray-300">JPEG entregados</div>
+                <div className="text-xs mt-0.5">{debugFileReport.convertedCount} convertidos por la app</div>
+              </div>
+            </div>
+            <div className={`p-2 rounded mb-3 text-sm font-bold ${debugFileReport.heicCount > 0 ? 'bg-green-700' : 'bg-red-700'}`}>
+              {debugFileReport.heicCount > 0
+                ? `✅ Fix v4 FUNCIONÓ — iOS entregó ${debugFileReport.heicCount} de ${debugFileReport.total} archivos en HEIC`
+                : `❌ Fix v4 sin efecto — iOS convirtió ${debugFileReport.total} archivos a JPEG antes de entregar`}
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex gap-2 py-0.5 text-gray-500 border-b border-gray-600 mb-1">
+                <span className="w-6">#</span>
+                <span className="flex-1">Nombre</span>
+                <span className="w-32 text-right">MIME type</span>
+                <span className="w-16 text-right">Tamaño</span>
+                <span className="w-8 text-center">Conv.</span>
+              </div>
+              {debugFileReport.files.slice(0, 30).map((f, i) => (
+                <div key={i} className={`flex gap-2 py-0.5 border-b border-gray-800 ${f.wasHeic ? 'text-green-400' : 'text-gray-300'}`}>
+                  <span className="w-6 text-gray-500">{i + 1}</span>
+                  <span className="flex-1 truncate">{f.name}</span>
+                  <span className="w-32 text-right">{f.originalType}</span>
+                  <span className="w-16 text-right text-gray-500">{(f.size / 1024).toFixed(0)} KB</span>
+                  <span className="w-8 text-center">{f.wasConverted ? '🔄' : '—'}</span>
+                </div>
+              ))}
+              {debugFileReport.files.length > 30 && (
+                <div className="text-gray-500 pt-1 text-center">… y {debugFileReport.files.length - 30} archivos más — ver consola del navegador</div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
@@ -1734,10 +1681,14 @@ export default function PhotoOrganizer({
             </div>
           ) : (
             <>
-              <button onClick={() => fileInputRef.current?.click()} className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 group">
-                <img src={jiffy2Img} alt="Jiffy Upload" className="w-35 h-35 mb-2 object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Selecciona tus fotos y empieza a revivir tus mejores recuerdos</p>
+              <button onClick={() => setShowPickerWarning(true)} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
+                <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
+                <div className="text-center flex flex-col items-center gap-3 w-full">
+                  <p className="text-sm text-gray-500">Según la cantidad de fotos seleccionadas, el tiempo de carga puede variar</p>
+                  <span className="inline-flex items-center justify-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors w-full max-w-xs">
+                    <Upload className="w-5 h-5 shrink-0" />
+                    Toca aquí para seleccionar fotos
+                  </span>
                 </div>
               </button>
               {/* Video explicativo iOS */}
@@ -1760,8 +1711,8 @@ export default function PhotoOrganizer({
               </div>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelection} className="hidden" disabled={isValidating} />
-          
+          <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -1769,10 +1720,23 @@ export default function PhotoOrganizer({
                 <button onClick={() => { setUploadedPhotos([]); setPendingFilesData([]); }} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
               </div>
             )}
-            <button disabled={uploadedPhotos.length < 40 || isValidating} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+            <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
+        </div>
+
+        {/* Zona de activación de debug — 5 taps activan/desactivan el modo debug */}
+        <div
+          className="w-full h-8 mt-1 flex items-center justify-center cursor-default select-none"
+          onClick={handleDebugTap}
+        >
+          {debugTapCount >= 2 && debugTapCount < 5 && (
+            <span className="text-xs text-gray-300">{5 - debugTapCount} taps más para debug</span>
+          )}
+          {debugMode && (
+            <span className="text-xs text-yellow-500 font-mono">🔍 debug activo</span>
+          )}
         </div>
       </div>
     );
@@ -1783,7 +1747,7 @@ export default function PhotoOrganizer({
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
-        {renderLowResModal()}
+        {renderLowResWarningModal()}
         
         {!isSortingWithAI && (
           <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
@@ -1840,17 +1804,16 @@ export default function PhotoOrganizer({
                 )}
 
                 <div className="mt-4 flex flex-col gap-2">
-                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-700">
-                      <span className="font-bold">Mínimo 40 páginas.</span> Los álbumes incluyen 40 páginas base.
+                  <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-purple-700">
+                      Tu álbum incluye 40 páginas base.
                     </p>
                   </div>
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                    <p className="text-sm text-blue-700">
-                      Cada página adicional (más de 40) tiene un costo de{' '}
-                      <span className="font-bold">${extraPagePrice.toLocaleString('es-CO')} COP</span>.
+                  <div className="flex items-start gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-fuchsia-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-fuchsia-700">
+                      Cada página adicional cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
                     </p>
                   </div>
                 </div>
@@ -1873,7 +1836,7 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
-      
+
       {/* CAPA DE CARGA PARA SUBIDA DE 1 FOTO ESPECÍFICA */}
       {isValidating && step === 'editor' && (
         <div className="fixed inset-0 z-[150] bg-white/50 backdrop-blur-sm flex flex-col items-center justify-center">
@@ -1883,7 +1846,7 @@ export default function PhotoOrganizer({
       )}
 
       {renderDuplicateModal()}
-      {renderLowResModal()}
+      {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
 
       {/* MODAL INTELIGENTE DE PÁGINAS VACÍAS */}
@@ -2110,14 +2073,14 @@ export default function PhotoOrganizer({
             ) : (
               <div className="space-y-6">
                 <p className="text-gray-600 text-sm">
-                  Has aumentado el diseño y ahora tienes más espacio. ¿Deseas reajustar trayendo fotos de las páginas siguientes para llenar el vacío?
+                  El nuevo diseño quedó con espacios en blanco. ¿Quieres que organicemos las fotos automáticamente para llenarlos?
                 </p>
                 <div className="space-y-3">
                   <button onClick={() => { applyPullShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
-                    Sí, reajustar fotos (Traer siguientes)
+                    Sí, reorganizar fotos
                   </button>
                   <button onClick={() => { applyIncreaseVariantOnly(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
-                    No, dejar los espacios vacíos
+                    No, dejar espacios vacíos
                   </button>
                 </div>
               </div>
@@ -2135,6 +2098,7 @@ export default function PhotoOrganizer({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
             <p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2213,12 +2177,22 @@ export default function PhotoOrganizer({
                     </span>
                   </button>
                 ) : isSelected ? (
-                  <button
-                    onClick={exitReorderMode}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
-                  >
-                    <X className="w-3 h-3" /> Cancelar
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {!pagesLocked && (
+                      <button
+                        onClick={() => { exitReorderMode(); handleDeletePage(pageIndex); }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border-2 bg-red-600 text-white border-red-600 text-xs font-bold uppercase hover:bg-red-700 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" /> Eliminar
+                      </button>
+                    )}
+                    <button
+                      onClick={exitReorderMode}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
+                    >
+                      <X className="w-3 h-3" /> Cancelar
+                    </button>
+                  </div>
                 ) : null}
               </div>
 
@@ -2244,19 +2218,34 @@ export default function PhotoOrganizer({
                           const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                           const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
                           const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
+                          const isPhotoLowRes = photo && lowResInfo[photo];
                           return (
-                            <AlbumEditorPhotoSlot
-                              key={photoIndex} photo={photo} textBox={textBox} crop={crop}
-                              isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
-                              photoCount={currentVariant}
-                              editingPageIndex={null}
-                              isDragging={false}
-                              isDragTarget={false}
-                              onDragStart={handleDragStart}
-                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
-                              onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
-                              t={t}
-                            />
+                            <div key={photoIndex} className="relative h-full">
+                              <AlbumEditorPhotoSlot
+                                photo={photo} textBox={textBox} crop={crop}
+                                isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                                photoCount={currentVariant}
+                                editingPageIndex={null}
+                                isDragging={false}
+                                isDragTarget={false}
+                                onDragStart={handleDragStart}
+                                handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                                onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                                t={t}
+                              />
+                              {isPhotoLowRes && (
+                                <button
+                                  className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLowResWarning({ url: photo!, pageIndex, photoIndex, ...lowResInfo[photo!] });
+                                  }}
+                                  title="Advertencia de resolución"
+                                >
+                                  !
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

@@ -46,12 +46,16 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   const floatingBoxShadow = hideSpine ? 'shadow-none' : 'shadow-2xl';
   const showSpine = !hideSpine && coverType !== 'Tela';
 
-  // Fuente lomo: 11pt = 0.3881cm; fórmula: 0.3881 / (7% × ancho_cm) × 100
-  // 30x30→18.5cqw | 20x20→27.7cqw | horizontal(28cm)→19.8cqw | vertical(21cm)→26.4cqw
-  const spineTextCqw = coverSize === '30x30' ? 18.5 : coverSize === '20x20' ? 27.7 : isHorizontal ? 19.8 : 26.4;
+  // Lomo físico: 1cm en todos los tamaños
+  // Fuente: 11pt = 0.3881cm → 0.3881/1×100 = 38.81cqw (igual para todos)
+  const spineTextCqw = 38.81;
   // Posición top del lomo: 1.5cm / alto_álbum_cm × 100
   // 20x20→7.5% | 30x30→5% | horizontal(21cm alto)→7.14% | vertical(28cm alto)→5.36%
   const spineTopPct = coverSize === '30x30' ? '5%' : coverSize === '20x20' ? '7.5%' : isHorizontal ? '7.14%' : '5.36%';
+  // Anchos CSS: 1/(1+ancho_cm)×97% [gap=3%]
+  // 20x20→4.62% | 30x30→3.13% | horizontal(28cm)→3.34% | vertical(21cm)→4.41%
+  const spineWidthPct = coverSize === '30x30' ? '3.13%' : coverSize === '20x20' ? '4.62%' : isHorizontal ? '3.34%' : '4.41%';
+  const coverWidthPct = coverSize === '30x30' ? '93.87%' : coverSize === '20x20' ? '92.38%' : isHorizontal ? '93.66%' : '92.59%';
 
   const renderImageSlot = () => {
     if (coverImage) {
@@ -100,7 +104,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 className="text-[4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute w-full text-center" style={{ top: '60%', transform: 'translateY(-50%)' }}>
-                  <p className="text-[2.4cqw] font-medium tracking-widest" style={{ color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="text-[2.4cqw] font-medium tracking-widest" style={{ color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -114,7 +118,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 className="text-[3.2cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute" style={{ bottom: '20%', right: '20%' }}>
-                  <p className="text-[3.2cqw] font-medium leading-none text-right" style={{ color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="text-[3.2cqw] font-medium leading-none text-right" style={{ color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -125,7 +129,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               {commonOverlay}
               <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
-                  <p className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
                 <div className="w-full flex justify-end items-end">
                   <h2 className="text-[6.4cqw] font-bold leading-none text-right" style={{ color: typographyColor }}>{coverTitle}</h2>
@@ -145,17 +149,14 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
       const baseStyle = { width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' as const };
 
       switch (selectedLayout) {
-        // L1: zona texto (23.57%) arriba full-width con título+sub a 1cm del borde imagen,
-        //     imagen flex-1 full-width sin margen inferior
-        // título = sub: 5cqw (30pt / 21cm)
+        // L1: zona texto (23.57%) arriba, título izq a 0.7cm del borde (left=3.33%) y a 3.7cm del tope (top=56.07% del header)
+        //     sin subtítulo; imagen flex-1 full-width sin margen inferior
+        // título: 5cqw
         case 1:
           return (
             <div className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
               <div className="flex-shrink-0 relative bg-white" style={{ height: '23.57%' }}>
-                <div className="absolute left-0 right-0 text-center" style={{ bottom: '15.15%' }}>
-                  <h2 className="font-bold leading-none" style={{ fontSize: '5cqw', color: typographyColor }}>{coverTitle}</h2>
-                  <p className="font-medium leading-none mt-[0.5cqw]" style={{ fontSize: '5cqw', color: typographyColor }}>{coverSubtitle}</p>
-                </div>
+                <h2 className="absolute font-bold leading-none" style={{ top: '56.07%', left: '3.33%', fontSize: '5cqw', color: typographyColor }}>{coverTitle}</h2>
               </div>
               <div className="relative w-full flex-1">
                 <div className="absolute inset-0 overflow-hidden">
@@ -180,7 +181,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw] left-0 right-0" style={{ top: '21.32%', backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: '47.89%', transform: 'translateY(-50%)' }}>
                   <h2 className="font-bold leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverTitle}</h2>
-                  <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw] left-0 right-0" style={{ top: '74.45%', backgroundColor: typographyColor }} />
               </div>
@@ -206,7 +207,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: '3.04cqw', color: typographyColor }}>{coverTitle}</h2>
-                      <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '3.04cqw', color: typographyColor }}>{coverSubtitle}</p>
+                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '3.04cqw', color: typographyColor }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -230,7 +231,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: '13.21%', paddingTop: '3.33%' }}>
-                <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>
+                {coverSubtitle && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
@@ -247,23 +248,24 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
       const baseStyle = { width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' as const };
 
       switch (selectedLayout) {
-        // L1: header=17.62% (título a 1.2cm del tope), imagen=75.24%, footer=7.14% (subtítulo)
-        // título: top=32.43% del header; lr imagen=7.14%
+        // L1: header=17.62% (título centrado a 1.2cm del tope, subtítulo a 0.2cm del título), imagen=75.24%, footer vacío=7.14%
+        // título: top=32.43% del header (=1.2cm); sub: marginTop=0.714cqw (=0.2cm); lr imagen=7.14%
         // título=3.30cqw, sub=2.12cqw
         case 1:
           return (
             <div className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
               <div className="flex-shrink-0 relative bg-white" style={{ height: '17.62%' }}>
-                <h2 className="absolute font-bold leading-none" style={{ top: '32.43%', left: '7.14%', fontSize: '3.30cqw', color: typographyColor }}>{coverTitle}</h2>
+                <div className="absolute w-full flex flex-col items-center" style={{ top: '32.43%' }}>
+                  <h2 className="font-bold leading-none text-center" style={{ fontSize: '3.30cqw', color: typographyColor }}>{coverTitle}</h2>
+                  {coverSubtitle && <p className="font-medium leading-none text-center" style={{ marginTop: '0.714cqw', fontSize: '2.12cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                </div>
               </div>
               <div className="relative w-full flex-1">
                 <div className="absolute top-0 bottom-0 overflow-hidden" style={{ left: '7.14%', right: '7.14%' }}>
                   {renderImageSlot()}
                 </div>
               </div>
-              <div className="flex-shrink-0 flex items-center bg-white" style={{ height: '7.14%', paddingLeft: '7.14%' }}>
-                <p className="font-medium leading-none" style={{ fontSize: '2.12cqw', color: typographyColor }}>{coverSubtitle}</p>
-              </div>
+              <div className="flex-shrink-0 bg-white" style={{ height: '7.14%' }} />
             </div>
           );
 
@@ -283,7 +285,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw]" style={{ top: '25%', left: '7.14%', right: '7.14%', backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: '44.84%', transform: 'translateY(-50%)', paddingLeft: '7.14%', paddingRight: '7.14%' }}>
                   <h2 className="font-bold leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverTitle}</h2>
-                  <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw]" style={{ top: '64.67%', left: '7.14%', right: '7.14%', backgroundColor: typographyColor }} />
               </div>
@@ -309,7 +311,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: '2.17cqw', color: typographyColor }}>{coverTitle}</h2>
-                      <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '2.17cqw', color: typographyColor }}>{coverSubtitle}</p>
+                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '2.17cqw', color: typographyColor }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -332,7 +334,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: '10.95%', paddingTop: '2.5%', paddingRight: '6.07%' }}>
-                <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>
+                {coverSubtitle && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
@@ -346,9 +348,11 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
               </div>
-              <div className="absolute z-10 pointer-events-none text-left" style={{ left: '3.57%', top: '4.76%' }}>
-                <p className="font-medium leading-none" style={{ fontSize: '4.12cqw', color: typographyColor }}>{coverSubtitle}</p>
-              </div>
+              {coverSubtitle && (
+                <div className="absolute z-10 pointer-events-none text-left" style={{ left: '3.57%', top: '4.76%' }}>
+                  <p className="font-medium leading-none" style={{ fontSize: '4.12cqw', color: typographyColor }}>{coverSubtitle}</p>
+                </div>
+              )}
               <div className="absolute z-10 pointer-events-none text-right" style={{ right: '3.57%', bottom: '4.76%' }}>
                 <h2 className="font-bold leading-none" style={{ fontSize: '4.56cqw', color: typographyColor }}>{coverTitle}</h2>
               </div>
@@ -388,7 +392,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="flex-shrink-0 flex flex-col items-center justify-center bg-white z-10" style={{ height: textH }}>
                 <div className="font-bold tracking-wide text-center leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</div>
                 <div className="my-[1cqw]" style={{ width: divW, height: '0.5cqw', backgroundColor: typographyColor }} />
-                <div className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor }}>{coverSubtitle}</div>
+                {coverSubtitle && <div className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor }}>{coverSubtitle}</div>}
               </div>
               <div className="flex-shrink-0 bg-white" style={{ height: '2.5%' }} />
             </div>
@@ -419,7 +423,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw]" style={{ top: l1Top, left: lrL, right: lrL, backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: txtTop, transform: 'translateY(-50%)', paddingLeft: lrL, paddingRight: lrL }}>
                   <h2 className="font-bold leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</h2>
-                  <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>
+                  {coverSubtitle && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw]" style={{ top: l2Top, left: lrL, right: lrL, backgroundColor: typographyColor }} />
               </div>
@@ -456,7 +460,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: fontF, color: typographyColor }}>{coverTitle}</h2>
-                      <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: fontF, color: typographyColor }}>{coverSubtitle}</p>
+                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: fontF, color: typographyColor }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -466,7 +470,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         }
 
         // L4: sándwich título|imagen|subtítulo
-        // 20x20: header=7.5%(1.5cm), img=85%(17cm), footer=7.5%, lr=5%(1cm), pad=3.5%(0.7cm), font=2.86cqw
+        // 20x20: header=7.5%(1.5cm), img=85%(17cm), footer=7.5%, lr=5%(1cm), título top=3%(0.6cm), font=2.86cqw
         // 30x30: header=10%(3cm),   img=80%(24cm), footer=10%, lr=6.67%(2cm), pad=2.33%(0.7cm), font=2.59cqw
         case 4: {
           const headerH = is30 ? '10%'    : '7.5%';
@@ -477,7 +481,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           const titleF  = is30 ? '2.59cqw' : '2.86cqw';
           return (
             <div className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
-              <div className="flex-shrink-0 bg-white z-10 flex items-end" style={{ height: headerH, paddingBottom: pad, paddingLeft: lrI }}>
+              <div className={`flex-shrink-0 bg-white z-10 flex ${is30 ? 'items-end' : 'items-start'}`} style={{ height: headerH, ...(is30 ? { paddingBottom: pad } : { paddingTop: '3%' }), paddingLeft: lrI }}>
                 <h2 className="font-bold leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</h2>
               </div>
               <div className="relative w-full flex-shrink-0" style={{ height: imgH }}>
@@ -486,30 +490,18 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: footerH, paddingTop: pad, paddingRight: lrI }}>
-                <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>
+                {coverSubtitle && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
         }
 
-        // L5: imagen full bleed, título esquina inferior derecha, subtítulo esquina superior izquierda
-        // 20x20: right/left=3.5%(0.7cm), bottom/top=4.5%(0.9cm), t=5.3cqw(30pt), s=5.55cqw(31.5pt)
-        // 30x30: right/left=3.67%(1.1cm), bottom/top=3.67%(1.1cm), t=5.2cqw(44.2pt), s=4.67cqw(39.7pt)
+        // L5: imagen full bleed sin texto
         case 5: {
-          const edgeH  = is30 ? '3.67%'  : '3.5%';
-          const edgeV  = is30 ? '3.67%'  : '4.5%';
-          const titleF = is30 ? '5.2cqw'  : '5.3cqw';
-          const subF   = is30 ? '4.67cqw' : '5.55cqw';
           return (
             <div className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
               <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
-              </div>
-              <div className="absolute z-10 pointer-events-none text-left" style={{ left: edgeH, top: edgeV }}>
-                <p className="font-medium leading-none" style={{ fontSize: subF, color: typographyColor }}>{coverSubtitle}</p>
-              </div>
-              <div className="absolute z-10 pointer-events-none text-right" style={{ right: edgeH, bottom: edgeV }}>
-                <h2 className="font-bold leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</h2>
               </div>
             </div>
           );
@@ -523,13 +515,13 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   };
 
   return (
-    <div className="flex w-full items-stretch justify-center h-full">
+    <div className="flex w-full items-stretch justify-center h-full" style={{ fontFamily: "Avenir, 'Century Gothic', 'Gill Sans', sans-serif" }}>
 
       {/* Lomo (Spine) con texto alineado a la parte superior — Oculto en TELA */}
       {showSpine && (
         <div
-          className="w-[7%] mr-[3%] bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm"
-          style={{ containerType: 'inline-size' }}
+          className="bg-white relative overflow-hidden shrink-0 border border-gray-200 shadow-sm"
+          style={{ width: spineWidthPct, marginRight: '3%', containerType: 'inline-size' as const }}
         >
           <div className="absolute left-[50%]" style={{ top: spineTopPct }}>
             <span
@@ -548,7 +540,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
       )}
 
       {/* Recuadro de la Portada. Si es Tela, toma el 100% */}
-      <div className={`${!showSpine ? 'w-full h-full' : 'w-[90%] shrink-0'} relative`}>
+      <div className={`relative ${!showSpine ? 'w-full h-full' : 'shrink-0'}`} style={showSpine ? { width: coverWidthPct } : undefined}>
         {renderPreviewContent()}
       </div>
 

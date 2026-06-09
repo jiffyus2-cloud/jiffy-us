@@ -14,7 +14,7 @@ const translations = {
     'nav.login': 'Log In',
     'nav.signup': 'Sign Up',
     'nav.home': 'Home',
-    'nav.dashboard': 'Projects',
+    'nav.dashboard': 'My Account',
     
     // Creator Steps
     'step.product': 'Product',
@@ -276,7 +276,7 @@ const translations = {
     'success.backHome': 'Back to home',
 
     // Dashboard
-    'dashboard.title': 'My Station',
+    'dashboard.title': 'My Account',
     'dashboard.subtitle': 'Manage and review the status of your creations.',
     'dashboard.noOrders': 'You haven\'t created any projects yet.',
     'dashboard.noOrdersDesc': 'Start creating your first album today!',
@@ -297,6 +297,9 @@ const translations = {
     'account.emailNote': 'To change your email, contact support.',
     'account.saveName': 'Save',
     'account.nameSaved': 'Name updated!',
+    'account.phone': 'Phone',
+    'account.savePhone': 'Save',
+    'account.phoneSaved': 'Phone updated!',
     'account.security': 'Security',
     'account.resetPassword': 'Send password reset email',
     'account.resetSent': 'Email sent! Check your inbox.',
@@ -391,7 +394,7 @@ const translations = {
     'nav.login': 'Iniciar Sesión',
     'nav.signup': 'Registrarse',
     'nav.home': 'Inicio',
-    'nav.dashboard': 'Mi Estación',
+    'nav.dashboard': 'Mi Cuenta',
     
     // Creator Steps
     'step.product': 'Producto',
@@ -400,7 +403,7 @@ const translations = {
     'step.photos': 'Fotos',
     'step.design': 'Diseño',
     'step.checkout': 'Pagar',
-    'step.back': 'Atrás',
+    'step.back': 'Volver',
     'step.of': 'de',
     'step.step': 'Paso',
 
@@ -519,7 +522,7 @@ const translations = {
     'organizer.minPagesReached': 'Se requiere un mínimo de 40 páginas.',
     'organizer.emptyPagesAlert': 'Tu álbum contiene páginas vacías (Página {pages}). Por favor, añade al menos una foto o un texto a cada página antes de continuar al checkout.',
     'organizer.aiSorting': 'Ordenando tus fotos con 1clic.IA',
-    'organizer.aiSortingDesc': 'Analizando metadatos para encontrar la mejor secuencia',
+    'organizer.aiSortingDesc': 'Estamos creando la mejor secuencia para tu álbum.',
     'organizer.aiSmartSort': 'Ordenando tus fotos con 1clic.IA',
     'organizer.clearAll': 'Limpiar todo',
     'organizer.addPageEnd': 'Añadir nueva página al final',
@@ -682,7 +685,7 @@ const translations = {
     'success.backHome': 'Volver al inicio',
 
     // Dashboard
-    'dashboard.title': 'Mi Estación',
+    'dashboard.title': 'Mi Cuenta',
     'dashboard.subtitle': 'Gestiona y revisa el estado de tus creaciones.',
     'dashboard.noOrders': 'Aún no tienes pedidos',
     'dashboard.noOrdersDesc': '¡Empieza a crear tu primer álbum hoy mismo!',
@@ -703,6 +706,9 @@ const translations = {
     'account.emailNote': 'Para cambiar tu correo, contacta soporte.',
     'account.saveName': 'Guardar',
     'account.nameSaved': '¡Nombre actualizado!',
+    'account.phone': 'Teléfono',
+    'account.savePhone': 'Guardar',
+    'account.phoneSaved': '¡Teléfono actualizado!',
     'account.security': 'Seguridad',
     'account.resetPassword': 'Enviar correo para cambiar contraseña',
     'account.resetSent': '¡Correo enviado! Revisa tu bandeja.',

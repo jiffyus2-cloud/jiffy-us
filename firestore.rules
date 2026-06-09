@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isOwner() {
-      return request.auth != null && request.auth.token.email == 'memorias@jiffyphotos.com';
+      return request.auth != null && request.auth.token.email == 'jiffyus2@gmail.com';
     }
 
     function isSignedIn() {
@@ -49,6 +49,11 @@ service cloud.firestore {
 
       // Only owner can write settings
       allow write: if isOwner();
+    }
+
+    // MCP API keys — owner-only
+    match /mcp_api_keys/{keyId} {
+      allow read, write: if isOwner();
     }
   }
 }

@@ -227,6 +227,7 @@ export default function Creator() {
   const [photoPackCustomization, setPhotoPackCustomization] = useState<PhotoPackCustomizationOptions | null>(null);
   
   const [photos, setPhotos] = useState<string[][]>([]);
+  const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [photoCrops, setPhotoCrops] = useState<Record<string, { x: number, y: number, zoom: number }>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<string[]>([]);
   const [calendarPhotoCrops, setCalendarPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
@@ -266,15 +267,72 @@ export default function Creator() {
     };
   }, [currentStep]);
 
+  const buildDesignDataFromOrder = (order: any, detectedType: ProductType) => {
+    const photos = detectedType === 'album'
+      ? (order.pages?.map((p: any) => p.images || []) || [])
+      : (order.photos || []);
+
+    // Reconstruir photoCrops desde pages[i].crops (fuente de verdad) con fallback al campo raíz
+    let photoCrops: Record<string, any> = {};
+    if (detectedType === 'album' && order.pages?.length) {
+      order.pages.forEach((page: any, i: number) => {
+        const crops = page.crops || {};
+        Object.keys(crops).forEach(j => {
+          photoCrops[`${i}-${j}`] = crops[Number(j)];
+        });
+      });
+    } else {
+      photoCrops = order.photoCrops || {};
+    }
+    // Completar con el campo raíz si alguna clave falta
+    const rootCrops = order.photoCrops || {};
+    Object.keys(rootCrops).forEach(k => {
+      if (!photoCrops[k]) photoCrops[k] = rootCrops[k];
+    });
+
+    // Construir fileSignatures placeholder desde pages para habilitar detección de duplicados
+    const fileSignatures = detectedType === 'album'
+      ? (order.pages?.map((p: any) => (p.images || []).map((url: string) => url || '')) || [])
+      : [];
+
+    return {
+      photos,
+      photoCrops,
+      fileSignatures,
+      textBoxSlots: order.textBoxSlots || {},
+      pageLayouts: order.pageLayouts || {},
+      pageLayoutVariants: order.pageLayoutVariants || {},
+      customization: order.customization,
+      coverData: order.coverData,
+      items: order.items || order.mugItems || [],
+      mugItems: order.items || order.mugItems || [],
+    };
+  };
+
   const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
     setSelectedProduct(productType);
-    setCurrentStep('organize');
+    setCurrentStep('customization');
 
     if (productType === 'album') {
       setSelectedAlbum(product);
-      setCustomization(designData.customization);
+      let albumCustomization = designData.customization;
+      if (
+        albumCustomization?.coverContent?.coverImage === 'uploaded' &&
+        designData.coverData?.image &&
+        designData.coverData.image !== 'uploaded'
+      ) {
+        albumCustomization = {
+          ...albumCustomization,
+          coverContent: {
+            ...albumCustomization.coverContent,
+            coverImage: designData.coverData.image,
+          },
+        };
+      }
+      setCustomization(albumCustomization);
       setPhotos(designData.photos);
       setPhotoCrops(designData.photoCrops || {});
+      setFileSignatures(designData.fileSignatures || (designData.photos || []).map((page: string[]) => (page || []).map(() => '')));
       setTextBoxSlots(designData.textBoxSlots || {});
       setPageLayouts(designData.pageLayouts || {});
       setPageLayoutVariants(designData.pageLayoutVariants || {});
@@ -310,23 +368,7 @@ export default function Creator() {
             else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
             else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
-            const photos = detectedType === 'album'
-              ? (order.pages?.map((p: any) => p.images || []) || [])
-              : (order.photos || []);
-
-            const designData = {
-              photos,
-              photoCrops: order.photoCrops || {},
-              textBoxSlots: order.textBoxSlots || {},
-              pageLayouts: order.pageLayouts || {},
-              pageLayoutVariants: order.pageLayoutVariants || {},
-              customization: order.customization,
-              coverData: order.coverData,
-              items: order.items || order.mugItems || [],
-              mugItems: order.items || order.mugItems || [],
-            };
-
-            restoreDesignToState(designData, order.product, detectedType);
+            restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setActiveDraftId(state.resumeSavedDraft);
           }
         } catch (e) {
@@ -345,23 +387,7 @@ export default function Creator() {
             else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
             else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
-            const photos = detectedType === 'album'
-              ? (order.pages?.map((p: any) => p.images || []) || [])
-              : (order.photos || []);
-
-            const designData = {
-              photos,
-              photoCrops: order.photoCrops || {},
-              textBoxSlots: order.textBoxSlots || {},
-              pageLayouts: order.pageLayouts || {},
-              pageLayoutVariants: order.pageLayoutVariants || {},
-              customization: order.customization,
-              coverData: order.coverData,
-              items: order.items || order.mugItems || [],
-              mugItems: order.items || order.mugItems || [],
-            };
-
-            restoreDesignToState(designData, order.product, detectedType);
+            restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setEditingPaidOrderId(state.editPaidOrder);
             setIsPageCountLocked(true);
           }
@@ -381,23 +407,7 @@ export default function Creator() {
             else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
             else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
-            const photos = detectedType === 'album'
-              ? (order.pages?.map((p: any) => p.images || []) || [])
-              : (order.photos || []);
-
-            const designData = {
-              photos,
-              photoCrops: order.photoCrops || {},
-              textBoxSlots: order.textBoxSlots || {},
-              pageLayouts: order.pageLayouts || {},
-              pageLayoutVariants: order.pageLayoutVariants || {},
-              customization: order.customization,
-              coverData: order.coverData,
-              items: order.items || order.mugItems || [],
-              mugItems: order.items || order.mugItems || [],
-            };
-
-            restoreDesignToState(designData, order.product, detectedType);
+            restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setResumingOrderId(state.orderId);
             setActiveDraftId(state.orderId);
           }
@@ -561,23 +571,7 @@ export default function Creator() {
     else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
     else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
-    const photos = detectedType === 'album'
-      ? (draft.pages?.map((p: any) => p.images || []) || [])
-      : (draft.photos || []);
-
-    const designData = {
-      photos,
-      photoCrops: draft.photoCrops || {},
-      textBoxSlots: draft.textBoxSlots || {},
-      pageLayouts: draft.pageLayouts || {},
-      pageLayoutVariants: draft.pageLayoutVariants || {},
-      customization: draft.customization,
-      coverData: draft.coverData,
-      items: draft.items || draft.mugItems || [],
-      mugItems: draft.items || draft.mugItems || [],
-    };
-
-    restoreDesignToState(designData, draft.product, detectedType);
+    restoreDesignToState(buildDesignDataFromOrder(draft, detectedType), draft.product, detectedType);
     setActiveDraftId(draft.id);
   };
 
@@ -810,7 +804,7 @@ export default function Creator() {
   const renderOrganizer = () => {
     if (selectedProduct === 'album' && customization) {
       return (
-        <PhotoOrganizer 
+        <PhotoOrganizer
           album={selectedAlbum!}
           customization={customization}
           photos={photos}
@@ -825,6 +819,7 @@ export default function Creator() {
           onPageLayoutVariantsChange={setPageLayoutVariants}
           onComplete={() => editingPaidOrderId ? handleSavePaidOrderChanges() : handleCheckoutRedirect()}
           pagesLocked={isPageCountLocked}
+          initialFileSignatures={fileSignatures.length > 0 ? fileSignatures : undefined}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
@@ -1020,7 +1015,7 @@ export default function Creator() {
             className="flex items-center gap-1 text-gray-500 hover:text-black font-semibold transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span className="hidden md:inline">{t('step.back')}</span>
+            <span>{t('step.back')}</span>
           </button>
         </div>
       )}
