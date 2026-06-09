@@ -616,7 +616,9 @@ export default function PhotoOrganizer({
 
         if (!aiResponse.ok) {
           const errData = await aiResponse.json().catch(() => ({}));
-          throw new Error(errData.message || `Error del servidor IA (HTTP ${aiResponse.status})`);
+          // Registrar el error real en consola para diagnóstico, sin exponerlo al usuario
+          console.error('[IA] Error del servidor:', errData.message || `HTTP ${aiResponse.status}`);
+          throw new Error('sort_failed');
         }
         const responseData = await aiResponse.json();
 
