@@ -169,9 +169,12 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const isHorizontal = size.includes('Horizontal');
   const isVertical = size.includes('Vertical');
 
-  const coverImageFixed = order.coverData?.image && typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') 
-    ? justWhiteImg 
-    : (order.coverData?.image || '');
+  const coverImageFixed = (() => {
+    const img = order.coverData?.image;
+    if (!img || typeof img !== 'string' || img === 'uploaded') return '';
+    if (img.includes('justwhite')) return justWhiteImg;
+    return img;
+  })();
 
   return (
     <div className="space-y-8">
@@ -530,7 +533,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
     const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
-    if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
+    if (isTela || !displayImage || (typeof displayImage === 'string' && (displayImage.includes('justwhite') || displayImage === 'uploaded'))) {
       let firstInnerPhoto = null;
       if (order.pages && order.pages.length > 0) {
         for (const page of order.pages) {
@@ -720,8 +723,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                   <p className="font-bold text-gray-900 text-base mb-1">{order.shippingAddress?.name}</p>
                   <p className="font-medium text-gray-600">{order.shippingAddress?.address}</p>
                   <p className="font-medium text-gray-600">{order.shippingAddress?.city}, {order.shippingAddress?.zipCode}</p>
-                  <div className="pt-2 mt-2 border-t border-gray-50">
+                  <div className="pt-2 mt-2 border-t border-gray-50 space-y-0.5">
                     <p className="text-gray-400 font-medium italic">{order.shippingAddress?.email}</p>
+                    {order.shippingAddress?.phone && (
+                      <p className="text-gray-500 font-medium">{order.shippingAddress.phone}</p>
+                    )}
                   </div>
                 </div>
               </div>

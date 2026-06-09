@@ -28,6 +28,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
@@ -227,7 +228,7 @@ export default function LandingPage() {
 
       {/* Promociones */}
       {activePromotions.length > 0 && (
-        <section className="bg-white py-5 border-b border-gray-100">
+        <section className="bg-gray-50 py-5 border-b border-gray-100">
           <div className={DESIGN.layout.container}>
             <div className="flex flex-col md:flex-row gap-3">
               {activePromotions.map((promo, index) => (
@@ -254,22 +255,18 @@ export default function LandingPage() {
       )}
 
       {/* Products Section */}
-      <section className={DESIGN.layout.sectionGray}>
+      <section className="pt-2 pb-16 px-4 bg-gray-50">
         <div className={DESIGN.layout.container}>
           <h2 className={DESIGN.text.h2}>{t('landing.ourProducts')}</h2>
-          <p className={DESIGN.text.sectionSubtitle}>
-            {t('landing.productsSubtitle')}
-          </p>
 
           <div className={DESIGN.layout.grid}>
             {/* Photo Album */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('album')}>
               <div className="relative h-72">
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <h3 className="text-xl font-medium mb-1">Álbumes de fotos</h3>
-                  <p className="text-sm mb-4 text-white/70">Cada recuerdo es único y merece ser contado.</p>
                   <button onClick={() => setSelectedProduct('album')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
@@ -278,13 +275,12 @@ export default function LandingPage() {
             </div>
 
             {/* Calendar */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('calendar')}>
               <div className="relative h-72">
                 <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <h3 className="text-lg font-medium mb-1">Calendarios</h3>
-                  <p className="text-xs mb-3 text-white/70">Tus días con tus mejores recuerdos.</p>
                   <button onClick={() => setSelectedProduct('calendar')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
@@ -293,13 +289,12 @@ export default function LandingPage() {
             </div>
 
             {showMugs && (
-              <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
                 <div className="relative h-72">
                   <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
                     <h3 className="text-lg font-medium mb-1">{t('product.mug')}</h3>
-                    <p className="text-xs mb-3 text-white/70">{t('product.mugDesc')}</p>
                     <button onClick={() => setSelectedProduct('mug')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                       {t('landing.more')}
                     </button>
@@ -309,13 +304,12 @@ export default function LandingPage() {
             )}
 
             {showPhotoPacks && (
-              <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`}>
+              <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
                 <div className="relative h-56">
                   <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
                   <div className={DESIGN.card.content}>
                     <h3 className="text-lg font-medium mb-1">{t('product.photoPack')}</h3>
-                    <p className="text-xs mb-3 text-white/70">{t('product.photoPackDesc')}</p>
                     <button onClick={() => setSelectedProduct('photo-pack')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                       {t('landing.more')}
                     </button>
@@ -368,27 +362,37 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section className={DESIGN.layout.sectionGray}>
+      <section className={`px-4 bg-gray-50 ${isFaqOpen ? 'py-16' : 'py-2'}`}>
         <div className={DESIGN.layout.containerNarrow}>
-          <h2 className={DESIGN.text.h2}>Preguntas Frecuentes</h2>
-          <p className={DESIGN.text.sectionSubtitle}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
+          <button
+            onClick={() => setIsFaqOpen(p => !p)}
+            className="w-full flex items-center justify-between text-left mb-0"
+          >
+            <h2 className={`${DESIGN.text.h2} mb-0`}>Preguntas Frecuentes</h2>
+            <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform duration-300 shrink-0 ${isFaqOpen ? 'rotate-180' : ''}`} />
+          </button>
 
-          <div className="divide-y divide-gray-200">
-            {faqs.map((faq, index) => (
-              <div key={index}>
-                <button
-                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  className="w-full py-4 text-left flex items-center justify-between hover:text-gray-700 transition-colors"
-                >
-                  <span className="text-sm font-medium pr-4">{faq.question}</span>
-                  <ChevronDown className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
-                </button>
-                {openFaq === index && (
-                  <div className="pb-4 text-sm text-gray-600">{faq.answer}</div>
-                )}
+          {isFaqOpen && (
+            <>
+              <p className={`${DESIGN.text.sectionSubtitle} mt-3`}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
+              <div className="divide-y divide-gray-200 mt-4">
+                {faqs.map((faq, index) => (
+                  <div key={index}>
+                    <button
+                      onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                      className="w-full py-4 text-left flex items-center justify-between hover:text-gray-700 transition-colors"
+                    >
+                      <span className="text-sm font-medium pr-4">{faq.question}</span>
+                      <ChevronDown className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
+                    </button>
+                    {openFaq === index && (
+                      <div className="pb-4 text-sm text-gray-600">{faq.answer}</div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </section>
 

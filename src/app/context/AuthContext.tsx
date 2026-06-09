@@ -16,7 +16,7 @@ interface AuthContextType {
   error: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (email: string, password: string, name: string) => Promise<User>;
+  register: (email: string, password: string, name: string, phone?: string) => Promise<User>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, name: string) => {
+  const register = async (email: string, password: string, name: string, phone?: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -74,12 +74,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newUser = userCredential.user;
 
       // Crear documento en Firestore
-      const userPayload = {
+      const userPayload: Record<string, any> = {
         name,
         email,
         createdAt: serverTimestamp(),
-        uid: newUser.uid
+        uid: newUser.uid,
       };
+      if (phone) userPayload.phone = phone;
       await setDoc(doc(db, 'users', newUser.uid), userPayload);
       setUserData(userPayload);
 

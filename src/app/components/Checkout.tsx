@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
+import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { getSavedAddresses, saveAddress, getSavedBilling, saveBilling, type SavedAddress, type SavedBilling } from '../../services/userProfileService';
@@ -35,8 +36,10 @@ export default function Checkout() {
   const [shouldSaveAddress, setShouldSaveAddress] = useState(true);
   const [shouldSaveBilling, setShouldSaveBilling] = useState(true);
 
+  const [pickupLocation, setPickupLocation] = useState<'' | 'Arboleda' | 'Ciudad Jardin'>('');
+
   const [formData, setFormData] = useState({
-    name: '', email: user?.email || '',
+    name: '', email: user?.email || '', phoneCode: '+57', phone: '',
     department: '', city: '', address: '', addressExtra: '', zipCode: '',
     billingName: '', billingAddress: '', billingCity: '', billingZipCode: '', sameAsShipping: true,
   });
@@ -79,10 +82,17 @@ export default function Checkout() {
 
   const applyAddress = (addr: SavedAddress) => {
     setSelectedAddressId(addr.id);
+    const savedPhone = addr.phone || '';
+    const matchedCode = savedPhone.startsWith('+')
+      ? (['+1-809', '+593', '+591', '+595', '+598', '+506', '+502', '+503', '+504', '+505', '+507', '+351'].find(c => savedPhone.startsWith(c)) || (savedPhone.length > 3 ? savedPhone.slice(0, savedPhone.indexOf(' ') > 0 ? savedPhone.indexOf(' ') : 3) : '+57'))
+      : '+57';
+    const numberPart = savedPhone.startsWith(matchedCode) ? savedPhone.slice(matchedCode.length).trim() : savedPhone;
     setFormData(prev => ({
       ...prev,
       name: addr.name,
       email: addr.email || prev.email,
+      phoneCode: matchedCode,
+      phone: numberPart,
       department: addr.department,
       city: addr.city,
       address: addr.address,
@@ -95,7 +105,7 @@ export default function Checkout() {
     setSelectedAddressId(null);
     setFormData(prev => ({
       ...prev,
-      name: '', department: '', city: '', address: '', addressExtra: '', zipCode: '',
+      name: '', phoneCode: '+57', phone: '', department: '', city: '', address: '', addressExtra: '', zipCode: '',
     }));
   };
 
@@ -192,12 +202,15 @@ export default function Checkout() {
 
   const subtotal = calculateSubtotal();
   const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
+  const isPickup = pickupLocation !== '';
   const cityLower = formData.city.trim().toLowerCase();
-  const shipping = cityLower === ''
+  const shipping = isPickup
     ? 0
-    : cityLower.includes('cali')
-      ? config.prices.shippingCali
-      : config.prices.shippingNational;
+    : cityLower === ''
+      ? 0
+      : cityLower.includes('cali')
+        ? config.prices.shippingCali
+        : config.prices.shippingNational;
   const tax = 0;
   const total = subtotal - discountAmount + shipping + tax;
 
@@ -213,9 +226,19 @@ export default function Checkout() {
     setIsProcessing(true);
 
     try {
-      const shippingAddress = {
+      const shippingAddress = isPickup ? {
         name: formData.name,
         email: formData.email,
+        phone: formData.phone.trim() ? `${formData.phoneCode}${formData.phone.trim()}` : '',
+        department: 'Valle del Cauca',
+        city: 'Cali',
+        address: `Recogida en punto: ${pickupLocation === 'Arboleda' ? 'Arboleda, Cali' : 'Ciudad Jardín, Cali'}`,
+        addressExtra: '',
+        zipCode: '760001',
+      } : {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone.trim() ? `${formData.phoneCode}${formData.phone.trim()}` : '',
         department: formData.department,
         city: formData.city,
         address: formData.address,
@@ -234,6 +257,7 @@ export default function Checkout() {
           saves.push(saveAddress(user.uid, {
             name: shippingAddress.name,
             email: shippingAddress.email,
+            phone: shippingAddress.phone,
             department: shippingAddress.department,
             city: shippingAddress.city,
             address: shippingAddress.address,
@@ -380,11 +404,84 @@ export default function Checkout() {
                 <div className="space-y-2"><label htmlFor="name" className="text-sm font-medium text-gray-700">{t('checkout.fullName')} *</label><input type="text" id="name" name="name" required value={formData.name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="Ej. Juan Pérez" /></div>
                 <div className="space-y-2"><label htmlFor="email" className="text-sm font-medium text-gray-700">{t('auth.emailLabel')} *</label><input type="email" id="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none" placeholder="juan@ejemplo.com" /></div>
               </div>
+              <div className="mt-3 md:mt-4">
+                <PhoneInput
+                  phoneCode={formData.phoneCode}
+                  phoneNumber={formData.phone}
+                  onPhoneCodeChange={(code) => setFormData(prev => ({ ...prev, phoneCode: code }))}
+                  onPhoneNumberChange={(num) => setFormData(prev => ({ ...prev, phone: num }))}
+                  label="Teléfono *"
+                  required
+                />
+              </div>
             </div>
 
+            {/* --- MÉTODO DE ENTREGA --- */}
             <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-5 flex items-center gap-2">
                 <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
+                Método de entrega
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Envío a domicilio */}
+                <button
+                  type="button"
+                  onClick={() => setPickupLocation('')}
+                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${!isPickup ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400 text-gray-700'}`}
+                >
+                  <Truck className={`w-5 h-5 mt-0.5 shrink-0 ${!isPickup ? 'text-white' : 'text-gray-400'}`} />
+                  <div>
+                    <p className="font-semibold text-sm">Envío a domicilio</p>
+                    <p className={`text-xs mt-0.5 ${!isPickup ? 'text-gray-300' : 'text-gray-500'}`}>Entrega en tu dirección</p>
+                  </div>
+                </button>
+                {/* Recogida en Cali */}
+                <button
+                  type="button"
+                  onClick={() => setPickupLocation(pickupLocation === '' ? 'Arboleda' : pickupLocation)}
+                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${isPickup ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400 text-gray-700'}`}
+                >
+                  <Store className={`w-5 h-5 mt-0.5 shrink-0 ${isPickup ? 'text-white' : 'text-gray-400'}`} />
+                  <div>
+                    <p className="font-semibold text-sm">Recogida en Cali</p>
+                    <p className={`text-xs mt-0.5 ${isPickup ? 'text-green-300 font-semibold' : 'text-green-600 font-semibold'}`}>Sin costo de envío</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Sub-opciones de punto de recogida */}
+              {isPickup && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Selecciona el punto de recogida:</p>
+                  {(['Arboleda', 'Ciudad Jardin'] as const).map(loc => (
+                    <button
+                      key={loc}
+                      type="button"
+                      onClick={() => setPickupLocation(loc)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all text-left ${pickupLocation === loc ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-400'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${pickupLocation === loc ? 'border-black' : 'border-gray-300'}`}>
+                        {pickupLocation === loc && <div className="w-2 h-2 rounded-full bg-black" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-gray-800">{loc === 'Arboleda' ? 'Arboleda' : 'Ciudad Jardín'}, Cali</p>
+                        <p className="text-xs text-gray-500">Te contactaremos por correo o teléfono para coordinar la entrega</p>
+                      </div>
+                    </button>
+                  ))}
+                  <div className="mt-3 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                    <MapPin className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-800 leading-snug">
+                      <span className="font-semibold">¿Cómo funciona?</span> Una vez confirmado tu pedido, te contactaremos al correo o teléfono que nos dejaste para coordinar el punto y horario de entrega.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!isPickup && <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-6 flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">3</span>
                 {t('checkout.shippingAddress')}
               </h3>
 
@@ -474,10 +571,10 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
 
             <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">3</span>{t('checkout.billingAddress')}</h3>
+              <h3 className="text-base md:text-xl font-bold mb-3 md:mb-4 flex items-center gap-2"><span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">{isPickup ? '3' : '4'}</span>{t('checkout.billingAddress')}</h3>
               <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors"><input type="checkbox" id="sameAsShipping" name="sameAsShipping" checked={formData.sameAsShipping} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black" /><span className="text-sm text-gray-700">{t('checkout.sameAddress')}</span></label>
               {!formData.sameAsShipping && (
                 <div className="space-y-6 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -567,14 +664,21 @@ export default function Checkout() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">{t('checkout.shipping')}</span>
                   <span>
-                    {formData.city.trim() === ''
-                      ? <span className="text-gray-400 italic text-xs">Por determinar</span>
-                      : `$${shipping.toLocaleString('es-CO')} COP`}
+                    {isPickup
+                      ? <span className="text-green-600 font-semibold">Gratis (recogida)</span>
+                      : formData.city.trim() === ''
+                        ? <span className="text-gray-400 italic text-xs">Por determinar</span>
+                        : `$${shipping.toLocaleString('es-CO')} COP`}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
-                  Cali: ${config.prices.shippingCali.toLocaleString('es-CO')} · Otras ciudades: ${config.prices.shippingNational.toLocaleString('es-CO')}
-                </p>
+                {!isPickup && (
+                  <p className="text-xs text-gray-400">
+                    Cali: ${config.prices.shippingCali.toLocaleString('es-CO')} · Otras ciudades: ${config.prices.shippingNational.toLocaleString('es-CO')}
+                  </p>
+                )}
+                {isPickup && (
+                  <p className="text-xs text-gray-500">Punto: {pickupLocation === 'Arboleda' ? 'Arboleda' : 'Ciudad Jardín'}, Cali</p>
+                )}
               </div>
             </div>
 

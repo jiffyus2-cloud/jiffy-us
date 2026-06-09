@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Loader2 } from 'lucide-react';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
@@ -64,7 +64,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const [isValidating, setIsValidating] = useState(false);
-  const [lowResImage, setLowResImage] = useState<{file: File, url: string, width: number, height: number} | null>(null);
+  const [coverImageLowResInfo, setCoverImageLowResInfo] = useState<{width: number, height: number} | null>(null);
+  const [showLowResWarning, setShowLowResWarning] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -73,15 +76,15 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const baseAspectRatio = isVertical ? 21/28 : isHorizontal ? 28/21 : 1;
 
   // Lógica de validación: El lomo NO es obligatorio en Tela
-  const isLayout5 = (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel';
+  const isSquareLayout5 = isSquare && selectedLayout === 5;
+  const isLayout5 = isHorizontal && selectedLayout === 5 && coverType === 'Papel';
   const requiresPhoto = coverType === 'Papel' && !hidePhoto;
-  const isFormValid = coverTitle.trim() !== '' &&
+  const isFormValid = (isSquareLayout5 ? true : coverTitle.trim() !== '') &&
                       (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
-                      (isLayout5 ? coverYear.trim() !== '' : coverSubtitle.trim() !== '') &&
                       (requiresPhoto ? coverImage !== '' : true);
 
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
-  const displaySubtitle = coverSubtitle || 'Un viaje inolvidable';
+  const displaySubtitle = coverSubtitle;
   const displayYear = coverYear || new Date().getFullYear().toString();
   const displaySpine = spineText || displayTitle;
 
@@ -145,26 +148,18 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
     setIsValidating(true);
     const result = await checkImageDimensions(file);
-
+    setIsValidating(false);
+    processCoverUpload(file);
     if (result.isLowRes) {
-      setLowResImage(result);
-      setIsValidating(false);
+      setCoverImageLowResInfo({ width: result.width, height: result.height });
     } else {
-      processCoverUpload(file);
-      setIsValidating(false);
+      setCoverImageLowResInfo(null);
     }
   };
 
   const processCoverUpload = (file: File) => {
     setCoverImage(URL.createObjectURL(file));
-    setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 }); 
-  };
-
-  const handleLowResDecision = (keep: boolean) => {
-    if (keep && lowResImage) {
-      processCoverUpload(lowResImage.file);
-    }
-    setLowResImage(null);
+    setCoverCrop({ x: 50, y: 50, zoom: 1, rotation: 0 });
   };
 
   const getTypographyColors = () => {
@@ -207,26 +202,30 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
         }
       `}</style>
 
-      {lowResImage && (
+      {showLowResWarning && coverImageLowResInfo && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
             <p className="text-sm text-gray-500 mb-6">
-              Esta imagen mide <strong>{lowResImage.width}x{lowResImage.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
+              Esta imagen mide <strong>{coverImageLowResInfo.width}x{coverImageLowResInfo.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
             </p>
-
-            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 relative flex items-center justify-center">
-              <img src={lowResImage.url} className="w-full h-full object-contain" alt="Low res preview" />
+            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
+              <img src={coverImage} className="w-full h-full object-contain" alt="Low res preview" />
             </div>
-
             <div className="flex gap-3">
-              <button onClick={() => handleLowResDecision(false)} className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all">
-                Elegir otra
+              <button
+                onClick={() => { setCoverImage(''); setCoverCrop({x:50,y:50,zoom:1,rotation:0}); setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
+                className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
+              >
+                Descartar
               </button>
-              <button onClick={() => handleLowResDecision(true)} className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md">
+              <button
+                onClick={() => { setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
+                className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
+              >
                 Usar de todos modos
               </button>
             </div>
@@ -244,7 +243,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden overscroll-contain min-h-0">
         <div className="relative w-full h-[30vh] shrink-0 md:h-full md:flex-1 bg-[#F3F4F6] flex items-center justify-center p-2 md:p-16 order-1 md:order-2 border-b md:border-b-0 border-gray-200 min-h-0">
           <div className="w-full h-full max-h-[90%] md:max-h-full flex items-center justify-center">
-            <div className="w-full" style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}>
+            <div
+              className={`w-full relative group ${!hidePhoto ? 'cursor-pointer' : ''}`}
+              style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}
+              onClick={() => { if (!hidePhoto) fileInputRef.current?.click(); }}
+            >
               <div className="md:hidden">
                 <CoverPreview
                   coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
@@ -257,6 +260,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
                 />
               </div>
+              {!hidePhoto && (
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none rounded-sm">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-3 shadow-md">
+                    <Upload className="w-6 h-6 text-black" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -308,11 +318,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <section className="space-y-4 md:space-y-5">
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
               <div className="space-y-3 md:space-y-4">
-                
-                <div className="space-y-1 md:space-y-1.5">
-                  <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
-                  <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
-                </div>
+
+                {!isSquareLayout5 && (
+                  <div className="space-y-1 md:space-y-1.5">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
+                    <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
+                  </div>
+                )}
 
                 {/* SOLO SE MUESTRA EL LOMO SI ES DE PAPEL */}
                 {coverType === 'Papel' && (
@@ -322,16 +334,16 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   </div>
                 )}
 
-                {!( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
+                {!isSquareLayout5 && !(isHorizontal && selectedLayout === 5 && coverType === 'Papel') && !(isVertical && selectedLayout === 1) && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción *</label>
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
                     <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo o descripción breve" />
                   </div>
                 )}
 
-                {( (isSquare || isHorizontal) && selectedLayout === 5 && coverType === 'Papel' ) && (
+                {isLayout5 && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Año de Referencia *</label>
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
                     <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Año o rango de fechas" />
                   </div>
                 )}
@@ -359,21 +371,30 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                         position={coverCrop} 
                       />
                       <div className="absolute top-2 right-2 md:top-2 md:right-2 z-10 flex gap-2.5 md:gap-2">
+                        {coverImageLowResInfo && (
+                          <button
+                            onClick={() => setShowLowResWarning(true)}
+                            className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-sm md:text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
+                            title="Advertencia de resolución"
+                          >
+                            !
+                          </button>
+                        )}
                         <button onClick={() => setIsCropModalOpen(true)} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte">
                           <CropIcon className="w-6 h-6 md:w-4 md:h-4" />
                         </button>
-                        <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); }} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto">
+                        <button onClick={() => { setCoverImage(''); setCoverCrop({x: 50, y: 50, zoom: 1, rotation: 0}); setCoverImageLowResInfo(null); }} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Quitar Foto">
                           <X className="w-6 h-6 md:w-4 md:h-4" />
                         </button>
                       </div>
                     </div>
                  ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group">
+                    <div className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group" onClick={() => fileInputRef.current?.click()}>
                       <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors"><Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" /></div>
                       <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
-                    </label>
+                    </div>
                  )}
+                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
               </section>
             )}
           </div>

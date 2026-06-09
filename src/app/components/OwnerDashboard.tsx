@@ -8,7 +8,9 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users } from 'lucide-react';
+import ConnectionsSection from './ConnectionsSection';
+import UsersSection from './UsersSection';
 import { updateOrderStatus } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
@@ -341,7 +343,7 @@ const OwnerDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'settings' | 'users' | 'connections'>('orders');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -354,6 +356,20 @@ const OwnerDashboard: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
+  const [isTabHidden, setIsTabHidden] = useState(false);
+
+  // --- Detectar cambio de pestaña durante la descarga ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsTabHidden(true);
+      } else {
+        setIsTabHidden(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // --- CONTEXTO GLOBAL DE LA TIENDA ---
   const storeConfig = useStoreConfig();
@@ -419,32 +435,40 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      const ordersCollection = collection(db, 'orders');
+      const orderSnapshot = await getDocs(ordersCollection);
+      const ordersList = orderSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const normalizeDate = (dateVal: any) => {
+          if (dateVal instanceof Timestamp) return dateVal.toDate().toISOString();
+          if (dateVal && typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000).toISOString();
+          return dateVal;
+        };
+        return { id: doc.id, ...data, createdAt: normalizeDate(data.createdAt), updatedAt: normalizeDate(data.updatedAt) } as Order;
+      });
+
+      const sortedOrders = ordersList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      setOrders(sortedOrders);
+      setFilteredOrders(sortedOrders);
+    } catch (err: any) {
+      console.error('Error fetching orders from Firestore:', err);
+      const isPermission = err?.code === 'permission-denied' || err?.message?.includes('permission');
+      setFetchError(
+        isPermission
+          ? 'Acceso denegado. Asegúrate de estar autenticado como administrador (jiffyus2@gmail.com).'
+          : `No se pudieron cargar los pedidos desde Firestore. (${err?.code ?? err?.message ?? 'error desconocido'})`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    const fetchOrders = async () => {
-      try {
-        setIsLoading(true);
-        const ordersCollection = collection(db, 'orders');
-        const orderSnapshot = await getDocs(ordersCollection);
-        const ordersList = orderSnapshot.docs.map(doc => {
-          const data = doc.data();
-          const normalizeDate = (dateVal: any) => {
-            if (dateVal instanceof Timestamp) return dateVal.toDate().toISOString();
-            if (dateVal && typeof dateVal === 'object' && dateVal.seconds) return new Date(dateVal.seconds * 1000).toISOString();
-            return dateVal;
-          };
-          return { id: doc.id, ...data, createdAt: normalizeDate(data.createdAt), updatedAt: normalizeDate(data.updatedAt) } as Order;
-        });
-
-        const sortedOrders = ordersList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        setOrders(sortedOrders);
-        setFilteredOrders(sortedOrders);
-      } catch (err) {
-        setFetchError('No se pudieron cargar los pedidos desde Firestore.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchOrders();
   }, [isAuthenticated]);
 
@@ -623,6 +647,27 @@ const OwnerDashboard: React.FC = () => {
         );
 
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
+
+        // ── Cm-space layout for cut lines ─────────────────────────────────────
+        const contentWCm = isTela ? wCm : (wCm * 2) + spineCm + (gapCm * 2);
+        const marginXCm  = isTela ? 0 : (totalWCm - contentWCm) / 2;
+        const marginYCm  = isTela ? 0 : (totalHCm - hCm) / 2;
+
+        // ── Segunda página: líneas de corte (vectores, sin JPEG) ──────────────
+        pdf.addPage();
+        pdf.setDrawColor(220, 30, 30);
+        pdf.setLineWidth(0.02);
+
+        if (isTela) {
+          pdf.rect(0, 0, wCm, hCm, 'S');
+        } else {
+          pdf.rect(marginXCm,                                   marginYCm, wCm,     hCm, 'S'); // contraportada
+          pdf.rect(marginXCm + wCm,                             marginYCm, gapCm,   hCm, 'S'); // gap 1
+          pdf.rect(marginXCm + wCm + gapCm,                    marginYCm, spineCm, hCm, 'S'); // lomo
+          pdf.rect(marginXCm + wCm + gapCm + spineCm,          marginYCm, gapCm,   hCm, 'S'); // gap 2
+          pdf.rect(marginXCm + wCm + gapCm + spineCm + gapCm,  marginYCm, wCm,     hCm, 'S'); // portada
+        }
+
         onProgress(100);
 
         root.unmount();
@@ -847,22 +892,38 @@ const OwnerDashboard: React.FC = () => {
       }
       await Promise.all(imagePromises);
 
-      try {
-        if (isCalendar) {
+      if (isCalendar) {
+        try {
           const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
           folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
-        } else if (isAlbum) {
-          // Generar PDF 1: Portada (Frente únicamente si es tela, Completa si es Papel)
+        } catch (pdfError) {
+          console.error("Error al generar PDF de calendario:", pdfError);
+          alert("Advertencia: El PDF del calendario no se pudo crear. El resto del ZIP se descargará normalmente.");
+        }
+      } else if (isAlbum) {
+        const pdfErrors: string[] = [];
+
+        // PDF 1: Portada — independiente del interior
+        try {
           const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
           folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+        } catch (coverError) {
+          console.error("Error al generar PDF de portada:", coverError);
+          pdfErrors.push("portada");
+        }
 
-          // Generar PDF 2: Páginas Interiores (70%)
+        // PDF 2: Interior — se intenta siempre, independientemente del resultado de la portada
+        try {
           const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
           folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+        } catch (innerError) {
+          console.error("Error al generar PDF de páginas interiores:", innerError);
+          pdfErrors.push("páginas interiores");
         }
-      } catch (pdfError) {
-        console.error("Error al generar PDF de alta resolución:", pdfError);
-        alert("Advertencia: El ZIP se descargará pero el PDF de previsualización no se pudo crear.");
+
+        if (pdfErrors.length > 0) {
+          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}. Los demás archivos se incluirán en el ZIP normalmente.`);
+        }
       }
       
       const content = await zip.generateAsync({ type: 'blob' });
@@ -923,6 +984,8 @@ const OwnerDashboard: React.FC = () => {
         <div className="flex gap-2 mb-6 border-b border-gray-200 pb-px">
           <button onClick={() => setActiveTab('orders')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'orders' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><ShoppingBag className="w-4 h-4" /> Pedidos Recibidos</button>
           <button onClick={() => setActiveTab('settings')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><SettingsIcon className="w-4 h-4" /> Ajustes de Tienda</button>
+          <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Users className="w-4 h-4" /> Usuarios</button>
+          <button onClick={() => setActiveTab('connections')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'connections' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Zap className="w-4 h-4" /> Conexiones</button>
         </div>
 
         {activeTab === 'orders' && (() => {
@@ -963,7 +1026,13 @@ const OwnerDashboard: React.FC = () => {
                 <div className="text-center py-20 bg-red-50 rounded-2xl border-2 border-dashed border-red-200 text-red-700">
                   <AlertCircle className="mx-auto h-12 w-12 mb-4" />
                   <h3 className="text-lg font-bold">Error de Conexión</h3>
-                  <p className="mt-1 opacity-80">{fetchError}</p>
+                  <p className="mt-1 opacity-80 text-sm max-w-md mx-auto">{fetchError}</p>
+                  <button
+                    onClick={fetchOrders}
+                    className="mt-4 px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                  >
+                    Reintentar
+                  </button>
                 </div>
               ) : (
                 <>
@@ -1066,6 +1135,16 @@ const OwnerDashboard: React.FC = () => {
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
                                     <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                                    {downloadProgress.orderId === order.id ? (
+                                      <div className="flex items-center gap-1 px-1">
+                                        <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                          <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress.progress}%` }} />
+                                        </div>
+                                        <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                    )}
                                     <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </td>
@@ -1303,7 +1382,43 @@ const OwnerDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'users' && (
+          <UsersSection />
+        )}
+
+        {activeTab === 'connections' && (
+          <ConnectionsSection />
+        )}
       </main>
+
+      {/* Indicador flotante de descarga — visible en cualquier pestaña */}
+      {downloadProgress.orderId && (
+        <div className={`fixed bottom-6 right-6 z-50 bg-white shadow-2xl rounded-2xl px-5 py-4 flex flex-col gap-3 min-w-[280px] transition-all duration-300 ${isTabHidden ? 'border-2 border-amber-400' : 'border border-gray-200'}`}>
+          <div className="flex items-center gap-3">
+            <Loader2 className={`w-5 h-5 animate-spin shrink-0 ${isTabHidden ? 'text-amber-500' : 'text-emerald-500'}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-black uppercase tracking-widest mb-1.5 ${isTabHidden ? 'text-amber-600' : 'text-gray-500'}`}>
+                {isTabHidden ? '⚠ Generación pausada' : 'Generando PDF…'}
+              </p>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${isTabHidden ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                  style={{ width: `${downloadProgress.progress}%` }}
+                />
+              </div>
+            </div>
+            <span className={`text-sm font-black tabular-nums shrink-0 ${isTabHidden ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {downloadProgress.progress}%
+            </span>
+          </div>
+          {isTabHidden && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 leading-snug">
+              El navegador pausa la generación en pestañas inactivas. <strong>Vuelve a esta pestaña</strong> para que continúe.
+            </p>
+          )}
+        </div>
+      )}
 
       <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={selectedOrder} />
       <footer className="py-6 text-center text-gray-400 text-xs border-t border-gray-100 bg-white">

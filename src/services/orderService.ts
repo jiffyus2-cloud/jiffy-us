@@ -125,12 +125,14 @@ export async function createDraftOrder(
 
       for (let j = 0; j < pagePhotos.length; j++) {
         let photoUrl = pagePhotos[j];
+        if (!photoUrl) continue;
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
           photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
           updateProgress();
         }
+        if (!photoUrl) continue;
         uploadedPhotos.push(photoUrl);
-        pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
+        pageCrops[uploadedPhotos.length - 1] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
       }
 
       finalPages.push({
@@ -142,7 +144,7 @@ export async function createDraftOrder(
         crops: pageCrops
       });
     }
-  } 
+  }
   // TAZAS
   else if (isMugType) {
     for (let i = 0; i < itemsToProcess.length; i++) {
@@ -182,7 +184,13 @@ export async function createDraftOrder(
   // ==========================================
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
-    cleanCustomization.coverContent.coverImage = "uploaded"; 
+    cleanCustomization = {
+      ...cleanCustomization,
+      coverContent: {
+        ...cleanCustomization.coverContent,
+        coverImage: 'uploaded',
+      },
+    };
   }
 
   // ESCUDO FIREBASE: Aplanamos a la fuerza para que Firebase no se queje por arreglos de 2D.
@@ -345,12 +353,14 @@ export async function updateOrderDesign(
       const pageCrops: any = {};
       for (let j = 0; j < pagePhotos.length; j++) {
         let photoUrl = pagePhotos[j];
+        if (!photoUrl) continue;
         if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
           photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
           updateProgress();
         }
+        if (!photoUrl) continue;
         uploadedPhotos.push(photoUrl);
-        pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
+        pageCrops[uploadedPhotos.length - 1] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
       }
       finalPages.push({ pageIndex: i, images: uploadedPhotos, layout: pageLayouts[i] || 1, variant: pageLayoutVariants[i] || null, texts: textBoxSlots[i] || {}, crops: pageCrops });
     }
@@ -386,7 +396,13 @@ export async function updateOrderDesign(
 
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {
-    cleanCustomization.coverContent.coverImage = 'uploaded';
+    cleanCustomization = {
+      ...cleanCustomization,
+      coverContent: {
+        ...cleanCustomization.coverContent,
+        coverImage: 'uploaded',
+      },
+    };
   }
 
   const updatePayload = sanitizeForFirestore(JSON.parse(JSON.stringify({
