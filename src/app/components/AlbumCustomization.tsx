@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Upload, X, Settings, Image as ImageIcon, AlertCircle, Layout, Check } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -45,6 +45,28 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   const [paperType] = useState<'Mate' | 'Brillante'>('Mate');
 
   const [showCoverEditor, setShowCoverEditor] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewFadingOut, setPreviewFadingOut] = useState(false);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startPreview = (img: string) => {
+    previewTimer.current = setTimeout(() => setPreviewImage(img), 800);
+  };
+
+  const cancelPreview = () => {
+    if (previewTimer.current) {
+      clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
+    if (previewImage) {
+      setPreviewFadingOut(true);
+      fadeOutTimer.current = setTimeout(() => {
+        setPreviewImage(null);
+        setPreviewFadingOut(false);
+      }, 500);
+    }
+  };
 
   const [coverContent, setCoverContent] = useState<CustomizationOptions['coverContent']>(
     initialData?.coverContent || {
@@ -149,47 +171,46 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('album.size')}</h3>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setSize('Cuadrado 20x20 cm')}
-                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                  size === 'Cuadrado 20x20 cm'
-                    ? 'bg-black text-white border-black shadow-md'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
-                }`}
-              >
-                20x20 cm
-              </button>
-              <button
-                onClick={() => setSize('Cuadrado 30x30 cm')}
-                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                  size === 'Cuadrado 30x30 cm'
-                    ? 'bg-black text-white border-black shadow-md'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
-                }`}
-              >
-                30x30 cm
-              </button>
-              <button
-                onClick={() => setSize('Horizontal 21x28 cm')}
-                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                  size === 'Horizontal 21x28 cm'
-                    ? 'bg-black text-white border-black shadow-md'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
-                }`}
-              >
-                21x28 cm (H)
-              </button>
-              <button
-                onClick={() => setSize('Vertical 28x21 cm')}
-                className={`py-2 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                  size === 'Vertical 28x21 cm'
-                    ? 'bg-black text-white border-black shadow-md'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
-                }`}
-              >
-                28x21 cm (V)
-              </button>
+              {[
+                { value: 'Cuadrado 20x20 cm' as const, label: '20x20 cm', img: '/size-20x20.jpeg' },
+                { value: 'Cuadrado 30x30 cm' as const, label: '30x30 cm', img: '/size-30x30.jpeg' },
+                { value: 'Horizontal 21x28 cm' as const, label: '21x28 cm (H)', img: '/size-horizontal.jpeg' },
+                { value: 'Vertical 28x21 cm' as const, label: '28x21 cm (V)', img: '/size-vertical.jpeg' },
+              ].map(({ value, label, img }) => (
+                <button
+                  key={value}
+                  onClick={() => setSize(value)}
+                  onMouseDown={() => startPreview(img)}
+                  onMouseUp={cancelPreview}
+                  onMouseLeave={cancelPreview}
+                  onTouchStart={() => startPreview(img)}
+                  onTouchEnd={cancelPreview}
+                  className={`h-20 rounded-xl border-2 text-xs font-bold transition-all flex items-center overflow-hidden ${
+                    size === value
+                      ? 'bg-black text-white border-black shadow-md'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black'
+                  }`}
+                >
+                  <span className="flex-1 px-2">{label}</span>
+                  <img src={img} alt={label} className="h-full aspect-square object-cover" />
+                </button>
+              ))}
             </div>
+
+            {previewImage && (
+              <div
+                className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+                style={{ animation: `${previewFadingOut ? 'fadeOut' : 'fadeIn'} 500ms ease forwards` }}
+                onMouseUp={cancelPreview}
+                onTouchEnd={cancelPreview}
+              >
+                <style>{`
+                  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+                `}</style>
+                <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain" />
+              </div>
+            )}
           </div>
         </div>
       </div>
