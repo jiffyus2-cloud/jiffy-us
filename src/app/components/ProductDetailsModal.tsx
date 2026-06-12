@@ -1,7 +1,7 @@
 import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
@@ -111,6 +111,28 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSpecsOpen, setIsSpecsOpen] = useState(false);
+  const [sizePreviewImage, setSizePreviewImage] = useState<string | null>(null);
+  const [sizePreviewFadingOut, setSizePreviewFadingOut] = useState(false);
+  const sizePreviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sizePreviewFadeOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startSizePreview = (img: string) => {
+    sizePreviewTimer.current = setTimeout(() => setSizePreviewImage(img), 200);
+  };
+
+  const cancelSizePreview = () => {
+    if (sizePreviewTimer.current) {
+      clearTimeout(sizePreviewTimer.current);
+      sizePreviewTimer.current = null;
+    }
+    if (sizePreviewImage) {
+      setSizePreviewFadingOut(true);
+      sizePreviewFadeOutTimer.current = setTimeout(() => {
+        setSizePreviewImage(null);
+        setSizePreviewFadingOut(false);
+      }, 500);
+    }
+  };
 
   const randomClientImages = useMemo(() => {
     if (!isOpen || allClientImages.length === 0) return [];
@@ -202,7 +224,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Pasta Dura en Tela o Papel' },
-            { label: 'Tamaños', value: '20x20: Cuadrado - 30x30: Cuadrado - 21x28: Vertical - 28x21: Horizontal' },
+            { label: 'Tamaños', value: 'sizes-album' },
             { label: 'Cantidad de páginas', value: 'Mínimo 40, máximo 250 (incrementos de 2)' },
             { label: 'Tipo de papel', value: 'Opalina Mate' }
           ],
@@ -334,7 +356,33 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
                   {productData.specifications.map((spec, index) => (
                     <div key={index} className="flex flex-col">
                       <span className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 md:mb-2">{spec.label}</span>
-                      <span className="text-sm md:text-base font-bold text-gray-900">{spec.value}</span>
+                      {spec.value === 'sizes-album' ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { img: '/size-20x20.jpeg', label: '20x20 cm' },
+                            { img: '/size-30x30.jpeg', label: '30x30 cm' },
+                            { img: '/size-horizontal.jpeg', label: '21x28 cm (H)' },
+                            { img: '/size-vertical.jpeg', label: '28x21 cm (V)' },
+                          ].map(({ img, label }) => (
+                            <div key={label} className="flex items-center gap-2">
+                              <img
+                                src={img}
+                                alt={label}
+                                className="w-10 h-10 object-cover rounded-lg flex-shrink-0 cursor-pointer select-none"
+                                onMouseDown={() => startSizePreview(img)}
+                                onMouseUp={cancelSizePreview}
+                                onMouseLeave={cancelSizePreview}
+                                onTouchStart={() => startSizePreview(img)}
+                                onTouchEnd={cancelSizePreview}
+                                draggable={false}
+                              />
+                              <span className="text-sm font-bold text-gray-900">{label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm md:text-base font-bold text-gray-900">{spec.value}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -378,6 +426,22 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           </button>
         </div>
       </div>
+
+      {/* Preview tamaños de álbum */}
+      {sizePreviewImage && (
+        <div
+          className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center"
+          style={{ animation: `${sizePreviewFadingOut ? 'fadeOut' : 'fadeIn'} 500ms ease forwards` }}
+          onMouseUp={cancelSizePreview}
+          onTouchEnd={cancelSizePreview}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+          `}</style>
+          <img src={sizePreviewImage} alt="Preview" className="max-w-full max-h-full object-contain" />
+        </div>
+      )}
 
       {/* Lightbox para Imágenes */}
       {selectedImage && (
