@@ -122,25 +122,25 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * 2;
-      canvas.height = rect.height * 2;
+    // Medir dimensiones ANTES de cargar la imagen (síncrono, layout ya calculado)
+    const rect = canvas.getBoundingClientRect();
+    const destWidth = Math.round(rect.width * 2);
+    const destHeight = Math.round(rect.height * 2);
+    if (destWidth === 0 || destHeight === 0) return;
+    canvas.width = destWidth;
+    canvas.height = destHeight;
 
-      const imgWidth = img.naturalWidth;
-      const imgHeight = img.naturalHeight;
-      const destWidth = canvas.width;
-      const destHeight = canvas.height;
+    const drawOnCanvas = (imgEl: HTMLImageElement) => {
+      const imgWidth = imgEl.naturalWidth;
+      const imgHeight = imgEl.naturalHeight;
+      if (imgWidth === 0 || imgHeight === 0) return;
 
-      const { x = 50, y = 50, zoom = 1 } = crop || { x: 50, y: 50, zoom: 1 };
+      const { x = 50, y = 50, zoom = 1, rotation = 0 } = crop || {};
       const imgAspect = imgWidth / imgHeight;
       const destAspect = destWidth / destHeight;
 
       let baseSWidth = imgWidth;
       let baseSHeight = imgHeight;
-
       if (imgAspect > destAspect) {
         baseSWidth = imgHeight * destAspect;
       } else {
@@ -153,11 +153,36 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       const centerX = (x / 100) * imgWidth;
       const centerY = (y / 100) * imgHeight;
 
-      const sX = centerX - (finalSWidth / 2);
-      const sY = centerY - (finalSHeight / 2);
+      // Clampar coordenadas fuente para evitar valores fuera de rango
+      const sX = Math.max(0, Math.min(centerX - finalSWidth / 2, imgWidth - finalSWidth));
+      const sY = Math.max(0, Math.min(centerY - finalSHeight / 2, imgHeight - finalSHeight));
 
       ctx.clearRect(0, 0, destWidth, destHeight);
-      ctx.drawImage(img, sX, sY, finalSWidth, finalSHeight, 0, 0, destWidth, destHeight);
+
+      if (rotation !== 0) {
+        ctx.save();
+        ctx.translate(destWidth / 2, destHeight / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-destWidth / 2, -destHeight / 2);
+      }
+
+      try {
+        ctx.drawImage(imgEl, sX, sY, finalSWidth, finalSHeight, 0, 0, destWidth, destHeight);
+      } catch {
+        ctx.drawImage(imgEl, 0, 0, destWidth, destHeight);
+      }
+
+      if (rotation !== 0) ctx.restore();
+    };
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => drawOnCanvas(img);
+    img.onerror = () => {
+      // Fallback sin crossOrigin si falla CORS
+      const fallback = new Image();
+      fallback.onload = () => drawOnCanvas(fallback);
+      fallback.src = src;
     };
     img.src = src;
   }, [src, crop]);
@@ -568,7 +593,7 @@ const OwnerDashboard: React.FC = () => {
                 const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
                 res(dataUrl);
               } catch (e) { rej(e); }
-            }, 1500);
+            }, 3000);
           });
         };
 
@@ -709,7 +734,7 @@ const OwnerDashboard: React.FC = () => {
               } catch (e) {
                 rej(e);
               }
-            }, 1500); 
+            }, 3000);
           });
         };
 
@@ -765,7 +790,7 @@ const OwnerDashboard: React.FC = () => {
               } catch (e) {
                 rej(e);
               }
-            }, 1500); 
+            }, 3000);
           });
         };
 
