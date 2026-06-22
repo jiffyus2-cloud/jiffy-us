@@ -8,22 +8,22 @@ interface ImageCropperProps {
 }
 
 export default function ImageCropper({ src, position, alt = "Photo" }: ImageCropperProps) {
-  // Extraemos la rotación (0 por defecto si no existe)
   const { x = 50, y = 50, zoom = 1, rotation = 0 } = position || {};
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-  
-  // Guardamos los estilos exactos calculados matemáticamente
   const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
+  const [hasError, setHasError] = useState(false);
 
   useLayoutEffect(() => {
+    setHasError(false);
+    setStyle({ opacity: 0 });
+
     const container = containerRef.current;
     const img = imgRef.current;
     if (!container || !img) return;
 
     const updateStyle = () => {
-      // 1. Tomar medidas del hueco y de la foto real
       const Cw = container.offsetWidth;
       const Ch = container.offsetHeight;
       const Iw = img.naturalWidth;
@@ -34,25 +34,21 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
       const C_AR = Cw / Ch;
       const I_AR = Iw / Ih;
 
-      // 2. Calcular tamaño Base de cobertura (Equivalente a object-fit: cover)
       let Rw = Cw;
       let Rh = Ch;
 
       if (I_AR > C_AR) {
-        Rw = Ch * I_AR; // La imagen es más ancha que el hueco
+        Rw = Ch * I_AR;
       } else {
-        Rh = Cw / I_AR; // La imagen es más alta que el hueco
+        Rh = Cw / I_AR;
       }
 
-      // 3. Ubicar el punto central (x, y) de la imagen según los porcentajes guardados
       const imgCenterX = (x / 100) * Rw;
       const imgCenterY = (y / 100) * Rh;
 
-      // 4. Calcular el desplazamiento para que ese punto quede justo en el centro del hueco
       const translateX = (Cw / 2) - imgCenterX;
       const translateY = (Ch / 2) - imgCenterY;
 
-      // 5. Aplicar estilos definitivos (Rotación y Zoom se hacen alrededor del centro exacto)
       setStyle({
         position: 'absolute',
         width: `${Rw}px`,
@@ -61,16 +57,15 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         top: `${translateY}px`,
         transform: `rotate(${rotation}deg) scale(${zoom})`,
         transformOrigin: `${imgCenterX}px ${imgCenterY}px`,
-        maxWidth: 'none', 
+        maxWidth: 'none',
         maxHeight: 'none',
-        opacity: 1, 
+        opacity: 1,
       });
     };
 
-    if (img.complete) updateStyle();
+    if (img.complete && img.naturalWidth > 0) updateStyle();
     img.addEventListener('load', updateStyle);
 
-    // Si la pantalla cambia de tamaño (ej. gira el móvil), recalculamos
     const observer = new ResizeObserver(updateStyle);
     observer.observe(container);
 
@@ -80,6 +75,15 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
     };
   }, [x, y, zoom, rotation, src]);
 
+  // Si la imagen falló, mostrarla con object-fit cover como fallback (visible, no gris)
+  if (hasError) {
+    return (
+      <div className="w-full h-full overflow-hidden bg-gray-100 relative">
+        <img src={src} alt={alt} className="w-full h-full object-cover pointer-events-none" />
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-100 relative">
       <img
@@ -88,6 +92,7 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         alt={alt}
         className="absolute pointer-events-none"
         style={style}
+        onError={() => setHasError(true)}
       />
     </div>
   );
