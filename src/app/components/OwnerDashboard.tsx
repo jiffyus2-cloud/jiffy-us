@@ -111,6 +111,30 @@ const getDimensions = (order: Order) => {
 }
 
 // ============================================================================
+// PRE-CARGA DE IMÁGENES COMO DATA URLS
+// ============================================================================
+async function preloadImages(urls: string[]): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    urls.filter(Boolean).map(async (url) => {
+      try {
+        const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        return [url, dataUrl] as [string, string];
+      } catch {
+        return [url, url] as [string, string];
+      }
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+// ============================================================================
 // RENDERIZADOR CANVAS NATIVO
 // ============================================================================
 const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
@@ -122,18 +146,25 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Medir dimensiones ANTES de cargar la imagen (síncrono, layout ya calculado)
+    canvas.removeAttribute('data-ready');
+
     const rect = canvas.getBoundingClientRect();
     const destWidth = Math.round(rect.width * 2);
     const destHeight = Math.round(rect.height * 2);
-    if (destWidth === 0 || destHeight === 0) return;
+    if (destWidth === 0 || destHeight === 0) {
+      canvas.setAttribute('data-ready', 'error');
+      return;
+    }
     canvas.width = destWidth;
     canvas.height = destHeight;
 
     const drawOnCanvas = (imgEl: HTMLImageElement) => {
       const imgWidth = imgEl.naturalWidth;
       const imgHeight = imgEl.naturalHeight;
-      if (imgWidth === 0 || imgHeight === 0) return;
+      if (imgWidth === 0 || imgHeight === 0) {
+        canvas.setAttribute('data-ready', 'error');
+        return;
+      }
 
       const { x = 50, y = 50, zoom = 1, rotation = 0 } = crop || {};
       const imgAspect = imgWidth / imgHeight;
@@ -153,7 +184,6 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       const centerX = (x / 100) * imgWidth;
       const centerY = (y / 100) * imgHeight;
 
-      // Clampar coordenadas fuente para evitar valores fuera de rango
       const sX = Math.max(0, Math.min(centerX - finalSWidth / 2, imgWidth - finalSWidth));
       const sY = Math.max(0, Math.min(centerY - finalSHeight / 2, imgHeight - finalSHeight));
 
@@ -173,21 +203,22 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       }
 
       if (rotation !== 0) ctx.restore();
+      canvas.setAttribute('data-ready', 'true');
     };
 
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    img.crossOrigin = 'anonymous';
     img.onload = () => drawOnCanvas(img);
     img.onerror = () => {
-      // Fallback sin crossOrigin si falla CORS
       const fallback = new Image();
       fallback.onload = () => drawOnCanvas(fallback);
+      fallback.onerror = () => canvas.setAttribute('data-ready', 'error');
       fallback.src = src;
     };
     img.src = src;
   }, [src, crop]);
 
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
+  return <canvas data-canvas-cropper ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
 };
 
 // ============================================================================
@@ -580,20 +611,24 @@ const OwnerDashboard: React.FC = () => {
 
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
+        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen de portada en caché del navegador antes de renderizar
+          await preloadImages(imageUrls);
+
           return new Promise<string>((res, rej) => {
             root.render(
               <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
                 {element}
               </div>
             );
+            // Con la imagen ya en caché, 500ms es suficiente para el render
             setTimeout(async () => {
               try {
                 const node = container.firstChild as HTMLElement;
                 const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
                 res(dataUrl);
               } catch (e) { rej(e); }
-            }, 3000);
+            }, 500);
           });
         };
 
@@ -605,6 +640,7 @@ const OwnerDashboard: React.FC = () => {
         const textColor = order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000';
         const spineText = order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || '';
 
+        const coverUrls = coverImageForPdf && !coverImageForPdf.startsWith('data:') ? [coverImageForPdf] : [];
         const dataUrl = await renderAndCapture(
           <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
             {/* Contenido centrado en el lienzo */}
@@ -668,7 +704,8 @@ const OwnerDashboard: React.FC = () => {
                 />
               </div>
             </div>
-          </div>
+          </div>,
+          coverUrls
         );
 
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
@@ -723,26 +760,46 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
+        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar todas las imágenes de la página como Data URLs antes de renderizar
+          await preloadImages(imageUrls);
+
           return new Promise<string>((res, rej) => {
             root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) {
-                rej(e);
+
+            // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
+            const MAX_WAIT_MS = 15000;
+            const POLL_MS = 100;
+            const startTime = Date.now();
+
+            const poll = setInterval(async () => {
+              const allCanvases = container.querySelectorAll('[data-canvas-cropper]');
+              const readyCanvases = container.querySelectorAll('[data-canvas-cropper][data-ready]');
+              const elapsed = Date.now() - startTime;
+              const allDone = allCanvases.length > 0 && allCanvases.length === readyCanvases.length;
+              const timedOut = elapsed > MAX_WAIT_MS;
+
+              if (allDone || timedOut) {
+                clearInterval(poll);
+                try {
+                  const node = container.firstChild as HTMLElement;
+                  const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
+                  res(dataUrl);
+                } catch (e) {
+                  rej(e);
+                }
               }
-            }, 3000);
+            }, POLL_MS);
           });
         };
 
         if (order.pages && order.pages.length > 0) {
           for (let i = 0; i < order.pages.length; i++) {
             if (i > 0) pdf.addPage();
+            const pageImages = ((order.pages[i] as any)?.images || []).filter(Boolean) as string[];
             const pageDataUrl = await renderAndCapture(
-              <AlbumPagePrintView pageObj={order.pages[i]} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} />
+              <AlbumPagePrintView pageObj={order.pages[i]} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} />,
+              pageImages
             );
             pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
             itemsProcessed++;
@@ -779,9 +836,13 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
+        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen del mes en caché del navegador antes de renderizar
+          await preloadImages(imageUrls);
+
           return new Promise<string>((res, rej) => {
             root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+            // Con la imagen ya en caché, 500ms es suficiente para el render
             setTimeout(async () => {
               try {
                 const node = container.firstChild as HTMLElement;
@@ -790,13 +851,17 @@ const OwnerDashboard: React.FC = () => {
               } catch (e) {
                 rej(e);
               }
-            }, 3000);
+            }, 500);
           });
         };
 
         for (let i = 0; i < 12; i++) {
-          if (i > 0) pdf.addPage(); 
-          const pageDataUrl = await renderAndCapture(<CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />);
+          if (i > 0) pdf.addPage();
+          const monthImageUrl = (order as any).photos?.[i];
+          const pageDataUrl = await renderAndCapture(
+            <CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />,
+            monthImageUrl ? [monthImageUrl] : []
+          );
           pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
           itemsProcessed++;
           onProgress(Math.round((itemsProcessed / totalItems) * 100));
