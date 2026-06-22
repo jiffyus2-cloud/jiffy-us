@@ -1,23 +1,30 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ImageCropperProps {
   src: string;
   /** Posición central y zoom {x, y, zoom, rotation} provisto por Jiffy */
   position: { x: number; y: number; zoom: number; rotation?: number };
   alt?: string;
+  onError?: (src: string) => void;
+  onRetry?: (src: string) => void;
 }
 
-export default function ImageCropper({ src, position, alt = "Photo" }: ImageCropperProps) {
+export default function ImageCropper({ src, position, alt = "Photo", onError, onRetry }: ImageCropperProps) {
   // Extraemos la rotación (0 por defecto si no existe)
   const { x = 50, y = 50, zoom = 1, rotation = 0 } = position || {};
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-  
+
   // Guardamos los estilos exactos calculados matemáticamente
   const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
+  const [hasError, setHasError] = useState(false);
 
   useLayoutEffect(() => {
+    setHasError(false);
+    setStyle({ opacity: 0 });
+
     const container = containerRef.current;
     const img = imgRef.current;
     if (!container || !img) return;
@@ -61,13 +68,13 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         top: `${translateY}px`,
         transform: `rotate(${rotation}deg) scale(${zoom})`,
         transformOrigin: `${imgCenterX}px ${imgCenterY}px`,
-        maxWidth: 'none', 
+        maxWidth: 'none',
         maxHeight: 'none',
-        opacity: 1, 
+        opacity: 1,
       });
     };
 
-    if (img.complete) updateStyle();
+    if (img.complete && img.naturalWidth > 0) updateStyle();
     img.addEventListener('load', updateStyle);
 
     // Si la pantalla cambia de tamaño (ej. gira el móvil), recalculamos
@@ -88,7 +95,25 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         alt={alt}
         className="absolute pointer-events-none"
         style={style}
+        onError={() => {
+          setHasError(true);
+          onError?.(src);
+        }}
       />
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200 gap-1 z-10">
+          <AlertTriangle className="text-orange-400" size={20} />
+          <span className="text-[10px] text-gray-500 text-center px-1 leading-tight">No se cargó</span>
+          {onRetry && (
+            <button
+              onClick={() => onRetry(src)}
+              className="mt-1 text-[10px] bg-white border border-gray-300 rounded px-2 py-0.5 text-gray-600 active:bg-gray-50"
+            >
+              ↺ Reemplazar
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
