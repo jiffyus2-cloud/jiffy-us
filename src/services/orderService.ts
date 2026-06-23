@@ -120,15 +120,18 @@ export async function createDraftOrder(
     for (let i = 0; i < photos.length; i++) {
       // Aseguramos que sea un array para evitar el error de .forEach is not a function
       const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
+      const variantSlotCount = (pageLayoutVariants[i] as number) || pagePhotos.length;
+      const totalSlots = Math.max(pagePhotos.length, variantSlotCount);
       const uploadedPhotos: (string | null)[] = [];
       const pageCrops: any = {};
 
-      for (let j = 0; j < pagePhotos.length; j++) {
-        let photoUrl: string | null = pagePhotos[j] || null;
+      for (let j = 0; j < totalSlots; j++) {
+        let photoUrl: string | null = (j < pagePhotos.length ? pagePhotos[j] : null) || null;
         if (photoUrl) {
           if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
             try {
-              photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
+              const uid = `${i}_${j}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+              photoUrl = await uploadImage(`${folderPath}/photos/${uid}`, photoUrl);
               updateProgress();
             } catch {
               photoUrl = null;
@@ -356,14 +359,17 @@ export async function updateOrderDesign(
     const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
     for (let i = 0; i < photos.length; i++) {
       const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
+      const variantSlotCount = (pageLayoutVariants[i] as number) || pagePhotos.length;
+      const totalSlots = Math.max(pagePhotos.length, variantSlotCount);
       const uploadedPhotos: (string | null)[] = [];
       const pageCrops: any = {};
-      for (let j = 0; j < pagePhotos.length; j++) {
-        let photoUrl: string | null = pagePhotos[j] || null;
+      for (let j = 0; j < totalSlots; j++) {
+        let photoUrl: string | null = (j < pagePhotos.length ? pagePhotos[j] : null) || null;
         if (photoUrl) {
           if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
             try {
-              photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
+              const uid = `${i}_${j}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+              photoUrl = await uploadImage(`${folderPath}/photos/${uid}`, photoUrl);
               updateProgress();
             } catch {
               photoUrl = null;
