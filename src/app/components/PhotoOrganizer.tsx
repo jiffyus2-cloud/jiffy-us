@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { convertFileIfHeic } from '../utils/imageUtils';
 import {
   fromPropsToAlbumState,
   fromAlbumStateToProps,
@@ -434,38 +435,6 @@ export default function PhotoOrganizer({
     });
   };
 
-  const convertFileIfHeic = async (file: File): Promise<File> => {
-    const isHeic = /\.(heic|heif)$/i.test(file.name) ||
-                   file.type.includes('heic') || file.type.includes('heif');
-    if (!isHeic) return file;
-
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    await new Promise<void>((resolve) => {
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-      img.src = url;
-    });
-    URL.revokeObjectURL(url);
-
-    const canvas = document.createElement('canvas');
-    const maxDim = 4096;
-    let w = img.naturalWidth || 1;
-    let h = img.naturalHeight || 1;
-    if (w > maxDim || h > maxDim) {
-      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-      else { w = Math.round(w * maxDim / h); h = maxDim; }
-    }
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-    return new Promise<File>((resolve) => {
-      canvas.toBlob((blob) => {
-        const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-        resolve(blob ? new File([blob], name, { type: 'image/jpeg' }) : file);
-      }, 'image/jpeg', 0.88);
-    });
-  };
 
   const checkDimensionsInBackground = async (files: File[]) => {
     const BATCH_SIZE = 5;

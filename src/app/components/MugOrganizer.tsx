@@ -9,6 +9,7 @@ import { useLanguage } from '../context/LanguageContext';
 import type { MugCustomizationOptions } from './MugCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
+import { convertFileIfHeic } from '../utils/imageUtils';
 
 export interface MugItem {
   id: string;
@@ -53,7 +54,8 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
 
     const filesArray = Array.from(files);
     
-    const newMugs: MugItem[] = filesArray.map((file, idx) => ({
+    const convertedFiles = await Promise.all(filesArray.map(convertFileIfHeic));
+    const newMugs: MugItem[] = convertedFiles.map((file, idx) => ({
       id: (Date.now() + idx).toString(),
       photos: [URL.createObjectURL(file)],
       text: '',
@@ -195,7 +197,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                            <button disabled={editingItemId !== item.id || !item.photos[0]} onClick={() => setCropModalData({ itemId: item.id })} className={`flex-[1] py-4 border-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${editingItemId === item.id && item.photos[0] ? 'border-gray-200 bg-white hover:border-black text-black shadow-sm' : 'border-gray-200 text-gray-400 opacity-50 cursor-not-allowed'}`}><CropIcon className="w-4 h-4" /><span className="font-bold uppercase text-[9px]">Ajustar</span></button>
                            <button
                              disabled={editingItemId !== item.id}
-                             onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) { safeOnItemsChange(safeItems.map(i => i.id === item.id ? { ...i, photos: [URL.createObjectURL(file)] } : i)); } }; input.click(); }}
+                             onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e: any) => { let file = e.target.files?.[0]; if (file) { file = await convertFileIfHeic(file); safeOnItemsChange(safeItems.map(i => i.id === item.id ? { ...i, photos: [URL.createObjectURL(file)] } : i)); } }; input.click(); }}
                              className={`flex-[3] py-4 px-6 border-2 border-dashed rounded-xl flex items-center justify-center gap-3 transition-all ${editingItemId === item.id ? 'border-black hover:bg-white text-black' : 'border-gray-200 text-gray-400 opacity-50'}`}
                            >
                               <ImageIcon className="w-5 h-5" /><span className="font-bold uppercase text-xs">{item.photos[0] ? 'Cambiar Foto' : 'Añadir Foto'}</span>
