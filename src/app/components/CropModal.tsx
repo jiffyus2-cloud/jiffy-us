@@ -18,7 +18,9 @@ export default function CropModal({
 }: CropModalProps) {
   
   const imgRef = useRef<HTMLImageElement>(null);
-  
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartCropRef = useRef<Crop | null>(null);
+
   // Estado para el recorte (x, y, zoom calculados en porcentajes)
   const [crop, setCrop] = useState<Crop>();
   // Estado para la rotación en grados
@@ -73,6 +75,39 @@ export default function CropModal({
     }
   }
 
+  const getPinchDist = (touches: React.TouchList) =>
+    Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+  const handlePinchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 2 || !crop) return;
+    pinchStartDistRef.current = getPinchDist(e.touches);
+    pinchStartCropRef.current = { ...crop };
+  };
+
+  const handlePinchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 2 || !pinchStartDistRef.current || !pinchStartCropRef.current) return;
+    e.preventDefault();
+    const newDist = getPinchDist(e.touches);
+    const ratio = pinchStartDistRef.current / newDist; // >1 = zoom in (recuadro más pequeño)
+    const base = pinchStartCropRef.current;
+    const centerX = base.x + base.width / 2;
+    const centerY = base.y + base.height / 2;
+    const newW = Math.min(100, Math.max(5, base.width * ratio));
+    const newH = newW * (base.height / base.width);
+    setCrop({
+      unit: '%',
+      x: Math.max(0, Math.min(100 - newW, centerX - newW / 2)),
+      y: Math.max(0, Math.min(100 - newH, centerY - newH / 2)),
+      width: newW,
+      height: newH,
+    });
+  };
+
+  const handlePinchEnd = () => {
+    pinchStartDistRef.current = null;
+    pinchStartCropRef.current = null;
+  };
+
   const handleSave = () => {
     if (!crop || !imgRef.current) return;
     
@@ -125,7 +160,12 @@ export default function CropModal({
         {/* ÁREA DE RECORTE */}
         <div className="overflow-y-auto p-4 sm:p-8 bg-gray-50 flex-1 flex items-center justify-center min-h-[350px]">
           {imageSrc ? (
-            <div className="shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100">
+            <div
+              className="shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100"
+              onTouchStart={handlePinchStart}
+              onTouchMove={handlePinchMove}
+              onTouchEnd={handlePinchEnd}
+            >
                <ReactCrop
                 crop={crop}
                 onChange={(_, percentCrop) => setCrop(percentCrop)} 

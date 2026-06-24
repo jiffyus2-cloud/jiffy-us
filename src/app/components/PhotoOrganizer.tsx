@@ -957,7 +957,7 @@ export default function PhotoOrganizer({
       if (navigator.vibrate) navigator.vibrate(60);
       setReorderSelectedPage(pageIndex);
       setReorderTargetPage(null);
-    }, 1000);
+    }, 200);
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', cancel);
@@ -2136,16 +2136,18 @@ export default function PhotoOrganizer({
                     {!pagesLocked && (
                       <button
                         onClick={() => { exitReorderMode(); handleDeletePage(pageIndex); }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border-2 bg-red-600 text-white border-red-600 text-xs font-bold uppercase hover:bg-red-700 transition-colors"
+                        className="p-1.5 rounded-full border-2 bg-red-600 text-white border-red-600 hover:bg-red-700 transition-colors"
+                        title="Eliminar página"
                       >
-                        <Trash2 className="w-3 h-3" /> Eliminar
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                     <button
                       onClick={exitReorderMode}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 bg-black text-white border-black text-xs font-bold uppercase"
+                      className="p-1.5 rounded-full border-2 bg-black text-white border-black"
+                      title="Cancelar"
                     >
-                      <X className="w-3 h-3" /> Cancelar
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 ) : null}

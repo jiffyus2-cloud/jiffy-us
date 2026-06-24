@@ -51,7 +51,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   const fadeOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startPreview = (img: string) => {
-    previewTimer.current = setTimeout(() => setPreviewImage(img), 800);
+    previewTimer.current = setTimeout(() => setPreviewImage(img), 200);
   };
 
   const cancelPreview = () => {
