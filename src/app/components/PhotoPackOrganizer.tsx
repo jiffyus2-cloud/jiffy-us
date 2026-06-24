@@ -4,7 +4,8 @@ import { Upload, Image as ImageIcon, Trash2, Edit3, Loader2, Check } from 'lucid
 import { PhotoPack } from '../types/products';
 import { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
 import ImageCropper from './ImageCropper'; 
-import CropModal from './CropModal'; 
+import CropModal from './CropModal';
+import { convertFileIfHeic } from '../utils/imageUtils';
 
 interface PhotoPackOrganizerProps {
   photoPack: PhotoPack;
@@ -39,7 +40,8 @@ export default function PhotoPackOrganizer({
     setIsProcessingFiles(true);
     await new Promise(resolve => setTimeout(resolve, 50));
     const filesArray = Array.from(files);
-    const loadedPhotos = filesArray.map(file => URL.createObjectURL(file));
+    const convertedFiles = await Promise.all(filesArray.map(convertFileIfHeic));
+    const loadedPhotos = convertedFiles.map(file => URL.createObjectURL(file));
     onPhotosChange([...photos, ...loadedPhotos]);
     setIsProcessingFiles(false);
     if (fileInputRef.current) fileInputRef.current.value = '';

@@ -8,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
+import { convertFileIfHeic } from '../utils/imageUtils';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 interface CalendarOrganizerProps {
@@ -129,7 +130,8 @@ export default function CalendarOrganizer({
     }
 
     setIsValidating(true);
-    const results = await Promise.all(filesArray.map(checkImageDimensions));
+    const convertedFiles = await Promise.all(filesArray.map(convertFileIfHeic));
+    const results = await Promise.all(convertedFiles.map(checkImageDimensions));
 
     // Guardar info de baja resolución para mostrar el ícono después
     results.filter(r => r.isLowRes).forEach(r => {
@@ -144,9 +146,10 @@ export default function CalendarOrganizer({
 
   const handleSpecificUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (targetSlot === null) return;
-    const file = event.target.files?.[0];
+    let file = event.target.files?.[0];
     if (!file) return;
 
+    file = await convertFileIfHeic(file);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     if (result.isLowRes) {
