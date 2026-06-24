@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import UsersSection from './UsersSection';
 import { updateOrderStatus } from '../../services/orderService';
@@ -412,6 +412,7 @@ const OwnerDashboard: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
+  const [downloadType, setDownloadType] = useState<'pdfs' | 'images' | null>(null);
   const [isTabHidden, setIsTabHidden] = useState(false);
 
   // --- Detectar cambio de pestaña durante la descarga ---
@@ -1026,6 +1027,170 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
+  const handleDownloadPDFs = async (order: Order) => {
+    if (downloadProgress.orderId) return;
+    setDownloadProgress({ orderId: order.id, progress: 0 });
+    setDownloadType('pdfs');
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`pdfs_${order.id}`);
+      if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
+
+      const { isCalendar, isAlbum } = getDimensions(order);
+
+      if (isCalendar) {
+        try {
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
+          folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+        } catch (pdfError) {
+          console.error("Error al generar PDF de calendario:", pdfError);
+          alert("No se pudo generar el PDF del calendario.");
+          setDownloadProgress({ orderId: null, progress: 0 });
+          setDownloadType(null);
+          return;
+        }
+      } else if (isAlbum) {
+        const pdfErrors: string[] = [];
+        try {
+          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
+          folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+        } catch (coverError) {
+          console.error("Error al generar PDF de portada:", coverError);
+          pdfErrors.push("portada");
+        }
+        try {
+          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
+          folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+        } catch (innerError) {
+          console.error("Error al generar PDF de páginas interiores:", innerError);
+          pdfErrors.push("páginas interiores");
+        }
+        if (pdfErrors.length > 0) {
+          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}.`);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `pdfs_pedido_${order.id}.zip`);
+      setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
+    } catch (error: any) {
+      console.error("Error al descargar PDFs:", error);
+      alert("Hubo un problema al generar los PDFs: " + (error.message || 'Error desconocido'));
+      setDownloadProgress({ orderId: null, progress: 0 });
+      setDownloadType(null);
+    }
+  };
+
+  const handleDownloadImagesExcel = async (order: Order) => {
+    if (downloadProgress.orderId) return;
+    setDownloadProgress({ orderId: order.id, progress: 0 });
+    setDownloadType('images');
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`imagenes_${order.id}`);
+      if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
+
+      const { isCalendar } = getDimensions(order);
+      const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
+
+      // Excel
+      const wb = XLSX.utils.book_new();
+      const resumenData = [{
+        'ID del Pedido': order.id, 'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
+        'Estado': order.status === 'paid' || order.status === 'mock_paid' ? 'Pagado' : order.status,
+        'Total Pagado ($)': order.total?.toFixed(2), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
+        'Email': order.shippingAddress?.email || 'N/A', 'Dirección de Envío': order.shippingAddress?.address || 'N/A',
+        'Ciudad': order.shippingAddress?.city || 'N/A', 'Código Postal': order.shippingAddress?.zipCode || 'N/A'
+      }];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenData), "Resumen General");
+      const configData = [{
+        'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
+        'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
+        'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
+        'Título de Portada': order.coverData?.title || 'N/A', 'Subtítulo': order.coverData?.subtitle || 'N/A',
+        'Año': order.coverData?.year || 'N/A', 'Layout Portada': order.coverData?.layout || 'N/A',
+        'Texto Lomo': !isTela ? (order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || 'N/A') : 'N/A (Tela)'
+      }];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(configData), "Configuración");
+      let detallesData: any[] = [];
+      if (order.pages && Array.isArray(order.pages)) {
+        detallesData = order.pages.map((page, i) => ({
+          'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
+          'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
+          'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
+        }));
+      } else if (order.items && Array.isArray(order.items)) {
+        detallesData = order.items.map((item, i) => ({
+          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
+          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
+        }));
+      }
+      if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
+      const imagenesData: any[] = [];
+      if (!isCalendar && order.coverData?.image) {
+        imagenesData.push({
+          'Ubicación': 'Portada', 'Nombre de Archivo en ZIP': 'portada.jpg',
+          'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00', 'Posición X (%)': order.coverData.crop?.x?.toFixed(2) || '50.00',
+          'Posición Y (%)': order.coverData.crop?.y?.toFixed(2) || '50.00', 'URL Original': typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') ? 'Imagen Blanca (Color Sólido)' : order.coverData.image
+        });
+      }
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          if (page.images && Array.isArray(page.images)) {
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              const crop = page.crops?.[imgIndex] || order.photoCrops?.[`${pageIndex}-${imgIndex}`] || { x: 50, y: 50, zoom: 1 };
+              imagenesData.push({
+                'Ubicación': `Página ${pageIndex + 1}`, 'Nombre de Archivo en ZIP': `pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
+                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00', 'Posición X (%)': crop.x?.toFixed(2) || '50.00', 'Posición Y (%)': crop.y?.toFixed(2) || '50.00', 'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
+              });
+            });
+          }
+        });
+      }
+      if (imagenesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(imagenesData), "Reporte de Imágenes");
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      folder.file('resumen_pedido.xlsx', excelBuffer);
+
+      // Imágenes
+      const imgFolder = folder.folder('imagenes');
+      if (!imgFolder) throw new Error("No se pudo crear la subcarpeta de imágenes.");
+      const fetchImageAsBlob = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Error al descargar la imagen: ${url}`);
+        return res.blob();
+      };
+      const imagePromises: Promise<void>[] = [];
+      if (!isCalendar && order.coverData?.image) {
+        let coverUrl = order.coverData.image;
+        if (typeof coverUrl === 'string' && coverUrl.includes('justwhite')) coverUrl = justWhiteImg;
+        imagePromises.push(fetchImageAsBlob(coverUrl).then(blob => { imgFolder.file('portada.jpg', blob); }).catch(e => console.error('Error descargando portada:', e)));
+      }
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          if (page.images && Array.isArray(page.images) && page.images.length > 0) {
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
+                imagePromises.push(fetchImageAsBlob(imgUrl).then(blob => { imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob); }).catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e)));
+              }
+            });
+          }
+        });
+      }
+      const total = imagePromises.length;
+      let done = 0;
+      await Promise.all(imagePromises.map(p => p.then(() => { done++; setDownloadProgress({ orderId: order.id, progress: Math.round((done / Math.max(total, 1)) * 100) }); })));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `imagenes_pedido_${order.id}.zip`);
+      setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
+    } catch (error: any) {
+      console.error("Error al descargar imágenes/Excel:", error);
+      alert("Hubo un problema al empaquetar: " + (error.message || 'Error desconocido'));
+      setDownloadProgress({ orderId: null, progress: 0 });
+      setDownloadType(null);
+    }
+  };
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1167,7 +1332,10 @@ const OwnerDashboard: React.FC = () => {
                                       <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
                                     </div>
                                   ) : (
-                                    <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                    <>
+                                      <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                      <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
+                                    </>
                                   )}
                                   {col.nextStatus && (
                                     <button
@@ -1233,7 +1401,10 @@ const OwnerDashboard: React.FC = () => {
                                         <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
                                       </div>
                                     ) : (
-                                      <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                      <>
+                                        <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
+                                      </>
                                     )}
                                     <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                   </div>
@@ -1489,7 +1660,7 @@ const OwnerDashboard: React.FC = () => {
             <Loader2 className={`w-5 h-5 animate-spin shrink-0 ${isTabHidden ? 'text-amber-500' : 'text-emerald-500'}`} />
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-black uppercase tracking-widest mb-1.5 ${isTabHidden ? 'text-amber-600' : 'text-gray-500'}`}>
-                {isTabHidden ? '⚠ Generación pausada' : 'Generando PDF…'}
+                {isTabHidden ? '⚠ Generación pausada' : downloadType === 'images' ? 'Descargando imágenes…' : 'Generando PDFs…'}
               </p>
               <div className="w-full bg-gray-100 rounded-full h-2">
                 <div
