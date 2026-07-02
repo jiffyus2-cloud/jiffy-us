@@ -173,6 +173,88 @@ export function swapPhotosOnPage(
   return next;
 }
 
+// ── insert blank pages at an arbitrary position ───────────────────────────────
+
+export function insertBlankPages(state: AlbumState, afterIndex: number, count: number): AlbumState {
+  const next = cloneState(state);
+  const blanks = Array.from({ length: count }, () => blankPage());
+  next.splice(afterIndex + 1, 0, ...blanks);
+  return next;
+}
+
+// ── move a single photo (with its crop/text/signature) to another page ───────
+
+export function movePhotoToPage(
+  state: AlbumState,
+  fromPage: number,
+  fromPhoto: number,
+  toPage: number,
+  config: AlbumConfig
+): { state: AlbumState; success: boolean } {
+  if (fromPage === toPage) return { state, success: false };
+  if (!state[fromPage] || !state[toPage]) return { state, success: false };
+
+  const photo = state[fromPage].photos[fromPhoto];
+  if (!photo || photo.trim() === '') return { state, success: false };
+
+  // Determine target slot before mutating anything, so a full target page
+  // is rejected without touching the source page at all.
+  const maxAllowed = config.allowedPhotosPerPage[config.allowedPhotosPerPage.length - 1];
+  const targetPhotos = state[toPage].photos;
+  let targetIdx = targetPhotos.findIndex(p => !p || p.trim() === '');
+  if (targetIdx === -1) {
+    if (targetPhotos.length >= maxAllowed) return { state, success: false };
+    targetIdx = targetPhotos.length;
+  }
+
+  const next = cloneState(state);
+  const source = next[fromPage];
+  const target = next[toPage];
+
+  const crop = source.crops[fromPhoto];
+  const text = source.texts[fromPhoto];
+  const sig = source.signatures[fromPhoto];
+
+  // Blank the source slot (mirrors handleRemovePhotoFromPage: positional
+  // slots are not shifted, only trailing empties are trimmed).
+  source.photos[fromPhoto] = '';
+  delete source.crops[fromPhoto];
+  delete source.texts[fromPhoto];
+  source.signatures[fromPhoto] = '';
+
+  while (
+    source.photos.length > 0 &&
+    (!source.photos[source.photos.length - 1] || source.photos[source.photos.length - 1].trim() === '')
+  ) {
+    const lastIdx = source.photos.length - 1;
+    source.photos.pop();
+    source.signatures.pop();
+    delete source.crops[lastIdx];
+    delete source.texts[lastIdx];
+  }
+
+  while (target.photos.length <= targetIdx) {
+    target.photos.push('');
+    target.signatures.push('');
+  }
+  target.photos[targetIdx] = photo;
+  target.signatures[targetIdx] = sig ?? '';
+  if (crop !== undefined) target.crops[targetIdx] = crop;
+  if (text !== undefined) target.texts[targetIdx] = text;
+
+  const neededVariant = getNextAllowed(target.photos.length, config.allowedPhotosPerPage);
+  const prevVariant = target.variant ?? neededVariant;
+  target.variant = Math.min(Math.max(prevVariant, neededVariant), maxAllowed);
+
+  // Defensive check: the destination page must actually contain the photo we
+  // just moved. If not, fail loudly instead of silently "losing" the photo.
+  if (target.photos[targetIdx] !== photo) {
+    throw new Error('movePhotoToPage: fallo al colocar la foto en la página destino');
+  }
+
+  return { state: next, success: true };
+}
+
 // ── swap two pages ────────────────────────────────────────────────────────────
 
 export function swapPages(state: AlbumState, a: number, b: number): AlbumState {
