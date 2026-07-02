@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import {
   fromPropsToAlbumState,
@@ -6,8 +6,6 @@ import {
   swapPhotosOnPage as albumSwapPhotosOnPage,
   swapPages as albumSwapPages,
   movePageToIndex as albumMovePageToIndex,
-  insertBlankPages as albumInsertBlankPages,
-  movePhotoToPage as albumMovePhotoToPage,
   rippleShift as albumRippleShift,
   pullShift as albumPullShift,
   deleteOverflow as albumDeleteOverflow,
@@ -353,9 +351,8 @@ export default function PhotoOrganizer({
     });
   };
 
-  const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
-  const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
-  const [sendPhotoPicker, setSendPhotoPicker] = useState<{ pageIndex: number; photoIndex: number } | null>(null);
+  const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
+  const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null } | null>(null);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
   const [reorderTargetPage, setReorderTargetPage] = useState<number | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -836,12 +833,25 @@ export default function PhotoOrganizer({
       alert('Límite máximo de 250 páginas alcanzado.');
       return;
     }
-    // Routed through the AlbumState abstraction: each PageState carries its own
-    // crops/texts keyed by local photoIndex, so splicing pages into the array
-    // keeps them correctly associated automatically — no manual reindexing of
-    // photoCrops/textBoxSlots keys required (unlike a raw photos.splice would).
-    applyAlbumState(albumInsertBlankPages(currentAlbumState(), index, 2));
-    setNumPages(photos.length + 2);
+    const newPhotos = [...photos];
+    newPhotos.splice(index + 1, 0, [], []);
+    onPhotosChange(newPhotos);
+    setNumPages(newPhotos.length);
+
+    // Shift pageLayouts and pageLayoutVariants for all pages after the insertion point
+    const insertAt = index + 1;
+    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
+    const newVariants: Record<number, number> = {};
+    for (const key of Object.keys(pageLayouts)) {
+      const k = Number(key);
+      newLayouts[k < insertAt ? k : k + 2] = pageLayouts[k];
+    }
+    for (const key of Object.keys(pageLayoutVariants)) {
+      const k = Number(key);
+      newVariants[k < insertAt ? k : k + 2] = pageLayoutVariants[k];
+    }
+    onPageLayoutsChange(newLayouts);
+    onPageLayoutVariantsChange(newVariants);
   };
 
   const handleDeletePage = (index: number) => {
@@ -1039,52 +1049,28 @@ export default function PhotoOrganizer({
     applyAlbumState(albumSwapPhotosOnPage(currentAlbumState(), pageIndex, fromIndex, toIndex));
   };
 
-  // Moves a single photo (with its crop) to a different page, chosen via the
-  // thumbnail picker opened after dropping on the "send to another page" zone.
-  const handleSendPhotoToPage = (pageIndex: number, photoIndex: number, targetPage: number) => {
-    const result = albumMovePhotoToPage(currentAlbumState(), pageIndex, photoIndex, targetPage, albumConfig);
-    if (!result.success) {
-      alert(`No hay espacio disponible en la página ${targetPage + 1}.`);
-      return;
-    }
-    applyAlbumState(result.state);
-    setSendPhotoPicker(null);
-  };
-
   const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    dragStateRef.current = { pageIndex, fromIndex: photoIndex, toIndex: null, overSendZone: false };
-    setDragVisual({ pageIndex, fromIndex: photoIndex, toIndex: null, overSendZone: false });
+    dragStateRef.current = { pageIndex, fromIndex: photoIndex, toIndex: null };
+    setDragVisual({ pageIndex, fromIndex: photoIndex, toIndex: null });
 
     const onMove = (ev: PointerEvent) => {
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const sendZone = el?.closest('[data-send-zone]');
-      if (sendZone) {
-        if (dragStateRef.current) { dragStateRef.current.toIndex = null; dragStateRef.current.overSendZone = true; }
-        setDragVisual(prev => prev ? { ...prev, toIndex: null, overSendZone: true } : null);
-        return;
-      }
       const slot = el?.closest('[data-photo-slot]') as HTMLElement | null;
       if (slot) {
         const pIdx = parseInt(slot.dataset.pageIndex ?? '-1');
         const phIdx = parseInt(slot.dataset.photoIndex ?? '-1');
         if (pIdx === pageIndex && phIdx !== -1) {
-          if (dragStateRef.current) { dragStateRef.current.toIndex = phIdx; dragStateRef.current.overSendZone = false; }
-          setDragVisual(prev => prev ? { ...prev, toIndex: phIdx, overSendZone: false } : null);
+          if (dragStateRef.current) dragStateRef.current.toIndex = phIdx;
+          setDragVisual(prev => prev ? { ...prev, toIndex: phIdx } : null);
         }
-      } else if (dragStateRef.current?.overSendZone) {
-        // Pointer left the send-zone without entering a slot — clear the flag.
-        dragStateRef.current.overSendZone = false;
-        setDragVisual(prev => prev ? { ...prev, overSendZone: false } : null);
       }
     };
 
     const onUp = () => {
       const state = dragStateRef.current;
-      if (state?.overSendZone) {
-        setSendPhotoPicker({ pageIndex: state.pageIndex, photoIndex: state.fromIndex });
-      } else if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
+      if (state && state.toIndex !== null && state.toIndex !== state.fromIndex) {
         handleSwapPhotosOnPage(state.pageIndex, state.fromIndex, state.toIndex);
       }
       dragStateRef.current = null;
@@ -1390,7 +1376,6 @@ export default function PhotoOrganizer({
     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
 
     return (
-      <>
       <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full p-4 sm:p-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
           <div className="flex justify-between items-center mb-4 sm:mb-6 border-b border-gray-100 pb-3 sm:pb-4">
@@ -1434,19 +1419,6 @@ export default function PhotoOrganizer({
                   })}
                 </div>
               </div>
-
-              {/* Zona de suelta: arrastra una foto aquí para enviarla a otra página */}
-              <div
-                data-send-zone="true"
-                className={`mt-4 w-full max-w-sm flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
-                  dragVisual?.pageIndex === pageIndex && dragVisual?.overSendZone
-                    ? 'border-black bg-black text-white'
-                    : 'border-gray-300 text-gray-400'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4 shrink-0 pointer-events-none" />
-                <span className="pointer-events-none">Arrastra una foto aquí para enviarla a otra página</span>
-              </div>
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
@@ -1481,42 +1453,6 @@ export default function PhotoOrganizer({
           </div>
         </div>
       </div>
-
-      {sendPhotoPicker && sendPhotoPicker.pageIndex === pageIndex && (
-        <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-              <h3 className="text-lg sm:text-xl font-bold">Enviar foto a la página...</h3>
-              <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X className="w-5 h-5"/>
-              </button>
-            </div>
-            <div className="overflow-y-auto grid grid-cols-4 sm:grid-cols-5 gap-2 sm:gap-3">
-              {safePhotos.map((pgPhotos, idx) => {
-                if (idx === sendPhotoPicker.pageIndex) return null;
-                const thumb = pgPhotos.find(p => p && p.trim() !== '');
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendPhotoToPage(sendPhotoPicker.pageIndex, sendPhotoPicker.photoIndex, idx)}
-                    className="relative flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-full aspect-square rounded-lg border-2 border-gray-200 group-hover:border-black overflow-hidden bg-gray-100 flex items-center justify-center transition-all">
-                      {thumb ? (
-                        <img src={thumb} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-gray-300" />
-                      )}
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-black">Pág. {idx + 1}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
     );
   };
 
@@ -2159,29 +2095,15 @@ export default function PhotoOrganizer({
           </div>
         </div>
 
-        {/* Insertar páginas en blanco antes de la primera página */}
-        {!pagesLocked && (
-          <button
-            onClick={() => handleAddPage(-1)}
-            disabled={reorderSelectedPage !== null}
-            className="col-span-2 flex items-center justify-center gap-2 py-3 text-gray-300 hover:text-black border-2 border-dashed border-transparent hover:border-gray-300 rounded-xl transition-all disabled:opacity-30 disabled:pointer-events-none"
-            title="Insertar 2 páginas en blanco al inicio"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-widest">Insertar páginas aquí</span>
-          </button>
-        )}
-
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
         {safePhotos.map((pagePhotos, pageIndex) => {
           const isReorderMode = reorderSelectedPage !== null;
           const isSelected = reorderSelectedPage === pageIndex;
           const isTarget = reorderTargetPage === pageIndex;
-          const isSpreadBoundary = pageIndex % 2 === 1 && pageIndex < safePhotos.length - 1;
 
           return (
-            <Fragment key={pageIndex}>
             <div
+              key={pageIndex}
               className={`relative flex flex-col transition-all duration-200 ${isReorderMode && !isSelected && !isTarget ? 'opacity-50' : ''}`}
             >
               {/* Capa de toque para seleccionar destino (modo reordenamiento, páginas no seleccionadas) */}
@@ -2313,19 +2235,6 @@ export default function PhotoOrganizer({
                 )}
               </div>
             </div>
-
-            {/* Insertar páginas en blanco entre este spread y el siguiente */}
-            {isSpreadBoundary && !pagesLocked && !isReorderMode && (
-              <button
-                onClick={() => handleAddPage(pageIndex)}
-                className="col-span-2 flex items-center justify-center gap-2 py-3 text-gray-300 hover:text-black border-2 border-dashed border-transparent hover:border-gray-300 rounded-xl transition-all"
-                title="Insertar 2 páginas en blanco aquí"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-widest">Insertar páginas aquí</span>
-              </button>
-            )}
-            </Fragment>
           );
         })}
 
