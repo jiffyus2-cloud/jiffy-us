@@ -1498,40 +1498,69 @@ export default function PhotoOrganizer({
         </div>
       </div>
 
-      {sendPhotoPicker && sendPhotoPicker.pageIndex === pageIndex && (
-        <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-              <h3 className="text-lg sm:text-xl font-bold">Enviar foto a la página...</h3>
-              <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X className="w-5 h-5"/>
-              </button>
-            </div>
-            <div className="overflow-y-auto grid grid-cols-4 sm:grid-cols-5 gap-2 sm:gap-3">
-              {safePhotos.map((pgPhotos, idx) => {
-                if (idx === sendPhotoPicker.pageIndex) return null;
-                const thumb = pgPhotos.find(p => p && p.trim() !== '');
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendPhotoToPage(sendPhotoPicker.pageIndex, sendPhotoPicker.photoIndex, idx)}
-                    className="relative flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-full aspect-square rounded-lg border-2 border-gray-200 group-hover:border-black overflow-hidden bg-gray-100 flex items-center justify-center transition-all">
-                      {thumb ? (
-                        <img src={thumb} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-gray-300" />
-                      )}
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-black">Pág. {idx + 1}</span>
-                  </button>
-                );
-              })}
+      {sendPhotoPicker && sendPhotoPicker.pageIndex === pageIndex && (() => {
+        // Agrupa las páginas exactamente como el grid principal: la página 1 va
+        // sola, y de ahí en adelante van de a pares (2-3, 4-5, 6-7...), para que
+        // el usuario reconozca de inmediato la misma disposición que ve al editar.
+        const groups: number[][] = [];
+        if (safePhotos.length > 0) groups.push([0]);
+        for (let i = 1; i < safePhotos.length; i += 2) {
+          groups.push(i + 1 < safePhotos.length ? [i, i + 1] : [i]);
+        }
+
+        const renderPageOption = (idx: number) => {
+          const pgPhotos = safePhotos[idx] || [];
+          const isSource = idx === sendPhotoPicker.pageIndex;
+          const variant = pageLayoutVariants[idx] || getNextAllowed(pgPhotos.length);
+          const layout = pageLayouts[idx] || 'grid';
+          const slots = Array.from({ length: variant }, (_, i) => !!(pgPhotos[i] && pgPhotos[i].trim() !== ''));
+
+          return (
+            <button
+              key={idx}
+              disabled={isSource}
+              onClick={() => handleSendPhotoToPage(sendPhotoPicker.pageIndex, sendPhotoPicker.photoIndex, idx)}
+              className={`relative flex flex-col items-center gap-1 group ${isSource ? 'opacity-30 cursor-not-allowed' : ''}`}
+            >
+              <div className={`w-full aspect-square rounded-lg border-2 overflow-hidden bg-gray-50 p-1.5 transition-all ${isSource ? 'border-gray-200' : 'border-gray-200 group-hover:border-black'}`}>
+                <div className={`grid gap-1 w-full h-full ${getGridLayout(variant, layout)}`}>
+                  {slots.map((hasPhoto, slotIdx) => (
+                    <div
+                      key={slotIdx}
+                      className={hasPhoto ? 'bg-gray-300 rounded-sm' : 'border border-dashed border-gray-200 rounded-sm'}
+                    />
+                  ))}
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold ${isSource ? 'text-gray-300' : 'text-gray-500 group-hover:text-black'}`}>Pág. {idx + 1}</span>
+            </button>
+          );
+        };
+
+        return (
+          <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                <h3 className="text-lg sm:text-xl font-bold">Enviar foto a la página...</h3>
+                <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <X className="w-5 h-5"/>
+                </button>
+              </div>
+              <div className="overflow-y-auto flex flex-col gap-3">
+                {groups.map((group, groupIdx) => (
+                  <div key={groupIdx} className={`flex gap-3 ${group.length === 1 ? '' : 'p-2 rounded-xl bg-gray-50 border border-gray-100'}`}>
+                    {group.map(idx => (
+                      <div key={idx} className="w-20 sm:w-24 shrink-0">
+                        {renderPageOption(idx)}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       </>
     );
   };
@@ -2175,24 +2204,17 @@ export default function PhotoOrganizer({
           </div>
         </div>
 
-        {/* Insertar páginas en blanco antes de la primera página */}
-        {!pagesLocked && reorderSelectedPage === null && (
-          <button
-            onClick={() => handleAddPage(-1)}
-            className="col-span-2 flex items-center justify-center gap-2 py-3 text-gray-300 hover:text-black border-2 border-dashed border-transparent hover:border-gray-300 rounded-xl transition-all"
-            title="Insertar 2 páginas en blanco al inicio"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-widest">Insertar páginas aquí</span>
-          </button>
-        )}
-
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
         {safePhotos.map((pagePhotos, pageIndex) => {
           const isReorderMode = reorderSelectedPage !== null;
           const isSelected = reorderSelectedPage === pageIndex;
           const isTarget = reorderTargetPage === pageIndex;
-          const isSpreadBoundary = pageIndex % 2 === 1 && pageIndex < safePhotos.length - 1;
+          // Página 1 (pageIndex 0) siempre se empareja con el cuadro "Reverso" en la
+          // fila 1; de ahí en adelante las páginas van de a pares (2-3, 4-5, 6-7...).
+          // El botón de insertar (col-span-2) solo puede caer justo después de
+          // completar una fila/pareja, nunca en medio — por eso la condición es
+          // pageIndex par (después de 1, 3, 5...) y no hay botón antes de Página 1.
+          const isSpreadBoundary = pageIndex % 2 === 0 && pageIndex < safePhotos.length - 1;
 
           return (
             <Fragment key={pageIndex}>
