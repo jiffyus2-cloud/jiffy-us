@@ -2352,11 +2352,14 @@ export default function PhotoOrganizer({
               </div>
             </div>
 
-            {/* Insertar páginas en blanco entre este spread y el siguiente */}
-            {isSpreadBoundary && !pagesLocked && !isReorderMode && (
+            {/* Insertar páginas en blanco entre este spread y el siguiente.
+                Se mantiene montado (solo deshabilitado) durante el modo de
+                reordenamiento para no encoger el grid y saltar el scroll. */}
+            {isSpreadBoundary && !pagesLocked && (
               <button
                 onClick={() => handleAddPage(pageIndex)}
-                className="col-span-2 flex items-center justify-center gap-2 py-3 text-gray-300 hover:text-black border-2 border-dashed border-transparent hover:border-gray-300 rounded-xl transition-all"
+                disabled={isReorderMode}
+                className="col-span-2 flex items-center justify-center gap-2 py-3 text-gray-300 hover:text-black border-2 border-dashed border-transparent hover:border-gray-300 rounded-xl transition-all disabled:opacity-30 disabled:pointer-events-none"
                 title="Insertar 2 páginas en blanco aquí"
               >
                 <Plus className="w-4 h-4" />
