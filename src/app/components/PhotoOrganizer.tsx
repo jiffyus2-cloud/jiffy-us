@@ -2157,7 +2157,7 @@ export default function PhotoOrganizer({
         </div>
       )}
 
-      <div className="flex flex-col mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="relative flex flex-col mb-8 sticky top-20 bg-white/95 backdrop-blur-sm z-40 py-2 sm:py-4 border-b -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
@@ -2175,9 +2175,10 @@ export default function PhotoOrganizer({
           </div>
         </div>
 
-        {/* Banner de modo reordenamiento — dentro del bloque sticky, debajo del botón de confirmar */}
+        {/* Banner de modo reordenamiento — superpuesto (absolute) para no alterar la altura
+            del header sticky; si empujara el layout, el scroll saltaría al activar el modo. */}
         {reorderSelectedPage !== null && (
-          <div className="mt-2 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-inner">
+          <div className="absolute left-4 right-4 sm:left-0 sm:right-0 top-full mt-2 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-inner z-50">
             <span>📌 Pág. {reorderSelectedPage + 1} seleccionada — toca otra página para moverla</span>
             <button onClick={exitReorderMode} className="ml-3 p-0.5 hover:bg-white/20 rounded-full transition-colors flex-shrink-0">
               <X className="w-3.5 h-3.5" />
