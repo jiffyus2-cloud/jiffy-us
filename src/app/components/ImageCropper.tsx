@@ -23,6 +23,8 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
     const img = imgRef.current;
     if (!container || !img) return;
 
+    container.removeAttribute('data-ready');
+
     const updateStyle = () => {
       const Cw = container.offsetWidth;
       const Ch = container.offsetHeight;
@@ -61,6 +63,7 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         maxHeight: 'none',
         opacity: 1,
       });
+      container.setAttribute('data-ready', 'true');
     };
 
     if (img.complete && img.naturalWidth > 0) updateStyle();
@@ -78,14 +81,14 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
   // Si la imagen falló, mostrarla con object-fit cover como fallback (visible, no gris)
   if (hasError) {
     return (
-      <div className="w-full h-full overflow-hidden bg-gray-100 relative">
+      <div data-image-cropper data-ready="true" className="w-full h-full overflow-hidden bg-gray-100 relative">
         <img src={src} alt={alt} className="w-full h-full object-cover pointer-events-none" />
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-100 relative">
+    <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-gray-100 relative">
       <img
         ref={imgRef}
         src={src}
