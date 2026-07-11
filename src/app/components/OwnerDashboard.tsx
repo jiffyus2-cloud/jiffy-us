@@ -135,6 +135,32 @@ async function preloadImages(urls: string[]): Promise<Record<string, string>> {
 }
 
 // ============================================================================
+// ESPERA ACTIVA HASTA QUE TODAS LAS IMÁGENES (CanvasCropper / ImageCropper)
+// DEL CONTENEDOR ESTÉN REALMENTE PINTADAS ANTES DE CAPTURAR CON html-to-image
+// ============================================================================
+function waitForRenderReady(container: HTMLElement, opts: { maxWaitMs?: number; minWaitMs?: number } = {}): Promise<void> {
+  const MAX_WAIT_MS = opts.maxWaitMs ?? 15000;
+  const MIN_WAIT_MS = opts.minWaitMs ?? 150;
+  const POLL_MS = 100;
+  const startTime = Date.now();
+
+  return new Promise((resolve) => {
+    const poll = setInterval(() => {
+      const targets = container.querySelectorAll('[data-canvas-cropper], [data-image-cropper]');
+      const readyTargets = container.querySelectorAll('[data-canvas-cropper][data-ready], [data-image-cropper][data-ready]');
+      const elapsed = Date.now() - startTime;
+      const allDone = targets.length === readyTargets.length;
+      const timedOut = elapsed > MAX_WAIT_MS;
+
+      if ((allDone && elapsed >= MIN_WAIT_MS) || timedOut) {
+        clearInterval(poll);
+        resolve();
+      }
+    }, POLL_MS);
+  });
+}
+
+// ============================================================================
 // RENDERIZADOR CANVAS NATIVO
 // ============================================================================
 const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
@@ -616,21 +642,17 @@ const OwnerDashboard: React.FC = () => {
           // Pre-cargar imagen de portada en caché del navegador antes de renderizar
           await preloadImages(imageUrls);
 
-          return new Promise<string>((res, rej) => {
-            root.render(
-              <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
-                {element}
-              </div>
-            );
-            // Con la imagen ya en caché, 500ms es suficiente para el render
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) { rej(e); }
-            }, 500);
-          });
+          root.render(
+            <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
+              {element}
+            </div>
+          );
+
+          // Esperar activamente hasta que la imagen de portada esté realmente pintada
+          await waitForRenderReady(container);
+
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         let coverImageForPdf = order.coverData?.image || '';
@@ -765,33 +787,13 @@ const OwnerDashboard: React.FC = () => {
           // Pre-cargar todas las imágenes de la página como Data URLs antes de renderizar
           await preloadImages(imageUrls);
 
-          return new Promise<string>((res, rej) => {
-            root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
 
-            // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
-            const MAX_WAIT_MS = 15000;
-            const POLL_MS = 100;
-            const startTime = Date.now();
+          // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
+          await waitForRenderReady(container);
 
-            const poll = setInterval(async () => {
-              const allCanvases = container.querySelectorAll('[data-canvas-cropper]');
-              const readyCanvases = container.querySelectorAll('[data-canvas-cropper][data-ready]');
-              const elapsed = Date.now() - startTime;
-              const allDone = allCanvases.length > 0 && allCanvases.length === readyCanvases.length;
-              const timedOut = elapsed > MAX_WAIT_MS;
-
-              if (allDone || timedOut) {
-                clearInterval(poll);
-                try {
-                  const node = container.firstChild as HTMLElement;
-                  const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                  res(dataUrl);
-                } catch (e) {
-                  rej(e);
-                }
-              }
-            }, POLL_MS);
-          });
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         if (order.pages && order.pages.length > 0) {
@@ -841,19 +843,13 @@ const OwnerDashboard: React.FC = () => {
           // Pre-cargar imagen del mes en caché del navegador antes de renderizar
           await preloadImages(imageUrls);
 
-          return new Promise<string>((res, rej) => {
-            root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
-            // Con la imagen ya en caché, 500ms es suficiente para el render
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) {
-                rej(e);
-              }
-            }, 500);
-          });
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+
+          // Esperar activamente hasta que la imagen del mes esté realmente pintada
+          await waitForRenderReady(container);
+
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         for (let i = 0; i < 12; i++) {
