@@ -172,6 +172,8 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    let cancelled = false;
+
     canvas.removeAttribute('data-ready');
 
     const rect = canvas.getBoundingClientRect();
@@ -185,6 +187,7 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     canvas.height = destHeight;
 
     const drawOnCanvas = (imgEl: HTMLImageElement) => {
+      if (cancelled) return;
       const imgWidth = imgEl.naturalWidth;
       const imgHeight = imgEl.naturalHeight;
       if (imgWidth === 0 || imgHeight === 0) {
@@ -236,12 +239,16 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     img.crossOrigin = 'anonymous';
     img.onload = () => drawOnCanvas(img);
     img.onerror = () => {
-      const fallback = new Image();
-      fallback.onload = () => drawOnCanvas(fallback);
-      fallback.onerror = () => canvas.setAttribute('data-ready', 'error');
-      fallback.src = src;
+      if (cancelled) return;
+      // No reintentar sin crossOrigin: eso "mancharía" (taint) el canvas y
+      // rompería la captura de html-to-image de forma silenciosa más adelante.
+      canvas.setAttribute('data-ready', 'error');
     };
     img.src = src;
+
+    return () => {
+      cancelled = true;
+    };
   }, [src, crop]);
 
   return <canvas data-canvas-cropper ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
@@ -250,7 +257,7 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
 // ============================================================================
 // COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
-const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
+const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number, preloadedMap?: Record<string, string>}> = ({pageObj, customization, pageIndex, order, pxWidth, preloadedMap}) => {
   const size = customization?.size || '';
   
   const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
@@ -272,13 +279,14 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
         const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
         
         const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
+        const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
 
         return (
           <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-white flex items-center justify-center w-full h-full border border-gray-100/50">
-            {photo ? (
+            {resolvedSrc ? (
               <div className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto bg-gray-100" : "w-full h-full relative bg-gray-100"}>
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={photo} crop={crop} />
+                  <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
               </div>
             ) : textBox ? (
@@ -307,7 +315,24 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
   );
 };
 
-const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number }> = ({ order, monthIndex, pxWidth }) => {
+const getPhotosForMonth = (order: any, monthIndex: number): string[] => {
+  let photosForMonth: string[] = [];
+  const pageData = order.pages?.[monthIndex];
+  if (pageData && Array.isArray(pageData.images)) {
+    photosForMonth = pageData.images;
+  } else if (pageData && pageData.image) {
+    photosForMonth = [pageData.image];
+  }
+
+  const photoData = order.photos?.[monthIndex];
+  if (photosForMonth.length === 0 && photoData) {
+    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
+    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
+  }
+  return photosForMonth;
+};
+
+const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number, preloadedMap?: Record<string, string> }> = ({ order, monthIndex, pxWidth, preloadedMap }) => {
   const year = order.customization?.year || new Date().getFullYear();
   const orientation = order.customization?.orientation || 'vertical';
   const type = order.customization?.type || 'desk';
@@ -332,19 +357,7 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
   const padding = baseSize * 3;
   const gap = baseSize * 0.5;
 
-  let photosForMonth: string[] = [];
-  const pageData = order.pages?.[monthIndex];
-  if (pageData && Array.isArray(pageData.images)) {
-    photosForMonth = pageData.images;
-  } else if (pageData && pageData.image) {
-    photosForMonth = [pageData.image];
-  }
-  
-  const photoData = order.photos?.[monthIndex];
-  if (photosForMonth.length === 0 && photoData) {
-    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
-    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
-  }
+  const photosForMonth = getPhotosForMonth(order, monthIndex);
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: orientation === 'horizontal' ? 'row' : 'column', backgroundColor: 'white', boxSizing: 'border-box' }}>
@@ -356,12 +369,13 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: `${gap}px`, width: '100%', height: '100%', padding: `${gap}px`, boxSizing: 'border-box' }}>
                   {Array.from({ length: 4 }).map((_, photoIdx) => {
                     const photo = photosForMonth[photoIdx];
+                    const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
                     const crop = order.photoCrops?.[`${monthIndex}-${photoIdx}`];
                     return (
                       <div key={photoIdx} style={{ position: 'relative', backgroundColor: '#e5e7eb', borderRadius: `${baseSize*0.5}px`, overflow: 'hidden' }}>
-                        {photo && (
+                        {resolvedSrc && (
                           <div className="absolute inset-0 w-full h-full pointer-events-none">
-                            <CanvasCropper src={photo} crop={crop} />
+                            <CanvasCropper src={resolvedSrc} crop={crop} />
                           </div>
                         )}
                       </div>
@@ -371,10 +385,11 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
               );
             } else {
               const photo = photosForMonth[0];
+              const resolvedSrc = preloadedMap?.[photo] || photo;
               const crop = order.photoCrops?.[monthIndex] || order.photoCrops?.[`${monthIndex}-0`];
               return (
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={photo} crop={crop} />
+                  <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
               );
             }
@@ -638,13 +653,13 @@ const OwnerDashboard: React.FC = () => {
 
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
-          // Pre-cargar imagen de portada en caché del navegador antes de renderizar
-          await preloadImages(imageUrls);
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen de portada como Data URL antes de renderizar
+          const preloadedMap = await preloadImages(imageUrls);
 
           root.render(
             <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
-              {element}
+              {buildElement(preloadedMap)}
             </div>
           );
 
@@ -665,69 +680,74 @@ const OwnerDashboard: React.FC = () => {
 
         const coverUrls = coverImageForPdf && !coverImageForPdf.startsWith('data:') ? [coverImageForPdf] : [];
         const dataUrl = await renderAndCapture(
-          <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
-            {/* Contenido centrado en el lienzo */}
-            <div style={{
-              position: 'absolute',
-              left: marginXPx,
-              top:  marginYPx,
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'flex-start',
-            }}>
-              {!isTela && (
-                <>
-                  {/* Contraportada */}
-                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                    <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
-                      <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                      <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
-                    </div>
+          (preloadedMap) => {
+            const resolvedCoverImage = preloadedMap[coverImageForPdf] || coverImageForPdf;
+            return (
+              <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
+                {/* Contenido centrado en el lienzo */}
+                <div style={{
+                  position: 'absolute',
+                  left: marginXPx,
+                  top:  marginYPx,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                }}>
+                  {!isTela && (
+                    <>
+                      {/* Contraportada */}
+                      <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
+                          <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                        </div>
+                      </div>
+
+                      {/* Gap 1 cm: contraportada → lomo */}
+                      <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
+
+                      {/* Lomo */}
+                      <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
+                          <span style={{
+                            display: 'block',
+                            transform: 'rotate(90deg) translateY(-50%)',
+                            transformOrigin: 'top left',
+                            whiteSpace: 'nowrap',
+                            fontSize: `${spinePxWidth * 0.25}px`,
+                            fontWeight: 'bold',
+                            letterSpacing: '8px',
+                            color: textColor,
+                          }}>
+                            {spineText}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Gap 1 cm: lomo → portada */}
+                      <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
+                    </>
+                  )}
+
+                  {/* Portada */}
+                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                    <CoverPreview
+                      coverSize={coverSizeProp as any}
+                      coverType={isTela ? 'Tela' : 'Papel'}
+                      coverImage={resolvedCoverImage}
+                      coverTitle={order.coverData?.title || ''}
+                      coverSubtitle={order.coverData?.subtitle || ''}
+                      coverYear={order.coverData?.year || ''}
+                      selectedLayout={Number(order.coverData?.layout) || 1}
+                      coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
+                      typographyColor={textColor}
+                      hideSpine={true}
+                    />
                   </div>
-
-                  {/* Gap 1 cm: contraportada → lomo */}
-                  <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
-
-                  {/* Lomo */}
-                  <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                    <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
-                      <span style={{
-                        display: 'block',
-                        transform: 'rotate(90deg) translateY(-50%)',
-                        transformOrigin: 'top left',
-                        whiteSpace: 'nowrap',
-                        fontSize: `${spinePxWidth * 0.25}px`,
-                        fontWeight: 'bold',
-                        letterSpacing: '8px',
-                        color: textColor,
-                      }}>
-                        {spineText}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Gap 1 cm: lomo → portada */}
-                  <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
-                </>
-              )}
-
-              {/* Portada */}
-              <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
-                <CoverPreview
-                  coverSize={coverSizeProp as any}
-                  coverType={isTela ? 'Tela' : 'Papel'}
-                  coverImage={coverImageForPdf}
-                  coverTitle={order.coverData?.title || ''}
-                  coverSubtitle={order.coverData?.subtitle || ''}
-                  coverYear={order.coverData?.year || ''}
-                  selectedLayout={Number(order.coverData?.layout) || 1}
-                  coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
-                  typographyColor={textColor}
-                  hideSpine={true}
-                />
+                </div>
               </div>
-            </div>
-          </div>,
+            );
+          },
           coverUrls
         );
 
@@ -783,11 +803,11 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
           // Pre-cargar todas las imágenes de la página como Data URLs antes de renderizar
-          await preloadImages(imageUrls);
+          const preloadedMap = await preloadImages(imageUrls);
 
-          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
 
           // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
           await waitForRenderReady(container);
@@ -799,9 +819,12 @@ const OwnerDashboard: React.FC = () => {
         if (order.pages && order.pages.length > 0) {
           for (let i = 0; i < order.pages.length; i++) {
             if (i > 0) pdf.addPage();
-            const pageImages = ((order.pages[i] as any)?.images || []).filter(Boolean) as string[];
+            const currentPage = order.pages[i];
+            const pageImages = ((currentPage as any)?.images || []).filter(Boolean) as string[];
             const pageDataUrl = await renderAndCapture(
-              <AlbumPagePrintView pageObj={order.pages[i]} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} />,
+              (preloadedMap) => (
+                <AlbumPagePrintView key={i} pageObj={currentPage} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+              ),
               pageImages
             );
             pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
@@ -839,11 +862,11 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode, imageUrls: string[] = []) => {
-          // Pre-cargar imagen del mes en caché del navegador antes de renderizar
-          await preloadImages(imageUrls);
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen(es) del mes como Data URLs antes de renderizar
+          const preloadedMap = await preloadImages(imageUrls);
 
-          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
 
           // Esperar activamente hasta que la imagen del mes esté realmente pintada
           await waitForRenderReady(container);
@@ -854,10 +877,12 @@ const OwnerDashboard: React.FC = () => {
 
         for (let i = 0; i < 12; i++) {
           if (i > 0) pdf.addPage();
-          const monthImageUrl = (order as any).photos?.[i];
+          const monthImages = getPhotosForMonth(order, i).filter(Boolean);
           const pageDataUrl = await renderAndCapture(
-            <CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />,
-            monthImageUrl ? [monthImageUrl] : []
+            (preloadedMap) => (
+              <CalendarPagePrintView key={i} order={order} monthIndex={i} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+            ),
+            monthImages
           );
           pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
           itemsProcessed++;
