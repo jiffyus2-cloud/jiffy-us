@@ -1,13 +1,16 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ImageCropperProps {
   src: string;
   /** Posición central y zoom {x, y, zoom, rotation} provisto por Jiffy */
   position: { x: number; y: number; zoom: number; rotation?: number };
   alt?: string;
+  onError?: (src: string) => void;
+  onRetry?: (src: string) => void;
 }
 
-export default function ImageCropper({ src, position, alt = "Photo" }: ImageCropperProps) {
+export default function ImageCropper({ src, position, alt = "Photo", onError, onRetry }: ImageCropperProps) {
   const { x = 50, y = 50, zoom = 1, rotation = 0 } = position || {};
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,15 +81,6 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
     };
   }, [x, y, zoom, rotation, src]);
 
-  // Si la imagen falló, mostrarla con object-fit cover como fallback (visible, no gris)
-  if (hasError) {
-    return (
-      <div data-image-cropper data-ready="true" className="w-full h-full overflow-hidden bg-gray-100 relative">
-        <img src={src} alt={alt} className="w-full h-full object-cover pointer-events-none" />
-      </div>
-    );
-  }
-
   return (
     <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-gray-100 relative">
       <img
@@ -95,8 +89,28 @@ export default function ImageCropper({ src, position, alt = "Photo" }: ImageCrop
         alt={alt}
         className="absolute pointer-events-none"
         style={style}
-        onError={() => setHasError(true)}
+        onError={() => {
+          setHasError(true);
+          // No hay más nada que pintar para esta imagen: marcar listo de una vez
+          // para que waitForRenderReady() (exportación PDF) no espere el timeout completo.
+          containerRef.current?.setAttribute('data-ready', 'true');
+          onError?.(src);
+        }}
       />
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200 gap-1 z-10">
+          <AlertTriangle className="text-orange-400" size={20} />
+          <span className="text-[10px] text-gray-500 text-center px-1 leading-tight">No se cargó</span>
+          {onRetry && (
+            <button
+              onClick={() => onRetry(src)}
+              className="mt-1 text-[10px] bg-white border border-gray-300 rounded px-2 py-0.5 text-gray-600 active:bg-gray-50"
+            >
+              ↺ Reemplazar
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

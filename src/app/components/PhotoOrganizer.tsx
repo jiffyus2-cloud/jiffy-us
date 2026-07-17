@@ -147,12 +147,15 @@ const AlbumEditorPhotoSlot: React.FC<{
   handleAddPhotoToPage: (pageIndex: number, file: File, targetPhotoIndex?: number) => void;
   handleAddTextBox: (pageIndex: number, photoIndex: number) => void;
   onOpenCropModal: (pageIndex: number, photoIndex: number, aspect: number) => void;
+  onPhotoError?: (url: string) => void;
+  onPhotoRetry?: (url: string, pageIndex: number, photoIndex: number) => void;
   t: (key: string) => string;
 }> = ({
   photo, textBox, crop, isHalfHeightLayout, pageIndex, photoIndex, photoCount, editingPageIndex,
   isDragging, isDragTarget, onDragStart,
   handleRemovePhotoFromPage, setEditingTextSlot,
-  handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal, t
+  handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal,
+  onPhotoError, onPhotoRetry, t
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isCompact = photoCount >= 6;
@@ -177,6 +180,8 @@ const AlbumEditorPhotoSlot: React.FC<{
             <ImageCropper
               src={photo}
               position={crop || { x: 50, y: 50, zoom: 1 }}
+              onError={onPhotoError}
+              onRetry={onPhotoRetry ? (url) => onPhotoRetry(url, pageIndex, photoIndex) : undefined}
             />
           </div>
 
@@ -299,6 +304,10 @@ export default function PhotoOrganizer({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const retryInputRef = useRef<HTMLInputElement>(null);
+  const retryTargetRef = useRef<{ pageIndex: number; photoIndex: number } | null>(null);
+  const [brokenPhotoUrls, setBrokenPhotoUrls] = useState<Set<string>>(new Set());
+  const [showBrokenBanner, setShowBrokenBanner] = useState(false);
   // Mapa URL → clave de archivo, para trasladar firmas desde processUpload hasta handleFinalizeSetup
   const pendingFileKeysRef = useRef<Map<string, string>>(new Map());
   // Mapa clave de archivo → info de baja resolución, para aplicarla cuando se crea la URL definitiva
@@ -369,6 +378,46 @@ export default function PhotoOrganizer({
     onCancel: () => void;
   } | null>(null);
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+
+  const handlePhotoError = useCallback((url: string) => {
+    setBrokenPhotoUrls(prev => {
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+    setShowBrokenBanner(true);
+  }, []);
+
+  const handlePhotoRetry = useCallback((url: string, pageIndex: number, photoIndex: number) => {
+    retryTargetRef.current = { pageIndex, photoIndex };
+    retryInputRef.current?.click();
+  }, []);
+
+  const handleRetryFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    event.target.value = '';
+
+    const target = retryTargetRef.current;
+    if (target) {
+      retryTargetRef.current = null;
+      await handleSpecificFileSelection(target.pageIndex, files[0], target.photoIndex);
+    } else {
+      // Retry masivo: reemplazar todos los slots rotos en orden
+      const brokenSlots: { pageIndex: number; photoIndex: number; url: string }[] = [];
+      photos.forEach((pagePhotos, pi) => {
+        pagePhotos.forEach((url, fi) => {
+          if (url && brokenPhotoUrls.has(url)) brokenSlots.push({ pageIndex: pi, photoIndex: fi, url });
+        });
+      });
+      const filesToUse = Array.from(files);
+      for (let i = 0; i < Math.min(filesToUse.length, brokenSlots.length); i++) {
+        await handleSpecificFileSelection(brokenSlots[i].pageIndex, filesToUse[i], brokenSlots[i].photoIndex);
+      }
+    }
+    setBrokenPhotoUrls(new Set());
+    setShowBrokenBanner(false);
+  };
 
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
@@ -686,6 +735,19 @@ export default function PhotoOrganizer({
       if (currentVariant < neededVariant) {
         onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: neededVariant });
       }
+
+      // Limpiar URL rota reemplazada del set de errores
+      const replacedUrl = photos[pageIndex]?.[slotIndex];
+      if (replacedUrl) {
+        setBrokenPhotoUrls(prev => {
+          if (!prev.has(replacedUrl)) return prev;
+          const next = new Set(prev);
+          next.delete(replacedUrl);
+          if (next.size === 0) setShowBrokenBanner(false);
+          return next;
+        });
+      }
+
       onPhotosChange(newPhotos);
     };
 
@@ -1444,6 +1506,8 @@ export default function PhotoOrganizer({
                         handleAddPhotoToPage={handleSpecificFileSelection}
                         handleAddTextBox={handleAddTextBox}
                         onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                        onPhotoError={handlePhotoError}
+                        onPhotoRetry={handlePhotoRetry}
                         t={t}
                       />
                     );
@@ -1776,6 +1840,7 @@ export default function PhotoOrganizer({
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+          <input ref={retryInputRef} type="file" multiple accept="image/*" onChange={handleRetryFileSelection} className="hidden" />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
@@ -1912,6 +1977,35 @@ export default function PhotoOrganizer({
       {renderDuplicateModal()}
       {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
+
+      {/* BANNER: FOTOS QUE NO SE CARGARON CORRECTAMENTE */}
+      {showBrokenBanner && brokenPhotoUrls.size > 0 && step === 'editor' && (
+        <div className="fixed bottom-20 left-0 right-0 z-[120] flex justify-center px-4 pointer-events-none">
+          <div className="bg-white border border-orange-300 rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3 max-w-sm w-full pointer-events-auto">
+            <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4 text-orange-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 leading-tight">
+                {brokenPhotoUrls.size === 1 ? '1 foto no se cargó' : `${brokenPhotoUrls.size} fotos no se cargaron`}
+              </p>
+              <p className="text-xs text-gray-500 leading-tight mt-0.5">Los slots con ⚠️ necesitan reemplazarse</p>
+            </div>
+            <button
+              onClick={() => {
+                retryTargetRef.current = null;
+                retryInputRef.current?.click();
+              }}
+              className="shrink-0 bg-orange-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg active:bg-orange-600"
+            >
+              Reintentar
+            </button>
+            <button onClick={() => setShowBrokenBanner(false)} className="shrink-0 text-gray-400 p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL INTELIGENTE DE PÁGINAS VACÍAS */}
       {emptyPagesModalData && (
@@ -2304,6 +2398,8 @@ export default function PhotoOrganizer({
                                 onDragStart={handleDragStart}
                                 handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
                                 onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                                onPhotoError={handlePhotoError}
+                                onPhotoRetry={handlePhotoRetry}
                                 t={t}
                               />
                               {isPhotoLowRes && (
