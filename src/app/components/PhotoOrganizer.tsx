@@ -16,6 +16,13 @@ import {
   type AlbumConfig,
 } from '../utils/albumStateUtils';
 import {
+  FONT_SIZES,
+  getMaxCharsForFontSize,
+  getEffectiveFontSize,
+  MAX_SHRINK_CHARS,
+  type TextOverflowMode,
+} from '../utils/textOverflowUtils';
+import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
@@ -28,6 +35,7 @@ import { useAuth } from '../../hooks/useAuth';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
+import { Switch } from './ui/switch';
 
 // --- NUEVA IMAGEN DE JIFFY ---
 import jiffy2Img from '../../assets/Jiffy2.png';
@@ -215,7 +223,7 @@ const AlbumEditorPhotoSlot: React.FC<{
             onPointerDown={isEditing ? e => onDragStart(pageIndex, photoIndex, e) : undefined}
             style={{
               width: '90%',
-              fontSize: `${textBox.fontSize * 0.25}cqi`,
+              fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
               fontFamily: textBox.fontFamily,
               color: textBox.color,
               textAlign: 'center',
@@ -1179,7 +1187,7 @@ export default function PhotoOrganizer({
   const handleAddTextBox = (pageIndex: number, photoIndex: number) => {
     const newSlots = { ...textBoxSlots };
     if (!newSlots[pageIndex]) newSlots[pageIndex] = {};
-    newSlots[pageIndex][photoIndex] = { text: '', fontSize: 24, fontFamily: 'Arial', color: '#000000' };
+    newSlots[pageIndex][photoIndex] = { text: '', fontSize: 24, fontFamily: 'Arial', color: '#000000', overflowMode: 'limit' };
     onTextBoxSlotsChange(newSlots);
     setEditingTextSlot({ pageIndex, photoIndex });
   };
@@ -1196,7 +1204,16 @@ export default function PhotoOrganizer({
   const updateTextBox = (pageIndex: number, photoIndex: number, updates: any) => {
     const newSlots = { ...textBoxSlots };
     if (newSlots[pageIndex] && newSlots[pageIndex][photoIndex]) {
-      newSlots[pageIndex][photoIndex] = { ...newSlots[pageIndex][photoIndex], ...updates };
+      const merged = { ...newSlots[pageIndex][photoIndex], ...updates };
+      // In 'limit' mode, text must never exceed what the current font size allows —
+      // re-clamp on every change (font size bump, mode switch, etc), not just on typing.
+      if ((merged.overflowMode || 'limit') === 'limit') {
+        const maxChars = getMaxCharsForFontSize(merged.fontSize || 24);
+        if (typeof merged.text === 'string' && merged.text.length > maxChars) {
+          merged.text = merged.text.slice(0, maxChars);
+        }
+      }
+      newSlots[pageIndex][photoIndex] = merged;
       onTextBoxSlotsChange(newSlots);
     }
   };
@@ -2551,26 +2568,38 @@ export default function PhotoOrganizer({
                   className="w-full border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center h-[200px]"
                   style={{ containerType: 'inline-size' }}
                 >
-                  <textarea 
-                    value={currentEditingText.text} 
-                    onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text: e.target.value })} 
-                    placeholder="Escribe tu texto aquí..." 
-                    className="bg-transparent resize-none outline-none p-0 m-0 border-none" 
+                  <textarea
+                    value={currentEditingText.text}
+                    onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text: e.target.value })}
+                    placeholder="Escribe tu texto aquí..."
+                    maxLength={(currentEditingText.overflowMode || 'limit') === 'limit' ? getMaxCharsForFontSize(currentEditingText.fontSize) : MAX_SHRINK_CHARS}
+                    className="bg-transparent resize-none outline-none p-0 m-0 border-none"
                     style={{
-                      width: '90%', 
+                      width: '90%',
                       height: '90%',
-                      fontSize: `${currentEditingText.fontSize * 0.25}cqi`, 
+                      fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, (currentEditingText.text || '').length, currentEditingText.overflowMode || 'limit') * 0.25}cqi`,
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
                       textAlign: 'center',
                       lineHeight: '1.3'
                     }}
-                    autoFocus 
+                    autoFocus
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label><select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{[12, 16, 20, 24, 32, 40, 48, 64].map(size => <option key={size} value={size}>{size}px</option>)}</select></div>
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label>
+                  <select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{FONT_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}</select>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <span className="text-[11px] font-medium text-gray-500">{(currentEditingText.overflowMode || 'limit') === 'shrink' ? t('organizer.overflowShrink') : t('organizer.overflowLimit')}</span>
+                    <Switch
+                      checked={(currentEditingText.overflowMode || 'limit') === 'shrink'}
+                      onCheckedChange={(checked: boolean) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { overflowMode: (checked ? 'shrink' : 'limit') as TextOverflowMode })}
+                      title={t('organizer.overflowMode')}
+                    />
+                  </div>
+                </div>
                 <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.font')}</label><select value={currentEditingText.fontFamily} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontFamily: e.target.value })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white"><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Monospace</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Handwritten</option></select></div>
               </div>
               <div>

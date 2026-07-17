@@ -21,6 +21,7 @@ import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { getEffectiveFontSize } from '../utils/textOverflowUtils';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
@@ -293,7 +294,7 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
               <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
                 <div style={{ 
                   width: '90%', 
-                  fontSize: `${(textBox.fontSize || 24) * 0.25}cqi`,
+                  fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
                   fontFamily: textBox.fontFamily || 'Arial', 
                   color: textBox.color || '#000', 
                   textAlign: 'center',
