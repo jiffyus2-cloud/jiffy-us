@@ -11,13 +11,10 @@ interface ImageCropperProps {
 }
 
 export default function ImageCropper({ src, position, alt = "Photo", onError, onRetry }: ImageCropperProps) {
-  // Extraemos la rotación (0 por defecto si no existe)
   const { x = 50, y = 50, zoom = 1, rotation = 0 } = position || {};
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-
-  // Guardamos los estilos exactos calculados matemáticamente
   const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
   const [hasError, setHasError] = useState(false);
 
@@ -29,8 +26,9 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
     const img = imgRef.current;
     if (!container || !img) return;
 
+    container.removeAttribute('data-ready');
+
     const updateStyle = () => {
-      // 1. Tomar medidas del hueco y de la foto real
       const Cw = container.offsetWidth;
       const Ch = container.offsetHeight;
       const Iw = img.naturalWidth;
@@ -41,25 +39,21 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
       const C_AR = Cw / Ch;
       const I_AR = Iw / Ih;
 
-      // 2. Calcular tamaño Base de cobertura (Equivalente a object-fit: cover)
       let Rw = Cw;
       let Rh = Ch;
 
       if (I_AR > C_AR) {
-        Rw = Ch * I_AR; // La imagen es más ancha que el hueco
+        Rw = Ch * I_AR;
       } else {
-        Rh = Cw / I_AR; // La imagen es más alta que el hueco
+        Rh = Cw / I_AR;
       }
 
-      // 3. Ubicar el punto central (x, y) de la imagen según los porcentajes guardados
       const imgCenterX = (x / 100) * Rw;
       const imgCenterY = (y / 100) * Rh;
 
-      // 4. Calcular el desplazamiento para que ese punto quede justo en el centro del hueco
       const translateX = (Cw / 2) - imgCenterX;
       const translateY = (Ch / 2) - imgCenterY;
 
-      // 5. Aplicar estilos definitivos (Rotación y Zoom se hacen alrededor del centro exacto)
       setStyle({
         position: 'absolute',
         width: `${Rw}px`,
@@ -72,12 +66,12 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
         maxHeight: 'none',
         opacity: 1,
       });
+      container.setAttribute('data-ready', 'true');
     };
 
     if (img.complete && img.naturalWidth > 0) updateStyle();
     img.addEventListener('load', updateStyle);
 
-    // Si la pantalla cambia de tamaño (ej. gira el móvil), recalculamos
     const observer = new ResizeObserver(updateStyle);
     observer.observe(container);
 
@@ -88,7 +82,7 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
   }, [x, y, zoom, rotation, src]);
 
   return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-100 relative">
+    <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-gray-100 relative">
       <img
         ref={imgRef}
         src={src}
@@ -97,6 +91,9 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
         style={style}
         onError={() => {
           setHasError(true);
+          // No hay más nada que pintar para esta imagen: marcar listo de una vez
+          // para que waitForRenderReady() (exportación PDF) no espere el timeout completo.
+          containerRef.current?.setAttribute('data-ready', 'true');
           onError?.(src);
         }}
       />

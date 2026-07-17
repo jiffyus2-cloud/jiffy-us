@@ -4,6 +4,7 @@ import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
+import { convertFileIfHeic } from '../utils/imageUtils';
 
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -143,9 +144,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file) return;
 
+    file = await convertFileIfHeic(file);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     setIsValidating(false);

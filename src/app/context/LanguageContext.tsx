@@ -15,7 +15,18 @@ const translations = {
     'nav.signup': 'Sign Up',
     'nav.home': 'Home',
     'nav.dashboard': 'My Account',
-    
+    'nav.support': 'Support',
+
+    // Support chat panel
+    'support.title': 'Support',
+    'support.close': 'Close support chat',
+    'support.placeholder': 'How can we help you today?',
+    'support.inputPlaceholder': 'Type your message...',
+    'support.send': 'Send',
+    'support.sending': 'Typing...',
+    'support.error': "Sorry, we couldn't send your message. Please try again.",
+    'support.emptyReply': "We didn't receive a response. Please try again.",
+
     // Creator Steps
     'step.product': 'Product',
     'step.customize': 'Customize',
@@ -395,7 +406,18 @@ const translations = {
     'nav.signup': 'Registrarse',
     'nav.home': 'Inicio',
     'nav.dashboard': 'Mi Cuenta',
-    
+    'nav.support': 'Soporte',
+
+    // Panel de chat de soporte
+    'support.title': 'Soporte',
+    'support.close': 'Cerrar chat de soporte',
+    'support.placeholder': '¿En qué podemos ayudarte hoy?',
+    'support.inputPlaceholder': 'Escribe tu mensaje...',
+    'support.send': 'Enviar',
+    'support.sending': 'Escribiendo...',
+    'support.error': 'Lo sentimos, no pudimos enviar tu mensaje. Intenta nuevamente.',
+    'support.emptyReply': 'No recibimos una respuesta. Intenta nuevamente.',
+
     // Creator Steps
     'step.product': 'Producto',
     'step.style': 'Estilo',

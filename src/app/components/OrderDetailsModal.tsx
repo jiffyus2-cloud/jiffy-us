@@ -470,6 +470,17 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
 
 // --- Main Modal Component ---
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false, onGoToEdit }) => {
+  useEffect(() => {
+    if (!isOpen || !order) return;
+    const allImageUrls: string[] = (order.pages || [])
+      .flatMap((page: any) => page?.images || [])
+      .filter(Boolean);
+    allImageUrls.forEach(url => {
+      const img = new Image();
+      img.src = url;
+    });
+  }, [isOpen, order]);
+
   if (!isOpen || !order) return null;
 
   const formatDate = (dateString: string) => {

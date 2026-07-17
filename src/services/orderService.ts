@@ -120,19 +120,28 @@ export async function createDraftOrder(
     for (let i = 0; i < photos.length; i++) {
       // Aseguramos que sea un array para evitar el error de .forEach is not a function
       const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
-      const uploadedPhotos: string[] = [];
+      const variantSlotCount = (pageLayoutVariants[i] as number) || pagePhotos.length;
+      const totalSlots = Math.max(pagePhotos.length, variantSlotCount);
+      const uploadedPhotos: (string | null)[] = [];
       const pageCrops: any = {};
 
-      for (let j = 0; j < pagePhotos.length; j++) {
-        let photoUrl = pagePhotos[j];
-        if (!photoUrl) continue;
-        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
-          photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
-          updateProgress();
+      for (let j = 0; j < totalSlots; j++) {
+        let photoUrl: string | null = (j < pagePhotos.length ? pagePhotos[j] : null) || null;
+        if (photoUrl) {
+          if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
+            try {
+              const uid = `${i}_${j}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+              photoUrl = await uploadImage(`${folderPath}/photos/${uid}`, photoUrl);
+              updateProgress();
+            } catch {
+              photoUrl = null;
+            }
+          }
+          if (photoUrl) {
+            pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
+          }
         }
-        if (!photoUrl) continue;
         uploadedPhotos.push(photoUrl);
-        pageCrops[uploadedPhotos.length - 1] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
       }
 
       finalPages.push({
@@ -193,13 +202,14 @@ export async function createDraftOrder(
     };
   }
 
-  // ESCUDO FIREBASE: Aplanamos a la fuerza para que Firebase no se queje por arreglos de 2D.
   let safePhotosToSave: any[] = [];
   if (finalPhotos.length > 0) {
-     safePhotosToSave = finalPhotos;
+    safePhotosToSave = finalPhotos;
+  } else if (finalPages.length > 0) {
+    // Para álbumes: usar las URLs ya subidas a Firebase (no las blob URLs originales)
+    safePhotosToSave = finalPages.flatMap((p: any) => (p.images || []).filter(Boolean));
   } else if (designData.photos) {
-     // .flat(Infinity) destruye los sub-arreglos y los vuelve uno solo 1D
-     safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean); 
+    safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean);
   }
 
   const orderPayload = {
@@ -349,18 +359,27 @@ export async function updateOrderDesign(
     const { photos = [], pageLayouts = {}, pageLayoutVariants = {}, textBoxSlots = {}, photoCrops = {} } = designData;
     for (let i = 0; i < photos.length; i++) {
       const pagePhotos = Array.isArray(photos[i]) ? photos[i] : [photos[i]];
-      const uploadedPhotos: string[] = [];
+      const variantSlotCount = (pageLayoutVariants[i] as number) || pagePhotos.length;
+      const totalSlots = Math.max(pagePhotos.length, variantSlotCount);
+      const uploadedPhotos: (string | null)[] = [];
       const pageCrops: any = {};
-      for (let j = 0; j < pagePhotos.length; j++) {
-        let photoUrl = pagePhotos[j];
-        if (!photoUrl) continue;
-        if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
-          photoUrl = await uploadImage(`${folderPath}/pages/page${i}_photo${j}`, photoUrl);
-          updateProgress();
+      for (let j = 0; j < totalSlots; j++) {
+        let photoUrl: string | null = (j < pagePhotos.length ? pagePhotos[j] : null) || null;
+        if (photoUrl) {
+          if (isBase64(photoUrl) || isBlobUrl(photoUrl)) {
+            try {
+              const uid = `${i}_${j}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+              photoUrl = await uploadImage(`${folderPath}/photos/${uid}`, photoUrl);
+              updateProgress();
+            } catch {
+              photoUrl = null;
+            }
+          }
+          if (photoUrl) {
+            pageCrops[j] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
+          }
         }
-        if (!photoUrl) continue;
         uploadedPhotos.push(photoUrl);
-        pageCrops[uploadedPhotos.length - 1] = photoCrops[`${i}-${j}`] || { x: 50, y: 50, zoom: 1 };
       }
       finalPages.push({ pageIndex: i, images: uploadedPhotos, layout: pageLayouts[i] || 1, variant: pageLayoutVariants[i] || null, texts: textBoxSlots[i] || {}, crops: pageCrops });
     }
@@ -391,8 +410,13 @@ export async function updateOrderDesign(
   }
 
   let safePhotosToSave: any[] = [];
-  if (finalPhotos.length > 0) safePhotosToSave = finalPhotos;
-  else if (designData.photos) safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean);
+  if (finalPhotos.length > 0) {
+    safePhotosToSave = finalPhotos;
+  } else if (finalPages.length > 0) {
+    safePhotosToSave = finalPages.flatMap((p: any) => (p.images || []).filter(Boolean));
+  } else if (designData.photos) {
+    safePhotosToSave = (designData.photos || []).flat(Infinity).filter(Boolean);
+  }
 
   let cleanCustomization = { ...designData.customization };
   if (cleanCustomization.coverContent && cleanCustomization.coverContent.coverImage) {

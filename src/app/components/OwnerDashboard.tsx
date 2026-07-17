@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import UsersSection from './UsersSection';
 import { updateOrderStatus } from '../../services/orderService';
@@ -111,6 +111,56 @@ const getDimensions = (order: Order) => {
 }
 
 // ============================================================================
+// PRE-CARGA DE IMÁGENES COMO DATA URLS
+// ============================================================================
+async function preloadImages(urls: string[]): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    urls.filter(Boolean).map(async (url) => {
+      try {
+        const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        return [url, dataUrl] as [string, string];
+      } catch {
+        return [url, url] as [string, string];
+      }
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+// ============================================================================
+// ESPERA ACTIVA HASTA QUE TODAS LAS IMÁGENES (CanvasCropper / ImageCropper)
+// DEL CONTENEDOR ESTÉN REALMENTE PINTADAS ANTES DE CAPTURAR CON html-to-image
+// ============================================================================
+function waitForRenderReady(container: HTMLElement, opts: { maxWaitMs?: number; minWaitMs?: number } = {}): Promise<void> {
+  const MAX_WAIT_MS = opts.maxWaitMs ?? 15000;
+  const MIN_WAIT_MS = opts.minWaitMs ?? 150;
+  const POLL_MS = 100;
+  const startTime = Date.now();
+
+  return new Promise((resolve) => {
+    const poll = setInterval(() => {
+      const targets = container.querySelectorAll('[data-canvas-cropper], [data-image-cropper]');
+      const readyTargets = container.querySelectorAll('[data-canvas-cropper][data-ready], [data-image-cropper][data-ready]');
+      const elapsed = Date.now() - startTime;
+      const allDone = targets.length === readyTargets.length;
+      const timedOut = elapsed > MAX_WAIT_MS;
+
+      if ((allDone && elapsed >= MIN_WAIT_MS) || timedOut) {
+        clearInterval(poll);
+        resolve();
+      }
+    }, POLL_MS);
+  });
+}
+
+// ============================================================================
 // RENDERIZADOR CANVAS NATIVO
 // ============================================================================
 const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
@@ -122,18 +172,28 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Medir dimensiones ANTES de cargar la imagen (síncrono, layout ya calculado)
+    let cancelled = false;
+
+    canvas.removeAttribute('data-ready');
+
     const rect = canvas.getBoundingClientRect();
     const destWidth = Math.round(rect.width * 2);
     const destHeight = Math.round(rect.height * 2);
-    if (destWidth === 0 || destHeight === 0) return;
+    if (destWidth === 0 || destHeight === 0) {
+      canvas.setAttribute('data-ready', 'error');
+      return;
+    }
     canvas.width = destWidth;
     canvas.height = destHeight;
 
     const drawOnCanvas = (imgEl: HTMLImageElement) => {
+      if (cancelled) return;
       const imgWidth = imgEl.naturalWidth;
       const imgHeight = imgEl.naturalHeight;
-      if (imgWidth === 0 || imgHeight === 0) return;
+      if (imgWidth === 0 || imgHeight === 0) {
+        canvas.setAttribute('data-ready', 'error');
+        return;
+      }
 
       const { x = 50, y = 50, zoom = 1, rotation = 0 } = crop || {};
       const imgAspect = imgWidth / imgHeight;
@@ -153,7 +213,6 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       const centerX = (x / 100) * imgWidth;
       const centerY = (y / 100) * imgHeight;
 
-      // Clampar coordenadas fuente para evitar valores fuera de rango
       const sX = Math.max(0, Math.min(centerX - finalSWidth / 2, imgWidth - finalSWidth));
       const sY = Math.max(0, Math.min(centerY - finalSHeight / 2, imgHeight - finalSHeight));
 
@@ -173,27 +232,32 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       }
 
       if (rotation !== 0) ctx.restore();
+      canvas.setAttribute('data-ready', 'true');
     };
 
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    img.crossOrigin = 'anonymous';
     img.onload = () => drawOnCanvas(img);
     img.onerror = () => {
-      // Fallback sin crossOrigin si falla CORS
-      const fallback = new Image();
-      fallback.onload = () => drawOnCanvas(fallback);
-      fallback.src = src;
+      if (cancelled) return;
+      // No reintentar sin crossOrigin: eso "mancharía" (taint) el canvas y
+      // rompería la captura de html-to-image de forma silenciosa más adelante.
+      canvas.setAttribute('data-ready', 'error');
     };
     img.src = src;
+
+    return () => {
+      cancelled = true;
+    };
   }, [src, crop]);
 
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
+  return <canvas data-canvas-cropper ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
 };
 
 // ============================================================================
 // COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
-const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number}> = ({pageObj, customization, pageIndex, order, pxWidth}) => {
+const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number, preloadedMap?: Record<string, string>}> = ({pageObj, customization, pageIndex, order, pxWidth, preloadedMap}) => {
   const size = customization?.size || '';
   
   const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
@@ -215,13 +279,14 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
         const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
         
         const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
+        const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
 
         return (
           <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-white flex items-center justify-center w-full h-full border border-gray-100/50">
-            {photo ? (
+            {resolvedSrc ? (
               <div className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto bg-gray-100" : "w-full h-full relative bg-gray-100"}>
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={photo} crop={crop} />
+                  <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
               </div>
             ) : textBox ? (
@@ -250,7 +315,24 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
   );
 };
 
-const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number }> = ({ order, monthIndex, pxWidth }) => {
+const getPhotosForMonth = (order: any, monthIndex: number): string[] => {
+  let photosForMonth: string[] = [];
+  const pageData = order.pages?.[monthIndex];
+  if (pageData && Array.isArray(pageData.images)) {
+    photosForMonth = pageData.images;
+  } else if (pageData && pageData.image) {
+    photosForMonth = [pageData.image];
+  }
+
+  const photoData = order.photos?.[monthIndex];
+  if (photosForMonth.length === 0 && photoData) {
+    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
+    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
+  }
+  return photosForMonth;
+};
+
+const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number, preloadedMap?: Record<string, string> }> = ({ order, monthIndex, pxWidth, preloadedMap }) => {
   const year = order.customization?.year || new Date().getFullYear();
   const orientation = order.customization?.orientation || 'vertical';
   const type = order.customization?.type || 'desk';
@@ -275,19 +357,7 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
   const padding = baseSize * 3;
   const gap = baseSize * 0.5;
 
-  let photosForMonth: string[] = [];
-  const pageData = order.pages?.[monthIndex];
-  if (pageData && Array.isArray(pageData.images)) {
-    photosForMonth = pageData.images;
-  } else if (pageData && pageData.image) {
-    photosForMonth = [pageData.image];
-  }
-  
-  const photoData = order.photos?.[monthIndex];
-  if (photosForMonth.length === 0 && photoData) {
-    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
-    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
-  }
+  const photosForMonth = getPhotosForMonth(order, monthIndex);
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: orientation === 'horizontal' ? 'row' : 'column', backgroundColor: 'white', boxSizing: 'border-box' }}>
@@ -299,12 +369,13 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: `${gap}px`, width: '100%', height: '100%', padding: `${gap}px`, boxSizing: 'border-box' }}>
                   {Array.from({ length: 4 }).map((_, photoIdx) => {
                     const photo = photosForMonth[photoIdx];
+                    const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
                     const crop = order.photoCrops?.[`${monthIndex}-${photoIdx}`];
                     return (
                       <div key={photoIdx} style={{ position: 'relative', backgroundColor: '#e5e7eb', borderRadius: `${baseSize*0.5}px`, overflow: 'hidden' }}>
-                        {photo && (
+                        {resolvedSrc && (
                           <div className="absolute inset-0 w-full h-full pointer-events-none">
-                            <CanvasCropper src={photo} crop={crop} />
+                            <CanvasCropper src={resolvedSrc} crop={crop} />
                           </div>
                         )}
                       </div>
@@ -314,10 +385,11 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
               );
             } else {
               const photo = photosForMonth[0];
+              const resolvedSrc = preloadedMap?.[photo] || photo;
               const crop = order.photoCrops?.[monthIndex] || order.photoCrops?.[`${monthIndex}-0`];
               return (
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={photo} crop={crop} />
+                  <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
               );
             }
@@ -381,6 +453,7 @@ const OwnerDashboard: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
+  const [downloadType, setDownloadType] = useState<'pdfs' | 'images' | null>(null);
   const [isTabHidden, setIsTabHidden] = useState(false);
 
   // --- Detectar cambio de pestaña durante la descarga ---
@@ -580,21 +653,21 @@ const OwnerDashboard: React.FC = () => {
 
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
-          return new Promise<string>((res, rej) => {
-            root.render(
-              <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
-                {element}
-              </div>
-            );
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) { rej(e); }
-            }, 3000);
-          });
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen de portada como Data URL antes de renderizar
+          const preloadedMap = await preloadImages(imageUrls);
+
+          root.render(
+            <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
+              {buildElement(preloadedMap)}
+            </div>
+          );
+
+          // Esperar activamente hasta que la imagen de portada esté realmente pintada
+          await waitForRenderReady(container);
+
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         let coverImageForPdf = order.coverData?.image || '';
@@ -605,70 +678,77 @@ const OwnerDashboard: React.FC = () => {
         const textColor = order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000';
         const spineText = order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || '';
 
+        const coverUrls = coverImageForPdf && !coverImageForPdf.startsWith('data:') ? [coverImageForPdf] : [];
         const dataUrl = await renderAndCapture(
-          <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
-            {/* Contenido centrado en el lienzo */}
-            <div style={{
-              position: 'absolute',
-              left: marginXPx,
-              top:  marginYPx,
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'flex-start',
-            }}>
-              {!isTela && (
-                <>
-                  {/* Contraportada */}
-                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                    <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
-                      <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                      <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
-                    </div>
+          (preloadedMap) => {
+            const resolvedCoverImage = preloadedMap[coverImageForPdf] || coverImageForPdf;
+            return (
+              <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
+                {/* Contenido centrado en el lienzo */}
+                <div style={{
+                  position: 'absolute',
+                  left: marginXPx,
+                  top:  marginYPx,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                }}>
+                  {!isTela && (
+                    <>
+                      {/* Contraportada */}
+                      <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
+                          <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                        </div>
+                      </div>
+
+                      {/* Gap 1 cm: contraportada → lomo */}
+                      <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
+
+                      {/* Lomo */}
+                      <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
+                          <span style={{
+                            display: 'block',
+                            transform: 'rotate(90deg) translateY(-50%)',
+                            transformOrigin: 'top left',
+                            whiteSpace: 'nowrap',
+                            fontSize: `${spinePxWidth * 0.25}px`,
+                            fontWeight: 'bold',
+                            letterSpacing: '8px',
+                            color: textColor,
+                          }}>
+                            {spineText}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Gap 1 cm: lomo → portada */}
+                      <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
+                    </>
+                  )}
+
+                  {/* Portada */}
+                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                    <CoverPreview
+                      coverSize={coverSizeProp as any}
+                      coverType={isTela ? 'Tela' : 'Papel'}
+                      coverImage={resolvedCoverImage}
+                      coverTitle={order.coverData?.title || ''}
+                      coverSubtitle={order.coverData?.subtitle || ''}
+                      coverYear={order.coverData?.year || ''}
+                      selectedLayout={Number(order.coverData?.layout) || 1}
+                      coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
+                      typographyColor={textColor}
+                      hideSpine={true}
+                    />
                   </div>
-
-                  {/* Gap 1 cm: contraportada → lomo */}
-                  <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
-
-                  {/* Lomo */}
-                  <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                    <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
-                      <span style={{
-                        display: 'block',
-                        transform: 'rotate(90deg) translateY(-50%)',
-                        transformOrigin: 'top left',
-                        whiteSpace: 'nowrap',
-                        fontSize: `${spinePxWidth * 0.25}px`,
-                        fontWeight: 'bold',
-                        letterSpacing: '8px',
-                        color: textColor,
-                      }}>
-                        {spineText}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Gap 1 cm: lomo → portada */}
-                  <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
-                </>
-              )}
-
-              {/* Portada */}
-              <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
-                <CoverPreview
-                  coverSize={coverSizeProp as any}
-                  coverType={isTela ? 'Tela' : 'Papel'}
-                  coverImage={coverImageForPdf}
-                  coverTitle={order.coverData?.title || ''}
-                  coverSubtitle={order.coverData?.subtitle || ''}
-                  coverYear={order.coverData?.year || ''}
-                  selectedLayout={Number(order.coverData?.layout) || 1}
-                  coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
-                  typographyColor={textColor}
-                  hideSpine={true}
-                />
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          },
+          coverUrls
         );
 
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
@@ -723,26 +803,29 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
-          return new Promise<string>((res, rej) => {
-            root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) {
-                rej(e);
-              }
-            }, 3000);
-          });
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar todas las imágenes de la página como Data URLs antes de renderizar
+          const preloadedMap = await preloadImages(imageUrls);
+
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
+
+          // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
+          await waitForRenderReady(container);
+
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         if (order.pages && order.pages.length > 0) {
           for (let i = 0; i < order.pages.length; i++) {
             if (i > 0) pdf.addPage();
+            const currentPage = order.pages[i];
+            const pageImages = ((currentPage as any)?.images || []).filter(Boolean) as string[];
             const pageDataUrl = await renderAndCapture(
-              <AlbumPagePrintView pageObj={order.pages[i]} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} />
+              (preloadedMap) => (
+                <AlbumPagePrintView key={i} pageObj={currentPage} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+              ),
+              pageImages
             );
             pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
             itemsProcessed++;
@@ -779,24 +862,28 @@ const OwnerDashboard: React.FC = () => {
         
         const root = createRoot(container);
 
-        const renderAndCapture = async (element: React.ReactNode) => {
-          return new Promise<string>((res, rej) => {
-            root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{element}</div>);
-            setTimeout(async () => {
-              try {
-                const node = container.firstChild as HTMLElement;
-                const dataUrl = await htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-                res(dataUrl);
-              } catch (e) {
-                rej(e);
-              }
-            }, 3000);
-          });
+        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
+          // Pre-cargar imagen(es) del mes como Data URLs antes de renderizar
+          const preloadedMap = await preloadImages(imageUrls);
+
+          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
+
+          // Esperar activamente hasta que la imagen del mes esté realmente pintada
+          await waitForRenderReady(container);
+
+          const node = container.firstChild as HTMLElement;
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
         };
 
         for (let i = 0; i < 12; i++) {
-          if (i > 0) pdf.addPage(); 
-          const pageDataUrl = await renderAndCapture(<CalendarPagePrintView order={order} monthIndex={i} pxWidth={pxWidth} />);
+          if (i > 0) pdf.addPage();
+          const monthImages = getPhotosForMonth(order, i).filter(Boolean);
+          const pageDataUrl = await renderAndCapture(
+            (preloadedMap) => (
+              <CalendarPagePrintView key={i} order={order} monthIndex={i} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+            ),
+            monthImages
+          );
           pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
           itemsProcessed++;
           onProgress(Math.round((itemsProcessed / totalItems) * 100));
@@ -961,6 +1048,170 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
+  const handleDownloadPDFs = async (order: Order) => {
+    if (downloadProgress.orderId) return;
+    setDownloadProgress({ orderId: order.id, progress: 0 });
+    setDownloadType('pdfs');
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`pdfs_${order.id}`);
+      if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
+
+      const { isCalendar, isAlbum } = getDimensions(order);
+
+      if (isCalendar) {
+        try {
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
+          folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+        } catch (pdfError) {
+          console.error("Error al generar PDF de calendario:", pdfError);
+          alert("No se pudo generar el PDF del calendario.");
+          setDownloadProgress({ orderId: null, progress: 0 });
+          setDownloadType(null);
+          return;
+        }
+      } else if (isAlbum) {
+        const pdfErrors: string[] = [];
+        try {
+          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
+          folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+        } catch (coverError) {
+          console.error("Error al generar PDF de portada:", coverError);
+          pdfErrors.push("portada");
+        }
+        try {
+          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
+          folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+        } catch (innerError) {
+          console.error("Error al generar PDF de páginas interiores:", innerError);
+          pdfErrors.push("páginas interiores");
+        }
+        if (pdfErrors.length > 0) {
+          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}.`);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `pdfs_pedido_${order.id}.zip`);
+      setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
+    } catch (error: any) {
+      console.error("Error al descargar PDFs:", error);
+      alert("Hubo un problema al generar los PDFs: " + (error.message || 'Error desconocido'));
+      setDownloadProgress({ orderId: null, progress: 0 });
+      setDownloadType(null);
+    }
+  };
+
+  const handleDownloadImagesExcel = async (order: Order) => {
+    if (downloadProgress.orderId) return;
+    setDownloadProgress({ orderId: order.id, progress: 0 });
+    setDownloadType('images');
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`imagenes_${order.id}`);
+      if (!folder) throw new Error("No se pudo crear la carpeta en el ZIP.");
+
+      const { isCalendar } = getDimensions(order);
+      const isTela = order.customization?.coverType === 'Tela' || order.customization?.material === 'Tela';
+
+      // Excel
+      const wb = XLSX.utils.book_new();
+      const resumenData = [{
+        'ID del Pedido': order.id, 'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
+        'Estado': order.status === 'paid' || order.status === 'mock_paid' ? 'Pagado' : order.status,
+        'Total Pagado ($)': order.total?.toFixed(2), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
+        'Email': order.shippingAddress?.email || 'N/A', 'Dirección de Envío': order.shippingAddress?.address || 'N/A',
+        'Ciudad': order.shippingAddress?.city || 'N/A', 'Código Postal': order.shippingAddress?.zipCode || 'N/A'
+      }];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenData), "Resumen General");
+      const configData = [{
+        'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
+        'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
+        'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
+        'Título de Portada': order.coverData?.title || 'N/A', 'Subtítulo': order.coverData?.subtitle || 'N/A',
+        'Año': order.coverData?.year || 'N/A', 'Layout Portada': order.coverData?.layout || 'N/A',
+        'Texto Lomo': !isTela ? (order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || 'N/A') : 'N/A (Tela)'
+      }];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(configData), "Configuración");
+      let detallesData: any[] = [];
+      if (order.pages && Array.isArray(order.pages)) {
+        detallesData = order.pages.map((page, i) => ({
+          'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
+          'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
+          'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
+        }));
+      } else if (order.items && Array.isArray(order.items)) {
+        detallesData = order.items.map((item, i) => ({
+          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
+          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
+        }));
+      }
+      if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
+      const imagenesData: any[] = [];
+      if (!isCalendar && order.coverData?.image) {
+        imagenesData.push({
+          'Ubicación': 'Portada', 'Nombre de Archivo en ZIP': 'portada.jpg',
+          'Zoom (Escala)': order.coverData.crop?.zoom?.toFixed(2) || '1.00', 'Posición X (%)': order.coverData.crop?.x?.toFixed(2) || '50.00',
+          'Posición Y (%)': order.coverData.crop?.y?.toFixed(2) || '50.00', 'URL Original': typeof order.coverData.image === 'string' && order.coverData.image.includes('justwhite') ? 'Imagen Blanca (Color Sólido)' : order.coverData.image
+        });
+      }
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          if (page.images && Array.isArray(page.images)) {
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              const crop = page.crops?.[imgIndex] || order.photoCrops?.[`${pageIndex}-${imgIndex}`] || { x: 50, y: 50, zoom: 1 };
+              imagenesData.push({
+                'Ubicación': `Página ${pageIndex + 1}`, 'Nombre de Archivo en ZIP': `pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`,
+                'Zoom (Escala)': crop.zoom?.toFixed(2) || '1.00', 'Posición X (%)': crop.x?.toFixed(2) || '50.00', 'Posición Y (%)': crop.y?.toFixed(2) || '50.00', 'URL Original': typeof imgUrl === 'string' ? imgUrl : 'N/A'
+              });
+            });
+          }
+        });
+      }
+      if (imagenesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(imagenesData), "Reporte de Imágenes");
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      folder.file('resumen_pedido.xlsx', excelBuffer);
+
+      // Imágenes
+      const imgFolder = folder.folder('imagenes');
+      if (!imgFolder) throw new Error("No se pudo crear la subcarpeta de imágenes.");
+      const fetchImageAsBlob = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Error al descargar la imagen: ${url}`);
+        return res.blob();
+      };
+      const imagePromises: Promise<void>[] = [];
+      if (!isCalendar && order.coverData?.image) {
+        let coverUrl = order.coverData.image;
+        if (typeof coverUrl === 'string' && coverUrl.includes('justwhite')) coverUrl = justWhiteImg;
+        imagePromises.push(fetchImageAsBlob(coverUrl).then(blob => { imgFolder.file('portada.jpg', blob); }).catch(e => console.error('Error descargando portada:', e)));
+      }
+      if (order.pages && Array.isArray(order.pages)) {
+        order.pages.forEach((page, pageIndex) => {
+          if (page.images && Array.isArray(page.images) && page.images.length > 0) {
+            page.images.forEach((imgUrl: any, imgIndex: number) => {
+              if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
+                imagePromises.push(fetchImageAsBlob(imgUrl).then(blob => { imgFolder.file(`pagina_${String(pageIndex + 1).padStart(2, '0')}_foto_${imgIndex + 1}.jpg`, blob); }).catch(e => console.error(`Error descargando pág ${pageIndex + 1}, foto ${imgIndex + 1}:`, e)));
+              }
+            });
+          }
+        });
+      }
+      const total = imagePromises.length;
+      let done = 0;
+      await Promise.all(imagePromises.map(p => p.then(() => { done++; setDownloadProgress({ orderId: order.id, progress: Math.round((done / Math.max(total, 1)) * 100) }); })));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `imagenes_pedido_${order.id}.zip`);
+      setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
+    } catch (error: any) {
+      console.error("Error al descargar imágenes/Excel:", error);
+      alert("Hubo un problema al empaquetar: " + (error.message || 'Error desconocido'));
+      setDownloadProgress({ orderId: null, progress: 0 });
+      setDownloadType(null);
+    }
+  };
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1102,7 +1353,10 @@ const OwnerDashboard: React.FC = () => {
                                       <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
                                     </div>
                                   ) : (
-                                    <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                    <>
+                                      <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                      <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
+                                    </>
                                   )}
                                   {col.nextStatus && (
                                     <button
@@ -1168,7 +1422,10 @@ const OwnerDashboard: React.FC = () => {
                                         <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
                                       </div>
                                     ) : (
-                                      <button onClick={() => handleDownloadZIP(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar ZIP"><Download className="w-4 h-4" /></button>
+                                      <>
+                                        <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
+                                      </>
                                     )}
                                     <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                   </div>
@@ -1424,7 +1681,7 @@ const OwnerDashboard: React.FC = () => {
             <Loader2 className={`w-5 h-5 animate-spin shrink-0 ${isTabHidden ? 'text-amber-500' : 'text-emerald-500'}`} />
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-black uppercase tracking-widest mb-1.5 ${isTabHidden ? 'text-amber-600' : 'text-gray-500'}`}>
-                {isTabHidden ? '⚠ Generación pausada' : 'Generando PDF…'}
+                {isTabHidden ? '⚠ Generación pausada' : downloadType === 'images' ? 'Descargando imágenes…' : 'Generando PDFs…'}
               </p>
               <div className="w-full bg-gray-100 rounded-full h-2">
                 <div
