@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { getEffectiveFontSize } from '../utils/textOverflowUtils';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -143,10 +144,10 @@ const AlbumPagePhoto: React.FC<{
       ) : textBox ? (
         <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
           <div
-            style={{ 
-              width: '90%', 
-              fontSize: `${textBox.fontSize * 0.25}cqi`,
-              fontFamily: textBox.fontFamily, 
+            style={{
+              width: '90%',
+              fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
+              fontFamily: textBox.fontFamily,
               color: textBox.color, 
               textAlign: 'center',
               wordBreak: 'break-word',
