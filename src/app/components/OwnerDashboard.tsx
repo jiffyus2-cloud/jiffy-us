@@ -295,9 +295,9 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                 <div style={{ 
                   width: '90%', 
                   fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
-                  fontFamily: textBox.fontFamily || 'Arial', 
-                  color: textBox.color || '#000', 
-                  textAlign: 'center',
+                  fontFamily: textBox.fontFamily || 'Arial',
+                  color: textBox.color || '#000',
+                  textAlign: textBox.textAlign || 'center',
                   wordBreak: 'break-word',
                   whiteSpace: 'pre-wrap',
                   lineHeight: '1.3'
