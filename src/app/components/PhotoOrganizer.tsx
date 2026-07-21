@@ -2591,6 +2591,9 @@ export default function PhotoOrganizer({
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label>
                   <select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{FONT_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}</select>
+                  {(currentEditingText.overflowMode || 'limit') === 'limit' && (
+                    <p className="text-[10px] text-gray-400 mt-1">{t('organizer.maxCharsHint', { count: getMaxCharsForFontSize(currentEditingText.fontSize) })}</p>
+                  )}
                   <div className="flex items-center justify-between gap-2 mt-2">
                     <span className="text-[11px] font-medium text-gray-500">{(currentEditingText.overflowMode || 'limit') === 'shrink' ? t('organizer.overflowShrink') : t('organizer.overflowLimit')}</span>
                     <Switch
