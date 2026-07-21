@@ -26,7 +26,7 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify
 } from 'lucide-react';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -226,7 +226,7 @@ const AlbumEditorPhotoSlot: React.FC<{
               fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
               fontFamily: textBox.fontFamily,
               color: textBox.color,
-              textAlign: 'center',
+              textAlign: textBox.textAlign || 'center',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
               lineHeight: '1.3',
@@ -1187,7 +1187,7 @@ export default function PhotoOrganizer({
   const handleAddTextBox = (pageIndex: number, photoIndex: number) => {
     const newSlots = { ...textBoxSlots };
     if (!newSlots[pageIndex]) newSlots[pageIndex] = {};
-    newSlots[pageIndex][photoIndex] = { text: '', fontSize: 24, fontFamily: 'Arial', color: '#000000', overflowMode: 'limit' };
+    newSlots[pageIndex][photoIndex] = { text: '', fontSize: 24, fontFamily: 'Arial', color: '#000000', overflowMode: 'limit', textAlign: 'center' };
     onTextBoxSlotsChange(newSlots);
     setEditingTextSlot({ pageIndex, photoIndex });
   };
@@ -2580,7 +2580,7 @@ export default function PhotoOrganizer({
                       fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, (currentEditingText.text || '').length, currentEditingText.overflowMode || 'limit') * 0.25}cqi`,
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
-                      textAlign: 'center',
+                      textAlign: currentEditingText.textAlign || 'center',
                       lineHeight: '1.3'
                     }}
                     autoFocus
@@ -2601,6 +2601,27 @@ export default function PhotoOrganizer({
                   </div>
                 </div>
                 <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.font')}</label><select value={currentEditingText.fontFamily} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontFamily: e.target.value })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white"><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Monospace</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Handwritten</option></select></div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.textAlign')}</label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'left', Icon: AlignLeft },
+                    { value: 'center', Icon: AlignCenter },
+                    { value: 'right', Icon: AlignRight },
+                    { value: 'justify', Icon: AlignJustify },
+                  ] as const).map(({ value, Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { textAlign: value })}
+                      title={t(`organizer.align.${value}`)}
+                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${(currentEditingText.textAlign || 'center') === value ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color')}</label>

@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { 
-  Upload, X, Plus, Eye, Edit3, 
+import {
+  Upload, X, Plus, Eye, Edit3,
   Image as ImageIcon, Check, Trash2,
-  Type, ALargeSmall, Loader2, Crop as CropIcon
+  Type, ALargeSmall, Loader2, Crop as CropIcon,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify
 } from 'lucide-react';
 import { MugProduct } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -17,7 +18,8 @@ export interface MugItem {
   text: string;
   fontSize: number;
   fontFamily: string;
-  fontWeight?: number; 
+  fontWeight?: number;
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
   designStyle?: 'separate' | 'text-cutout';
   photoCrops?: Record<number, { x: number; y: number; zoom: number }>;
 }
@@ -76,7 +78,7 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
   const addNewItem = () => {
     const newItem: MugItem = {
       id: Date.now().toString(),
-      photos: [], text: '', fontSize: 48, fontFamily: 'Arial', fontWeight: 400, 
+      photos: [], text: '', fontSize: 48, fontFamily: 'Arial', fontWeight: 400, textAlign: 'center',
       designStyle: 'separate', photoCrops: {}
     };
     safeOnItemsChange([...safeItems, newItem]);
@@ -170,11 +172,11 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                             
                             {item.designStyle === 'text-cutout' ? (
                                <div className="absolute inset-0 bg-white pointer-events-none mix-blend-screen flex items-center justify-center p-6 z-10">
-                                  <div style={{ fontSize: `${item.fontSize}px`, fontFamily: item.fontFamily, fontWeight: item.fontWeight || 400, color: 'black', textAlign: 'center', lineHeight: 1.1, wordBreak: 'break-word', width: '100%' }}>{item.text || (editingItemId === item.id ? 'ESCRIBE AQUÍ' : '')}</div>
+                                  <div style={{ fontSize: `${item.fontSize}px`, fontFamily: item.fontFamily, fontWeight: item.fontWeight || 400, color: 'black', textAlign: item.textAlign || 'center', lineHeight: 1.1, wordBreak: 'break-word', width: '100%' }}>{item.text || (editingItemId === item.id ? 'ESCRIBE AQUÍ' : '')}</div>
                                </div>
                             ) : (
                                item.text && (
-                                  <div className="absolute inset-0 flex items-center justify-center p-10 pointer-events-none z-10" style={{ fontSize: `${item.fontSize}px`, fontFamily: item.fontFamily, fontWeight: item.fontWeight || 400, color: item.photos[0] ? 'white' : 'black', textShadow: item.photos[0] ? '0 2px 8px rgba(0,0,0,0.6)' : 'none', textAlign: 'center', lineHeight: 1.1, wordBreak: 'break-word', width: '100%' }}>{item.text}</div>
+                                  <div className="absolute inset-0 flex items-center justify-center p-10 pointer-events-none z-10" style={{ fontSize: `${item.fontSize}px`, fontFamily: item.fontFamily, fontWeight: item.fontWeight || 400, color: item.photos[0] ? 'white' : 'black', textShadow: item.photos[0] ? '0 2px 8px rgba(0,0,0,0.6)' : 'none', textAlign: item.textAlign || 'center', lineHeight: 1.1, wordBreak: 'break-word', width: '100%' }}>{item.text}</div>
                                )
                             )}
                          </div>
@@ -249,6 +251,26 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
                 <div className="col-span-1"><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block items-center gap-1.5 truncate"><ALargeSmall className="w-3.5 h-3.5 inline" /> Tamaño</label><select value={currentEditingItem.fontSize} onChange={(e) => updateItemText(currentEditingItem.id, { fontSize: parseInt(e.target.value) })} className="w-full h-[42px] px-2 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white font-bold text-sm">{[16, 24, 32, 48, 64, 80, 96, 120].map(size => (<option key={size} value={size}>{size}px</option>))}</select></div>
                 <div className="col-span-1"><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block truncate">Fuente</label><select value={currentEditingItem.fontFamily} onChange={(e) => updateItemText(currentEditingItem.id, { fontFamily: e.target.value })} className="w-full h-[42px] px-1 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white font-bold text-sm"><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Mono</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Script</option></select></div>
                 <div className="col-span-1"><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block truncate">Grosor</label><select value={currentEditingItem.fontWeight || 400} onChange={(e) => updateItemText(currentEditingItem.id, { fontWeight: parseInt(e.target.value) })} className="w-full h-[42px] px-1 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white font-bold text-sm"><option value={400}>Normal</option><option value={500}>Medium</option><option value={600}>SemiBold</option><option value={700}>Bold</option><option value={800}>ExtraBold</option><option value={900}>Black</option></select></div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Alineación</label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'left', Icon: AlignLeft },
+                    { value: 'center', Icon: AlignCenter },
+                    { value: 'right', Icon: AlignRight },
+                    { value: 'justify', Icon: AlignJustify },
+                  ] as const).map(({ value, Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateItemText(currentEditingItem.id, { textAlign: value })}
+                      className={`flex-1 h-[42px] rounded-xl border-2 flex items-center justify-center transition-all ${(currentEditingItem.textAlign || 'center') === value ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  ))}
+                </div>
               </div>
               <button onClick={() => setEditingTextSlot(null)} className="w-full py-4 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-bold text-lg shadow-lg">Guardar Cambios</button>
             </div>

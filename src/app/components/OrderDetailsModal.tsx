@@ -148,8 +148,8 @@ const AlbumPagePhoto: React.FC<{
               width: '90%',
               fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
               fontFamily: textBox.fontFamily,
-              color: textBox.color, 
-              textAlign: 'center',
+              color: textBox.color,
+              textAlign: textBox.textAlign || 'center',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
               lineHeight: '1.3'
@@ -314,7 +314,7 @@ const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
                   fontFamily: item.fontFamily,
                   color: photo ? 'white' : 'black',
                   textShadow: photo ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
-                  textAlign: 'center',
+                  textAlign: item.textAlign || 'center',
                   wordBreak: 'break-word',
                   whiteSpace: 'pre-wrap'
                 }}
