@@ -118,9 +118,17 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   };
 
   const currentCoverSize = mapSizeToCoverSize(size);
-  
+
   // Determinamos el número de layouts disponibles dependiendo del material y orientación
   const numLayouts = coverType === 'Tela' ? 3 : (currentCoverSize === '28x21' ? 4 : 5);
+
+  // Layouts full-bleed sin texto (mismo criterio que CoverEditor): cuadrado L5 y horizontal Papel L5
+  const isSquareLayout5 = (currentCoverSize === '20x20' || currentCoverSize === '30x30') && coverContent.selectedLayout === 5;
+  const isHorizontalPapelLayout5 = currentCoverSize === '21x28' && coverContent.selectedLayout === 5 && coverType === 'Papel';
+  const subtitleFieldVisible = !isSquareLayout5 && !isHorizontalPapelLayout5 && !(currentCoverSize === '28x21' && coverContent.selectedLayout === 1);
+  const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
+  const displaySubtitle = coverContent.coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
+  const subtitleIsPlaceholder = subtitleFieldVisible && !coverContent.coverSubtitle;
 
   // Si el usuario cambia de material o tamaño y el layout seleccionado ya no existe, lo regresamos al 1
   useEffect(() => {
@@ -257,12 +265,13 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
               coverType={coverType}
               coverImage={coverContent.coverImage}
               coverTitle={coverContent.coverTitle || 'NUESTRA HISTORIA'}
-              coverSubtitle={coverContent.coverSubtitle}
+              coverSubtitle={displaySubtitle}
               coverYear={coverContent.coverYear || new Date().getFullYear().toString()}
               spineText={coverContent.spineText || coverContent.coverTitle || 'NUESTRA HISTORIA'}
               selectedLayout={coverContent.selectedLayout}
               coverCrop={coverContent.coverCrop}
               typographyColor={coverContent.typographyColor}
+              subtitlePlaceholder={subtitleIsPlaceholder}
             />
           </div>
 
