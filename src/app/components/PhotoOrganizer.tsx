@@ -374,6 +374,8 @@ export default function PhotoOrganizer({
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
   const [sendPhotoPicker, setSendPhotoPicker] = useState<{ pageIndex: number; photoIndex: number } | null>(null);
+  const sendPhotoPickerScrollRef = useRef<HTMLDivElement>(null);
+  const sendPhotoPickerItemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
   const [reorderTargetPage, setReorderTargetPage] = useState<number | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -478,6 +480,21 @@ export default function PhotoOrganizer({
       }
     }
   }, [uploadedPhotos.length]);
+
+  // Al abrir el selector de página destino, centra el scroll en la página de origen
+  // para que el usuario no tenga que buscarla manualmente si está lejos del inicio.
+  useEffect(() => {
+    if (!sendPhotoPicker) return;
+    const container = sendPhotoPickerScrollRef.current;
+    const item = sendPhotoPickerItemRefs.current[sendPhotoPicker.pageIndex];
+    if (container && item) {
+      const containerHeight = container.clientHeight;
+      const itemTop = item.offsetTop;
+      const itemHeight = item.offsetHeight;
+      const scrollPosition = itemTop - (containerHeight / 2) + (itemHeight / 2);
+      container.scrollTo({ top: Math.max(0, scrollPosition), behavior: 'auto' });
+    }
+  }, [sendPhotoPicker]);
 
   const checkImageDimensions = (file: File): Promise<{file: File, url: string, isLowRes: boolean, width: number, height: number}> => {
     return new Promise((resolve) => {
@@ -1590,6 +1607,7 @@ export default function PhotoOrganizer({
         for (let i = 1; i < safePhotos.length; i += 2) {
           groups.push(i + 1 < safePhotos.length ? [i, i + 1] : [i]);
         }
+        sendPhotoPickerItemRefs.current = [];
 
         const renderPageOption = (idx: number) => {
           const pgPhotos = safePhotos[idx] || [];
@@ -1629,11 +1647,11 @@ export default function PhotoOrganizer({
                   <X className="w-5 h-5"/>
                 </button>
               </div>
-              <div className="overflow-y-auto flex flex-col gap-3">
+              <div ref={sendPhotoPickerScrollRef} className="overflow-y-auto flex flex-col gap-3">
                 {groups.map((group, groupIdx) => (
                   <div key={groupIdx} className={`flex gap-3 ${group.length === 1 ? '' : 'p-2 rounded-xl bg-gray-50 border border-gray-100'}`}>
                     {group.map(idx => (
-                      <div key={idx} className="w-20 sm:w-24 shrink-0">
+                      <div key={idx} ref={(el) => { sendPhotoPickerItemRefs.current[idx] = el; }} className="w-20 sm:w-24 shrink-0">
                         {renderPageOption(idx)}
                       </div>
                     ))}
