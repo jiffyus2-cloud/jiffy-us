@@ -14,6 +14,7 @@ interface CoverPreviewProps {
   typographyColor?: string;
 
   hideSpine?: boolean; // Usado también para saber si estamos en "Modo Impresión PDF"
+  subtitlePlaceholder?: boolean; // Cuando es true, coverSubtitle es texto de muestra (no guardado) y se renderiza atenuado
   customization?: any;
   photos?: (string | null)[];
   photoCrops?: Record<string, { x: number; y: number; zoom: number }>;
@@ -31,6 +32,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverCrop = { x: 50, y: 50, zoom: 1 },
   typographyColor = '#000000',
   hideSpine = false,
+  subtitlePlaceholder = false,
 }) => {
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -104,7 +106,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 className="text-[4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute w-full text-center" style={{ top: '60%', transform: 'translateY(-50%)' }}>
-                  {coverSubtitle && <p className="text-[2.4cqw] font-medium tracking-widest" style={{ color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="text-[2.4cqw] font-medium tracking-widest" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -118,7 +120,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 className="text-[3.2cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute" style={{ bottom: '20%', right: '20%' }}>
-                  {coverSubtitle && <p className="text-[3.2cqw] font-medium leading-none text-right" style={{ color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="text-[3.2cqw] font-medium leading-none text-right" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -129,7 +131,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               {commonOverlay}
               <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
-                  {coverSubtitle && <p className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
                 <div className="w-full flex justify-end items-end">
                   <h2 className="text-[6.4cqw] font-bold leading-none text-right" style={{ color: typographyColor }}>{coverTitle}</h2>
@@ -181,7 +183,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw] left-0 right-0" style={{ top: '21.32%', backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: '47.89%', transform: 'translateY(-50%)' }}>
                   <h2 className="font-bold leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverTitle}</h2>
-                  {coverSubtitle && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw] left-0 right-0" style={{ top: '74.45%', backgroundColor: typographyColor }} />
               </div>
@@ -207,7 +209,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: '3.04cqw', color: typographyColor }}>{coverTitle}</h2>
-                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '3.04cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                      {(coverSubtitle || subtitlePlaceholder) && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '3.04cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -231,7 +233,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: '13.21%', paddingTop: '3.33%' }}>
-                {coverSubtitle && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none px-[2%]" style={{ fontSize: '3.36cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
@@ -257,7 +259,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="flex-shrink-0 relative bg-white" style={{ height: '17.62%' }}>
                 <div className="absolute w-full flex flex-col items-center" style={{ top: '32.43%' }}>
                   <h2 className="font-bold leading-none text-center" style={{ fontSize: '3.30cqw', color: typographyColor }}>{coverTitle}</h2>
-                  {coverSubtitle && <p className="font-medium leading-none text-center" style={{ marginTop: '0.714cqw', fontSize: '2.12cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="font-medium leading-none text-center" style={{ marginTop: '0.714cqw', fontSize: '2.12cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
               <div className="relative w-full flex-1">
@@ -285,7 +287,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw]" style={{ top: '25%', left: '7.14%', right: '7.14%', backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: '44.84%', transform: 'translateY(-50%)', paddingLeft: '7.14%', paddingRight: '7.14%' }}>
                   <h2 className="font-bold leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverTitle}</h2>
-                  {coverSubtitle && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw]" style={{ top: '64.67%', left: '7.14%', right: '7.14%', backgroundColor: typographyColor }} />
               </div>
@@ -311,7 +313,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: '2.17cqw', color: typographyColor }}>{coverTitle}</h2>
-                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '2.17cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                      {(coverSubtitle || subtitlePlaceholder) && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: '2.17cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -334,27 +336,17 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: '10.95%', paddingTop: '2.5%', paddingRight: '6.07%' }}>
-                {coverSubtitle && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor }}>{coverSubtitle}</p>}
+                {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none" style={{ fontSize: '2.52cqw', color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
 
-        // L5: imagen full bleed, título esquina inferior derecha, subtítulo esquina superior izquierda
-        // right/left=3.57% (1cm/28cm), bottom/top=4.76% (1cm/21cm)
-        // título=4.56cqw (36.2pt/28cm), sub=4.12cqw (32.7pt/28cm)
+        // L5: imagen full bleed sin texto (igual que Square L5) — sin recuadro de respaldo, no debe llevar texto
         case 5:
           return (
             <div className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
               <div className="absolute inset-0 z-0 overflow-hidden bg-gray-100">
                 {renderImageSlot()}
-              </div>
-              {coverSubtitle && (
-                <div className="absolute z-10 pointer-events-none text-left" style={{ left: '3.57%', top: '4.76%' }}>
-                  <p className="font-medium leading-none" style={{ fontSize: '4.12cqw', color: typographyColor }}>{coverSubtitle}</p>
-                </div>
-              )}
-              <div className="absolute z-10 pointer-events-none text-right" style={{ right: '3.57%', bottom: '4.76%' }}>
-                <h2 className="font-bold leading-none" style={{ fontSize: '4.56cqw', color: typographyColor }}>{coverTitle}</h2>
               </div>
             </div>
           );
@@ -392,7 +384,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               <div className="flex-shrink-0 flex flex-col items-center justify-center bg-white z-10" style={{ height: textH }}>
                 <div className="font-bold tracking-wide text-center leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</div>
                 <div className="my-[1cqw]" style={{ width: divW, height: '0.5cqw', backgroundColor: typographyColor }} />
-                {coverSubtitle && <div className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor }}>{coverSubtitle}</div>}
+                {(coverSubtitle || subtitlePlaceholder) && <div className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</div>}
               </div>
               <div className="flex-shrink-0 bg-white" style={{ height: '2.5%' }} />
             </div>
@@ -423,7 +415,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 <div className="absolute h-[0.2cqw]" style={{ top: l1Top, left: lrL, right: lrL, backgroundColor: typographyColor }} />
                 <div className="absolute flex justify-between items-center w-full" style={{ top: txtTop, transform: 'translateY(-50%)', paddingLeft: lrL, paddingRight: lrL }}>
                   <h2 className="font-bold leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</h2>
-                  {coverSubtitle && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute h-[0.2cqw]" style={{ top: l2Top, left: lrL, right: lrL, backgroundColor: typographyColor }} />
               </div>
@@ -460,7 +452,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   >
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       <h2 className="font-black tracking-tight leading-none text-center" style={{ fontSize: fontF, color: typographyColor }}>{coverTitle}</h2>
-                      {coverSubtitle && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: fontF, color: typographyColor }}>{coverSubtitle}</p>}
+                      {(coverSubtitle || subtitlePlaceholder) && <p className="font-medium tracking-widest leading-tight text-center" style={{ fontSize: fontF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -490,7 +482,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                 </div>
               </div>
               <div className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: footerH, paddingTop: pad, paddingRight: lrI }}>
-                {coverSubtitle && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverSubtitle}</p>}
+                {(coverSubtitle || subtitlePlaceholder) && <p className="leading-none" style={{ fontSize: titleF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
               </div>
             </div>
           );
