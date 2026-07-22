@@ -46,7 +46,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [coverImage, setCoverImage] = useState(initialData?.coverImage || '');
   const [coverTitle, setCoverTitle] = useState(initialData?.coverTitle || '');
   const [coverSubtitle, setCoverSubtitle] = useState(initialData?.coverSubtitle || '');
-  const [coverYear, setCoverYear] = useState(initialData?.coverYear || '');
+  const [coverYear] = useState(initialData?.coverYear || '');
   const [spineText, setSpineText] = useState(initialData?.spineText || '');
 
   useEffect(() => {
@@ -80,12 +80,16 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const isSquareLayout5 = isSquare && selectedLayout === 5;
   const isLayout5 = isHorizontal && selectedLayout === 5 && coverType === 'Papel';
   const requiresPhoto = coverType === 'Papel' && !hidePhoto;
-  const isFormValid = (isSquareLayout5 ? true : coverTitle.trim() !== '') &&
+  const isFormValid = ((isSquareLayout5 || isLayout5) ? true : coverTitle.trim() !== '') &&
                       (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
                       (requiresPhoto ? coverImage !== '' : true);
 
+  const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
+  const subtitleFieldVisible = !isSquareLayout5 && !isLayout5 && !(isVertical && selectedLayout === 1);
+  const subtitleIsPlaceholder = subtitleFieldVisible && !coverSubtitle;
+
   const displayTitle = coverTitle || 'NUESTRA HISTORIA';
-  const displaySubtitle = coverSubtitle;
+  const displaySubtitle = coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
   const displayYear = coverYear || new Date().getFullYear().toString();
   const displaySpine = spineText || displayTitle;
 
@@ -254,12 +258,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 <CoverPreview
                   coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                  subtitlePlaceholder={subtitleIsPlaceholder}
                 />
               </div>
               <div className="hidden md:block w-full" style={{ maxWidth: isVertical ? '400px' : isHorizontal ? '580px' : '470px' }}>
                 <CoverPreview
                   coverSize={coverSize} coverType={coverType} coverImage={coverImage} coverTitle={displayTitle} coverSubtitle={displaySubtitle}
                   coverYear={displayYear} spineText={displaySpine} selectedLayout={selectedLayout} coverCrop={coverCrop} typographyColor={typographyColor}
+                  subtitlePlaceholder={subtitleIsPlaceholder}
                 />
               </div>
               {!hidePhoto && (
@@ -321,7 +327,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
               <div className="space-y-3 md:space-y-4">
 
-                {!isSquareLayout5 && (
+                {!isSquareLayout5 && !isLayout5 && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
                     <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
@@ -336,17 +342,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                   </div>
                 )}
 
-                {!isSquareLayout5 && !(isHorizontal && selectedLayout === 5 && coverType === 'Papel') && !(isVertical && selectedLayout === 1) && (
+                {subtitleFieldVisible && (
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
-                    <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Subtítulo o descripción breve" />
-                  </div>
-                )}
-
-                {isLayout5 && (
-                  <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
-                    <input type="text" value={coverYear} onChange={(e) => setCoverYear(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Año o rango de fechas" />
+                    <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder={SAMPLE_SUBTITLE} />
                   </div>
                 )}
               </div>
