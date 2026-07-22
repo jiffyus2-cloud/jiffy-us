@@ -97,6 +97,12 @@ export default function Creator() {
   const [isPageCountLocked, setIsPageCountLocked] = useState(false);
 
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const activeDraftIdRef = useRef<string | null>(null);
+  const draftSaveInFlightRef = useRef<Promise<string> | null>(null);
+  const updateActiveDraftId = (id: string | null) => {
+    activeDraftIdRef.current = id;
+    setActiveDraftId(id);
+  };
   const [savedDrafts, setSavedDrafts] = useState<any[]>([]);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -137,7 +143,42 @@ export default function Creator() {
     checkSavedDrafts();
   }, [user]);
 
-  const handleCheckoutRedirect = async (finalData?: { 
+  // Guardado single-flight: si ya hay un guardado de borrador en curso, las llamadas
+  // subsiguientes esperan ese resultado y lo reutilizan en vez de crear un documento
+  // duplicado en Firestore (evita la carrera entre autoguardado, guardado manual y checkout).
+  const persistDraft = async (
+    designData: any,
+    activeProduct: any,
+    userInfo: { name?: string; email?: string },
+    opts?: { status?: 'draft' | 'saved_draft'; onProgress?: (progress: number) => void }
+  ): Promise<string> => {
+    if (draftSaveInFlightRef.current) {
+      await draftSaveInFlightRef.current;
+    }
+    const existingOrderId = activeDraftIdRef.current || resumingOrderId || undefined;
+    const savePromise = createDraftOrder(
+      user!.uid,
+      designData,
+      activeProduct,
+      opts?.onProgress,
+      existingOrderId,
+      selectedProduct || undefined,
+      opts?.status ?? 'saved_draft',
+      userInfo
+    );
+    draftSaveInFlightRef.current = savePromise;
+    try {
+      const newDraftId = await savePromise;
+      updateActiveDraftId(newDraftId);
+      return newDraftId;
+    } finally {
+      if (draftSaveInFlightRef.current === savePromise) {
+        draftSaveInFlightRef.current = null;
+      }
+    }
+  };
+
+  const handleCheckoutRedirect = async (finalData?: {
     photos?: string[][] | string[], 
     mugItems?: MugItem[], 
     textBoxSlots?: Record<number, Record<number, any>> 
@@ -193,11 +234,11 @@ export default function Creator() {
       }
 
       const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      const orderId = await createDraftOrder(user.uid, designData, activeProduct, (progress) => {
-        setUploadProgress(progress);
-      }, activeDraftId || resumingOrderId || undefined, selectedProduct || undefined, 'saved_draft', userInfo);
+      const orderId = await persistDraft(designData, activeProduct, userInfo, {
+        status: 'saved_draft',
+        onProgress: (progress) => setUploadProgress(progress),
+      });
 
-      setActiveDraftId(orderId);
       setResumingOrderId(null);
       navigate('/checkout', {
         state: {
@@ -369,7 +410,7 @@ export default function Creator() {
             else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
             restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
-            setActiveDraftId(state.resumeSavedDraft);
+            updateActiveDraftId(state.resumeSavedDraft);
           }
         } catch (e) {
           console.error('Error restaurando saved draft', e);
@@ -409,7 +450,7 @@ export default function Creator() {
 
             restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setResumingOrderId(state.orderId);
-            setActiveDraftId(state.orderId);
+            updateActiveDraftId(state.orderId);
           }
         } catch (e) {
           console.error('Error al restaurar orden desde checkout', e);
@@ -447,7 +488,7 @@ export default function Creator() {
 
     try {
       const currentDrafts = await getUserSavedDrafts(user.uid);
-      const isUpdatingExisting = activeDraftId !== null;
+      const isUpdatingExisting = activeDraftIdRef.current !== null;
       if (!isUpdatingExisting && currentDrafts.length >= 3) {
         alert(t('draft.limitReached'));
         return;
@@ -493,18 +534,8 @@ export default function Creator() {
       };
 
       const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      const newDraftId = await createDraftOrder(
-        user.uid,
-        designData,
-        activeProduct,
-        undefined,
-        activeDraftId || resumingOrderId || undefined,
-        selectedProduct || undefined,
-        'saved_draft',
-        userInfo
-      );
+      const newDraftId = await persistDraft(designData, activeProduct, userInfo, { status: 'saved_draft' });
 
-      setActiveDraftId(newDraftId);
       setSavedDrafts(prev => {
         const exists = prev.find(d => d.id === newDraftId);
         if (exists) {
@@ -572,12 +603,12 @@ export default function Creator() {
     else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
     restoreDesignToState(buildDesignDataFromOrder(draft, detectedType), draft.product, detectedType);
-    setActiveDraftId(draft.id);
+    updateActiveDraftId(draft.id);
   };
 
   const handleStartNew = () => {
     setShowDraftPrompt(false);
-    setActiveDraftId(null);
+    updateActiveDraftId(null);
   };
 
   const handleDismissDraftHint = () => {
@@ -591,7 +622,7 @@ export default function Creator() {
       const updated = savedDrafts.filter(d => d.id !== draftId);
       setSavedDrafts(updated);
       if (updated.length === 0) setShowDraftPrompt(false);
-      if (activeDraftId === draftId) setActiveDraftId(null);
+      if (activeDraftIdRef.current === draftId) updateActiveDraftId(null);
     } catch (e) {
       console.error('Error deleting draft', e);
     }
@@ -612,6 +643,7 @@ export default function Creator() {
 
   const autoSaveDraftSilently = async (customizationOverride?: any) => {
     if (!user) return;
+    setIsSaving(true);
     try {
       const activeProduct = getActiveProduct();
       if (!activeProduct) return;
@@ -648,21 +680,13 @@ export default function Creator() {
       };
 
       const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      const newDraftId = await createDraftOrder(
-        user.uid,
-        designData,
-        activeProduct,
-        undefined,
-        activeDraftId || undefined,
-        selectedProduct || undefined,
-        'saved_draft',
-        userInfo
-      );
-      setActiveDraftId(newDraftId);
+      await persistDraft(designData, activeProduct, userInfo, { status: 'saved_draft' });
       setAutoSaveBanner('Borrador guardado automáticamente');
       setTimeout(() => setAutoSaveBanner(null), 3500);
     } catch (e) {
       console.error('Auto-save silencioso falló:', e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -820,12 +844,13 @@ export default function Creator() {
           onComplete={() => editingPaidOrderId ? handleSavePaidOrderChanges() : handleCheckoutRedirect()}
           pagesLocked={isPageCountLocked}
           initialFileSignatures={fileSignatures.length > 0 ? fileSignatures : undefined}
+          isSaving={isSaving}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
       const AnyCalendarOrganizer = CalendarOrganizer as any;
       return (
-        <AnyCalendarOrganizer 
+        <AnyCalendarOrganizer
           calendar={selectedCalendar!}
           customization={calendarCustomization}
           photos={calendarPhotos}
@@ -833,16 +858,18 @@ export default function Creator() {
           photoCrops={calendarPhotoCrops}
           onPhotoCropsChange={setCalendarPhotoCrops}
           onComplete={handleCalendarPhotosComplete}
+          isSaving={isSaving}
         />
       );
     } else if (selectedProduct === 'mug' && mugCustomization) {
       return (
-        <MugOrganizer 
+        <MugOrganizer
           mug={selectedMug!}
           customization={mugCustomization}
           items={mugItems}
           onItemsChange={setMugItems}
           onComplete={handleMugItemsComplete}
+          isSaving={isSaving}
         />
       );
     } else if (selectedProduct === 'photo-pack' && photoPackCustomization) {
