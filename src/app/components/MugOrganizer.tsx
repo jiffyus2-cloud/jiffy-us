@@ -30,11 +30,12 @@ interface MugOrganizerProps {
   items: MugItem[];
   onItemsChange: (items: MugItem[]) => void;
   onComplete?: () => void;
+  isSaving?: boolean;
 }
 
 type Step = 'upload' | 'editor';
 
-export default function MugOrganizer({ mug, customization, items, onItemsChange, onComplete }: MugOrganizerProps) {
+export default function MugOrganizer({ mug, customization, items, onItemsChange, onComplete, isSaving = false }: MugOrganizerProps) {
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(items.length > 0 ? 'editor' : 'upload');
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
@@ -141,7 +142,11 @@ export default function MugOrganizer({ mug, customization, items, onItemsChange,
         <div>
           <h2 className="text-2xl font-bold">{safeMug.name} Editor</h2><p className="text-gray-500">{safeItems.length} tazas en tu colección</p>
         </div>
-        <button onClick={onComplete} className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium">{t('organizer.complete') || 'Continuar al Checkout'}</button>
+        <button
+          onClick={() => { if (!isSaving && onComplete) onComplete(); }}
+          disabled={isSaving}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >{t('organizer.complete') || 'Continuar al Checkout'}</button>
       </div>
 
       <div className="space-y-12">

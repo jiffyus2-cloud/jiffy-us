@@ -123,6 +123,27 @@ function getPreviewImage(order: Order): string | null {
   return imageUrl;
 }
 
+/** Ids de borradores que son "el más reciente" dentro de un grupo con más de un borrador
+ * del mismo producto (probables duplicados) — se usa para resaltarlos en la lista. */
+function getMostRecentDuplicateDraftIds(drafts: Order[]): Set<string> {
+  const groups = new Map<string, Order[]>();
+  drafts.forEach((d) => {
+    const key = String(d.product?.type || d.product?.id || d.product?.name || d.productType || 'unknown').toLowerCase();
+    const group = groups.get(key) || [];
+    group.push(d);
+    groups.set(key, group);
+  });
+
+  const result = new Set<string>();
+  groups.forEach((group) => {
+    if (group.length < 2) return;
+    const time = (d: Order) => (d.updatedAt ? new Date(d.updatedAt).getTime() : 0) || 0;
+    const newest = group.reduce((a, b) => (time(a) >= time(b) ? a : b));
+    result.add(newest.id);
+  });
+  return result;
+}
+
 const UserDashboard: React.FC = () => {
   const { user, userData, resetPassword, refreshUserData } = useAuth();
   const { t, language } = useLanguage();
@@ -458,7 +479,9 @@ const UserDashboard: React.FC = () => {
                   savedDrafts.length === 2 ? 'md:grid-cols-2' :
                   'md:grid-cols-3'
                 }`}>
-                  {savedDrafts.map((draft) => {
+                  {(() => {
+                    const mostRecentDuplicateIds = getMostRecentDuplicateDraftIds(savedDrafts);
+                    return savedDrafts.map((draft) => {
                     const productString = String(draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || '').toLowerCase();
                     const isCalendar = productString.includes('calendar') || productString.includes('calendario');
                     const isMug = productString.includes('mug') || productString.includes('taza');
@@ -467,6 +490,7 @@ const UserDashboard: React.FC = () => {
                     const updatedDate = draft.updatedAt
                       ? format(new Date(draft.updatedAt), 'PP', { locale: dateLocale })
                       : '';
+                    const isMostRecentDuplicate = mostRecentDuplicateIds.has(draft.id);
 
                     return (
                       <div key={draft.id} className="group relative border border-dashed border-gray-300 rounded-2xl overflow-hidden hover:border-gray-400 hover:shadow-md transition-all duration-200 bg-white">
@@ -483,10 +507,15 @@ const UserDashboard: React.FC = () => {
                               <ProductIcon className="h-10 w-10 text-gray-300" />
                             </div>
                           )}
-                          <div className="absolute top-3 left-3">
+                          <div className="absolute top-3 left-3 flex items-center gap-2">
                             <span className="text-xs font-semibold bg-white/90 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
                               {t('draft.savedOn').replace('{date}', updatedDate)}
                             </span>
+                            {isMostRecentDuplicate && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200">
+                                Más reciente
+                              </span>
+                            )}
                           </div>
                         </AspectRatio>
 
@@ -516,7 +545,8 @@ const UserDashboard: React.FC = () => {
                         </div>
                       </div>
                     );
-                  })}
+                    });
+                  })()}
                 </div>
               </section>
             )}

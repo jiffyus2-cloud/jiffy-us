@@ -133,6 +133,7 @@ interface PhotoOrganizerProps {
   onComplete?: () => void;
   pagesLocked?: boolean;
   initialFileSignatures?: string[][];
+  isSaving?: boolean;
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -268,7 +269,7 @@ export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
   onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false,
-  initialFileSignatures,
+  initialFileSignatures, isSaving = false,
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
@@ -1301,6 +1302,7 @@ export default function PhotoOrganizer({
   // LÓGICA DE DETECCIÓN Y ELIMINACIÓN DE PÁGINAS VACÍAS
   // ==========================================================================
   const handleComplete = () => {
+    if (isSaving) return;
     const emptyPageIndices = safePhotos.reduce((acc, pagePhotos, index) => {
       // Verificamos si al menos una foto existe y no es un string vacío
       const hasPhotos = pagePhotos.some(p => p && p.trim() !== '');
@@ -2040,9 +2042,10 @@ export default function PhotoOrganizer({
             </p>
 
             <div className="space-y-3">
-              <button 
-                onClick={() => { setEmptyPagesModalData(null); if(onComplete) onComplete(); }} 
-                className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm"
+              <button
+                onClick={() => { setEmptyPagesModalData(null); if(onComplete && !isSaving) onComplete(); }}
+                disabled={isSaving}
+                className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continuar y dejarlas en blanco (Hoja blanca)
               </button>
@@ -2519,7 +2522,8 @@ export default function PhotoOrganizer({
       <div className="mt-12 flex justify-center">
         <button
           onClick={handleComplete}
-          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-base"
+          disabled={isSaving}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t('organizer.complete')}
         </button>

@@ -55,6 +55,34 @@ function getDraftProductIcon(draft: SavedDraft) {
   return ImageIcon;
 }
 
+function getDraftGroupKey(draft: SavedDraft): string {
+  return String(
+    draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || 'unknown'
+  ).toLowerCase();
+}
+
+/** Ids de borradores que son "el más reciente" dentro de un grupo con más de un borrador
+ * del mismo producto (probables duplicados) — se usa para resaltarlos en la lista. */
+function getMostRecentDuplicateIds(drafts: SavedDraft[]): Set<string> {
+  const groups = new Map<string, SavedDraft[]>();
+  drafts.forEach((d) => {
+    const key = getDraftGroupKey(d);
+    const group = groups.get(key) || [];
+    group.push(d);
+    groups.set(key, group);
+  });
+
+  const result = new Set<string>();
+  groups.forEach((group) => {
+    if (group.length < 2) return;
+    const newest = group.reduce((a, b) =>
+      new Date(a.updatedAt).getTime() >= new Date(b.updatedAt).getTime() ? a : b
+    );
+    result.add(newest.id);
+  });
+  return result;
+}
+
 const DraftPromptModal: React.FC<DraftPromptModalProps> = ({
   isOpen,
   drafts,
@@ -66,6 +94,8 @@ const DraftPromptModal: React.FC<DraftPromptModalProps> = ({
   const dateLocale = language === 'es' ? es : enUS;
 
   if (!isOpen) return null;
+
+  const mostRecentDuplicateIds = getMostRecentDuplicateIds(drafts);
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
@@ -115,9 +145,16 @@ const DraftPromptModal: React.FC<DraftPromptModalProps> = ({
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm truncate">
-                    {productName || draft.product?.name || 'Borrador'}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 text-sm truncate">
+                      {productName || draft.product?.name || 'Borrador'}
+                    </p>
+                    {mostRecentDuplicateIds.has(draft.id) && (
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                        Más reciente
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {t('draft.savedOn').replace('{date}', updatedDate)}
                   </p>

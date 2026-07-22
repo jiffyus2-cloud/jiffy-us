@@ -19,6 +19,7 @@ interface CalendarOrganizerProps {
   photoCrops: Record<number, { x: number; y: number; zoom: number }>;
   onPhotoCropsChange: (crops: Record<number, { x: number; y: number; zoom: number }>) => void;
   onComplete: (photos: string[]) => void;
+  isSaving?: boolean;
 }
 
 type Step = 'upload' | 'editor';
@@ -53,7 +54,8 @@ export default function CalendarOrganizer({
   onPhotosChange,
   photoCrops,
   onPhotoCropsChange,
-  onComplete 
+  onComplete,
+  isSaving = false,
 }: CalendarOrganizerProps) {
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(photos.length > 0 ? 'editor' : 'upload');
@@ -520,7 +522,11 @@ export default function CalendarOrganizer({
             {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'} • Total: ${totalPrice.toLocaleString('es-CO')} COP
           </p>
         </div>
-        <button onClick={() => onComplete(photos)} className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium">
+        <button
+          onClick={() => { if (!isSaving) onComplete(photos); }}
+          disabled={isSaving}
+          className="px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           {t('organizer.complete')}
         </button>
       </div>
