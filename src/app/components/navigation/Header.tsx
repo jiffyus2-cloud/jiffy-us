@@ -1,20 +1,24 @@
 import { Link, useNavigate, useLocation } from 'react-router';
 import { Button } from '../ui/button';
-import React, { useState } from 'react';
+import React from 'react';
 import logo from '../../../assets/JiffyLogo.svg';
 import { useLanguage } from '../../context/LanguageContext';
-import { LogOut, Plus, CircleHelp, Menu } from 'lucide-react';
+import { LogOut, Plus, MessageCircle, Menu } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
 import { buttonVariants } from '../ui/button';
-import { SupportChatPanel } from '../support/SupportChatPanel';
+
+const WHATSAPP_SUPPORT_URL = 'https://wa.me/573234089624';
 
 export function Header() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSupportOpen, setIsSupportOpen] = useState(false);
+
+  const handleSupportClick = () => {
+    window.open(WHATSAPP_SUPPORT_URL, '_blank', 'noopener,noreferrer');
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -42,12 +46,12 @@ export function Header() {
                 </Link>
               )}
               <button
-                onClick={() => setIsSupportOpen(true)}
+                onClick={handleSupportClick}
                 aria-label={t('nav.support')}
                 title={t('nav.support')}
                 className="flex items-center justify-center w-8 h-8 rounded-md transition-colors text-gray-500 hover:text-black hover:bg-gray-50"
               >
-                <CircleHelp className="w-4.5 h-4.5" />
+                <MessageCircle className="w-4.5 h-4.5" />
               </button>
             </nav>
           </div>
@@ -107,8 +111,8 @@ export function Header() {
                     Nuevo Pedido
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => setIsSupportOpen(true)}>
-                  <CircleHelp className="w-3.5 h-3.5" />
+                <DropdownMenuItem onClick={handleSupportClick}>
+                  <MessageCircle className="w-3.5 h-3.5" />
                   {t('nav.support')}
                 </DropdownMenuItem>
                 {user ? (
@@ -131,8 +135,6 @@ export function Header() {
           </div>
         </div>
       </header>
-
-      {isSupportOpen && <SupportChatPanel onClose={() => setIsSupportOpen(false)} />}
     </>
   );
 }
