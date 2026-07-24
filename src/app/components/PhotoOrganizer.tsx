@@ -449,6 +449,8 @@ export default function PhotoOrganizer({
       return 'grid-cols-2';
     }
     if (count === 3) {
+      if (layout === 'column') return 'grid-cols-1 grid-rows-3';
+      if (layout === 'row') return 'grid-cols-3 grid-rows-1';
       if (isHorizontal) return 'grid-cols-3 grid-rows-1';
       if (isVertical) return 'grid-cols-1 grid-rows-3';
       return 'grid-cols-3';
@@ -1578,12 +1580,12 @@ export default function PhotoOrganizer({
                     </div>
                   </div>
 
-                  {currentVariant === 2 && (
+                  {(currentVariant === 2 || currentVariant === 3) && (
                     <div className="pt-2 border-t border-gray-50">
                       <label className="block text-xs font-medium text-gray-700 mb-1.5">Orientación del Layout</label>
                       <div className="flex gap-1.5 sm:gap-2">
-                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout !== 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>En Fila</button>
-                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout === 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>En Columna</button>
+                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout !== 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>Vertical</button>
+                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout === 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>Horizontal</button>
                       </div>
                     </div>
                   )}
