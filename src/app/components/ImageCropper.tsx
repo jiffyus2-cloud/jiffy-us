@@ -1,5 +1,6 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { getCoverDimensions } from '../utils/cropMath';
 
 interface ImageCropperProps {
   src: string;
@@ -36,17 +37,7 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
 
       if (Cw === 0 || Ch === 0 || Iw === 0 || Ih === 0) return;
 
-      const C_AR = Cw / Ch;
-      const I_AR = Iw / Ih;
-
-      let Rw = Cw;
-      let Rh = Ch;
-
-      if (I_AR > C_AR) {
-        Rw = Ch * I_AR;
-      } else {
-        Rh = Cw / I_AR;
-      }
+      const { Rw, Rh } = getCoverDimensions(Cw, Ch, Iw, Ih);
 
       const imgCenterX = (x / 100) * Rw;
       const imgCenterY = (y / 100) * Rh;
@@ -82,7 +73,7 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
   }, [x, y, zoom, rotation, src]);
 
   return (
-    <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-gray-100 relative">
+    <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-white relative">
       <img
         ref={imgRef}
         src={src}
