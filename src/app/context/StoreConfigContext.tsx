@@ -88,13 +88,15 @@ const defaultConfig: StoreConfig = {
 
 interface StoreConfigContextValue extends StoreConfig {
   configLoaded: boolean;
+  configError: string | null;
 }
 
-const StoreConfigContext = createContext<StoreConfigContextValue>({ ...defaultConfig, configLoaded: false });
+const StoreConfigContext = createContext<StoreConfigContextValue>({ ...defaultConfig, configLoaded: false, configError: null });
 
 export const StoreConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [config, setConfig] = useState<StoreConfig>(defaultConfig);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
     const configRef = doc(db, 'settings', 'store_config');
@@ -108,16 +110,23 @@ export const StoreConfigProvider: React.FC<{ children: React.ReactNode }> = ({ c
           prices: { ...defaultConfig.prices, ...(data.prices || {}) },
         } as StoreConfig);
       } else {
+        console.warn('El documento settings/store_config no existe — sembrando valores por defecto. Si esto es inesperado, el documento pudo haber sido borrado.');
         setDoc(configRef, defaultConfig);
       }
+      setConfigError(null);
       setConfigLoaded(true);
+    }, (error) => {
+      // No marcamos configLoaded=true en un error: así ningún guardado puede
+      // sobrescribir la config real con los valores por defecto mientras la carga sigue fallando.
+      console.error('Error al escuchar settings/store_config:', error);
+      setConfigError(error.message);
     });
 
     return () => unsubscribe();
   }, []);
 
   return (
-    <StoreConfigContext.Provider value={{ ...config, configLoaded }}>
+    <StoreConfigContext.Provider value={{ ...config, configLoaded, configError }}>
       {children}
     </StoreConfigContext.Provider>
   );

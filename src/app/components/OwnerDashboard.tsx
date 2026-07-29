@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc, query, orderBy, limit, addDoc } from 'firebase/firestore';
 // Importamos la lógica de Autenticación de Firebase
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../lib/firebase';
@@ -27,6 +27,13 @@ import jiffyLogo from '../../assets/JiffyLogo.svg';
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
+
+interface ConfigHistoryEntry {
+  id: string;
+  config: StoreConfig;
+  savedAt: Timestamp;
+  savedBy: string;
+}
 
 interface Order {
   id: string;
@@ -474,6 +481,14 @@ const OwnerDashboard: React.FC = () => {
   const storeConfig = useStoreConfig();
   const [localConfig, setLocalConfig] = useState<StoreConfig>(storeConfig);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const hasSeededConfig = useRef(false);
+  const lastRemoteConfigRef = useRef<StoreConfig>(storeConfig);
+  const [remoteConfigChangedElsewhere, setRemoteConfigChangedElsewhere] = useState(false);
+
+  const [historyEntries, setHistoryEntries] = useState<ConfigHistoryEntry[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // 2. Comprobar sesión activa automáticamente con Firebase
   useEffect(() => {
@@ -481,22 +496,118 @@ const OwnerDashboard: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user);
       setIsAuthChecking(false);
+      setCurrentUserEmail(user?.email ?? null);
     });
     return () => unsubscribe();
   }, []);
 
+  // Sembramos localConfig UNA sola vez, en la transición de "no cargado" a "cargado".
+  // Antes esto se ejecutaba en cada cambio de storeConfig, lo que podía pisar
+  // silenciosamente ediciones sin guardar (o, peor, sembrar defaultConfig si el
+  // guardado ocurría antes de que Firestore respondiera). Ver PR: fix reseteo de precios.
   useEffect(() => {
-    setLocalConfig(storeConfig);
+    if (!storeConfig.configLoaded) return;
+
+    if (!hasSeededConfig.current) {
+      setLocalConfig(storeConfig);
+      hasSeededConfig.current = true;
+      lastRemoteConfigRef.current = storeConfig;
+      return;
+    }
+
+    // Ya sembrado antes: si llega un cambio remoto (otra sesión guardó algo),
+    // no pisamos silenciosamente las ediciones locales — solo avisamos.
+    if (JSON.stringify(storeConfig) !== JSON.stringify(lastRemoteConfigRef.current)) {
+      lastRemoteConfigRef.current = storeConfig;
+      setRemoteConfigChangedElsewhere(true);
+    }
   }, [storeConfig]);
 
+  const fetchConfigHistory = async () => {
+    setIsHistoryLoading(true);
+    try {
+      const historyQuery = query(
+        collection(db, 'settings', 'store_config', 'history'),
+        orderBy('savedAt', 'desc'),
+        limit(20)
+      );
+      const snapshot = await getDocs(historyQuery);
+      setHistoryEntries(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ConfigHistoryEntry)));
+    } catch (error) {
+      console.error('Error al cargar el historial de configuración:', error);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next) fetchConfigHistory();
+  };
+
+  // Guarda la config actual (previa a un guardado/restauración) como respaldo,
+  // y poda entradas viejas para no acumular historial indefinidamente.
+  const backupCurrentConfig = async (configToBackup: StoreConfig) => {
+    try {
+      await addDoc(collection(db, 'settings', 'store_config', 'history'), {
+        config: configToBackup,
+        savedAt: Timestamp.now(),
+        savedBy: currentUserEmail || 'desconocido',
+      });
+
+      const pruneQuery = query(
+        collection(db, 'settings', 'store_config', 'history'),
+        orderBy('savedAt', 'desc'),
+        limit(25)
+      );
+      const snapshot = await getDocs(pruneQuery);
+      const excess = snapshot.docs.slice(20);
+      await Promise.all(excess.map(d => deleteDoc(d.ref)));
+    } catch (error) {
+      // El respaldo es "best effort": si falla, no debe bloquear el guardado principal.
+      console.error('Error al respaldar la configuración anterior:', error);
+    }
+  };
+
   const handleSaveConfig = async () => {
+    if (!storeConfig.configLoaded) {
+      alert('La configuración aún se está cargando. Espera un momento e intenta de nuevo.');
+      return;
+    }
     setIsSavingConfig(true);
     try {
-      await setDoc(doc(db, 'settings', 'store_config'), localConfig);
+      await backupCurrentConfig(storeConfig);
+      await setDoc(doc(db, 'settings', 'store_config'), localConfig, { merge: true });
+      setRemoteConfigChangedElsewhere(false);
+      if (showHistory) fetchConfigHistory();
       alert('¡Configuración guardada exitosamente! Los cambios ya están en vivo en toda la tienda.');
     } catch (error) {
       console.error("Error saving config:", error);
       alert('Error al guardar la configuración.');
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleRestoreHistory = async (entry: ConfigHistoryEntry) => {
+    if (!storeConfig.configLoaded) {
+      alert('La configuración aún se está cargando. Espera un momento e intenta de nuevo.');
+      return;
+    }
+    if (!window.confirm('¿Restaurar la configuración a esta versión anterior? Esto reemplazará los valores actuales de precios y promociones.')) return;
+    setIsSavingConfig(true);
+    try {
+      await backupCurrentConfig(storeConfig);
+      await setDoc(doc(db, 'settings', 'store_config'), entry.config, { merge: true });
+      setLocalConfig(entry.config);
+      lastRemoteConfigRef.current = entry.config;
+      setRemoteConfigChangedElsewhere(false);
+      fetchConfigHistory();
+      alert('Configuración restaurada exitosamente.');
+    } catch (error) {
+      console.error('Error al restaurar la configuración:', error);
+      alert('No se pudo restaurar la configuración.');
     } finally {
       setIsSavingConfig(false);
     }
@@ -1446,8 +1557,30 @@ const OwnerDashboard: React.FC = () => {
 
         {/* VISTA 2: AJUSTES DE TIENDA */}
         {activeTab === 'settings' && (
+          <div className="space-y-4">
+            {!storeConfig.configLoaded && !storeConfig.configError && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Cargando configuración actual desde el servidor...
+              </div>
+            )}
+            {storeConfig.configError && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+                <AlertCircle className="w-4 h-4" />
+                No se pudo cargar la configuración ({storeConfig.configError}). Verifica tu conexión antes de intentar guardar.
+              </div>
+            )}
+            {remoteConfigChangedElsewhere && (
+              <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-medium">
+                <span>La configuración cambió en otra sesión. Si recargas la página verás los cambios más recientes (perderás tus ediciones no guardadas).</span>
+                <button onClick={() => window.location.reload()} className="whitespace-nowrap px-3 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors">
+                  Recargar
+                </button>
+              </div>
+            )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
+
             {/* COLUMNA IZQUIERDA: Descuentos y Promociones */}
             <div className="space-y-8">
               {/* Descuento Global (Para el Checkout) */}
@@ -1651,11 +1784,51 @@ const OwnerDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Historial de configuración / Respaldos */}
+              <div className="mt-8 pt-6 border-t border-gray-100">
+                <button
+                  onClick={toggleHistory}
+                  className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-black transition-colors"
+                >
+                  <ChevronRight className={`w-4 h-4 transition-transform ${showHistory ? 'rotate-90' : ''}`} />
+                  Historial de cambios
+                </button>
+                {showHistory && (
+                  <div className="mt-4 space-y-2 max-h-72 overflow-y-auto pr-2">
+                    {isHistoryLoading && (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Cargando historial...
+                      </div>
+                    )}
+                    {!isHistoryLoading && historyEntries.length === 0 && (
+                      <p className="text-sm text-gray-400">Todavía no hay versiones anteriores guardadas.</p>
+                    )}
+                    {!isHistoryLoading && historyEntries.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-xl text-sm">
+                        <div>
+                          <span className="font-bold text-gray-800 block">
+                            {entry.savedAt?.toDate ? format(entry.savedAt.toDate(), "d MMM yyyy, HH:mm", { locale: es }) : '—'}
+                          </span>
+                          <span className="text-xs text-gray-400">{entry.savedBy}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRestoreHistory(entry)}
+                          disabled={isSavingConfig || !storeConfig.configLoaded}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                        >
+                          Restaurar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Botón de Guardado Flotante */}
               <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
                 <button
                   onClick={handleSaveConfig}
-                  disabled={isSavingConfig}
+                  disabled={isSavingConfig || !storeConfig.configLoaded}
                   className="flex items-center gap-2 px-8 py-3 bg-black hover:bg-gray-800 text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-50"
                 >
                   {isSavingConfig ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
@@ -1663,6 +1836,7 @@ const OwnerDashboard: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
           </div>
         )}
 
