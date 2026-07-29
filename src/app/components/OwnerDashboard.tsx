@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import UsersSection from './UsersSection';
 import { updateOrderStatus } from '../../services/orderService';
@@ -448,7 +448,7 @@ const OwnerDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings' | 'users' | 'connections'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'users' | 'connections'>('orders');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -1371,6 +1371,7 @@ const OwnerDashboard: React.FC = () => {
 
         <div className="flex gap-2 mb-6 border-b border-gray-200 pb-px">
           <button onClick={() => setActiveTab('orders')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'orders' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><ShoppingBag className="w-4 h-4" /> Pedidos Recibidos</button>
+          <button onClick={() => setActiveTab('custom-albums')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'custom-albums' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Sparkles className="w-4 h-4" /> Álbumes Personalizados</button>
           <button onClick={() => setActiveTab('settings')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><SettingsIcon className="w-4 h-4" /> Ajustes de Tienda</button>
           <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Users className="w-4 h-4" /> Usuarios</button>
           <button onClick={() => setActiveTab('connections')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'connections' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Zap className="w-4 h-4" /> Conexiones</button>
@@ -1552,6 +1553,73 @@ const OwnerDashboard: React.FC = () => {
                 </>
               )}
             </>
+          );
+        })()}
+
+        {/* VISTA 1.5: ÁLBUMES PERSONALIZADOS */}
+        {activeTab === 'custom-albums' && (() => {
+          const customAlbumOrders = orders.filter(o => o.productType === 'custom-album');
+          const SIZE_LABELS: Record<string, string> = {
+            customAlbum20x20: '20x20 cm',
+            customAlbum30x30: '30x30 cm',
+            customAlbumRect: 'Rectangular',
+          };
+
+          return (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              {customAlbumOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-300">
+                  <Sparkles className="w-10 h-10 mb-3" />
+                  <span className="text-sm text-gray-400">Aún no hay solicitudes de álbum personalizado</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <th className="px-4 py-3">Código</th>
+                        <th className="px-4 py-3">Cliente</th>
+                        <th className="px-4 py-3">Tamaño</th>
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Estado</th>
+                        <th className="px-4 py-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customAlbumOrders.map(order => (
+                        <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="px-4 py-3 font-mono font-bold text-gray-700">#{order.id.slice(0, 8).toUpperCase()}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-800">{order.customerName || 'Sin nombre'}</div>
+                            <div className="text-xs text-gray-400">{order.customerEmail || 'Sin email'}</div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{SIZE_LABELS[order.customAlbumSize] || '—'}</td>
+                          <td className="px-4 py-3 text-gray-500">{order.createdAt ? format(new Date(order.createdAt), 'PPP', { locale: es }) : '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${order.status === 'custom_pendiente' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+                              {order.status === 'custom_pendiente' ? 'Pendiente de contacto' : 'Contactado'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2">
+                              {order.status === 'custom_pendiente' && (
+                                <button
+                                  onClick={() => handleUpdateOrderStatus(order.id, 'custom_contactado')}
+                                  className="px-3 py-1.5 bg-black text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
+                                >
+                                  Marcar contactado
+                                </button>
+                              )}
+                              <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           );
         })()}
 
@@ -1768,6 +1836,22 @@ const OwnerDashboard: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Pack Fotos (Por foto)</label>
                     <input type="number" value={localConfig.prices.photoPackBase} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, photoPackBase: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-4">Álbum Personalizado (precios mock)</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">20x20 cm</label>
+                    <input type="number" value={localConfig.prices.customAlbum20x20} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, customAlbum20x20: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">30x30 cm</label>
+                    <input type="number" value={localConfig.prices.customAlbum30x30} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, customAlbum30x30: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Rectangular</label>
+                    <input type="number" value={localConfig.prices.customAlbumRect} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, customAlbumRect: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
                   </div>
                 </div>
 

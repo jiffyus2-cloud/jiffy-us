@@ -22,6 +22,9 @@ export interface StoreConfig {
     albumExtra20x20: number;
     albumExtra30x30: number;
     albumExtraRect: number;
+    customAlbum20x20: number;
+    customAlbum30x30: number;
+    customAlbumRect: number;
     mug: number;
     calendarWall: number;
     calendarDesk: number;
@@ -47,6 +50,9 @@ const defaultConfig: StoreConfig = {
     albumExtra20x20: 3750,
     albumExtra30x30: 4750,
     albumExtraRect: 4500,
+    customAlbum20x20: 280000,
+    customAlbum30x30: 350000,
+    customAlbumRect: 330000,
     mug: 45000,
     calendarWall: 80000,
     calendarDesk: 60000,

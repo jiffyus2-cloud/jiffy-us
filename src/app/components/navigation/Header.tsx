@@ -7,8 +7,7 @@ import { LogOut, Plus, MessageCircle, Menu } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
 import { buttonVariants } from '../ui/button';
-
-const WHATSAPP_SUPPORT_URL = 'https://wa.me/573234089624';
+import { WHATSAPP_SUPPORT_URL } from '../../config/contact';
 
 export function Header() {
   const { t } = useLanguage();
