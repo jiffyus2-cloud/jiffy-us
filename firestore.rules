@@ -49,6 +49,11 @@ service cloud.firestore {
 
       // Only owner can write settings
       allow write: if isOwner();
+
+      // Config history/backups — owner-only, no public read needed
+      match /history/{historyId} {
+        allow read, write: if isOwner();
+      }
     }
 
     // MCP API keys — owner-only
