@@ -4,7 +4,7 @@ import mugImage from '../../assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png'
 import { DESIGN } from '../../styles/design-system';
 import { useLanguage } from '../context/LanguageContext';
 
-export type ProductType = 'album' | 'calendar' | 'mug' | 'photo-pack';
+export type ProductType = 'album' | 'calendar' | 'mug' | 'photo-pack' | 'custom-album';
 
 interface ProductSelectionProps {
   onSelectProduct: (product: ProductType) => void;
@@ -67,6 +67,27 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
             <h3 className={DESIGN.text.h4}>{t('product.calendar')}</h3>
             <p className="text-sm mb-4 text-gray-600">
               Tus días merecen la mejor sonrisa. Calendarios personalizados para recibir el día con la mejor actitud.
+            </p>
+          </div>
+        </button>
+
+        {/* Custom Album Option */}
+        <button
+          onClick={() => onSelectProduct('custom-album')}
+          className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+        >
+          <div className="w-full aspect-square overflow-hidden">
+            <img
+              src={albumImage}
+              alt="Custom Album"
+              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+            />
+          </div>
+
+          <div className="p-6">
+            <h3 className={DESIGN.text.h4}>Álbum Personalizado</h3>
+            <p className="text-sm mb-4 text-gray-600">
+              Una curadora selecciona tus mejores fotos y diseña cada página por ti, de principio a fin.
             </p>
           </div>
         </button>

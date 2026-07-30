@@ -37,9 +37,12 @@ import {
   Lock,
   Check,
   X,
+  Sparkles,
+  MessageCircle,
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import { useLanguage } from '../context/LanguageContext';
+import { buildWhatsAppUrl } from '../config/contact';
 
 import justWhiteImg from '../../assets/justwhite.png';
 
@@ -49,6 +52,7 @@ interface Order {
   updatedAt?: string;
   status: string;
   total: number;
+  customAlbumSize?: string;
   coverData?: {
     image?: string;
     title?: string;
@@ -73,6 +77,7 @@ interface Order {
 }
 
 function getPreviewImage(order: Order): string | null {
+  if (order.productType === 'custom-album') return null;
   const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
   const isMug = productString.includes('mug') || productString.includes('taza');
@@ -183,6 +188,10 @@ const UserDashboard: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'custom_pendiente':
+        return { text: 'Pendiente de contacto', className: 'bg-amber-100 text-amber-800 hover:bg-amber-100' };
+      case 'custom_contactado':
+        return { text: 'Contactado', className: 'bg-green-100 text-green-800 hover:bg-green-100' };
       case 'mock_paid':
       case 'paid':
         return { text: t('status.paid'), className: 'bg-green-100 text-green-800 hover:bg-green-100' };
@@ -199,7 +208,7 @@ const UserDashboard: React.FC = () => {
     }
   };
 
-  const formatPriceCOP = (amount: number) => {
+  const formatPriceCOP = (amount: number | null | undefined) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -564,11 +573,62 @@ const UserDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {orders.map((order) => {
                     const statusInfo = getStatusBadge(order.status);
+                    const isCustomAlbum = order.productType === 'custom-album';
                     const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
                     const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
                     const isMug = productString.includes('mug') || productString.includes('taza');
-                    const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+                    const ProductIcon = isCustomAlbum ? Sparkles : isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
                     const imageUrl = getPreviewImage(order);
+
+                    if (isCustomAlbum) {
+                      const orderCode = order.id.slice(0, 8).toUpperCase();
+                      const handleContactWhatsApp = () => {
+                        const message = `Hola, quiero hacer un Álbum Personalizado. Mi solicitud fue registrada con el código ${orderCode}.`;
+                        window.open(buildWhatsAppUrl(message), '_blank', 'noopener,noreferrer');
+                      };
+                      return (
+                        <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">
+                          <div className="relative overflow-hidden">
+                            <AspectRatio ratio={1 / 1}>
+                              <div className="w-full h-full bg-amber-50 flex items-center justify-center">
+                                <Sparkles className="h-12 w-12 text-amber-300" />
+                              </div>
+                            </AspectRatio>
+                            <div className="absolute top-4 right-4">
+                              <Badge className={`${statusInfo.className} border-none font-medium px-3 py-1`}>
+                                {statusInfo.text}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <CardHeader className="p-5 pb-2">
+                            <div className="flex items-center text-xs text-gray-500 mb-2">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {order.createdAt ? t('dashboard.orderDate', { date: format(new Date(order.createdAt), "P", { locale: dateLocale }) }) : t('status.unknown')}
+                            </div>
+                            <CardTitle className="text-xl font-bold truncate leading-tight">
+                              Álbum Personalizado
+                            </CardTitle>
+                          </CardHeader>
+
+                          <CardContent className="p-5 pt-0 space-y-4">
+                            <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                              Un curador se pondrá en contacto contigo por WhatsApp para continuar con tu solicitud.
+                            </p>
+                          </CardContent>
+
+                          <CardFooter className="p-5 pt-0">
+                            <button
+                              onClick={handleContactWhatsApp}
+                              className="w-full py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center gap-2"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              Contactar por WhatsApp
+                            </button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    }
 
                     return (
                       <Card key={order.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-white">

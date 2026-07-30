@@ -33,6 +33,14 @@ export interface PhotoPack {
   image: string;
 }
 
+export interface CustomAlbumProduct {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  type: 'custom-album';
+}
+
 export const BASE_ALBUM: Album = {
   id: 'base-album',
   name: 'Classic Album',
@@ -66,4 +74,12 @@ export const BASE_PHOTO_PACK: PhotoPack = {
   description: 'High-quality loose photo prints',
   basePrice: 0.50, // Price per photo
   image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800&h=1000&fit=crop',
+};
+
+export const BASE_CUSTOM_ALBUM: CustomAlbumProduct = {
+  id: 'base-custom-album',
+  name: 'Álbum Personalizado',
+  description: 'Un curador te acompaña de principio a fin, desde la selección de fotos hasta el diseño final.',
+  image: 'https://images.unsplash.com/photo-1582047099758-862642d6c7df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+  type: 'custom-album',
 };

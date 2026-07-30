@@ -244,6 +244,33 @@ export async function createDraftOrder(
   return orderId;
 }
 
+export const CUSTOM_ALBUM_PRODUCT_TYPE = 'custom-album';
+export const CUSTOM_ALBUM_STATUS = 'custom_pendiente';
+
+export async function createCustomAlbumOrder(
+  userId: string,
+  size: 'customAlbum20x20' | 'customAlbum30x30' | 'customAlbumRect',
+  userInfo?: { name?: string; email?: string }
+): Promise<string> {
+  const orderRef = doc(collection(db, 'orders'));
+  const orderId = orderRef.id;
+  const payload = {
+    id: orderId,
+    userId,
+    customerName: userInfo?.name || null,
+    customerEmail: userInfo?.email || null,
+    status: CUSTOM_ALBUM_STATUS,
+    productType: CUSTOM_ALBUM_PRODUCT_TYPE,
+    product: { id: 'custom-album', name: 'Álbum Personalizado', type: CUSTOM_ALBUM_PRODUCT_TYPE },
+    customAlbumSize: size,
+    total: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(orderRef, sanitizeForFirestore(payload));
+  return orderId;
+}
+
 export async function getOrder(orderId: string) {
   const docRef = doc(db, 'orders', orderId);
   const docSnap = await getDoc(docRef);

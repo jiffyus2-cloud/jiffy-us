@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check } from 'lucide-react';
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check, Sparkles } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -12,10 +12,12 @@ import PhotoPackCustomization, { PhotoPackCustomizationOptions } from './PhotoPa
 import PhotoPackOrganizer from './PhotoPackOrganizer';
 import ProductDetailsModal from './ProductDetailsModal';
 import DraftPromptModal from './DraftPromptModal';
+import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { Album, Calendar, MugProduct, PhotoPack, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK } from '../types/products';
-import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign } from '../../services/orderService';
+import { Album, Calendar, MugProduct, PhotoPack, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK, BASE_CUSTOM_ALBUM } from '../types/products';
+import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder } from '../../services/orderService';
+import { buildWhatsAppUrl } from '../config/contact';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -65,7 +67,7 @@ const clearDraftFromDB = (): Promise<void> => {
   });
 };
 
-type Step = 'product' | 'customization' | 'organize' | 'checkout';
+type Step = 'product' | 'customization' | 'organize' | 'checkout' | 'custom-album-info';
 
 export default function Creator() {
   const { t } = useLanguage();
@@ -111,6 +113,8 @@ export default function Creator() {
   const [autoSaveBanner, setAutoSaveBanner] = useState<string | null>(null);
 
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
+  const [selectedCustomAlbum, setSelectedCustomAlbum] = useState<CustomAlbumProduct | null>(null);
+  const [isSubmittingCustomAlbum, setIsSubmittingCustomAlbum] = useState(false);
 
   // EFECTO PARA LLEVAR EL SCROLL SIEMPRE ARRIBA AL CAMBIAR DE PASO
   useEffect(() => {
@@ -638,7 +642,32 @@ export default function Creator() {
     if (product === 'calendar') setSelectedCalendar(BASE_CALENDAR);
     if (product === 'mug') setSelectedMug(BASE_MUG);
     if (product === 'photo-pack') setSelectedPhotoPack(BASE_PHOTO_PACK);
+    if (product === 'custom-album') {
+      setSelectedCustomAlbum(BASE_CUSTOM_ALBUM);
+      setCurrentStep('custom-album-info');
+      return;
+    }
     setCurrentStep('customization');
+  };
+
+  const handleConfirmCustomAlbum = async (size: CustomAlbumSize) => {
+    if (!user) {
+      navigate('/login', { state: { from: location.pathname, startProduct: 'custom-album' } });
+      return;
+    }
+    setIsSubmittingCustomAlbum(true);
+    try {
+      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
+      const orderId = await createCustomAlbumOrder(user.uid, size, userInfo);
+      const code = orderId.slice(0, 8).toUpperCase();
+      const message = `Hola, quiero hacer un Álbum Personalizado. Mi solicitud fue registrada con el código ${code}.`;
+      window.open(buildWhatsAppUrl(message), '_blank', 'noopener,noreferrer');
+      navigate('/dashboard');
+    } catch (e) {
+      console.error('Error creando orden de álbum personalizado', e);
+    } finally {
+      setIsSubmittingCustomAlbum(false);
+    }
   };
 
   const autoSaveDraftSilently = async (customizationOverride?: any) => {
@@ -726,7 +755,11 @@ export default function Creator() {
   };
 
   const handleBack = () => {
-    if (currentStep === 'customization') {
+    if (currentStep === 'custom-album-info') {
+      setCurrentStep('product');
+      setSelectedProduct(null);
+      setSelectedCustomAlbum(null);
+    } else if (currentStep === 'customization') {
       setCurrentStep('product');
       setSelectedProduct(null);
       setSelectedAlbum(null);
@@ -747,6 +780,13 @@ export default function Creator() {
   };
 
   const getProgressSteps = () => {
+    if (selectedProduct === 'custom-album') {
+      return [
+        { id: 'product', label: t('step.product'), active: true },
+        { id: 'custom-album-info', label: 'Información', active: currentStep === 'custom-album-info' },
+      ];
+    }
+
     const commonSteps = [
       { id: 'product', label: t('step.product'), active: true },
       { id: 'customization', label: t('step.customize'), active: currentStep === 'customization' || currentStep === 'organize' || currentStep === 'checkout' },
@@ -786,8 +826,16 @@ export default function Creator() {
   }, [currentStep, activeStepIndex]);
 
   const renderProductSelection = () => (
-    <ProductSelection 
-      onSelectProduct={(product) => setPreviewProduct(product)}
+    <ProductSelection
+      onSelectProduct={(product) => product === 'custom-album' ? handleSelectProduct(product) : setPreviewProduct(product)}
+    />
+  );
+
+  const renderCustomAlbumInfo = () => (
+    <CustomAlbumInfo
+      onConfirm={handleConfirmCustomAlbum}
+      onBack={handleBack}
+      isSubmitting={isSubmittingCustomAlbum}
     />
   );
 
@@ -929,7 +977,7 @@ export default function Creator() {
             </div>
           )}
 
-          {user && currentStep !== 'product' && currentStep !== 'checkout' && (
+          {user && currentStep !== 'product' && currentStep !== 'checkout' && currentStep !== 'custom-album-info' && (
             <div className="relative">
               <button
                 onClick={editingPaidOrderId ? handleSavePaidOrderChanges : handleSaveDraft}
@@ -999,6 +1047,7 @@ export default function Creator() {
                     case 'customization': return <Settings className="w-5 h-5" />;
                     case 'organize': return <ImageIcon className="w-5 h-5" />;
                     case 'checkout': return <ShoppingCart className="w-5 h-5" />;
+                    case 'custom-album-info': return <Sparkles className="w-5 h-5" />;
                     default: return null;
                   }
                 };
@@ -1048,6 +1097,7 @@ export default function Creator() {
       )}
 
       {currentStep === 'product' && renderProductSelection()}
+      {currentStep === 'custom-album-info' && renderCustomAlbumInfo()}
       {currentStep === 'customization' && renderCustomization()}
       {currentStep === 'organize' && renderOrganizer()}
 
