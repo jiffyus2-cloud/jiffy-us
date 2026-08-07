@@ -69,13 +69,38 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
       container.setAttribute('data-ready', 'true');
     };
 
-    if (img.complete && img.naturalWidth > 0) updateStyle();
+    let cancelled = false;
+
+    const tryUpdate = (): boolean => {
+      if (cancelled) return true;
+      if (img.complete && img.naturalWidth > 0) {
+        updateStyle();
+        return true;
+      }
+      return false;
+    };
+
     img.addEventListener('load', updateStyle);
+
+    // Red de seguridad. Este efecto arranca siempre en `opacity: 0` y solo la
+    // restaura en `load`; si el evento ya se había disparado antes de montar el
+    // listener (imagen en caché, o React reutilizando el <img> tras reordenar y
+    // cambiando solo el src), la foto se quedaba invisible aunque el estado
+    // fuese correcto — "la foto desapareció de la página".
+    if (!tryUpdate()) {
+      let attempts = 0;
+      const poll = () => {
+        if (cancelled || attempts++ > 60) return;
+        if (!tryUpdate()) requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
+    }
 
     const observer = new ResizeObserver(updateStyle);
     observer.observe(container);
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       img.removeEventListener('load', updateStyle);
     };

@@ -23,6 +23,22 @@ export interface AlbumConfig {
   maxPages: number;               // 250
 }
 
+/**
+ * Avisos que una operación devuelve al llamante. Antes estas situaciones se
+ * comunicaban con `alert()` desde dentro de estas funciones puras: bloqueaba el
+ * hilo en mitad de una transformación de estado y hacía imposible testearlas.
+ */
+export type AlbumWarning =
+  | { code: 'max_pages_reached'; unplacedPhotos: number }
+  | { code: 'photos_moved'; count: number; toPage: number }
+  | { code: 'photos_deleted'; count: number }
+  | { code: 'refused_photo_deletion'; pages: number[] };
+
+export interface AlbumOpResult {
+  state: AlbumState;
+  warnings: AlbumWarning[];
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 export function getNextAllowed(count: number, allowed: number[]): number {
@@ -30,6 +46,33 @@ export function getNextAllowed(count: number, allowed: number[]): number {
     if (opt >= count) return opt;
   }
   return allowed[allowed.length - 1];
+}
+
+function maxPhotosPerPage(config: AlbumConfig): number {
+  return config.allowedPhotosPerPage[config.allowedPhotosPerPage.length - 1];
+}
+
+/**
+ * Cuántas fotos más caben desde `fromIndex` hasta el final, contando también las
+ * páginas que todavía se podrían añadir (siempre de dos en dos: los álbumes
+ * mantienen un número par de páginas).
+ *
+ * Se usa para decidir ANTES de tocar nada si una operación cabe. Sin esto, el
+ * `splice` del excedente se ejecutaba primero y, al toparse con el límite de
+ * páginas, esas fotos ya extraídas se descartaban para siempre.
+ */
+export function freeCapacityFrom(state: AlbumState, fromIndex: number, config: AlbumConfig): number {
+  const max = maxPhotosPerPage(config);
+  let capacity = 0;
+  for (let i = Math.max(0, fromIndex); i < state.length; i++) {
+    capacity += Math.max(0, max - state[i].photos.length);
+  }
+  const addable = Math.max(0, config.maxPages - state.length);
+  return capacity + (addable - (addable % 2)) * max;
+}
+
+function countPhotos(state: AlbumState): number {
+  return state.reduce((n, p) => n + p.photos.filter(ph => ph && ph.trim() !== '').length, 0);
 }
 
 function clonePage(page: PageState): PageState {
@@ -276,7 +319,7 @@ export function movePageToIndex(state: AlbumState, fromIdx: number, toIdx: numbe
 
 // ── delete overflow (shrink variant, discard excess photos) ───────────────────
 
-export function deleteOverflow(state: AlbumState, pageIndex: number, newVariant: number): AlbumState {
+export function deleteOverflow(state: AlbumState, pageIndex: number, newVariant: number): AlbumOpResult {
   const next = cloneState(state);
   const page = next[pageIndex];
 
@@ -291,7 +334,12 @@ export function deleteOverflow(state: AlbumState, pageIndex: number, newVariant:
   });
 
   page.variant = newVariant;
-  return next;
+
+  const deleted = removed.filter(p => p && p.trim() !== '').length;
+  return {
+    state: next,
+    warnings: deleted > 0 ? [{ code: 'photos_deleted', count: deleted }] : [],
+  };
 }
 
 // ── move overflow to a specific target page ───────────────────────────────────
@@ -303,10 +351,23 @@ export function moveOverflowToPage(
   targetPage: number,
   config: AlbumConfig,
   onPageCountChange?: (count: number) => void
-): AlbumState {
+): AlbumOpResult {
+  const maxAllowed = maxPhotosPerPage(config);
+  const overflowCount = Math.max(0, state[pageIndex].photos.length - newVariant);
+
+  // Precomprobación: si el álbum tendría que crecer más allá de maxPages para
+  // alojar la página destino, no tocamos NADA. Antes el splice ya se había
+  // ejecutado a estas alturas y el excedente se perdía.
+  if (overflowCount > 0 && targetPage >= state.length) {
+    const pagesNeeded = targetPage + 1 - state.length;
+    const pagesAvailable = Math.max(0, config.maxPages - state.length);
+    if (pagesNeeded > pagesAvailable - (pagesAvailable % 2)) {
+      return { state, warnings: [{ code: 'max_pages_reached', unplacedPhotos: overflowCount }] };
+    }
+  }
+
   const next = cloneState(state);
   const source = next[pageIndex];
-  const maxAllowed = config.allowedPhotosPerPage[config.allowedPhotosPerPage.length - 1];
 
   // Extract overflow items from source
   const overflowPhotos = source.photos.splice(newVariant);
@@ -322,14 +383,10 @@ export function moveOverflowToPage(
 
   source.variant = newVariant;
 
-  if (overflowData.length === 0) return next;
+  if (overflowData.length === 0) return { state: next, warnings: [] };
 
   // Ensure target page exists (expand album if needed)
   while (next.length <= targetPage) {
-    if (next.length >= config.maxPages) {
-      alert('Límite máximo de ' + config.maxPages + ' páginas alcanzado. Algunas fotos no se pudieron acomodar.');
-      return next;
-    }
     next.push(blankPage(), blankPage());
     onPageCountChange?.(next.length);
   }
@@ -350,12 +407,24 @@ export function moveOverflowToPage(
   const prevVariant = target.variant ?? minNeeded;
   target.variant = Math.min(Math.max(prevVariant, minNeeded), maxAllowed);
 
+  const moved: AlbumWarning = {
+    code: 'photos_moved',
+    count: overflowData.filter(d => d.photo && d.photo.trim() !== '').length,
+    toPage: targetPage,
+  };
+
   // If target still overflows after capping, cascade the remainder
   if (target.photos.length > maxAllowed) {
-    return rippleShift(next, targetPage, maxAllowed, config, onPageCountChange);
+    const cascaded = rippleShift(next, targetPage, maxAllowed, config, onPageCountChange);
+    // La cascada no cupo: revertimos la operación completa en vez de dejar el
+    // estado a medias con fotos perdidas por el camino.
+    if (cascaded.warnings.some(w => w.code === 'max_pages_reached')) {
+      return { state, warnings: cascaded.warnings };
+    }
+    return { state: cascaded.state, warnings: [moved, ...cascaded.warnings] };
   }
 
-  return next;
+  return { state: next, warnings: [moved] };
 }
 
 // ── ripple shift (cascade overflow downstream) ────────────────────────────────
@@ -366,9 +435,16 @@ export function rippleShift(
   newVariant: number,
   config: AlbumConfig,
   onPageCountChange?: (count: number) => void
-): AlbumState {
+): AlbumOpResult {
+  const maxAllowed = maxPhotosPerPage(config);
+
+  // Precomprobación (ver freeCapacityFrom): o cabe todo, o no se toca nada.
+  const overflowCount = Math.max(0, state[startIndex].photos.length - newVariant);
+  if (overflowCount > freeCapacityFrom(state, startIndex + 1, config)) {
+    return { state, warnings: [{ code: 'max_pages_reached', unplacedPhotos: overflowCount }] };
+  }
+
   const next = cloneState(state);
-  const maxAllowed = config.allowedPhotosPerPage[config.allowedPhotosPerPage.length - 1];
 
   // Phase 1 — extract overflow from startIndex
   const source = next[startIndex];
@@ -388,12 +464,13 @@ export function rippleShift(
   // Phase 2 — cascade
   let p = startIndex + 1;
   let pending = overflowData;
+  let hitLimit = false;
 
   while (pending.length > 0) {
     // Expand album by two pages if needed (albums must stay even-count)
     if (p >= next.length) {
       if (next.length >= config.maxPages) {
-        alert('Límite máximo de ' + config.maxPages + ' páginas alcanzado. Algunas fotos no se pudieron acomodar.');
+        hitLimit = true;
         break;
       }
       next.push(blankPage(), blankPage());
@@ -450,7 +527,126 @@ export function rippleShift(
     p++;
   }
 
-  return next;
+  // Cinturón de seguridad: si algo quedó sin colocar (la precomprobación debería
+  // haberlo impedido), devolvemos el estado ORIGINAL. Nunca un estado intermedio
+  // al que le faltan fotos.
+  if (hitLimit || pending.length > 0) {
+    return {
+      state,
+      warnings: [{ code: 'max_pages_reached', unplacedPhotos: pending.length }],
+    };
+  }
+
+  return { state: next, warnings: [] };
+}
+
+// ── delete pages ──────────────────────────────────────────────────────────────
+
+/**
+ * Borra páginas por índice reindexando crops/textos/layouts de forma atómica.
+ * Sustituye el reindexado manual que había en PhotoOrganizer, que parseaba las
+ * claves `"pagina-foto"` con `split('-')[1]` y se rompía con índices de dos cifras.
+ *
+ * Con `allowPhotoDeletion` a false (el valor por defecto) la operación es un no-op
+ * si alguna página objetivo contiene fotos: borrar fotos siempre debe ser una
+ * decisión explícita del usuario, nunca un efecto colateral.
+ */
+export function deletePages(
+  state: AlbumState,
+  indices: number[],
+  opts?: { allowPhotoDeletion?: boolean }
+): AlbumOpResult {
+  const unique = Array.from(new Set(indices)).filter(i => i >= 0 && i < state.length);
+  if (unique.length === 0) return { state, warnings: [] };
+
+  const withPhotos = unique.filter(i =>
+    state[i].photos.some(p => p && p.trim() !== '') || Object.keys(state[i].texts).length > 0
+  );
+
+  if (withPhotos.length > 0 && !opts?.allowPhotoDeletion) {
+    return { state, warnings: [{ code: 'refused_photo_deletion', pages: withPhotos }] };
+  }
+
+  const toDelete = new Set(unique);
+  const next = state.filter((_, i) => !toDelete.has(i)).map(clonePage);
+
+  const deletedPhotos = unique.reduce(
+    (n, i) => n + state[i].photos.filter(p => p && p.trim() !== '').length,
+    0
+  );
+
+  return {
+    state: next,
+    warnings: deletedPhotos > 0 ? [{ code: 'photos_deleted', count: deletedPhotos }] : [],
+  };
+}
+
+// ── album size / config change ────────────────────────────────────────────────
+
+/**
+ * Qué pasaría al aplicar una configuración distinta (p. ej. pasar de un álbum
+ * cuadrado, que admite hasta 9 fotos por página, a uno horizontal que solo admite 6).
+ */
+export function analyzeConfigChange(
+  state: AlbumState,
+  to: AlbumConfig
+): { pagesAffected: number[]; photosAtRisk: number; estimatedNewPages: number } {
+  const max = maxPhotosPerPage(to);
+  const pagesAffected: number[] = [];
+  let photosAtRisk = 0;
+
+  state.forEach((page, i) => {
+    const real = page.photos.filter(p => p && p.trim() !== '').length;
+    if (real > max) {
+      pagesAffected.push(i);
+      photosAtRisk += real - max;
+    }
+  });
+
+  // Las páginas se añaden de dos en dos.
+  const free = state.reduce((n, p) => n + Math.max(0, max - p.photos.length), 0);
+  const stillNeeded = Math.max(0, photosAtRisk - free);
+  const estimatedNewPages = Math.ceil(Math.ceil(stillNeeded / max) / 2) * 2;
+
+  return { pagesAffected, photosAtRisk, estimatedNewPages };
+}
+
+/**
+ * Redistribuye el álbum para que quepa en la nueva configuración sin ocultar ni
+ * perder ninguna foto. Delega en `rippleShift` en vez de reimplementar la cascada.
+ */
+export function migrateAlbumToConfig(
+  state: AlbumState,
+  to: AlbumConfig,
+  onPageCountChange?: (count: number) => void
+): AlbumOpResult {
+  const max = maxPhotosPerPage(to);
+  const before = countPhotos(state);
+  let current = state;
+
+  for (let i = 0; i < current.length; i++) {
+    if (current[i].photos.length <= max) continue;
+    const result = rippleShift(current, i, max, to, onPageCountChange);
+    if (result.warnings.some(w => w.code === 'max_pages_reached')) {
+      // No cabe: devolvemos el estado original intacto.
+      return { state, warnings: result.warnings };
+    }
+    current = result.state;
+  }
+
+  // Normalizar variantes para que ninguna página oculte fotos (R1/R2).
+  const normalized = current.map(page => {
+    const needed = getNextAllowed(page.photos.length, to.allowedPhotosPerPage);
+    const prev = page.variant ?? needed;
+    return { ...clonePage(page), variant: Math.min(Math.max(prev, needed), max) };
+  });
+
+  if (countPhotos(normalized) !== before) {
+    // Invariante rota: preferimos no aplicar nada antes que perder fotos.
+    return { state, warnings: [{ code: 'max_pages_reached', unplacedPhotos: before - countPhotos(normalized) }] };
+  }
+
+  return { state: normalized, warnings: [] };
 }
 
 // ── pull shift (fill gap by pulling from next pages) ─────────────────────────

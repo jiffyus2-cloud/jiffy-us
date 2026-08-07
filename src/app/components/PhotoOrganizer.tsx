@@ -12,8 +12,13 @@ import {
   pullShift as albumPullShift,
   deleteOverflow as albumDeleteOverflow,
   moveOverflowToPage as albumMoveOverflowToPage,
+  deletePages as albumDeletePages,
+  analyzeConfigChange,
+  migrateAlbumToConfig,
   type AlbumState,
   type AlbumConfig,
+  type AlbumOpResult,
+  type AlbumWarning,
 } from '../utils/albumStateUtils';
 import {
   FONT_SIZES,
@@ -134,6 +139,8 @@ interface PhotoOrganizerProps {
   pagesLocked?: boolean;
   initialFileSignatures?: string[][];
   isSaving?: boolean;
+  /** URLs cuya subida a Storage falló: se marcan como rotas para que el usuario las reemplace. */
+  failedUploadUrls?: string[];
 }
 
 type Step = 'upload' | 'pages' | 'editor';
@@ -269,7 +276,7 @@ export default function PhotoOrganizer({
   album, customization = {} as CustomizationOptions, photos = [], onPhotosChange, photoCrops = {},
   onPhotoCropsChange, textBoxSlots = {}, onTextBoxSlotsChange, pageLayouts = {},
   onPageLayoutsChange, pageLayoutVariants = {}, onPageLayoutVariantsChange, onComplete, pagesLocked = false,
-  initialFileSignatures, isSaving = false,
+  initialFileSignatures, isSaving = false, failedUploadUrls,
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
@@ -389,6 +396,32 @@ export default function PhotoOrganizer({
     onCancel: () => void;
   } | null>(null);
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+  /**
+   * Claves ya subidas en esta sesión. `fileSignatures` no se rellena hasta
+   * handleFinalizeSetup, así que sin esto los duplicados entre lotes distintos
+   * de una misma selección pasaban desapercibidos.
+   */
+  const sessionKeysRef = useRef<Set<string>>(new Set());
+  /** Archivos que no se pudieron procesar; se muestran al usuario en vez de descartarse en silencio. */
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  /** Avisos devueltos por las operaciones de albumStateUtils (antes eran alert() bloqueantes). */
+  const [albumWarning, setAlbumWarning] = useState<string | null>(null);
+  const [sizeMigrationModal, setSizeMigrationModal] = useState<{
+    pagesAffected: number[];
+    photosAtRisk: number;
+    estimatedNewPages: number;
+  } | null>(null);
+
+  // Fotos cuya subida a Storage falló: se pintan como rotas y el usuario puede reemplazarlas.
+  useEffect(() => {
+    if (!failedUploadUrls || failedUploadUrls.length === 0) return;
+    setBrokenPhotoUrls(prev => {
+      const next = new Set(prev);
+      failedUploadUrls.forEach(url => next.add(url));
+      return next;
+    });
+    setShowBrokenBanner(true);
+  }, [failedUploadUrls]);
 
   const handlePhotoError = useCallback((url: string) => {
     setBrokenPhotoUrls(prev => {
@@ -439,8 +472,22 @@ export default function PhotoOrganizer({
     for (const opt of allowedPhotosPerPage) {
       if (opt >= count) return opt;
     }
-    return allowedPhotosPerPage[allowedPhotosPerPage.length - 1]; 
+    return allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
   };
+
+  /**
+   * Cuántos slots pintar en una página. Nunca menos que el número de fotos que
+   * realmente tiene: antes se pintaban exactamente `variant` slots, así que una
+   * variante desactualizada (p. ej. al cambiar el tamaño del álbum de Cuadrado,
+   * que admite 9, a Horizontal, que admite 6) hacía DESAPARECER de la vista las
+   * fotos en los índices sobrantes, sin ningún aviso.
+   */
+  const getRenderSlotCount = (pageIndex: number, pagePhotos: string[]) =>
+    Math.max(
+      pageLayoutVariants[pageIndex] ?? 0,
+      getNextAllowed(pagePhotos.length),
+      pagePhotos.length
+    );
 
   const getGridLayout = (count: number, layout?: 'row' | 'column' | 'grid') => {
     if (count === 1) return 'grid-cols-1';
@@ -582,8 +629,10 @@ export default function PhotoOrganizer({
           });
         }
 
-        // Subir este lote: crea ObjectURLs y añade al estado → React renderiza solo 5 imágenes
-        processUpload(processedBatch);
+        // Subir este lote: crea ObjectURLs y añade al estado → React renderiza solo 5 imágenes.
+        // El await es imprescindible: si este lote abre el modal de duplicados, el
+        // siguiente no debe pisarlo (ver askDuplicateDecision).
+        await processUpload(processedBatch);
 
         setConversionProgress({ done: Math.min(i + BATCH_SIZE, filesArray.length), total: filesArray.length });
         // Ceder control al navegador para renderizar el lote y liberar memoria (GC de iOS)
@@ -618,13 +667,46 @@ export default function PhotoOrganizer({
   };
 
 
-  const processUpload = (finalFiles: File[]) => {
+  /**
+   * Muestra el modal de duplicados y espera la decisión del usuario.
+   *
+   * Antes la subida real vivía dentro de los callbacks de `setDuplicateModal`, y
+   * como los lotes de 5 archivos no esperaban ninguna respuesta, un segundo lote
+   * con duplicados reemplazaba el objeto del modal y se perdían los callbacks del
+   * lote anterior: todas sus fotos (también las NO duplicadas) desaparecían sin
+   * ningún aviso.
+   */
+  const askDuplicateDecision = (file: File): Promise<'use' | 'skip'> =>
+    new Promise(resolve => {
+      let previewUrl = '';
+      try {
+        previewUrl = URL.createObjectURL(file);
+      } catch {
+        resolve('use');
+        return;
+      }
+      const finish = (decision: 'use' | 'skip') => {
+        URL.revokeObjectURL(previewUrl);
+        setDuplicateModal(null);
+        resolve(decision);
+      };
+      setDuplicateModal({
+        file,
+        previewUrl,
+        onConfirm: () => finish('use'),
+        onCancel: () => finish('skip'),
+      });
+    });
+
+  const processUpload = async (finalFiles: File[]) => {
     if (finalFiles.length === 0) return;
 
-    // Colectar todas las firmas existentes en el álbum (flat)
-    const existingKeys = new Set(
-      fileSignatures.flat().filter(Boolean)
-    );
+    // Firmas ya presentes en el álbum + las subidas en esta misma sesión
+    // (fileSignatures no se rellena hasta handleFinalizeSetup).
+    const existingKeys = new Set([
+      ...fileSignatures.flat().filter(Boolean),
+      ...sessionKeysRef.current,
+    ]);
 
     const duplicates: File[] = [];
     const unique: File[] = [];
@@ -636,20 +718,24 @@ export default function PhotoOrganizer({
     const doUpload = (files: File[]) => {
       if (files.length === 0) return;
       const newFilesData: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      const skipped: string[] = [];
       for (const file of files) {
         let url: string;
         try {
           url = URL.createObjectURL(file);
-          if (!url) continue;
+          if (!url) { skipped.push(file.name); continue; }
         } catch {
+          skipped.push(file.name);
           continue;
         }
+        sessionKeysRef.current.add(getFileKey(file));
         newFilesData.push({
           id: Math.random().toString(36).substring(2, 11),
           url,
           metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
         });
       }
+      if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
       if (newFilesData.length === 0) return;
       // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
       newFilesData.forEach(f => {
@@ -672,21 +758,8 @@ export default function PhotoOrganizer({
     };
 
     if (duplicates.length > 0) {
-      const _dupPreviewUrl = URL.createObjectURL(duplicates[0]);
-      setDuplicateModal({
-        file: duplicates[0],
-        previewUrl: _dupPreviewUrl,
-        onConfirm: () => {
-          URL.revokeObjectURL(_dupPreviewUrl);
-          setDuplicateModal(null);
-          doUpload([...unique, ...duplicates]);
-        },
-        onCancel: () => {
-          URL.revokeObjectURL(_dupPreviewUrl);
-          setDuplicateModal(null);
-          doUpload(unique);
-        },
-      });
+      const decision = await askDuplicateDecision(duplicates[0]);
+      doUpload(decision === 'use' ? [...unique, ...duplicates] : unique);
     } else {
       doUpload(unique);
     }
@@ -699,12 +772,15 @@ export default function PhotoOrganizer({
       pendingLowResRef.current.set(getFileKey(file), { width: result.width, height: result.height });
     }
     setIsValidating(false);
-    processSpecificUpload(pageIndex, file, targetPhotoIndex);
+    await processSpecificUpload(pageIndex, file, targetPhotoIndex);
   };
 
-  const processSpecificUpload = (pageIndex: number, file: File, targetPhotoIndex?: number) => {
+  const processSpecificUpload = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
     const key = getFileKey(file);
-    const existingKeys = new Set(fileSignatures.flat().filter(Boolean));
+    const existingKeys = new Set([
+      ...fileSignatures.flat().filter(Boolean),
+      ...sessionKeysRef.current,
+    ]);
 
     const doUpload = () => {
       const newPhotos = [...photos];
@@ -714,10 +790,12 @@ export default function PhotoOrganizer({
       let newUrl: string;
       try {
         newUrl = URL.createObjectURL(file);
-        if (!newUrl) return;
+        if (!newUrl) { setSkippedFiles(prev => [...prev, file.name]); return; }
       } catch {
+        setSkippedFiles(prev => [...prev, file.name]);
         return;
       }
+      sessionKeysRef.current.add(key);
 
       if (targetPhotoIndex !== undefined && targetPhotoIndex >= 0) {
         while (pagePhotos.length <= targetPhotoIndex) pagePhotos.push('');
@@ -780,13 +858,8 @@ export default function PhotoOrganizer({
     };
 
     if (existingKeys.has(key)) {
-      const _slotPreviewUrl = URL.createObjectURL(file);
-      setDuplicateModal({
-        file,
-        previewUrl: _slotPreviewUrl,
-        onConfirm: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); doUpload(); },
-        onCancel: () => { URL.revokeObjectURL(_slotPreviewUrl); setDuplicateModal(null); },
-      });
+      const decision = await askDuplicateDecision(file);
+      if (decision === 'use') doUpload();
     } else {
       doUpload();
     }
@@ -950,48 +1023,18 @@ export default function PhotoOrganizer({
   };
 
   const executeDeletePage = (index: number) => {
-    const newPhotos = [...photos];
-    const deleteCount = newPhotos.length > 41 ? 2 : 1;
-    newPhotos.splice(index, deleteCount);
-    onPhotosChange(newPhotos);
-    setNumPages(newPhotos.length);
+    // El usuario ya confirmó viendo el número de fotos de la página y de su compañera,
+    // de ahí allowPhotoDeletion. El reindexado de crops/textos/layouts lo hace
+    // deletePages de forma atómica (antes eran ~40 líneas manuales aquí).
+    const deleteCount = photos.length > 41 ? 2 : 1;
+    const indices = deleteCount === 2 ? [index, index + 1] : [index];
+    const result = albumDeletePages(currentAlbumState(), indices, { allowPhotoDeletion: true });
+
+    applyAlbumState(result.state);
+    setNumPages(result.state.length);
     setEditingPageIndex(null);
     setAdvancedSettingsModal(null);
     setDeletePageConfirm(null);
-
-    // Remove deleted indices and shift remaining ones down
-    const newLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
-    const newVariants: Record<number, number> = {};
-    for (const key of Object.keys(pageLayouts)) {
-      const k = Number(key);
-      if (k < index) newLayouts[k] = pageLayouts[k];
-      else if (k >= index + deleteCount) newLayouts[k - deleteCount] = pageLayouts[k];
-    }
-    for (const key of Object.keys(pageLayoutVariants)) {
-      const k = Number(key);
-      if (k < index) newVariants[k] = pageLayoutVariants[k];
-      else if (k >= index + deleteCount) newVariants[k - deleteCount] = pageLayoutVariants[k];
-    }
-    onPageLayoutsChange(newLayouts);
-    onPageLayoutVariantsChange(newVariants);
-
-    const newCrops: Record<string, any> = {};
-    for (const key of Object.keys(photoCrops)) {
-      const dashIdx = key.indexOf('-');
-      const pageNum = Number(key.substring(0, dashIdx));
-      const photoStr = key.substring(dashIdx + 1);
-      if (pageNum < index) newCrops[key] = photoCrops[key];
-      else if (pageNum >= index + deleteCount) newCrops[`${pageNum - deleteCount}-${photoStr}`] = photoCrops[key];
-    }
-    onPhotoCropsChange(newCrops);
-
-    const newTextsPage: Record<number, Record<number, any>> = {};
-    for (const pageKey of Object.keys(textBoxSlots)) {
-      const pageNum = Number(pageKey);
-      if (pageNum < index) newTextsPage[pageNum] = textBoxSlots[pageNum];
-      else if (pageNum >= index + deleteCount) newTextsPage[pageNum - deleteCount] = textBoxSlots[pageNum];
-    }
-    onTextBoxSlotsChange(newTextsPage);
   };
 
   const handleMovePage = (index: number, direction: 'up' | 'down') => {
@@ -1242,8 +1285,54 @@ export default function PhotoOrganizer({
 
   const albumConfig: AlbumConfig = { allowedPhotosPerPage, maxPages: 250 };
 
-  const currentAlbumState = (): AlbumState =>
-    fromPropsToAlbumState(photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants, fileSignatures);
+  // Espejo de las props leído por currentAlbumState(). Antes se leían las closures,
+  // y un useCallback con deps incompletas (handleDragStart no incluía pageLayouts,
+  // pageLayoutVariants ni fileSignatures) podía revertir la variante a un valor viejo
+  // y más pequeño al soltar una foto.
+  const propsRef = useRef({ photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants, fileSignatures });
+  useEffect(() => {
+    propsRef.current = { photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants, fileSignatures };
+  });
+
+  const currentAlbumState = (): AlbumState => {
+    const p = propsRef.current;
+    return fromPropsToAlbumState(
+      p.photos, p.photoCrops, p.textBoxSlots, p.pageLayouts, p.pageLayoutVariants, p.fileSignatures
+    );
+  };
+
+  /** Traduce los avisos de albumStateUtils a un mensaje para el banner. */
+  const reportWarnings = (warnings: AlbumWarning[]) => {
+    for (const w of warnings) {
+      if (w.code === 'max_pages_reached') {
+        setAlbumWarning(
+          `No hay espacio para ${w.unplacedPhotos} foto(s): el álbum ya está en el máximo de ${albumConfig.maxPages} páginas. ` +
+          `No se movió ninguna foto.`
+        );
+        return;
+      }
+      if (w.code === 'refused_photo_deletion') {
+        setAlbumWarning(
+          `No borramos la(s) página(s) ${w.pages.map(p => p + 1).join(', ')} porque tienen contenido.`
+        );
+        return;
+      }
+      if (w.code === 'photos_moved' && w.count > 0) {
+        setAlbumWarning(`Movimos ${w.count} foto(s) a la página ${w.toPage + 1}.`);
+        return;
+      }
+      if (w.code === 'photos_deleted' && w.count > 0) {
+        setAlbumWarning(`Se eliminaron ${w.count} foto(s).`);
+        return;
+      }
+    }
+  };
+
+  /** Aplica un AlbumOpResult: primero el estado, luego el aviso si lo hubo. */
+  const applyOpResult = (result: AlbumOpResult) => {
+    applyAlbumState(result.state);
+    reportWarnings(result.warnings);
+  };
 
   // Fires all 6 onChange callbacks in one React 18 auto-batched update so the
   // parent never reads a partially-updated state between callbacks.
@@ -1261,7 +1350,7 @@ export default function PhotoOrganizer({
   // ── End unified helpers ──────────────────────────────────────────────────────
 
   const applyRippleShift = (startIndex: number, newVariant: number) => {
-    applyAlbumState(albumRippleShift(currentAlbumState(), startIndex, newVariant, albumConfig, setNumPages));
+    applyOpResult(albumRippleShift(currentAlbumState(), startIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyPullShift = (startIndex: number, newVariant: number) => {
@@ -1274,15 +1363,46 @@ export default function PhotoOrganizer({
 
   // Treated as a bounded ripple: cascade stops naturally when no more overflow.
   const applyIncreaseNextPageVariant = (pageIndex: number, newVariant: number) => {
-    applyAlbumState(albumRippleShift(currentAlbumState(), pageIndex, newVariant, albumConfig, setNumPages));
+    applyOpResult(albumRippleShift(currentAlbumState(), pageIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyDeleteOverflow = (pageIndex: number, newVariant: number) => {
-    applyAlbumState(albumDeleteOverflow(currentAlbumState(), pageIndex, newVariant));
+    applyOpResult(albumDeleteOverflow(currentAlbumState(), pageIndex, newVariant));
   };
 
   const applyMoveToSpecificPage = (pageIndex: number, newVariant: number, targetPage: number) => {
-    applyAlbumState(albumMoveOverflowToPage(currentAlbumState(), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
+    applyOpResult(albumMoveOverflowToPage(currentAlbumState(), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
+  };
+
+  // ── Cambio de tamaño del álbum (B5) ──────────────────────────────────────────
+  // Al pasar de Cuadrado (hasta 9 fotos/página) a Horizontal o Vertical (hasta 6),
+  // las fotos sobrantes de cada página quedaban fuera del render sin aviso ninguno.
+  // Ahora se detecta y se ofrece redistribuirlas.
+  const prevMaxAllowedRef = useRef(allowedPhotosPerPage[allowedPhotosPerPage.length - 1]);
+  useEffect(() => {
+    const max = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+    if (max >= prevMaxAllowedRef.current) {
+      prevMaxAllowedRef.current = max;
+      return;
+    }
+    const impact = analyzeConfigChange(currentAlbumState(), albumConfig);
+    if (impact.photosAtRisk > 0) {
+      setSizeMigrationModal(impact);
+    } else {
+      prevMaxAllowedRef.current = max;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedPhotosPerPage.join(',')]);
+
+  const applySizeMigration = () => {
+    const result = migrateAlbumToConfig(currentAlbumState(), albumConfig, setNumPages);
+    if (result.warnings.some(w => w.code === 'max_pages_reached')) {
+      reportWarnings(result.warnings);
+      return;
+    }
+    applyAlbumState(result.state);
+    prevMaxAllowedRef.current = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+    setSizeMigrationModal(null);
   };
 
   const handleVariantSelect = (opt: number) => {
@@ -1341,74 +1461,84 @@ export default function PhotoOrganizer({
     if (onComplete) onComplete();
   };
 
+  /**
+   * Con un número impar de páginas vacías hay que sacrificar una página más para
+   * que el álbum mantenga un número par. `findCompanionPage` elige cuál, dando
+   * prioridad absoluta a las páginas SIN contenido.
+   *
+   * Antes, la rama `delete-companion` empujaba directamente la página compañera
+   * —que por construcción tiene fotos— y, si no encontraba ningún bloque suelto,
+   * caía en `indicesToDelete.push(lastEmpty - 1)`: una página elegida a ciegas,
+   * sin comprobar si estaba vacía y sin avisar. Ocurría en el último clic antes
+   * del checkout.
+   */
+  const pageHasContent = (idx: number) => {
+    const p = photos[idx] || [];
+    return p.some(ph => ph && ph.trim() !== '') ||
+           (textBoxSlots[idx] && Object.keys(textBoxSlots[idx]).length > 0);
+  };
+
+  const findCompanionPage = (emptyIndices: number[]): number | null => {
+    const alreadySelected = new Set(emptyIndices);
+    const blocks = new Map<number, number[]>();
+    emptyIndices.forEach(idx => {
+      const block = Math.floor(idx / 2);
+      if (!blocks.has(block)) blocks.set(block, []);
+      blocks.get(block)!.push(idx);
+    });
+
+    // 1º) Compañeras que también están vacías (borrado indoloro).
+    for (const pages of blocks.values()) {
+      if (pages.length !== 1) continue;
+      const companion = pages[0] % 2 === 0 ? pages[0] + 1 : pages[0] - 1;
+      if (companion >= 0 && companion < photos.length &&
+          !alreadySelected.has(companion) && !pageHasContent(companion)) {
+        return companion;
+      }
+    }
+    // 2º) Compañera con contenido: válida, pero el botón lo dice explícitamente.
+    for (const pages of blocks.values()) {
+      if (pages.length !== 1) continue;
+      const companion = pages[0] % 2 === 0 ? pages[0] + 1 : pages[0] - 1;
+      if (companion >= 0 && companion < photos.length && !alreadySelected.has(companion)) {
+        return companion;
+      }
+    }
+    // Sin candidato: la opción se deshabilita en la UI (nada de elegir a ciegas).
+    return null;
+  };
+
   const executeDeleteEmptyPages = (strategy: 'even' | 'delete-companion' | 'keep-one-blank') => {
     if (!emptyPagesModalData) return;
     let indicesToDelete = [...emptyPagesModalData.indices];
+    let allowPhotoDeletion = false;
 
     if (strategy === 'delete-companion') {
-       const blocks = new Map<number, number[]>();
-       indicesToDelete.forEach(idx => {
-          const block = Math.floor(idx / 2);
-          if (!blocks.has(block)) blocks.set(block, []);
-          blocks.get(block)!.push(idx);
-       });
-       
-       let found = false;
-       for (const [block, pages] of blocks.entries()) {
-          if (pages.length === 1) {
-             const companion = pages[0] % 2 === 0 ? pages[0] + 1 : pages[0] - 1;
-             if (companion < photos.length) {
-               indicesToDelete.push(companion);
-               found = true;
-               break;
-             }
-          }
-       }
-       if (!found) {
-          const lastEmpty = indicesToDelete[indicesToDelete.length - 1];
-          indicesToDelete.push(lastEmpty - 1);
-       }
+      const companion = findCompanionPage(indicesToDelete);
+      if (companion === null) {
+        setAlbumWarning('No encontramos una página compañera que se pueda eliminar.');
+        return;
+      }
+      indicesToDelete.push(companion);
+      // El usuario aceptó explícitamente en el botón que esa página tiene contenido.
+      allowPhotoDeletion = pageHasContent(companion);
     } else if (strategy === 'keep-one-blank') {
-       indicesToDelete.pop(); 
+      indicesToDelete.pop();
     }
 
     if (photos.length - indicesToDelete.length < 40) {
-       alert("No se puede completar la acción porque el álbum quedaría con menos de 40 páginas.");
-       return;
+      setAlbumWarning('No se puede completar la acción porque el álbum quedaría con menos de 40 páginas.');
+      return;
     }
 
-    indicesToDelete.sort((a, b) => b - a);
-
-    const mappedPhotos: string[][] = [];
-    const mappedLayouts: Record<number, any> = {};
-    const mappedVariants: Record<number, number> = {};
-    const mappedCrops: Record<string, any> = {};
-    const mappedTexts: Record<number, any> = {};
-
-    let newIdx = 0;
-    for (let oldIdx = 0; oldIdx < photos.length; oldIdx++) {
-       if (indicesToDelete.includes(oldIdx)) continue;
-       
-       mappedPhotos.push(photos[oldIdx]);
-       if (pageLayouts[oldIdx]) mappedLayouts[newIdx] = pageLayouts[oldIdx];
-       if (pageLayoutVariants[oldIdx]) mappedVariants[newIdx] = pageLayoutVariants[oldIdx];
-       if (textBoxSlots[oldIdx]) mappedTexts[newIdx] = textBoxSlots[oldIdx];
-
-       Object.keys(photoCrops).forEach(key => {
-          if (key.startsWith(`${oldIdx}-`)) {
-             const pIdx = key.split('-')[1];
-             mappedCrops[`${newIdx}-${pIdx}`] = photoCrops[key];
-          }
-       });
-       newIdx++;
+    const result = albumDeletePages(currentAlbumState(), indicesToDelete, { allowPhotoDeletion });
+    if (result.warnings.some(w => w.code === 'refused_photo_deletion')) {
+      reportWarnings(result.warnings);
+      return;
     }
 
-    onPhotosChange(mappedPhotos);
-    onPageLayoutsChange(mappedLayouts);
-    onPageLayoutVariantsChange(mappedVariants);
-    onTextBoxSlotsChange(mappedTexts);
-    onPhotoCropsChange(mappedCrops);
-    setNumPages(mappedPhotos.length);
+    applyAlbumState(result.state);
+    setNumPages(result.state.length);
     setEmptyPagesModalData(null);
   };
 
@@ -1500,9 +1630,9 @@ export default function PhotoOrganizer({
     if (!photos || !photos[pageIndex]) return null;
 
     const pagePhotos = photos[pageIndex];
-    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+    const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
-    
+
     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
 
     return (
@@ -2000,7 +2130,17 @@ export default function PhotoOrganizer({
   // Comprobaciones para saber qué opciones mostrar en el modal de vacías
   const canDeleteEven = emptyPagesModalData && !emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - emptyPagesModalData.indices.length >= 40);
   const canKeepOneBlank = emptyPagesModalData && emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - (emptyPagesModalData.indices.length - 1) >= 40);
-  const canDeleteCompanion = emptyPagesModalData && emptyPagesModalData.isOdd && (emptyPagesModalData.totalCurrent - (emptyPagesModalData.indices.length + 1) >= 40);
+  // La compañera se resuelve aquí para poder nombrarla en el botón. Si no hay
+  // candidata, la opción no se ofrece (antes se elegía una página al azar).
+  const companionCandidate = emptyPagesModalData && emptyPagesModalData.isOdd
+    ? findCompanionPage(emptyPagesModalData.indices)
+    : null;
+  const companionPhotoCount = companionCandidate !== null
+    ? (photos[companionCandidate] || []).filter(p => p && p.trim() !== '').length
+    : 0;
+  const canDeleteCompanion = emptyPagesModalData && emptyPagesModalData.isOdd
+    && companionCandidate !== null
+    && (emptyPagesModalData.totalCurrent - (emptyPagesModalData.indices.length + 1) >= 40);
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
@@ -2016,6 +2156,82 @@ export default function PhotoOrganizer({
       {renderDuplicateModal()}
       {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
+
+      {/* AVISOS DE OPERACIONES SOBRE EL ÁLBUM (antes eran alert() bloqueantes) */}
+      {albumWarning && (
+        <div className="fixed bottom-20 left-0 right-0 z-[125] flex justify-center px-4">
+          <div className="bg-white border border-amber-300 rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3 max-w-md w-full">
+            <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+            </div>
+            <p className="text-sm text-gray-700 flex-1">{albumWarning}</p>
+            <button
+              onClick={() => setAlbumWarning(null)}
+              className="text-xs font-bold text-gray-500 hover:text-black shrink-0"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ARCHIVOS QUE NO SE PUDIERON PROCESAR (antes se descartaban en silencio) */}
+      {skippedFiles.length > 0 && (
+        <div className="fixed bottom-36 left-0 right-0 z-[125] flex justify-center px-4">
+          <div className="bg-white border border-red-300 rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3 max-w-md w-full">
+            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4 text-red-500" />
+            </div>
+            <p className="text-sm text-gray-700 flex-1">
+              No pudimos procesar {skippedFiles.length} archivo(s): {skippedFiles.slice(0, 3).join(', ')}
+              {skippedFiles.length > 3 ? '…' : ''}
+            </p>
+            <button
+              onClick={() => setSkippedFiles([])}
+              className="text-xs font-bold text-gray-500 hover:text-black shrink-0"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CAMBIO DE TAMAÑO DEL ÁLBUM: fotos que ya no cabrían por página */}
+      {sizeMigrationModal && (
+        <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">El formato cambió</h3>
+            </div>
+            <p className="text-gray-600 text-sm mb-2">
+              En <strong>{sizeStr}</strong> caben como máximo{' '}
+              <strong>{allowedPhotosPerPage[allowedPhotosPerPage.length - 1]} fotos por página</strong>.
+            </p>
+            <p className="text-gray-600 text-sm mb-6">
+              Tienes <strong>{sizeMigrationModal.photosAtRisk} foto(s)</strong> en{' '}
+              {sizeMigrationModal.pagesAffected.length} página(s) que ya no caben. No se perderá ninguna:
+              las moveremos a las páginas siguientes.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={applySizeMigration}
+                className="w-full px-4 py-3 rounded-xl bg-black text-white font-semibold hover:bg-gray-800 transition-all text-sm"
+              >
+                Redistribuir automáticamente
+                {sizeMigrationModal.estimatedNewPages > 0
+                  ? ` (+${sizeMigrationModal.estimatedNewPages} páginas)`
+                  : ''}
+              </button>
+              <p className="text-[11px] text-gray-400 text-center leading-tight">
+                Si prefieres conservar el diseño actual, vuelve atrás y elige de nuevo un tamaño cuadrado.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BANNER: FOTOS QUE NO SE CARGARON CORRECTAMENTE */}
       {showBrokenBanner && brokenPhotoUrls.size > 0 && step === 'editor' && (
@@ -2103,7 +2319,10 @@ export default function PhotoOrganizer({
                           onClick={() => executeDeleteEmptyPages('delete-companion')}
                           className="w-full text-left px-4 py-3 rounded-xl border-2 border-red-100 hover:border-red-500 hover:bg-red-50 font-medium transition-all text-sm text-red-600"
                         >
-                          Eliminar {emptyPagesModalData.indices.length + 1} (Incluye borrar 1 pág. compañera con fotos)
+                          Eliminar {emptyPagesModalData.indices.length + 1}, incluida la página {companionCandidate! + 1}
+                          {companionPhotoCount > 0
+                            ? ` (¡tiene ${companionPhotoCount} foto${companionPhotoCount === 1 ? '' : 's'}!)`
+                            : ' (está vacía)'}
                         </button>
                       )}
                     </div>
@@ -2417,7 +2636,7 @@ export default function PhotoOrganizer({
                   onPointerDown={!isReorderMode ? e => handlePageLongPress(pageIndex, e) : undefined}
                 >
                   {(() => {
-                    const currentVariant = pageLayoutVariants[pageIndex] || getNextAllowed(pagePhotos.length);
+                    const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
                     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
                     return (
                       <div className={`grid gap-2 p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>

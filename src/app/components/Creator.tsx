@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check, Sparkles } from 'lucide-react';
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -16,7 +16,7 @@ import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK, BASE_CUSTOM_ALBUM } from '../types/products';
-import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder } from '../../services/orderService';
+import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
 
 const DB_NAME = 'JiffyAppDB';
@@ -100,7 +100,6 @@ export default function Creator() {
 
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const activeDraftIdRef = useRef<string | null>(null);
-  const draftSaveInFlightRef = useRef<Promise<string> | null>(null);
   const updateActiveDraftId = (id: string | null) => {
     activeDraftIdRef.current = id;
     setActiveDraftId(id);
@@ -110,7 +109,18 @@ export default function Creator() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSaveSuccess, setDraftSaveSuccess] = useState(false);
   const [showDraftHint, setShowDraftHint] = useState(false);
-  const [autoSaveBanner, setAutoSaveBanner] = useState<string | null>(null);
+  const [autoSaveBanner, setAutoSaveBanner] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
+
+  /**
+   * Equivalencias `blob:`/`data:` → URL de Firebase Storage descubiertas en guardados
+   * anteriores de esta sesión. Evita resubir lo ya subido y, sobre todo, permite guardar
+   * aunque la `blob:` original haya muerto (pestaña descartada por iOS, PWA en segundo plano).
+   */
+  const [uploadedUrlMap, setUploadedUrlMap] = useState<Record<string, string>>({});
+  /** Fotos que no se pudieron subir tras los reintentos; bloquea el avance a checkout. */
+  const [uploadFailure, setUploadFailure] = useState<{ urls: string[]; count: number } | null>(null);
+  /** URLs señaladas en el editor para que el usuario las reemplace una a una. */
+  const [failedUploadUrls, setFailedUploadUrls] = useState<string[]>([]);
 
   const [previewProduct, setPreviewProduct] = useState<ProductType | null>(null);
   const [selectedCustomAlbum, setSelectedCustomAlbum] = useState<CustomAlbumProduct | null>(null);
@@ -147,39 +157,196 @@ export default function Creator() {
     checkSavedDrafts();
   }, [user]);
 
-  // Guardado single-flight: si ya hay un guardado de borrador en curso, las llamadas
-  // subsiguientes esperan ese resultado y lo reutilizan en vez de crear un documento
-  // duplicado en Firestore (evita la carrera entre autoguardado, guardado manual y checkout).
-  const persistDraft = async (
-    designData: any,
-    activeProduct: any,
-    userInfo: { name?: string; email?: string },
-    opts?: { status?: 'draft' | 'saved_draft'; onProgress?: (progress: number) => void }
-  ): Promise<string> => {
-    if (draftSaveInFlightRef.current) {
-      await draftSaveInFlightRef.current;
-    }
-    const existingOrderId = activeDraftIdRef.current || resumingOrderId || undefined;
-    const savePromise = createDraftOrder(
-      user!.uid,
-      designData,
-      activeProduct,
-      opts?.onProgress,
-      existingOrderId,
-      selectedProduct || undefined,
-      opts?.status ?? 'saved_draft',
-      userInfo
+  // ───────────────────────────────────────────────────────────────────────────
+  // Cola de guardado
+  //
+  // Las escrituras del pedido se ejecutan ESTRICTAMENTE en serie. El esquema
+  // anterior ("single-flight") solo esperaba la promesa en curso, así que dos
+  // llamadas que esperaban la misma promesa reanudaban a la vez y lanzaban dos
+  // createDraftOrder en paralelo sobre el mismo documento; como cada uno sube N
+  // imágenes y tarda distinto, el que salió con datos más viejos podía escribir
+  // el último y borrar las fotos añadidas entre medias.
+  // ───────────────────────────────────────────────────────────────────────────
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const saveSeqRef = useRef(0);
+
+  const enqueueSave = <T,>(
+    task: () => Promise<T>,
+    opts?: { coalescable?: boolean; onSkip?: () => T }
+  ): Promise<T> => {
+    const ticket = ++saveSeqRef.current;
+    const run = saveQueueRef.current.then(
+      () => {
+        // Un autoguardado que ya fue superado por otro posterior no aporta nada.
+        if (opts?.coalescable && ticket !== saveSeqRef.current) {
+          return Promise.resolve(opts.onSkip ? opts.onSkip() : (undefined as unknown as T));
+        }
+        return task();
+      },
+      // Encadenar aunque el guardado anterior haya fallado.
+      () => task()
     );
-    draftSaveInFlightRef.current = savePromise;
-    try {
-      const newDraftId = await savePromise;
-      updateActiveDraftId(newDraftId);
-      return newDraftId;
-    } finally {
-      if (draftSaveInFlightRef.current === savePromise) {
-        draftSaveInFlightRef.current = null;
-      }
+    saveQueueRef.current = run.then(() => undefined, () => undefined);
+    return run;
+  };
+
+  /**
+   * Espejo del estado de diseño, refrescado en cada render. Los guardados leen de aquí
+   * en el momento en que se ejecutan (ya dentro de la cola), no de la closure congelada
+   * en el momento en que se encolaron.
+   */
+  const designRef = useRef<any>({});
+
+  const buildDesignData = (overrides?: {
+    photos?: string[][] | string[];
+    mugItems?: MugItem[];
+    textBoxSlots?: Record<number, Record<number, any>>;
+    customization?: any;
+  }) => {
+    const d = designRef.current;
+    const product = d.selectedProduct as ProductType | null;
+
+    const activeCustomization = overrides?.customization ?? (
+      product === 'album' ? d.customization
+      : product === 'calendar' ? d.calendarCustomization
+      : product === 'mug' ? d.mugCustomization
+      : product === 'photo-pack' ? d.photoPackCustomization
+      : null
+    );
+
+    const activeProduct = product === 'album' ? d.selectedAlbum
+                        : product === 'calendar' ? d.selectedCalendar
+                        : product === 'mug' ? d.selectedMug
+                        : product === 'photo-pack' ? d.selectedPhotoPack
+                        : null;
+
+    const activePhotos = overrides?.photos ?? (
+      product === 'album' ? d.photos
+      : product === 'calendar' ? d.calendarPhotos
+      : product === 'photo-pack' ? d.photoPackPhotos
+      : []
+    );
+
+    const activePhotoCrops = product === 'album' ? d.photoCrops
+                           : product === 'calendar' ? d.calendarPhotoCrops
+                           : product === 'photo-pack' ? d.photoPackPhotoCrops
+                           : {};
+
+    const currentMugItems = overrides?.mugItems ?? (product === 'mug' ? d.mugItems : []);
+
+    let coverData: any = { image: '', title: activeProduct?.name || '' };
+    if (product === 'album' && (activeCustomization as any)?.coverContent) {
+      const content = (activeCustomization as any).coverContent;
+      coverData = {
+        image: content.coverImage || '',
+        title: content.coverTitle || '',
+        subtitle: content.coverSubtitle || '',
+        year: content.coverYear || '',
+        layout: content.selectedLayout || 1,
+        crop: content.coverCrop || { x: 50, y: 50, zoom: 1 },
+      };
     }
+
+    return {
+      activeProduct,
+      designData: {
+        photos: activePhotos,
+        pageLayouts: d.pageLayouts,
+        pageLayoutVariants: d.pageLayoutVariants,
+        textBoxSlots: overrides?.textBoxSlots ?? d.textBoxSlots,
+        customization: activeCustomization,
+        coverData,
+        photoCrops: activePhotoCrops,
+        items: currentMugItems,
+        mugItems: currentMugItems,
+        uploadedUrlMap: d.uploadedUrlMap,
+      },
+    };
+  };
+
+  const currentUserInfo = () => ({
+    name: userData?.name || user?.displayName || undefined,
+    email: user?.email || undefined,
+  });
+
+  /**
+   * Guarda el borrador. El `designData` se construye DENTRO de la tarea encolada,
+   * de modo que siempre refleja el estado más reciente y no una copia congelada.
+   */
+  const persistDraft = (opts?: {
+    status?: 'draft' | 'saved_draft';
+    onProgress?: (progress: number) => void;
+    overrides?: Parameters<typeof buildDesignData>[0];
+    coalescable?: boolean;
+    allowShrink?: boolean;
+  }): Promise<string | null> =>
+    enqueueSave<string | null>(
+      async () => {
+        const { activeProduct, designData } = buildDesignData(opts?.overrides);
+        if (!activeProduct) return activeDraftIdRef.current;
+
+        const result = await createDraftOrder(
+          user!.uid,
+          designData,
+          activeProduct,
+          opts?.onProgress,
+          activeDraftIdRef.current || resumingOrderId || undefined,
+          designRef.current.selectedProduct || undefined,
+          opts?.status ?? 'saved_draft',
+          currentUserInfo(),
+          opts?.allowShrink ?? false
+        );
+
+        updateActiveDraftId(result.orderId);
+        if (Object.keys(result.uploadedUrlMap).length > 0) {
+          setUploadedUrlMap(prev => ({ ...prev, ...result.uploadedUrlMap }));
+        }
+        setFailedUploadUrls([]);
+        return result.orderId;
+      },
+      // null = "no se guardó" (coalescado). Así el llamante no muestra el banner
+      // de éxito por un guardado que en realidad nunca ocurrió.
+      { coalescable: opts?.coalescable, onSkip: () => null }
+    );
+
+  /**
+   * Traduce los errores tipados del servicio a algo accionable para el usuario.
+   * Devuelve `true` si el error ya fue manejado aquí.
+   */
+  const handleSaveError = (e: unknown, opts?: { onConfirmShrink?: () => void }): boolean => {
+    if (e instanceof PhotoUploadError) {
+      setUploadFailure({
+        urls: e.failures.map(f => f.sourceUrl),
+        count: e.failures.length,
+      });
+      return true;
+    }
+    if (e instanceof PhotoLossError) {
+      // Dejar el pedido en CERO fotos nunca es intencional y no admite override:
+      // no tiene sentido ofrecer un "continuar" que volvería a fallar.
+      if (e.after === 0) {
+        setAutoSaveBanner({
+          text: `No guardamos: el diseño se quedaría sin ninguna de tus ${e.before} fotos. ` +
+                `Recarga la página y vuelve a abrir el borrador; el guardado anterior sigue intacto.`,
+          tone: 'error',
+        });
+        return true;
+      }
+      if (opts?.onConfirmShrink) {
+        const ok = window.confirm(
+          `Tu diseño pasaría de ${e.before} a ${e.after} fotos guardadas.\n\n` +
+          `Si no borraste fotos a propósito, cancela y avísanos.\n\n¿Continuar de todos modos?`
+        );
+        if (ok) opts.onConfirmShrink();
+      } else {
+        setAutoSaveBanner({
+          text: 'No guardamos automáticamente: el diseño tenía menos fotos de lo esperado.',
+          tone: 'error',
+        });
+      }
+      return true;
+    }
+    return false;
   };
 
   const handleCheckoutRedirect = async (finalData?: {
@@ -187,60 +354,34 @@ export default function Creator() {
     mugItems?: MugItem[], 
     textBoxSlots?: Record<number, Record<number, any>> 
   }) => {
-    setIsSaving(true); 
+    const overrides = {
+      photos: finalData?.photos,
+      mugItems: finalData?.mugItems,
+      textBoxSlots: finalData?.textBoxSlots,
+    };
+
+    setIsSaving(true);
     setUploadProgress(0);
 
-    try {
-      const activeProduct = getActiveProduct();
-      const activeCustomization = getActiveCustomization();
-      
-      let currentPhotosRaw = finalData?.photos || getActivePhotos();
-      let currentMugItems = finalData?.mugItems || (selectedProduct === 'mug' ? mugItems : []);
-      let currentTextBoxSlots = finalData?.textBoxSlots || textBoxSlots; 
-
-      let coverData: any = { image: '', title: '' };
-      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
-        const content = (activeCustomization as any).coverContent;
-        coverData = {
-          image: content.coverImage || '',
-          title: content.coverTitle || '',
-          subtitle: content.coverSubtitle || '',
-          year: content.coverYear || '',
-          layout: content.selectedLayout || 1,
-          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
-        };
-      } else if (activeProduct) {
-        coverData = { image: '', title: activeProduct.name };
-      }
-
-      const activePhotoCrops = selectedProduct === 'album' ? photoCrops 
-                             : selectedProduct === 'calendar' ? calendarPhotoCrops
-                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
-                             : {};
-
-      const designData = {
-        photos: currentPhotosRaw, 
-        pageLayouts,
-        pageLayoutVariants,
-        textBoxSlots: currentTextBoxSlots,
-        customization: activeCustomization,
-        coverData,
-        photoCrops: activePhotoCrops,
-        items: currentMugItems, 
-        mugItems: currentMugItems
-      };
+    const attempt = async (allowShrink: boolean): Promise<void> => {
+      const { activeProduct, designData } = buildDesignData(overrides);
 
       if (!user) {
-        const draftData = { designData, product: activeProduct, productType: selectedProduct };
-        await saveDraftToDB(draftData); 
-        navigate('/login', { state: { from: location.pathname } }); 
+        const draftData = {
+          designData,
+          product: activeProduct,
+          productType: designRef.current.selectedProduct,
+        };
+        await saveDraftToDB(draftData);
+        navigate('/login', { state: { from: location.pathname } });
         return;
       }
 
-      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      const orderId = await persistDraft(designData, activeProduct, userInfo, {
+      const orderId = await persistDraft({
         status: 'saved_draft',
         onProgress: (progress) => setUploadProgress(progress),
+        overrides,
+        allowShrink,
       });
 
       setResumingOrderId(null);
@@ -248,15 +389,28 @@ export default function Creator() {
         state: {
           orderId,
           product: activeProduct,
-          productType: selectedProduct
-        }
+          productType: designRef.current.selectedProduct,
+        },
       });
+    };
 
+    try {
+      await attempt(false);
     } catch (error) {
-      console.error("Error al guardar el diseño:", error);
-      alert(t('error.processingImages'));
+      const handled = handleSaveError(error, {
+        onConfirmShrink: () => {
+          attempt(true).catch(e => {
+            console.error('Error al guardar el diseño (reintento):', e);
+            if (!handleSaveError(e)) alert(t('error.processingImages'));
+          });
+        },
+      });
+      if (!handled) {
+        console.error('Error al guardar el diseño:', error);
+        alert(t('error.processingImages'));
+      }
     } finally {
-      setIsSaving(false); 
+      setIsSaving(false);
     }
   };
 
@@ -284,6 +438,17 @@ export default function Creator() {
   const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, number>>({});
   const progressRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Sin array de dependencias a propósito: designRef debe reflejar el último render.
+  useEffect(() => {
+    designRef.current = {
+      selectedProduct, selectedAlbum, selectedCalendar, selectedMug, selectedPhotoPack,
+      customization, calendarCustomization, mugCustomization, photoPackCustomization,
+      photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants,
+      calendarPhotos, calendarPhotoCrops, photoPackPhotos, photoPackPhotoCrops,
+      mugItems, uploadedUrlMap,
+    };
+  });
 
   useEffect(() => {
     const apiKey = import.meta.env.VITE_1CLIC_API_KEY;
@@ -357,6 +522,11 @@ export default function Creator() {
   const restoreDesignToState = (designData: any, product: any, productType: ProductType) => {
     setSelectedProduct(productType);
     setCurrentStep('customization');
+    // El borrador de invitado (IndexedDB) viaja con las equivalencias blob: → Storage
+    // ya descubiertas: sin ellas, al volver del login las blob: muertas fallarían al subir.
+    setUploadedUrlMap(designData.uploadedUrlMap || {});
+    setUploadFailure(null);
+    setFailedUploadUrls([]);
 
     if (productType === 'album') {
       setSelectedAlbum(product);
@@ -500,57 +670,37 @@ export default function Creator() {
 
       setIsSavingDraft(true);
 
-      const activeProduct = getActiveProduct();
-      const activeCustomization = getActiveCustomization();
+      const attempt = async (allowShrink: boolean) => {
+        const newDraftId = await persistDraft({ status: 'saved_draft', allowShrink });
 
-      let coverData: any = { image: '', title: '' };
-      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
-        const content = (activeCustomization as any).coverContent;
-        coverData = {
-          image: content.coverImage || '',
-          title: content.coverTitle || '',
-          subtitle: content.coverSubtitle || '',
-          year: content.coverYear || '',
-          layout: content.selectedLayout || 1,
-          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
-        };
-      } else if (activeProduct) {
-        coverData = { image: '', title: activeProduct.name };
-      }
+        setSavedDrafts(prev => {
+          const exists = prev.find(d => d.id === newDraftId);
+          if (exists) {
+            return prev.map(d => d.id === newDraftId ? { ...d, updatedAt: new Date().toISOString() } : d);
+          }
+          return [...prev, { id: newDraftId, updatedAt: new Date().toISOString() }];
+        });
 
-      const activePhotoCrops = selectedProduct === 'album' ? photoCrops
-                             : selectedProduct === 'calendar' ? calendarPhotoCrops
-                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
-                             : {};
-
-      const currentMugItems = selectedProduct === 'mug' ? mugItems : [];
-
-      const designData = {
-        photos: getActivePhotos(),
-        pageLayouts,
-        pageLayoutVariants,
-        textBoxSlots,
-        customization: activeCustomization,
-        coverData,
-        photoCrops: activePhotoCrops,
-        items: currentMugItems,
-        mugItems: currentMugItems,
+        setDraftSaveSuccess(true);
+        setTimeout(() => setDraftSaveSuccess(false), 2500);
       };
 
-      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      const newDraftId = await persistDraft(designData, activeProduct, userInfo, { status: 'saved_draft' });
-
-      setSavedDrafts(prev => {
-        const exists = prev.find(d => d.id === newDraftId);
-        if (exists) {
-          return prev.map(d => d.id === newDraftId ? { ...d, updatedAt: new Date().toISOString() } : d);
+      try {
+        await attempt(false);
+      } catch (e) {
+        const handled = handleSaveError(e, {
+          onConfirmShrink: () => {
+            attempt(true).catch(err => {
+              console.error('Error saving draft (reintento)', err);
+              if (!handleSaveError(err)) alert(t('error.savingDraft'));
+            });
+          },
+        });
+        if (!handled) {
+          console.error('Error saving draft', e);
+          alert(t('error.savingDraft'));
         }
-        return [...prev, { id: newDraftId, updatedAt: new Date().toISOString() }];
-      });
-
-      setDraftSaveSuccess(true);
-      setTimeout(() => setDraftSaveSuccess(false), 2500);
-
+      }
     } catch (e) {
       console.error('Error saving draft', e);
       alert(t('error.savingDraft'));
@@ -563,34 +713,34 @@ export default function Creator() {
     if (!user || !editingPaidOrderId) return;
     setIsSavingDraft(true);
     setUploadProgress(0);
+    const attempt = (allowShrink: boolean) =>
+      enqueueSave(async () => {
+        const { designData } = buildDesignData();
+        const result = await updateOrderDesign(
+          editingPaidOrderId, user.uid, designData, setUploadProgress, allowShrink
+        );
+        if (Object.keys(result.uploadedUrlMap).length > 0) {
+          setUploadedUrlMap(prev => ({ ...prev, ...result.uploadedUrlMap }));
+        }
+        setDraftSaveSuccess(true);
+        setTimeout(() => setDraftSaveSuccess(false), 2500);
+      });
+
     try {
-      const activeCustomization = getActiveCustomization();
-      let coverData: any = { image: '', title: '' };
-      if (selectedProduct === 'album' && (activeCustomization as any)?.coverContent) {
-        const content = (activeCustomization as any).coverContent;
-        coverData = { image: content.coverImage || '', title: content.coverTitle || '', subtitle: content.coverSubtitle || '', year: content.coverYear || '', layout: content.selectedLayout || 1, crop: content.coverCrop || { x: 50, y: 50, zoom: 1 } };
-      } else if (getActiveProduct()) {
-        coverData = { image: '', title: getActiveProduct()?.name };
-      }
-      const activePhotoCrops = selectedProduct === 'album' ? photoCrops : selectedProduct === 'calendar' ? calendarPhotoCrops : selectedProduct === 'photo-pack' ? photoPackPhotoCrops : {};
-      const currentMugItems = selectedProduct === 'mug' ? mugItems : [];
-      const designData = {
-        photos: getActivePhotos(),
-        pageLayouts,
-        pageLayoutVariants,
-        textBoxSlots,
-        customization: activeCustomization,
-        coverData,
-        photoCrops: activePhotoCrops,
-        items: currentMugItems,
-        mugItems: currentMugItems,
-      };
-      await updateOrderDesign(editingPaidOrderId, user.uid, designData, setUploadProgress);
-      setDraftSaveSuccess(true);
-      setTimeout(() => setDraftSaveSuccess(false), 2500);
+      await attempt(false);
     } catch (e) {
-      console.error('Error saving paid order changes', e);
-      alert(t('error.savingDraft'));
+      const handled = handleSaveError(e, {
+        onConfirmShrink: () => {
+          attempt(true).catch(err => {
+            console.error('Error saving paid order changes (reintento)', err);
+            if (!handleSaveError(err)) alert(t('error.savingDraft'));
+          });
+        },
+      });
+      if (!handled) {
+        console.error('Error saving paid order changes', e);
+        alert(t('error.savingDraft'));
+      }
     } finally {
       setIsSavingDraft(false);
       setUploadProgress(0);
@@ -670,54 +820,78 @@ export default function Creator() {
     }
   };
 
-  const autoSaveDraftSilently = async (customizationOverride?: any) => {
+  /**
+   * Autoguardado. Nunca usa `allowShrink`: un guardado automático jamás debe poder
+   * reducir el diseño. Si algo falla, el usuario se entera — antes solo iba a consola
+   * mientras la UI podía llegar a mostrar el banner de éxito.
+   */
+  const autoSaveDraftSilently = async (
+    customizationOverride?: any,
+    opts?: { silentUi?: boolean }
+  ) => {
     if (!user) return;
-    setIsSaving(true);
+    if (!designRef.current.selectedProduct) return;
+    if (uploadFailure) return; // hay fotos sin subir: no insistir en bucle
+
+    if (!opts?.silentUi) setIsSaving(true);
     try {
-      const activeProduct = getActiveProduct();
-      if (!activeProduct) return;
-      const effectiveCustomization = customizationOverride ?? getActiveCustomization();
-
-      let coverData: any = { image: '', title: activeProduct.name };
-      if (selectedProduct === 'album' && (effectiveCustomization as any)?.coverContent) {
-        const content = (effectiveCustomization as any).coverContent;
-        coverData = {
-          image: content.coverImage || '',
-          title: content.coverTitle || '',
-          subtitle: content.coverSubtitle || '',
-          year: content.coverYear || '',
-          layout: content.selectedLayout || 1,
-          crop: content.coverCrop || { x: 50, y: 50, zoom: 1 }
-        };
+      const saved = await persistDraft({
+        status: 'saved_draft',
+        overrides: customizationOverride ? { customization: customizationOverride } : undefined,
+        coalescable: true,
+      });
+      if (saved) {
+        setAutoSaveBanner({ text: 'Borrador guardado automáticamente', tone: 'ok' });
+        setTimeout(() => setAutoSaveBanner(null), 3500);
       }
-
-      const activePhotoCrops = selectedProduct === 'album' ? photoCrops
-                             : selectedProduct === 'calendar' ? calendarPhotoCrops
-                             : selectedProduct === 'photo-pack' ? photoPackPhotoCrops
-                             : {};
-
-      const designData = {
-        photos: getActivePhotos(),
-        pageLayouts,
-        pageLayoutVariants,
-        textBoxSlots,
-        customization: effectiveCustomization,
-        coverData,
-        photoCrops: activePhotoCrops,
-        items: selectedProduct === 'mug' ? mugItems : [],
-        mugItems: selectedProduct === 'mug' ? mugItems : [],
-      };
-
-      const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
-      await persistDraft(designData, activeProduct, userInfo, { status: 'saved_draft' });
-      setAutoSaveBanner('Borrador guardado automáticamente');
-      setTimeout(() => setAutoSaveBanner(null), 3500);
     } catch (e) {
       console.error('Auto-save silencioso falló:', e);
+      if (!handleSaveError(e)) {
+        setAutoSaveBanner({
+          text: 'No pudimos guardar automáticamente. Usa "Guardar borrador".',
+          tone: 'error',
+        });
+      }
     } finally {
-      setIsSaving(false);
+      if (!opts?.silentUi) setIsSaving(false);
     }
   };
+
+  // ── C2: autoguardado periódico y al ocultar la pestaña ─────────────────────
+  // El editor solo se guardaba al pulsar un botón; una pestaña descartada por iOS
+  // (PWA en segundo plano) se llevaba consigo todas las blob: URLs.
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasUnsavedChangesRef = useRef(false);
+
+  useEffect(() => {
+    if (currentStep !== 'organize' || !user) return;
+    if (editingPaidOrderId) return; // los pedidos pagados solo se guardan explícitamente
+    if (photos.length === 0 && mugItems.length === 0) return;
+
+    hasUnsavedChangesRef.current = true;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      hasUnsavedChangesRef.current = false;
+      autoSaveDraftSilently(undefined, { silentUi: true });
+    }, 20000);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [photos, pageLayouts, pageLayoutVariants, textBoxSlots, photoCrops, mugItems, currentStep, user, editingPaidOrderId]);
+
+  useEffect(() => {
+    // `visibilitychange` es más fiable que `beforeunload` en iOS/PWA.
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!hasUnsavedChangesRef.current) return;
+      if (currentStep !== 'organize' || !user || editingPaidOrderId) return;
+      hasUnsavedChangesRef.current = false;
+      autoSaveDraftSilently(undefined, { silentUi: true });
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [currentStep, user, editingPaidOrderId]);
 
   const handleCustomizationComplete = (options: CustomizationOptions) => {
     setCustomization(options);
@@ -893,6 +1067,7 @@ export default function Creator() {
           pagesLocked={isPageCountLocked}
           initialFileSignatures={fileSignatures.length > 0 ? fileSignatures : undefined}
           isSaving={isSaving}
+          failedUploadUrls={failedUploadUrls}
         />
       );
     } else if (selectedProduct === 'calendar' && calendarCustomization) {
@@ -936,28 +1111,9 @@ export default function Creator() {
     return null;
   };
 
-  const getActiveProduct = () => {
-    if (selectedProduct === 'album') return selectedAlbum;
-    if (selectedProduct === 'calendar') return selectedCalendar;
-    if (selectedProduct === 'mug') return selectedMug;
-    if (selectedProduct === 'photo-pack') return selectedPhotoPack;
-    return null;
-  };
-
-  const getActiveCustomization = () => {
-    if (selectedProduct === 'album') return customization;
-    if (selectedProduct === 'calendar') return calendarCustomization;
-    if (selectedProduct === 'mug') return mugCustomization;
-    if (selectedProduct === 'photo-pack') return photoPackCustomization;
-    return null;
-  };
-
-  const getActivePhotos = () => {
-    if (selectedProduct === 'album') return photos;
-    if (selectedProduct === 'calendar') return calendarPhotos;
-    if (selectedProduct === 'photo-pack') return photoPackPhotos;
-    return [];
-  };
+  // getActiveProduct / getActiveCustomization / getActivePhotos vivían aquí y se
+  // duplicaban en cada ruta de guardado. Ahora esa selección la hace buildDesignData
+  // leyendo designRef, para que ningún guardado use una copia congelada del estado.
 
   return (
     <div className="min-h-screen bg-white">
@@ -1160,9 +1316,78 @@ export default function Creator() {
       )}
 
       {autoSaveBanner && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium pointer-events-none">
-          <Check className="w-4 h-4 text-green-400 shrink-0" />
-          {autoSaveBanner}
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-sm font-medium ${
+            autoSaveBanner.tone === 'error'
+              ? 'bg-red-600 text-white'
+              : 'bg-gray-900 text-white pointer-events-none'
+          }`}
+        >
+          {autoSaveBanner.tone === 'error' ? (
+            <>
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{autoSaveBanner.text}</span>
+              <button
+                onClick={() => setAutoSaveBanner(null)}
+                className="ml-2 underline underline-offset-2 shrink-0"
+              >
+                Entendido
+              </button>
+            </>
+          ) : (
+            <>
+              <Check className="w-4 h-4 text-green-400 shrink-0" />
+              <span>{autoSaveBanner.text}</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/*
+        Fotos que no se pudieron subir. El guardado se abortó ENTERO, así que el
+        documento anterior sigue intacto y el diseño sigue completo en memoria:
+        el mensaje debe dejar claro que no se perdió nada.
+      */}
+      {uploadFailure && (
+        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">
+                  No pudimos subir {uploadFailure.count} foto{uploadFailure.count === 1 ? '' : 's'}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Tus fotos siguen aquí, no se perdió nada y tu diseño no cambió.
+                  Revisa tu conexión e inténtalo otra vez.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  setUploadFailure(null);
+                  if (editingPaidOrderId) handleSavePaidOrderChanges();
+                  else handleCheckoutRedirect();
+                }}
+                className="flex-1 flex items-center justify-center gap-2 bg-black text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reintentar
+              </button>
+              <button
+                onClick={() => {
+                  setFailedUploadUrls(uploadFailure.urls);
+                  setUploadFailure(null);
+                }}
+                className="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Ver fotos afectadas
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
