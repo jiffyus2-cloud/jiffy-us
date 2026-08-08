@@ -17,6 +17,10 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
   const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
+  // Ancho equivalente a las columnas de la grilla previa (gap-8 = 2rem):
+  // 2 por fila en md, 4 por fila en lg. flex-wrap + justify-center centra la última fila.
+  const CARD_WIDTH = 'w-full md:w-[calc(50%_-_1rem)] lg:w-[calc(25%_-_1.5rem)]';
+
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
       <div className="text-center mb-12">
@@ -26,11 +30,11 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+      <div className="flex flex-wrap justify-center gap-8 max-w-6xl mx-auto">
         {/* Photo Album Option */}
         <button
           onClick={() => onSelectProduct('album')}
-          className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+          className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Album Image */}
           <div className="w-full aspect-square overflow-hidden">
@@ -52,7 +56,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         {/* Photo Calendar Option */}
         <button
           onClick={() => onSelectProduct('calendar')}
-          className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+          className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Calendar Image */}
           <div className="w-full aspect-square overflow-hidden">
@@ -74,7 +78,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         {/* Custom Album Option */}
         <button
           onClick={() => onSelectProduct('custom-album')}
-          className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+          className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           <div className="w-full aspect-square overflow-hidden">
             <img
@@ -96,7 +100,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         {showMugs && (
           <button
             onClick={() => onSelectProduct('mug')}
-            className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+            className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
           >
             {/* Mug Image */}
             <div className="w-full aspect-square overflow-hidden">
@@ -120,7 +124,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         {showPhotoPacks && (
           <button
             onClick={() => onSelectProduct('photo-pack')}
-            className={`${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
+            className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
           >
             {/* Photo Pack Image */}
             <div className="w-full aspect-square overflow-hidden bg-gray-100 flex items-center justify-center">

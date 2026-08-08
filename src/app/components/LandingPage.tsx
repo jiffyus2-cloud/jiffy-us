@@ -38,6 +38,9 @@ export default function LandingPage() {
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
   const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
+  // 3 por fila en md con gap-5 (1.25rem): (100% - 2×1.25rem)/3
+  const CARD_WIDTH = 'w-full md:w-[calc(33.333%_-_0.834rem)]';
+
   // --- NUEVOS TEXTOS DEL CARRUSEL ---
   const heroImages = [
     { 
@@ -259,9 +262,9 @@ export default function LandingPage() {
         <div className={DESIGN.layout.container}>
           <h2 className={DESIGN.text.h2}>{t('landing.ourProducts')}</h2>
 
-          <div className={DESIGN.layout.grid}>
+          <div className="flex flex-wrap justify-center gap-5">
             {/* Photo Album */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('album')}>
+            <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('album')}>
               <div className="relative h-72">
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
@@ -275,7 +278,7 @@ export default function LandingPage() {
             </div>
 
             {/* Calendar */}
-            <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('calendar')}>
+            <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('calendar')}>
               <div className="relative h-72">
                 <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
@@ -289,7 +292,7 @@ export default function LandingPage() {
             </div>
 
             {showMugs && (
-              <div className={`${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
+              <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
                 <div className="relative h-72">
                   <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
@@ -304,7 +307,7 @@ export default function LandingPage() {
             )}
 
             {showPhotoPacks && (
-              <div className={`md:col-span-3 ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
+              <div className={`w-full ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
                 <div className="relative h-56">
                   <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
                   <div className={DESIGN.card.overlay} />
