@@ -312,6 +312,14 @@ export default function PhotoOrganizer({
 
   const [deletePageConfirm, setDeletePageConfirm] = useState<{ pageIndex: number; photoCount: number; companionIndex: number | null; companionPhotoCount: number } | null>(null);
 
+  // Confirmación de borrado de un slot (foto o caja de texto). Mismo patrón que
+  // deletePageConfirm: el handler abre el modal, el execute* hace la mutación.
+  const [deleteSlotConfirm, setDeleteSlotConfirm] = useState<
+    | { kind: 'photo'; pageIndex: number; photoIndex: number; url: string }
+    | { kind: 'text'; pageIndex: number; photoIndex: number; text: string }
+    | null
+  >(null);
+
   // NUEVO ESTADO PARA EL MODAL DE PÁGINAS VACÍAS
   const [emptyPagesModalData, setEmptyPagesModalData] = useState<{
     indices: number[];
@@ -1087,7 +1095,17 @@ export default function PhotoOrganizer({
     document.addEventListener('pointercancel', cancel);
   };
 
+  // Abre la confirmación. El borrado real vive en executeRemovePhotoFromPage.
   const handleRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
+    setDeleteSlotConfirm({
+      kind: 'photo',
+      pageIndex,
+      photoIndex,
+      url: photos[pageIndex]?.[photoIndex] || '',
+    });
+  };
+
+  const executeRemovePhotoFromPage = (pageIndex: number, photoIndex: number) => {
     const newPhotos = [...photos];
     const pagePhotos = [...newPhotos[pageIndex]];
     pagePhotos[photoIndex] = '';
@@ -1120,6 +1138,8 @@ export default function PhotoOrganizer({
       else newTextsRemove[pageIndex] = pageTexts;
       onTextBoxSlotsChange(newTextsRemove);
     }
+
+    setDeleteSlotConfirm(null);
   };
 
   const handleMovePhotoWithinPage = (pageIndex: number, photoIndex: number, direction: 'left' | 'right') => {
@@ -1256,12 +1276,23 @@ export default function PhotoOrganizer({
   };
 
   const handleRemoveTextBox = (pageIndex: number, photoIndex: number) => {
+    const text = textBoxSlots[pageIndex]?.[photoIndex]?.text || '';
+    // Una caja recién creada y vacía no tiene nada que perder: se borra directo.
+    if (!text.trim()) {
+      executeRemoveTextBox(pageIndex, photoIndex);
+      return;
+    }
+    setDeleteSlotConfirm({ kind: 'text', pageIndex, photoIndex, text });
+  };
+
+  const executeRemoveTextBox = (pageIndex: number, photoIndex: number) => {
     const newSlots = { ...textBoxSlots };
     if (newSlots[pageIndex]) {
       delete newSlots[pageIndex][photoIndex];
       if (Object.keys(newSlots[pageIndex]).length === 0) delete newSlots[pageIndex];
     }
     onTextBoxSlotsChange(newSlots);
+    setDeleteSlotConfirm(null);
   };
 
   const updateTextBox = (pageIndex: number, photoIndex: number, updates: any) => {
@@ -1601,7 +1632,9 @@ export default function PhotoOrganizer({
           <div className="flex gap-3">
             <button
               onClick={() => {
-                handleRemovePhotoFromPage(pageIndex, photoIndex);
+                // Directo al execute*: el usuario ya está confirmando aquí, un
+                // segundo modal encima sobraría.
+                executeRemovePhotoFromPage(pageIndex, photoIndex);
                 setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
                 setSelectedLowResWarning(null);
               }}
@@ -2387,6 +2420,70 @@ export default function PhotoOrganizer({
                 className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all"
               >
                 Eliminar página
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE FOTO / TEXTO */}
+      {deleteSlotConfirm && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {deleteSlotConfirm.kind === 'photo' ? 'Eliminar foto' : 'Eliminar texto'}
+                </h3>
+                <p className="text-sm text-gray-500">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              {deleteSlotConfirm.kind === 'photo' ? (
+                <>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Se quitará de la página {deleteSlotConfirm.pageIndex + 1}. Podrás volver a subirla después.
+                  </p>
+                  {deleteSlotConfirm.url && (
+                    <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center">
+                      <img src={deleteSlotConfirm.url} className="w-full h-full object-contain" alt="Foto a eliminar" />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Se borrará este texto de la página {deleteSlotConfirm.pageIndex + 1}:
+                  </p>
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <p className="text-sm text-red-700 break-words">
+                      «{deleteSlotConfirm.text.slice(0, 120)}{deleteSlotConfirm.text.length > 120 ? '…' : ''}»
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteSlotConfirm(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600 hover:border-gray-400 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { kind, pageIndex, photoIndex } = deleteSlotConfirm;
+                  if (kind === 'photo') executeRemovePhotoFromPage(pageIndex, photoIndex);
+                  else executeRemoveTextBox(pageIndex, photoIndex);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all"
+              >
+                {deleteSlotConfirm.kind === 'photo' ? 'Eliminar foto' : 'Eliminar texto'}
               </button>
             </div>
           </div>

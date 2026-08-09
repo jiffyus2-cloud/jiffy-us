@@ -5,6 +5,7 @@ import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
 import { convertFileIfHeic } from '../utils/imageUtils';
+import { getCoverTextLimits } from '../utils/coverTextLimits';
 
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -80,9 +81,25 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const isSquareLayout5 = isSquare && selectedLayout === 5;
   const isLayout5 = isHorizontal && selectedLayout === 5 && coverType === 'Papel';
   const requiresPhoto = coverType === 'Papel' && !hidePhoto;
+
+  // Cuántos caracteres caben en una sola línea con este layout y tamaño.
+  // `null` significa que el layout no renderiza ese campo.
+  const textLimits = useMemo(
+    () => getCoverTextLimits(coverSize, coverType, selectedLayout),
+    [coverSize, coverType, selectedLayout]
+  );
+
+  // Se mide el ESTADO, no displaySubtitle: el subtítulo de muestra es un
+  // placeholder que nunca se guarda y no debe bloquear nada.
+  const titleOverLimit = textLimits.title !== null && coverTitle.trim().length > textLimits.title;
+  const subtitleOverLimit = textLimits.subtitle !== null && coverSubtitle.trim().length > textLimits.subtitle;
+  const spineOverLimit = coverType === 'Papel' && spineText.trim().length > textLimits.spine;
+  const hasTextOverflow = titleOverLimit || subtitleOverLimit || spineOverLimit;
+
   const isFormValid = ((isSquareLayout5 || isLayout5) ? true : coverTitle.trim() !== '') &&
                       (coverType === 'Papel' ? spineText.trim() !== '' : true) &&
-                      (requiresPhoto ? coverImage !== '' : true);
+                      (requiresPhoto ? coverImage !== '' : true) &&
+                      !hasTextOverflow;
 
   const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
   const subtitleFieldVisible = !isSquareLayout5 && !isLayout5 && !(isVertical && selectedLayout === 1);
@@ -184,18 +201,43 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   const currentTypographyColors = getTypographyColors();
 
+  const inputClass = (over: boolean, base: string) =>
+    `${base} border-2 ${over
+      ? 'bg-red-50 border-red-400 focus:border-red-500 text-red-700'
+      : 'bg-gray-50 border-gray-50 focus:bg-white focus:border-black'}`;
+
+  const CharCount = ({ used, max }: { used: number; max: number }) => (
+    <span className={`text-[9px] md:text-[10px] font-black tabular-nums ${used > max ? 'text-red-500' : 'text-gray-300'}`}>
+      {used}/{max}
+    </span>
+  );
+
+  const OverflowMsg = ({ used, max }: { used: number; max: number }) => (
+    <p className="flex items-start gap-1 text-[10px] font-medium text-red-500 ml-1">
+      <AlertCircle size={12} className="shrink-0 mt-px" />
+      <span>Este texto no cabe en una sola línea en este diseño. Quita {used - max} caracter{used - max === 1 ? '' : 'es'}.</span>
+    </p>
+  );
+
   const ActionButtons = () => (
-    <button 
-      onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })} 
-      disabled={!isFormValid || isValidating}
-      className={`w-full py-4 font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all text-sm ${
-        isFormValid && !isValidating
-          ? 'bg-black text-white hover:bg-zinc-800 shadow-xl active:scale-[0.98]' 
-          : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-      }`}
-    >
-      <Check size={18} /> Guardar
-    </button>
+    <div className="w-full space-y-2">
+      {hasTextOverflow && (
+        <p className="text-[10px] font-bold text-red-500 text-center">
+          Ajusta los textos marcados en rojo para poder guardar.
+        </p>
+      )}
+      <button
+        onClick={() => onSave({ coverImage, coverTitle, coverSubtitle, coverYear, spineText, selectedLayout, coverCrop, typographyColor })}
+        disabled={!isFormValid || isValidating}
+        className={`w-full py-4 font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all text-sm ${
+          isFormValid && !isValidating
+            ? 'bg-black text-white hover:bg-zinc-800 shadow-xl active:scale-[0.98]'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+        }`}
+      >
+        <Check size={18} /> Guardar
+      </button>
+    </div>
   );
 
   return (
@@ -327,25 +369,63 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
               <div className="flex items-center gap-1.5 mb-2 text-gray-400"><Type size={16} /><h3 className="text-[10px] md:text-xs font-black uppercase tracking-widest">Contenido del Texto</h3></div>
               <div className="space-y-3 md:space-y-4">
 
-                {!isSquareLayout5 && !isLayout5 && (
+                {/* `textLimits.title !== null` equivale a !isSquareLayout5 && !isLayout5,
+                    pero con una sola fuente de verdad: la tabla de coverTextLimits. */}
+                {textLimits.title !== null && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal *</label>
-                    <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-bold text-[16px] md:text-base" placeholder="Título de tu álbum" />
+                    <div className="flex items-baseline justify-between ml-1 mr-1">
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Título Principal *</label>
+                      <CharCount used={coverTitle.length} max={textLimits.title} />
+                    </div>
+                    <input
+                      type="text"
+                      value={coverTitle}
+                      onChange={(e) => setCoverTitle(e.target.value)}
+                      maxLength={textLimits.title}
+                      aria-invalid={titleOverLimit}
+                      className={inputClass(titleOverLimit, 'w-full p-2.5 md:p-3.5 rounded-lg outline-none transition-all font-bold text-[16px] md:text-base')}
+                      placeholder="Título de tu álbum"
+                    />
+                    {titleOverLimit && <OverflowMsg used={coverTitle.length} max={textLimits.title} />}
                   </div>
                 )}
 
                 {/* SOLO SE MUESTRA EL LOMO SI ES DE PAPEL */}
                 {coverType === 'Papel' && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Texto del Lomo *</label>
-                    <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder="Texto visible en el lomo" />
+                    <div className="flex items-baseline justify-between ml-1 mr-1">
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Texto del Lomo *</label>
+                      <CharCount used={spineText.length} max={textLimits.spine} />
+                    </div>
+                    <input
+                      type="text"
+                      value={spineText}
+                      onChange={(e) => setSpineText(e.target.value)}
+                      maxLength={textLimits.spine}
+                      aria-invalid={spineOverLimit}
+                      className={inputClass(spineOverLimit, 'w-full p-2.5 md:p-3.5 rounded-lg outline-none transition-all font-medium text-[16px] md:text-sm')}
+                      placeholder="Texto visible en el lomo"
+                    />
+                    {spineOverLimit && <OverflowMsg used={spineText.length} max={textLimits.spine} />}
                   </div>
                 )}
 
-                {subtitleFieldVisible && (
+                {textLimits.subtitle !== null && (
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo / Descripción</label>
-                    <input type="text" value={coverSubtitle} onChange={(e) => setCoverSubtitle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-2.5 md:p-3.5 rounded-lg focus:bg-white focus:border-black outline-none transition-all font-medium text-[16px] md:text-sm" placeholder={SAMPLE_SUBTITLE} />
+                    <div className="flex items-baseline justify-between ml-1 mr-1">
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Subtítulo / Descripción</label>
+                      <CharCount used={coverSubtitle.length} max={textLimits.subtitle} />
+                    </div>
+                    <input
+                      type="text"
+                      value={coverSubtitle}
+                      onChange={(e) => setCoverSubtitle(e.target.value)}
+                      maxLength={textLimits.subtitle}
+                      aria-invalid={subtitleOverLimit}
+                      className={inputClass(subtitleOverLimit, 'w-full p-2.5 md:p-3.5 rounded-lg outline-none transition-all font-medium text-[16px] md:text-sm')}
+                      placeholder={SAMPLE_SUBTITLE}
+                    />
+                    {subtitleOverLimit && <OverflowMsg used={coverSubtitle.length} max={textLimits.subtitle} />}
                   </div>
                 )}
               </div>
