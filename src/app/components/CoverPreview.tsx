@@ -7,8 +7,13 @@ import ImageCropper from './ImageCropper';
 const noiseTile = (freq: number, octaves: number, opacity: number, tile: number) =>
   `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${tile}' height='${tile}'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='${octaves}'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='${tile}' height='${tile}' filter='url(%23n)' opacity='${opacity}'/%3E%3C/svg%3E")`;
 
+// Base de tela sin trama: da el tono marfil a plena opacidad para que el texto
+// mantenga contraste; la trama va aparte, atenuada.
+const CANVAS_BASE: React.CSSProperties = { backgroundColor: '#F7F4ED' };
+
+// Trama al 20%: a plena opacidad competía con el título y dificultaba la lectura.
 const CANVAS_TEXTURE: React.CSSProperties = {
-  backgroundColor: '#F7F4ED',
+  opacity: 0.2,
   backgroundImage: [
     noiseTile(0.85, 3, 0.22, 140),                                                              // fibras finas
     'repeating-linear-gradient(90deg, rgba(116,101,78,0.10) 0 1px, rgba(255,255,255,0.30) 1px 2px, transparent 2px 4px)', // urdimbre
@@ -118,7 +123,9 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
 
       // Va sobre la imagen blanca (z-0) y bajo los textos (z-10)
       const fabricLayer = !forPdf ? (
-        <div aria-hidden className="absolute inset-0 z-[1] pointer-events-none" style={CANVAS_TEXTURE} />
+        <div aria-hidden className="absolute inset-0 z-[1] pointer-events-none" style={CANVAS_BASE}>
+          <div className="absolute inset-0" style={CANVAS_TEXTURE} />
+        </div>
       ) : null;
 
       switch (selectedLayout) {
