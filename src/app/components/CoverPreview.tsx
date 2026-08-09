@@ -1,6 +1,29 @@
 import React, { useMemo } from 'react';
 import ImageCropper from './ImageCropper';
 
+// Lienzo simulado para la portada de Tela: hilos de urdimbre + trama, fibras
+// irregulares (feTurbulence) y un vignette suave. Solo previsualización en
+// pantalla — en el PDF la tela es física, así que ahí va blanco plano.
+const noiseTile = (freq: number, octaves: number, opacity: number, tile: number) =>
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${tile}' height='${tile}'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='${octaves}'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='${tile}' height='${tile}' filter='url(%23n)' opacity='${opacity}'/%3E%3C/svg%3E")`;
+
+// Base de tela sin trama: da el tono marfil a plena opacidad para que el texto
+// mantenga contraste; la trama va aparte, atenuada.
+const CANVAS_BASE: React.CSSProperties = { backgroundColor: '#F7F4ED' };
+
+// Trama al 20%: a plena opacidad competía con el título y dificultaba la lectura.
+const CANVAS_TEXTURE: React.CSSProperties = {
+  opacity: 0.2,
+  backgroundImage: [
+    noiseTile(0.85, 3, 0.22, 140),                                                              // fibras finas
+    'repeating-linear-gradient(90deg, rgba(116,101,78,0.10) 0 1px, rgba(255,255,255,0.30) 1px 2px, transparent 2px 4px)', // urdimbre
+    'repeating-linear-gradient(0deg,  rgba(116,101,78,0.09) 0 1px, rgba(255,255,255,0.26) 1px 2px, transparent 2px 3px)', // trama
+    noiseTile(0.035, 2, 0.16, 420),                                                             // irregularidad del tejido
+    'radial-gradient(125% 125% at 50% 25%, rgba(255,255,255,0.45), rgba(90,74,52,0.10))',       // vignette
+  ].join(', '),
+  backgroundSize: '140px 140px, 4px 4px, 3px 3px, 420px 420px, 100% 100%',
+};
+
 interface CoverPreviewProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
   coverType?: 'Tela' | 'Papel';
@@ -13,7 +36,8 @@ interface CoverPreviewProps {
   coverCrop?: { x: number; y: number; zoom: number };
   typographyColor?: string;
 
-  hideSpine?: boolean; // Usado también para saber si estamos en "Modo Impresión PDF"
+  hideSpine?: boolean;
+  forPdf?: boolean; // true solo en el render offscreen de impresión: desactiva efectos de pantalla
   subtitlePlaceholder?: boolean; // Cuando es true, coverSubtitle es texto de muestra (no guardado) y se renderiza atenuado
   customization?: any;
   photos?: (string | null)[];
@@ -32,6 +56,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverCrop = { x: 50, y: 50, zoom: 1 },
   typographyColor = '#000000',
   hideSpine = false,
+  forPdf = false,
   subtitlePlaceholder = false,
 }) => {
   const isVertical = coverSize === '28x21';
@@ -96,11 +121,19 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       );
 
+      // Va sobre la imagen blanca (z-0) y bajo los textos (z-10)
+      const fabricLayer = !forPdf ? (
+        <div aria-hidden className="absolute inset-0 z-[1] pointer-events-none" style={CANVAS_BASE}>
+          <div className="absolute inset-0" style={CANVAS_TEXTURE} />
+        </div>
+      ) : null;
+
       switch (selectedLayout) {
         case 1:
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
+              {fabricLayer}
               <div className="absolute inset-0 z-10 pointer-events-none">
                 <div className="absolute w-full text-center" style={{ top: '30%', transform: 'translateY(-50%)' }}>
                   <h2 data-cover-title className="text-[4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
@@ -115,6 +148,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
+              {fabricLayer}
               <div className="absolute inset-0 z-10 pointer-events-none">
                 <div className="absolute w-full text-center" style={{ top: '30%', transform: 'translateY(-50%)' }}>
                   <h2 data-cover-title className="text-[3.2cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
@@ -129,6 +163,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
+              {fabricLayer}
               <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
                 <div className="w-full text-left">
                   {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
