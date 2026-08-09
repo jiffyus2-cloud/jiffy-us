@@ -854,7 +854,6 @@ const OwnerDashboard: React.FC = () => {
                       coverCrop={{ x: order.coverData?.crop?.x ?? 50, y: order.coverData?.crop?.y ?? 50, zoom: order.coverData?.crop?.zoom ?? 1 }}
                       typographyColor={textColor}
                       hideSpine={true}
-                      forPdf={true}
                     />
                   </div>
                 </div>
