@@ -24,11 +24,11 @@ describe('getCoverTextLimits — matriz de límites', () => {
   // puede escribir.
   const MATRIX: Record<string, Array<[number | null, number | null]>> = {
     // familia: [ [título L1, subtítulo L1], [L2], [L3], [L4], [L5] ]
-    'Tela':             [[37, 55], [46, 38], [18, 31]],
-    'Papel/28x21':      [[28, null], [20, 21], [22, 19], [36, 44]],
-    'Papel/21x28':      [[44, 73], [25, 26], [25, 22], [55, 58], [null, null]],
-    'Papel/20x20':      [[28, 35], [23, 24], [23, 20], [49, 51], [null, null]],
-    'Papel/30x30':      [[27, 32], [27, 28], [25, 22], [53, 56], [null, null]],
+    'Tela':             [[32, 46], [40, 32], [16, 26]],
+    'Papel/28x21':      [[25, null], [17, 17], [19, 16], [32, 37]],
+    'Papel/21x28':      [[39, 61], [22, 22], [22, 18], [48, 48], [null, null]],
+    'Papel/20x20':      [[24, 29], [20, 20], [20, 17], [43, 43], [null, null]],
+    'Papel/30x30':      [[23, 27], [23, 23], [22, 18], [46, 46], [null, null]],
   };
 
   it('Tela: idéntica en los 4 tamaños (su geometría es cqw pura)', () => {
@@ -110,7 +110,7 @@ describe('getCoverTextLimits — lomo', () => {
     // es el disparador: estos números salen del renderer del PDF, no del preview.
     expect(spine('20x20')).toBe(44);
     expect(spine('21x28')).toBe(46);
-    expect(spine('28x21')).toBe(61);
+    expect(spine('28x21')).toBe(62);
     expect(spine('30x30')).toBe(66);
   });
 

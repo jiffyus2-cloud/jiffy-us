@@ -50,27 +50,50 @@ type LayoutGeometry = { title: FieldGeometry | null; subtitle: FieldGeometry | n
 type Family = 'tela' | 'vertical' | 'horizontal' | 'square20' | 'square30';
 
 /**
- * Avance medio por glifo en mayúsculas (caso peor: el default de la app es
- * 'NUESTRA HISTORIA'), pesado por frecuencia del español y medido contra
- * Century Gothic — la más ancha del stack `Avenir, 'Century Gothic',
- * 'Gill Sans', sans-serif` (CoverPreview.tsx:510) y la que resuelve en las
- * máquinas Windows que generan los PDFs (src/styles/fonts.css está vacío: no
- * hay @font-face, la fuente sale del SO).
+ * Avance medio por glifo, MEDIDO con canvas measureText sobre un corpus de
+ * mayúsculas en español, con la fuente que realmente se pinta.
  *
- * Si los límites resultan demasiado estrictos, ESTE es el único dial a mover
- * (0.56 modela Title Case y da ~9% más caracteres). No subir SAFETY de 0.98.
+ * src/styles/fonts.css está vacío (no hay @font-face ni archivos de fuente en
+ * el repo), así que el stack de CoverPreview.tsx:510 —`Avenir,
+ * 'Century Gothic', 'Gill Sans', sans-serif`— se resuelve contra las fuentes
+ * del SO. En Windows con Office resuelve a **Century Gothic** (GOTHIC.TTF);
+ * Avenir y Gill Sans no están instaladas. Century Gothic es ~9% MÁS ESTRECHA
+ * que Arial, así que en una máquina sin ella los límites quedan holgados —
+ * el lado seguro del error.
+ *
+ * Medido: mayúsculas 0.592 em en regular y 0.585 en bold. En Century Gothic
+ * la negrita NO ensancha el avance, de ahí que el delta de peso sea 0 (antes
+ * se asumía +0.03, que inflaba de más el límite de los títulos).
  */
-const AVG_CHAR_EM = 0.61;
-const WEIGHT_DELTA_EM = { regular: 0, bold: 0.03 } as const;
+const AVG_CHAR_EM = 0.592;
+const WEIGHT_DELTA_EM = { regular: 0, bold: 0 } as const;
 /** Valores de tracking-* de Tailwind v4, por legibilidad en la tabla. */
 const TRACK = { tight: -0.025, none: 0, wide: 0.025, widest: 0.1 } as const;
-/** Aire para bordes de 1px, hinting y redondeo a zoom bajo. */
-const SAFETY = 0.95;
+
+/**
+ * Fracción del ancho útil que se permite ocupar. NO es sólo aire para bordes
+ * y redondeo: absorbe sobre todo que el texto real del usuario es más ancho
+ * que el promedio del corpus (títulos cortos, más mayúsculas seguidas, menos
+ * espacios), que es exactamente lo que hacía desbordar con SAFETY = 0.95.
+ *
+ * Calibrado contra pruebas reales en 20x20 Papel: con 0.77 los límites caen
+ * en o justo por debajo de los topes que se comprobaron a ojo (L1 título 24,
+ * L1 subtítulo 31, L3 subtítulo 18, L4 subtítulo 45), dejando ~23% de aire
+ * para texto más ancho de lo normal. Subirlo vuelve a apretar contra el borde.
+ */
+const FIT = 0.77;
+
+/**
+ * El lomo va aparte: nunca dio problemas y se verificó midiendo directamente
+ * contra el renderer del PDF (llenado 0.88–0.90), así que no necesita el
+ * margen extra del texto de portada.
+ */
+const SPINE_FIT = 0.9;
 
 const advanceEm = (g: FieldGeometry) => AVG_CHAR_EM + WEIGHT_DELTA_EM[g.weight] + g.trackingEm;
 
 const charsFor = (g: FieldGeometry | null): number | null =>
-  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * SAFETY) / (advanceEm(g) * g.fontCqw)));
+  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * FIT) / (advanceEm(g) * g.fontCqw)));
 
 const GEOMETRY: Record<Family, Record<number, LayoutGeometry>> = {
   // ── TELA — 3 layouts, idénticos en los 4 tamaños (geometría cqw pura)
@@ -227,10 +250,10 @@ function spineLimit(size: CoverSize): number {
   const boldEm = AVG_CHAR_EM + WEIGHT_DELTA_EM.bold;
 
   const previewAdv = boldEm * PREVIEW_SPINE.fontCm + PREVIEW_SPINE.extraTrackingCm;
-  const previewMax = Math.floor(((h - PREVIEW_SPINE.topOffsetCm) * SAFETY) / previewAdv);
+  const previewMax = Math.floor(((h - PREVIEW_SPINE.topOffsetCm) * SPINE_FIT) / previewAdv);
 
   const pdfAdv = boldEm * PDF_SPINE.fontCm + PDF_SPINE.extraTrackingCm;
-  const pdfMax = Math.floor((h * (1 - PDF_SPINE.topOffsetFrac) * SAFETY) / pdfAdv);
+  const pdfMax = Math.floor((h * (1 - PDF_SPINE.topOffsetFrac) * SPINE_FIT) / pdfAdv);
 
   return Math.max(1, Math.min(previewMax, pdfMax));
 }
@@ -248,11 +271,15 @@ function familyFor(size: CoverSize, type: CoverType): Family {
  * Tabla resultante (título / subtítulo):
  *
  *   Familia            L1        L2        L3        L4        L5        Lomo
- *   Tela (4 tamaños)   37 / 55   46 / 38   18 / 31   —         —         n/a
- *   Vertical 28x21     28 / —    20 / 21   22 / 19   36 / 44   —         61
- *   Horizontal 21x28   44 / 73   25 / 26   25 / 22   55 / 58   sin texto 46
- *   Cuadrado 20x20     28 / 35   23 / 24   23 / 20   49 / 51   sin texto 44
- *   Cuadrado 30x30     27 / 32   27 / 28   25 / 22   53 / 56   sin texto 66
+ *   Tela (4 tamaños)   32 / 46   40 / 32   16 / 26   —         —         n/a
+ *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         62
+ *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 46
+ *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 44
+ *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 66
+ *
+ * En cada familia el título y el subtítulo de un mismo layout coinciden salvo
+ * que cambie el tamaño de fuente o el tracking: en Century Gothic la negrita
+ * no ensancha el avance, así que ser título ya no resta caracteres.
  */
 export function getCoverTextLimits(
   coverSize: CoverSize,
