@@ -4,6 +4,7 @@ import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
 import CoverPreview from './CoverPreview';
+import { getCoverTextLimits } from '../utils/coverTextLimits';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -98,7 +99,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   };
 
   const handleContinue = () => {
-    if (!isCoverEdited) return;
+    if (!isCoverEdited || coverTextOverflows) return;
     onCustomizationComplete({
       coverType,
       size,
@@ -129,6 +130,15 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
   const displaySubtitle = coverContent.coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
   const subtitleIsPlaceholder = subtitleFieldVisible && !coverContent.coverSubtitle;
+
+  // Aquí se puede cambiar layout, tamaño y tipo de tapa sobre una portada YA
+  // guardada, sin reabrir el editor — así que una portada que era válida puede
+  // dejar de serlo. Sin este chequeo pasaría desbordada al pedido.
+  const savedLimits = getCoverTextLimits(currentCoverSize, coverType, coverContent.selectedLayout);
+  const coverTextOverflows =
+    (savedLimits.title !== null && coverContent.coverTitle.trim().length > savedLimits.title) ||
+    (savedLimits.subtitle !== null && coverContent.coverSubtitle.trim().length > savedLimits.subtitle) ||
+    (coverType === 'Papel' && (coverContent.spineText ?? '').trim().length > savedLimits.spine);
 
   // Si el usuario cambia de material o tamaño y el layout seleccionado ya no existe, lo regresamos al 1
   useEffect(() => {
@@ -289,15 +299,19 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
       <div className="mt-4">
         <button
           onClick={handleContinue}
-          disabled={!isCoverEdited}
+          disabled={!isCoverEdited || coverTextOverflows}
           className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-md flex items-center justify-center gap-2 ${
-            isCoverEdited 
-              ? 'bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5' 
+            isCoverEdited && !coverTextOverflows
+              ? 'bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
           }`}
         >
-          {!isCoverEdited && <AlertCircle className="w-5 h-5" />}
-          {!isCoverEdited ? 'Diseña tu portada para continuar' : t('album.continue') || 'Continuar al organizador de fotos'}
+          {(!isCoverEdited || coverTextOverflows) && <AlertCircle className="w-5 h-5" />}
+          {!isCoverEdited
+            ? 'Diseña tu portada para continuar'
+            : coverTextOverflows
+            ? 'Tus textos no caben en este diseño — edita la portada'
+            : t('album.continue') || 'Continuar al organizador de fotos'}
         </button>
       </div>
 
