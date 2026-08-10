@@ -22,6 +22,7 @@ import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import { getEffectiveFontSize } from '../utils/textOverflowUtils';
+import { getCoverDimensions } from '../utils/cropMath';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
@@ -204,27 +205,25 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       }
 
       const { x = 50, y = 50, zoom = 1, rotation = 0 } = crop || {};
-      const imgAspect = imgWidth / imgHeight;
-      const destAspect = destWidth / destHeight;
 
-      let baseSWidth = imgWidth;
-      let baseSHeight = imgHeight;
-      if (imgAspect > destAspect) {
-        baseSWidth = imgHeight * destAspect;
-      } else {
-        baseSHeight = imgWidth / destAspect;
-      }
+      // Espejo exacto de ImageCropper: en vez de recortar un rectángulo DENTRO de
+      // la imagen, se dibuja la imagen entera en un destino calculado. Es la única
+      // forma de representar zoom < 1 ("foto completa"), donde el marco es más
+      // grande que la imagen y el rectángulo fuente se saldría de ella: al recortar
+      // el canvas la fuente contra los bordes, la foto salía pegada a la esquina y
+      // el desplazamiento del usuario se ignoraba por completo.
+      const { Rw, Rh } = getCoverDimensions(destWidth, destHeight, imgWidth, imgHeight);
 
-      const finalSWidth = baseSWidth / zoom;
-      const finalSHeight = baseSHeight / zoom;
+      const drawWidth = Rw * zoom;
+      const drawHeight = Rh * zoom;
+      const dX = destWidth / 2 - (x / 100) * Rw * zoom;
+      const dY = destHeight / 2 - (y / 100) * Rh * zoom;
 
-      const centerX = (x / 100) * imgWidth;
-      const centerY = (y / 100) * imgHeight;
-
-      const sX = Math.max(0, Math.min(centerX - finalSWidth / 2, imgWidth - finalSWidth));
-      const sY = Math.max(0, Math.min(centerY - finalSHeight / 2, imgHeight - finalSHeight));
-
+      // El hueco que deja un zoom < 1 es blanco intencional, igual que el fondo de
+      // ImageCropper en pantalla, y no el gris del contenedor que hay detrás.
       ctx.clearRect(0, 0, destWidth, destHeight);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, destWidth, destHeight);
 
       if (rotation !== 0) {
         ctx.save();
@@ -234,7 +233,7 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
       }
 
       try {
-        ctx.drawImage(imgEl, sX, sY, finalSWidth, finalSHeight, 0, 0, destWidth, destHeight);
+        ctx.drawImage(imgEl, 0, 0, imgWidth, imgHeight, dX, dY, drawWidth, drawHeight);
       } catch {
         ctx.drawImage(imgEl, 0, 0, destWidth, destHeight);
       }
