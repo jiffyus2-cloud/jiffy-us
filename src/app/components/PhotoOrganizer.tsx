@@ -13,6 +13,8 @@ import {
   deleteOverflow as albumDeleteOverflow,
   moveOverflowToPage as albumMoveOverflowToPage,
   deletePages as albumDeletePages,
+  compactPage as albumCompactPage,
+  occupiedSlotCount,
   analyzeConfigChange,
   migrateAlbumToConfig,
   type AlbumState,
@@ -1380,8 +1382,17 @@ export default function PhotoOrganizer({
 
   // ── End unified helpers ──────────────────────────────────────────────────────
 
+  // Al reducir el layout, la página origen se compacta ANTES de repartir el
+  // excedente: así el `splice(newVariant)` de estas operaciones corta sobre un
+  // array denso y mueve/borra las fotos reales del final, no las que quedaban
+  // detrás de un hueco. Es composición pura (compactPage no muta), así que no
+  // hay estado intermedio ni riesgo de leer un propsRef desactualizado cuando
+  // la acción llega desde el modal en un click posterior.
+  const compactedStateFor = (pageIndex: number): AlbumState =>
+    albumCompactPage(currentAlbumState(), pageIndex);
+
   const applyRippleShift = (startIndex: number, newVariant: number) => {
-    applyOpResult(albumRippleShift(currentAlbumState(), startIndex, newVariant, albumConfig, setNumPages));
+    applyOpResult(albumRippleShift(compactedStateFor(startIndex), startIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyPullShift = (startIndex: number, newVariant: number) => {
@@ -1392,17 +1403,24 @@ export default function PhotoOrganizer({
     onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: newVariant });
   };
 
+  // Cierra los huecos de la página y fija la nueva variante en una sola
+  // actualización: el excedente cabía entero una vez reacomodado.
+  const applyCompactAndSetVariant = (pageIndex: number, newVariant: number) => {
+    const compacted = compactedStateFor(pageIndex);
+    applyAlbumState(compacted.map((p, i) => (i === pageIndex ? { ...p, variant: newVariant } : p)));
+  };
+
   // Treated as a bounded ripple: cascade stops naturally when no more overflow.
   const applyIncreaseNextPageVariant = (pageIndex: number, newVariant: number) => {
-    applyOpResult(albumRippleShift(currentAlbumState(), pageIndex, newVariant, albumConfig, setNumPages));
+    applyOpResult(albumRippleShift(compactedStateFor(pageIndex), pageIndex, newVariant, albumConfig, setNumPages));
   };
 
   const applyDeleteOverflow = (pageIndex: number, newVariant: number) => {
-    applyOpResult(albumDeleteOverflow(currentAlbumState(), pageIndex, newVariant));
+    applyOpResult(albumDeleteOverflow(compactedStateFor(pageIndex), pageIndex, newVariant));
   };
 
   const applyMoveToSpecificPage = (pageIndex: number, newVariant: number, targetPage: number) => {
-    applyOpResult(albumMoveOverflowToPage(currentAlbumState(), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
+    applyOpResult(albumMoveOverflowToPage(compactedStateFor(pageIndex), pageIndex, newVariant, targetPage, albumConfig, setNumPages));
   };
 
   // ── Cambio de tamaño del álbum (B5) ──────────────────────────────────────────
@@ -1440,21 +1458,12 @@ export default function PhotoOrganizer({
     if (advancedSettingsModal === null) return;
     const pageIndex = advancedSettingsModal;
     const currentLen = photos[pageIndex].length;
+    // Los huecos intermedios (un `''` de una foto borrada) no son excedente: al
+    // reducir se cierran y la página se reacomoda. Por eso lo que manda aquí es
+    // el número de slots OCUPADOS, no la longitud cruda del array.
+    const occupied = occupiedSlotCount(currentAlbumState()[pageIndex]);
 
-    if (opt < currentLen) {
-        const maxForNext = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
-        const nextPageLen = photos[pageIndex + 1]?.length || 0;
-        const overflowCount = currentLen - opt;
-        
-        const isNextPageFull = (nextPageLen + overflowCount > maxForNext);
-
-        if (isNextPageFull && pageIndex < photos.length - 1) {
-            applyRippleShift(pageIndex, opt);
-        } else {
-            setSelectedTargetPage(pageIndex + 1 < photos.length ? pageIndex + 1 : 0);
-            setLayoutChangeModal({ type: 'decrease', pageIndex, newVariant: opt, overflowCount });
-        }
-    } else if (opt > currentLen) {
+    if (opt > currentLen) {
         let totalAhead = 0;
         for(let i = pageIndex + 1; i < photos.length; i++) totalAhead += photos[i].length;
 
@@ -1463,8 +1472,22 @@ export default function PhotoOrganizer({
         } else {
             applyIncreaseVariantOnly(pageIndex, opt);
         }
+    } else if (opt >= occupied) {
+        // Cabe todo una vez cerrados los huecos: no hay nada que repartir.
+        applyCompactAndSetVariant(pageIndex, opt);
     } else {
-        applyIncreaseVariantOnly(pageIndex, opt);
+        const maxForNext = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+        const nextPageLen = photos[pageIndex + 1]?.length || 0;
+        const overflowCount = occupied - opt;
+
+        const isNextPageFull = (nextPageLen + overflowCount > maxForNext);
+
+        if (isNextPageFull && pageIndex < photos.length - 1) {
+            applyRippleShift(pageIndex, opt);
+        } else {
+            setSelectedTargetPage(pageIndex + 1 < photos.length ? pageIndex + 1 : 0);
+            setLayoutChangeModal({ type: 'decrease', pageIndex, newVariant: opt, overflowCount });
+        }
     }
   };
 

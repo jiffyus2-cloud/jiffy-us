@@ -94,6 +94,87 @@ function blankPage(): PageState {
   return { photos: [], crops: {}, texts: {}, signatures: [] };
 }
 
+// ── compactar los huecos de una página ───────────────────────────────────────
+
+/**
+ * Último índice de slot que la página llega a usar. No basta con
+ * `photos.length`: al borrar una foto se recortan los vacíos del final del
+ * array, así que una caja de texto puede quedar en un índice posterior.
+ */
+function slotSpan(page: PageState): number {
+  let span = page.photos.length;
+  for (const key of Object.keys(page.texts)) {
+    const idx = Number(key);
+    if (Number.isFinite(idx) && idx + 1 > span) span = idx + 1;
+  }
+  return span;
+}
+
+/**
+ * Cuántos slots de la página están ocupados. Un slot cuenta como ocupado si
+ * tiene foto O si tiene caja de texto: los textos viven en un slot cuya foto es
+ * `''`, y tratarlos como hueco los borraría.
+ */
+export function occupiedSlotCount(page: PageState): number {
+  let count = 0;
+  const span = slotSpan(page);
+  for (let i = 0; i < span; i++) {
+    const photo = page.photos[i];
+    if ((photo && photo.trim() !== '') || page.texts[i] !== undefined) count++;
+  }
+  return count;
+}
+
+/**
+ * Cierra los huecos de una página: los slots ocupados suben a las primeras
+ * posiciones conservando su orden relativo, y sus crops, textos y firmas viajan
+ * con ellos.
+ *
+ * Borrar una foto deja un `''` en su índice (ver handleRemovePhotoFromPage), y
+ * las operaciones de excedente cortan por posición con `splice(newVariant)`.
+ * Sin compactar antes, reducir el layout de una página con un hueco intermedio
+ * descartaba una foto real y dejaba el hueco donde estaba.
+ *
+ * Devuelve el mismo `state` sin clonar si no hay nada que cerrar.
+ * No toca `layout` ni `variant` (R3).
+ */
+export function compactPage(state: AlbumState, pageIndex: number): AlbumState {
+  const page = state[pageIndex];
+  if (!page) return state;
+
+  const span = slotSpan(page);
+  const occupied: number[] = [];
+  for (let i = 0; i < span; i++) {
+    const photo = page.photos[i];
+    if ((photo && photo.trim() !== '') || page.texts[i] !== undefined) occupied.push(i);
+  }
+
+  const hasGaps = occupied.length !== page.photos.length || occupied.some((oldIdx, newIdx) => oldIdx !== newIdx);
+  if (!hasGaps) return state;
+
+  const next = cloneState(state);
+  const target = next[pageIndex];
+
+  const photos: string[] = [];
+  const signatures: string[] = [];
+  const crops: Record<number, any> = {};
+  const texts: Record<number, any> = {};
+
+  occupied.forEach((oldIdx, newIdx) => {
+    photos.push(page.photos[oldIdx] ?? '');
+    signatures.push(page.signatures[oldIdx] ?? '');
+    if (page.crops[oldIdx] !== undefined) crops[newIdx] = page.crops[oldIdx];
+    if (page.texts[oldIdx] !== undefined) texts[newIdx] = page.texts[oldIdx];
+  });
+
+  target.photos = photos;
+  target.signatures = signatures;
+  target.crops = crops;
+  target.texts = texts;
+
+  return next;
+}
+
 // ── converters ────────────────────────────────────────────────────────────────
 
 export function fromPropsToAlbumState(

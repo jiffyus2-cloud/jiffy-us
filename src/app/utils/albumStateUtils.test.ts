@@ -19,6 +19,8 @@ import {
   deletePages,
   analyzeConfigChange,
   migrateAlbumToConfig,
+  compactPage,
+  occupiedSlotCount,
 } from './albumStateUtils';
 
 // ── Configuraciones reales de la app ─────────────────────────────────────────
@@ -426,5 +428,131 @@ describe('deleteOverflow', () => {
     expect(result.state[0].photos.length).toBe(4);
     expect(result.state[0].variant).toBe(4);
     expect(result.warnings).toEqual([{ code: 'photos_deleted', count: 5 }]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Huecos intermedios: borrar una foto deja un '' en su índice. Al reducir el
+// layout hay que cerrarlos y reacomodar, no tratarlos como excedente.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('occupiedSlotCount', () => {
+  it('no cuenta los huecos', () => {
+    expect(occupiedSlotCount(page(['A', '', 'C']))).toBe(2);
+    expect(occupiedSlotCount(page(['A', 'B', 'C']))).toBe(3);
+    expect(occupiedSlotCount(page([]))).toBe(0);
+  });
+
+  it('cuenta como ocupado el slot que solo tiene caja de texto', () => {
+    expect(occupiedSlotCount(page(['A', '', 'C'], { texts: { 1: { content: 'hola' } } }))).toBe(3);
+  });
+
+  it('ve las cajas de texto más allá del final del array de fotos', () => {
+    // Tras borrar la última foto se recortan los vacíos finales, así que un
+    // texto puede quedar en un índice que ya no existe en `photos`.
+    expect(occupiedSlotCount(page(['A'], { texts: { 2: { content: 'pie' } } }))).toBe(2);
+  });
+});
+
+describe('compactPage', () => {
+  it('sube las fotos y arrastra crops y firmas', () => {
+    const before = albumOf(['A', '', 'C']);
+    before[0].crops = { 0: { x: 1 }, 2: { x: 3 } };
+
+    const after = compactPage(before, 0);
+
+    expect(after[0].photos).toEqual(['A', 'C']);
+    expect(after[0].signatures).toEqual(['sig:A', 'sig:C']);
+    expect(after[0].crops).toEqual({ 0: { x: 1 }, 1: { x: 3 } });
+  });
+
+  it('conserva las cajas de texto y su posición relativa', () => {
+    const before = albumOf(['', '', 'C']);
+    before[0].texts = { 0: { content: 'titulo' } };
+
+    const after = compactPage(before, 0);
+
+    expect(after[0].photos).toEqual(['', 'C']);
+    expect(after[0].texts).toEqual({ 0: { content: 'titulo' } });
+  });
+
+  it('recupera una caja de texto que quedó más allá del array de fotos', () => {
+    const before = albumOf(['A']);
+    before[0].texts = { 2: { content: 'pie' } };
+
+    const after = compactPage(before, 0);
+
+    expect(after[0].photos).toEqual(['A', '']);
+    expect(after[0].texts).toEqual({ 1: { content: 'pie' } });
+  });
+
+  it('devuelve el mismo estado si no hay huecos', () => {
+    const before = albumOf(['A', 'B', 'C']);
+    expect(compactPage(before, 0)).toBe(before);
+  });
+
+  it('no toca layout ni variant (R3)', () => {
+    const before = albumOf(['A', '', 'C']);
+    before[0].layout = 'column';
+    before[0].variant = 3;
+
+    const after = compactPage(before, 0);
+
+    expect(after[0].layout).toBe('column');
+    expect(after[0].variant).toBe(3);
+  });
+
+  it('no muta el estado de entrada', () => {
+    const before = albumOf(['A', '', 'C']);
+    compactPage(before, 0);
+    expect(before[0].photos).toEqual(['A', '', 'C']);
+  });
+
+  it('no pierde fotos y solo compacta la página indicada (R1)', () => {
+    const before = albumOf(['A', '', 'C'], ['D', '', 'F']);
+    const after = compactPage(before, 0);
+
+    expect(bag(after)).toEqual(bag(before));
+    expect(after[1].photos).toEqual(['D', '', 'F']);
+  });
+});
+
+describe('reducir el layout con un hueco intermedio', () => {
+  it('deleteOverflow tras compactar conserva las fotos reales que caben', () => {
+    // Página de 3 slots, se borró la del medio, se reduce a 2: antes se perdía
+    // 'C' y el hueco se quedaba. Ahora caben las dos fotos reales.
+    const before = albumOf(['A', '', 'C']);
+    const result = deleteOverflow(compactPage(before, 0), 0, 2);
+
+    expect(result.state[0].photos).toEqual(['A', 'C']);
+    expect(result.state[0].variant).toBe(2);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('con excedente real, lo sobrante es la última foto tras compactar', () => {
+    const before = albumOf(['A', '', 'C']);
+    const result = deleteOverflow(compactPage(before, 0), 0, 1);
+
+    expect(result.state[0].photos).toEqual(['A']);
+    expect(result.warnings).toEqual([{ code: 'photos_deleted', count: 1 }]);
+  });
+
+  it('rippleShift tras compactar desplaza la foto real, no el hueco', () => {
+    const before = albumOf(['A', '', 'C'], ['D']);
+    const result = rippleShift(compactPage(before, 0), 0, 1, RECT);
+
+    expect(result.state[0].photos).toEqual(['A']);
+    expect(result.state[1].photos).toEqual(['C', 'D']);
+    expect(bag(result.state)).toEqual(bag(before));
+    expect(hidesPhotos(result.state, RECT)).toBe(false);
+  });
+
+  it('moveOverflowToPage tras compactar envía la foto real', () => {
+    const before = albumOf(['A', '', 'C'], ['D']);
+    const result = moveOverflowToPage(compactPage(before, 0), 0, 1, 1, RECT);
+
+    expect(result.state[0].photos).toEqual(['A']);
+    expect(result.state[1].photos).toEqual(['D', 'C']);
+    expect(bag(result.state)).toEqual(bag(before));
   });
 });
