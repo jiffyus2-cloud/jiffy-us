@@ -43,6 +43,7 @@ import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { Switch } from './ui/switch';
+import { PageRangeSlider } from './ui/page-range-slider';
 
 // --- NUEVA IMAGEN DE JIFFY ---
 import jiffy2Img from '../../assets/Jiffy2.png';
@@ -146,6 +147,9 @@ interface PhotoOrganizerProps {
 }
 
 type Step = 'upload' | 'pages' | 'editor';
+
+/** Tope duro de páginas de un álbum. */
+const ALBUM_MAX_PAGES = 250;
 
 const AlbumEditorPhotoSlot: React.FC<{
   photo: string | null;
@@ -297,6 +301,9 @@ export default function PhotoOrganizer({
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, metadata: any}[]>([]);
   const [numPages, setNumPages] = useState<number | string>(40);
+  // Cuántas de esas páginas son en blanco pedidas a propósito (siempre par).
+  // Permiten superar el máximo que justifican las fotos, hasta ALBUM_MAX_PAGES.
+  const [blankPages, setBlankPages] = useState(0);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
   const [advancedSettingsModal, setAdvancedSettingsModal] = useState<number | null>(null);
@@ -522,10 +529,18 @@ export default function PhotoOrganizer({
     return 'grid-cols-2 grid-rows-2';
   };
 
-  const getMaxPages = (photoCount: number) => {
+  // Máximo de páginas que justifican las fotos subidas (mínimo 1 foto por página).
+  // Es el tope de la barra del selector, dinámico según cuántas fotos haya.
+  const getMaxPhotoPages = (photoCount: number) => {
     const baseMax = Math.max(40, photoCount);
-    return Math.min(250, baseMax % 2 === 0 ? baseMax : baseMax + 1);
+    return Math.min(ALBUM_MAX_PAGES, baseMax % 2 === 0 ? baseMax : baseMax + 1);
   };
+
+  // Tope duro del álbum. Se puede superar el máximo anterior sumando páginas en
+  // blanco a propósito (control aparte en el paso 'pages'): quedan sin fotos y
+  // se avisan antes de imprimir (handleComplete). Es el mismo límite que aplica
+  // handleAddPage en el editor.
+  const getMaxPages = (_photoCount: number) => ALBUM_MAX_PAGES;
 
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
@@ -2098,6 +2113,43 @@ export default function PhotoOrganizer({
 
   if (step === 'pages') {
     const maxP = getMaxPages(uploadedPhotos.length);
+    // El número de páginas siempre es par y está entre 40 y maxP.
+    const clampPages = (v: number) => {
+      let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), maxP);
+      if (val % 2 !== 0) val = Math.min(val + 1, maxP);
+      return val;
+    };
+    const currentPages = typeof numPages === 'number' ? numPages : 40;
+    // Tope de la barra: lo que dan de sí las fotos subidas. Para pasar de ahí
+    // hay que sumar páginas en blanco a propósito (control de más abajo).
+    const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
+    // Las páginas en blanco no pueden dejar la barra por debajo del mínimo, y
+    // tanto ellas como la barra son siempre pares (el total puede ser impar
+    // mientras se teclea en el campo; el onBlur lo redondea).
+    const toEven = (v: number) => v - (v % 2);
+    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - 40)));
+    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, 40), maxPhotoP));
+    const emptyPages = Math.max(0, currentPages - uploadedPhotos.length);
+
+    // Añade o quita 2 páginas: primero se mueve la parte que cubren las fotos y,
+    // cuando esa parte llega a su tope, se tocan las páginas en blanco.
+    const stepPages = (delta: 2 | -2) => {
+      const next = currentPages + delta;
+      if (next < 40 || next > maxP) return;
+      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= 40;
+      if (!canUsePhotoPages) setBlankPages(safeBlank + delta);
+      else if (safeBlank !== blankPages) setBlankPages(safeBlank);
+      setNumPages(next);
+    };
+
+    const stepBlankPages = (delta: 2 | -2) => {
+      const nextBlank = safeBlank + delta;
+      const next = currentPages + delta;
+      if (nextBlank < 0 || next > maxP || next < 40) return;
+      setBlankPages(nextBlank);
+      setNumPages(next);
+    };
+
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
@@ -2114,50 +2166,109 @@ export default function PhotoOrganizer({
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <label className="text-xl font-medium">{t('organizer.numPages')}</label>
-                  <input 
-                    type="number"
-                    inputMode="numeric"
-                    pattern="[0-9]*" 
-                    min={40} 
-                    max={maxP} 
-                    step={2} 
-                    value={numPages} 
-                    onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
-                    onBlur={() => {
-                      let val = typeof numPages === 'number' ? numPages : 40;
-                      val = Math.min(Math.max(val, 40), maxP);
-                      if (val % 2 !== 0) val = Math.min(val + 1, maxP);
-                      setNumPages(val);
-                    }} 
-                    className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-right" 
-                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Quitar 2 páginas"
+                      disabled={currentPages <= 40}
+                      onClick={() => stepPages(-2)}
+                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min={40}
+                      max={maxP}
+                      step={2}
+                      value={numPages}
+                      onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      onBlur={() => {
+                        // Lo que exceda del máximo que dan las fotos pasa a
+                        // contar como páginas en blanco pedidas a propósito.
+                        const val = clampPages(currentPages);
+                        setNumPages(val);
+                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - 40)));
+                      }}
+                      className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-center"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Añadir 2 páginas"
+                      disabled={currentPages >= maxP}
+                      onClick={() => stepPages(2)}
+                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                {uploadedPhotos.length === 40 ? (
+                {maxPhotoP > 40 ? (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. 40</span>
+                      <span>Máx. {maxPhotoP}</span>
+                    </div>
+                    <PageRangeSlider
+                      min={40}
+                      max={maxPhotoP}
+                      step={2}
+                      value={sliderPages}
+                      onChange={(value) => setNumPages(value + safeBlank)}
+                    />
+                  </>
+                ) : (
                   <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
                     <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, por lo que tu álbum tendrá exactamente <strong>40 páginas</strong>.</span>
+                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, así que tus fotos dan para <strong>40 páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. 40</span>
-                      <span>Máx. {maxP}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={40}
-                      max={maxP}
-                      step={2}
-                      value={numPages === '' ? 40 : numPages}
-                      onChange={(e) => setNumPages(parseInt(e.target.value, 10))}
-                      className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
-                    />
-                  </>
                 )}
 
+                {/* Páginas en blanco: la única forma de pasar del máximo que dan las fotos */}
+                <div className="mt-4 flex items-center justify-between gap-4 border-2 border-gray-200 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="font-medium">Páginas en blanco adicionales</p>
+                    <p className="text-xs text-gray-500">
+                      Súmalas si quieres más de las {maxPhotoP} páginas que dan tus {uploadedPhotos.length} fotos (hasta {maxP} en total).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      aria-label="Quitar 2 páginas en blanco"
+                      disabled={safeBlank <= 0}
+                      onClick={() => stepBlankPages(-2)}
+                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <span className="w-10 text-center text-xl font-bold" aria-live="polite">{safeBlank}</span>
+                    <button
+                      type="button"
+                      aria-label="Añadir 2 páginas en blanco"
+                      disabled={currentPages >= maxP}
+                      onClick={() => stepBlankPages(2)}
+                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
                 <div className="mt-4 flex flex-col gap-2">
+                  {emptyPages > 0 && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                      <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                      <p className="text-sm text-amber-700">
+                        Has elegido {currentPages} páginas y tienes {uploadedPhotos.length} fotos:{' '}
+                        <strong>{emptyPages} página(s) quedarán vacías</strong>. Podrás rellenarlas o eliminarlas en el editor.
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
                     <AlertCircle className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
                     <p className="text-sm text-purple-700">
