@@ -297,3 +297,33 @@ export function getCoverTextLimits(
     spine: spineLimit(coverSize),
   };
 }
+
+/**
+ * Subtítulos de muestra para el preview, de más largo a más corto.
+ *
+ * El placeholder no puede desbordarse: es justo el texto contra el que el
+ * usuario calcula a ojo cuánto le entra, y en los layouts estrechos (vertical
+ * L2/L3, cuadrado L3, horizontal L3 — 16 a 18 caracteres) el de 32 se salía
+ * de la portada. Por eso se elige el más largo que cabe en el límite REAL del
+ * layout, en vez de una única frase fija.
+ */
+const SAMPLE_SUBTITLES = [
+  'Nuestros mejores momentos juntos', // 32
+  'Nuestros mejores momentos',        // 25
+  'Momentos inolvidables',            // 21
+  'Nuestros recuerdos',               // 18
+  'Momentos juntos',                  // 15
+  'Recuerdos',                        //  9
+] as const;
+
+/**
+ * Subtítulo de muestra que cabe en una sola línea para el límite dado.
+ * `null` (layout sin subtítulo) devuelve cadena vacía.
+ */
+export function getSampleSubtitle(subtitleLimit: number | null): string {
+  if (subtitleLimit === null) return '';
+  const fits = SAMPLE_SUBTITLES.find(s => s.length <= subtitleLimit);
+  // Ningún límite de la tabla baja de 15, así que el último siempre entra;
+  // el slice es sólo una red por si la geometría cambia.
+  return fits ?? SAMPLE_SUBTITLES[SAMPLE_SUBTITLES.length - 1].slice(0, Math.max(0, subtitleLimit));
+}

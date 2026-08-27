@@ -4,7 +4,7 @@ import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
 import CoverPreview from './CoverPreview';
-import { getCoverTextLimits } from '../utils/coverTextLimits';
+import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -127,14 +127,18 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   const isSquareLayout5 = (currentCoverSize === '20x20' || currentCoverSize === '30x30') && coverContent.selectedLayout === 5;
   const isHorizontalPapelLayout5 = currentCoverSize === '21x28' && coverContent.selectedLayout === 5 && coverType === 'Papel';
   const subtitleFieldVisible = !isSquareLayout5 && !isHorizontalPapelLayout5 && !(currentCoverSize === '28x21' && coverContent.selectedLayout === 1);
-  const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
-  const displaySubtitle = coverContent.coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
-  const subtitleIsPlaceholder = subtitleFieldVisible && !coverContent.coverSubtitle;
 
   // Aquí se puede cambiar layout, tamaño y tipo de tapa sobre una portada YA
   // guardada, sin reabrir el editor — así que una portada que era válida puede
   // dejar de serlo. Sin este chequeo pasaría desbordada al pedido.
   const savedLimits = getCoverTextLimits(currentCoverSize, coverType, coverContent.selectedLayout);
+
+  // El subtítulo de muestra sale del límite REAL del layout: la frase fija
+  // de 32 caracteres se desbordaba en los layouts estrechos (ver getSampleSubtitle).
+  const SAMPLE_SUBTITLE = getSampleSubtitle(savedLimits.subtitle);
+  const displaySubtitle = coverContent.coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
+  const subtitleIsPlaceholder = subtitleFieldVisible && !coverContent.coverSubtitle;
+
   const coverTextOverflows =
     (savedLimits.title !== null && coverContent.coverTitle.trim().length > savedLimits.title) ||
     (savedLimits.subtitle !== null && coverContent.coverSubtitle.trim().length > savedLimits.subtitle) ||
