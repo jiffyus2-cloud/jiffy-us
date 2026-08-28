@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCoverTextLimits, type CoverSize, type CoverType } from './coverTextLimits';
+import { getCoverTextLimits, getSampleSubtitle, type CoverSize, type CoverType } from './coverTextLimits';
 
 const SIZES: CoverSize[] = ['20x20', '30x30', '21x28', '28x21'];
 const TYPES: CoverType[] = ['Tela', 'Papel'];
@@ -156,5 +156,31 @@ describe('getCoverTextLimits — usabilidad y robustez', () => {
     const l2 = getCoverTextLimits('20x20', 'Papel', 2).title!;
     const l4 = getCoverTextLimits('20x20', 'Papel', 4).title!;
     expect(l2).toBeLessThan(l4);
+  });
+});
+
+describe('getSampleSubtitle — el placeholder del preview nunca desborda', () => {
+  it('cabe en el límite de todo layout con subtítulo', () => {
+    for (const { size, type, layout } of allCombos()) {
+      const { subtitle } = getCoverTextLimits(size, type, layout);
+      const sample = getSampleSubtitle(subtitle);
+      if (subtitle === null) {
+        expect({ size, type, layout, sample }).toMatchObject({ sample: '' });
+      } else {
+        expect({ size, type, layout, len: sample.length, subtitle })
+          .toMatchObject({ len: expect.any(Number) });
+        expect(sample.length).toBeGreaterThan(0);
+        expect(sample.length).toBeLessThanOrEqual(subtitle);
+      }
+    }
+  });
+
+  it('elige el más largo que entra, no siempre el más corto', () => {
+    // Tela L1 admite 46 → debe salir la frase completa; vertical L3 admite 16.
+    expect(getSampleSubtitle(getCoverTextLimits('20x20', 'Tela', 1).subtitle))
+      .toBe('Nuestros mejores momentos juntos');
+    const tight = getCoverTextLimits('28x21', 'Papel', 3).subtitle!;
+    expect(getSampleSubtitle(tight).length).toBeLessThanOrEqual(tight);
+    expect(getSampleSubtitle(tight).length).toBeGreaterThanOrEqual(tight - 4);
   });
 });

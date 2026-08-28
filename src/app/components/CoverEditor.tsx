@@ -5,7 +5,7 @@ import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
 import { convertFileIfHeic } from '../utils/imageUtils';
-import { getCoverTextLimits } from '../utils/coverTextLimits';
+import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -101,7 +101,9 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       (requiresPhoto ? coverImage !== '' : true) &&
                       !hasTextOverflow;
 
-  const SAMPLE_SUBTITLE = 'Nuestros mejores momentos juntos';
+  // El de muestra se adapta al layout: la frase fija de 32 caracteres
+  // desbordaba en los layouts estrechos (ver getSampleSubtitle).
+  const SAMPLE_SUBTITLE = getSampleSubtitle(textLimits.subtitle);
   const subtitleFieldVisible = !isSquareLayout5 && !isLayout5 && !(isVertical && selectedLayout === 1);
   const subtitleIsPlaceholder = subtitleFieldVisible && !coverSubtitle;
 
