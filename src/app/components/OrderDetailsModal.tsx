@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useEffect } from 'react';
 import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee, Image as ImageIcon, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -8,6 +8,7 @@ import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import { getEffectiveFontSize } from '../utils/textOverflowUtils';
+import { getClosestAllowed, getPageSlots } from '../utils/pageLayouts';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -46,35 +47,6 @@ const MONTHS_ES = [
 ];
 
 // --- Album Viewer ---
-const getClosestAllowed = (count: number, size: string) => {
-  const isSquare = size?.includes('Cuadrado');
-  const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
-  return allowedPhotosPerPage.find(opt => opt >= count) || allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
-};
-
-const getGridLayout = (count: number, layout: any, size: string) => {
-  const isHorizontal = size?.includes('Horizontal');
-  const isVertical = size?.includes('Vertical');
-  if (count === 1) return 'grid-cols-1';
-  if (count === 2) {
-    if (layout === 'column') return 'grid-cols-1 grid-rows-2';
-    return 'grid-cols-2';
-  }
-  if (count === 3) {
-    if (isHorizontal) return 'grid-cols-3 grid-rows-1';
-    if (isVertical) return 'grid-cols-1 grid-rows-3';
-    return 'grid-cols-3';
-  }
-  if (count === 4) return 'grid-cols-2 grid-rows-2';
-  if (count === 6) {
-    if (isHorizontal) return 'grid-cols-3 grid-rows-2';
-    if (isVertical) return 'grid-cols-2 grid-rows-3';
-    return 'grid-cols-3 grid-rows-2';
-  }
-  if (count === 9) return 'grid-cols-3 grid-rows-3';
-  return 'grid-cols-2 grid-rows-2';
-};
-
 const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21' => {
   if (!size) return '20x20';
   if (size.includes('20x20')) return '20x20';
@@ -84,62 +56,20 @@ const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21'
   return '20x20';
 };
 
+// El marco ya viene con la proporción del pliego, así que la foto lo llena sin
+// más: antes había que compensar con zoom porque las páginas de 2 y 3 fotos
+// recortaban la imagen al 65 % de una celda con otra proporción.
 const AlbumPagePhoto: React.FC<{
   photo: string | null;
   textBox: any;
   crop: { x: number; y: number; zoom: number } | undefined;
-  isHalfHeightLayout: boolean;
   photoIndex: number;
-}> = ({ photo, textBox, crop, isHalfHeightLayout, photoIndex }) => {
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null);
-
-  useEffect(() => {
-    if (photo) {
-      const img = new Image();
-      img.onload = () => setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-      img.src = photo;
-    } else {
-      setImageDimensions(null);
-    }
-  }, [photo]);
-
-  useLayoutEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      setContainerDimensions({ width: element.offsetWidth, height: element.offsetHeight });
-    });
-
-    resizeObserver.observe(element);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  let calculatedCrop = crop;
-  if (isHalfHeightLayout && imageDimensions && containerDimensions && imageDimensions.width >= imageDimensions.height && (!crop || crop.zoom === 1)) {
-    const { width: imageW, height: imageH } = imageDimensions;
-    const { width: containerW, height: containerH } = containerDimensions;
-
-    if (imageH > 0 && containerH > 0 && imageW > 0 && containerW > 0) {
-      const imageAspectRatio = imageW / imageH;
-      const containerAspectRatio = containerW / containerH;
-      
-      if (imageAspectRatio > containerAspectRatio) {
-        const newZoom = imageAspectRatio / containerAspectRatio;
-        if (newZoom > 1.01) { 
-          calculatedCrop = { x: crop?.x ?? 50, y: crop?.y ?? 50, zoom: newZoom };
-        }
-      }
-    }
-  }
-
+}> = ({ photo, textBox, crop, photoIndex }) => {
   return (
-    <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center`}>
+    <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center w-full h-full`}>
       {photo ? (
-        <div ref={containerRef} className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"}>
-          <ImageCropper src={photo} position={calculatedCrop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
+        <div className="w-full h-full relative">
+          <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
         </div>
       ) : textBox ? (
         <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
@@ -222,6 +152,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
           const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
           const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
           const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
+          const slotRects = getPageSlots(currentPhotosPerPage, layout, size);
 
           return (
             <div key={pageIndex} className="space-y-4">
@@ -230,22 +161,27 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
                 className="bg-white rounded-[3%] shadow-lg border border-gray-100 overflow-hidden mx-auto w-full"
                 style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
               >
-                <div className={`grid gap-2 p-4 h-full ${getGridLayout(currentPhotosPerPage, layout, size)}`}>
+                <div className="relative w-full h-full">
                   {slots.map((photo, photoIndex) => {
                     const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
                     const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
                     const crop = (pageObj as any)?.crops?.[photoIndex] || order.photoCrops?.[`${pageIndex}-${photoIndex}`];
-                    const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
+                    const rect = slotRects[photoIndex];
+                    if (!rect) return null;
 
                     return (
-                      <AlbumPagePhoto
+                      <div
                         key={photoIndex}
-                        photo={photo}
-                        textBox={textBox}
-                        crop={crop}
-                        isHalfHeightLayout={isHalfHeightLayout}
-                        photoIndex={photoIndex}
-                      />
+                        className="absolute"
+                        style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+                      >
+                        <AlbumPagePhoto
+                          photo={photo}
+                          textBox={textBox}
+                          crop={crop}
+                          photoIndex={photoIndex}
+                        />
+                      </div>
                     );
                   })}
                 </div>

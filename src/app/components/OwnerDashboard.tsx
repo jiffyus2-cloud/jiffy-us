@@ -23,6 +23,7 @@ import CoverPreview from './CoverPreview';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import { getEffectiveFontSize } from '../utils/textOverflowUtils';
 import { getCoverDimensions } from '../utils/cropMath';
+import { getClosestAllowed, getPageSlots } from '../utils/pageLayouts';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
@@ -61,35 +62,6 @@ const MONTHS_ES = [
 // ============================================================================
 // FUNCIONES HELPERS DE DIMENSIONES Y LAYOUT
 // ============================================================================
-const getClosestAllowed = (count: number, size: string) => {
-  const isSquare = size?.includes('Cuadrado');
-  const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
-  return allowedPhotosPerPage.find(opt => opt >= count) || allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
-};
-
-const getGridLayout = (count: number, layout: any, size: string) => {
-  const isHorizontal = size?.includes('Horizontal');
-  const isVertical = size?.includes('Vertical');
-  if (count === 1) return 'grid-cols-1';
-  if (count === 2) {
-    if (layout === 'column') return 'grid-cols-1 grid-rows-2';
-    return 'grid-cols-2';
-  }
-  if (count === 3) {
-    if (isHorizontal) return 'grid-cols-3 grid-rows-1';
-    if (isVertical) return 'grid-cols-1 grid-rows-3';
-    return 'grid-cols-3';
-  }
-  if (count === 4) return 'grid-cols-2 grid-rows-2';
-  if (count === 6) {
-    if (isHorizontal) return 'grid-cols-3 grid-rows-2';
-    if (isVertical) return 'grid-cols-2 grid-rows-3';
-    return 'grid-cols-3 grid-rows-2';
-  }
-  if (count === 9) return 'grid-cols-3 grid-rows-3';
-  return 'grid-cols-2 grid-rows-2';
-};
-
 const getDimensions = (order: Order) => {
   const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
@@ -275,23 +247,28 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
   const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
   const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
 
-  const gridClass = getGridLayout(currentPhotosPerPage, layout, size);
+  const slotRects = getPageSlots(currentPhotosPerPage, layout, size);
 
   return (
-    <div className={`w-full h-full bg-white ${currentPhotosPerPage === 3 ? 'flex flex-col items-center justify-center' : ''}`}>
-    <div className={`w-full ${currentPhotosPerPage === 3 ? 'h-4/5' : 'h-full'} grid gap-[2%] p-[4%] ${gridClass}`}>
+    <div className="w-full h-full bg-white">
+    <div className="relative w-full h-full">
       {slots.map((photo: string | null, photoIndex: number) => {
         const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
         const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
         const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-        
-        const isHalfHeightLayout = (currentPhotosPerPage === 2 || currentPhotosPerPage === 3) && layout !== 'column';
+
+        const rect = slotRects[photoIndex];
+        if (!rect) return null;
         const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
 
         return (
-          <div key={photoIndex} className="relative overflow-hidden rounded-lg bg-white flex items-center justify-center w-full h-full border border-gray-100/50">
+          <div
+            key={photoIndex}
+            className="absolute overflow-hidden rounded-lg bg-white flex items-center justify-center border border-gray-100/50"
+            style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+          >
             {resolvedSrc ? (
-              <div className={isHalfHeightLayout ? "w-full h-[65%] relative my-auto bg-gray-100" : "w-full h-full relative bg-gray-100"}>
+              <div className="w-full h-full relative bg-gray-100">
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
                   <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
