@@ -35,6 +35,11 @@ import {
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
   AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify
 } from 'lucide-react';
+import {
+  getAllowedPhotosPerPage,
+  getPageSlots,
+  hasOrientationChoice,
+} from '../utils/pageLayouts';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
@@ -155,7 +160,6 @@ const AlbumEditorPhotoSlot: React.FC<{
   photo: string | null;
   textBox: any;
   crop: { x: number; y: number; zoom: number };
-  isHalfHeightLayout: boolean;
   pageIndex: number;
   photoIndex: number;
   photoCount: number;
@@ -173,7 +177,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   onPhotoRetry?: (url: string, pageIndex: number, photoIndex: number) => void;
   t: (key: string) => string;
 }> = ({
-  photo, textBox, crop, isHalfHeightLayout, pageIndex, photoIndex, photoCount, editingPageIndex,
+  photo, textBox, crop, pageIndex, photoIndex, photoCount, editingPageIndex,
   isDragging, isDragTarget, onDragStart,
   handleRemovePhotoFromPage, setEditingTextSlot,
   handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal,
@@ -195,7 +199,7 @@ const AlbumEditorPhotoSlot: React.FC<{
           {/* Contenido de la foto — drag directo sobre la imagen */}
           <div
             ref={containerRef}
-            className={`${isHalfHeightLayout ? "w-full h-[65%] relative my-auto" : "w-full h-full relative"} ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`w-full h-full relative ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
             onPointerDown={isEditing ? e => onDragStart(pageIndex, photoIndex, e) : undefined}
             style={isEditing ? { touchAction: 'none', userSelect: 'none' } : undefined}
           >
@@ -483,7 +487,7 @@ export default function PhotoOrganizer({
   const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
   const isVertical = sizeStr.includes('Vertical');
-  const allowedPhotosPerPage = isSquare ? [1, 2, 3, 4, 9] : [1, 2, 3, 4, 6];
+  const allowedPhotosPerPage = getAllowedPhotosPerPage(sizeStr);
 
   const getNextAllowed = (count: number) => {
     for (const opt of allowedPhotosPerPage) {
@@ -505,29 +509,6 @@ export default function PhotoOrganizer({
       getNextAllowed(pagePhotos.length),
       pagePhotos.length
     );
-
-  const getGridLayout = (count: number, layout?: 'row' | 'column' | 'grid') => {
-    if (count === 1) return 'grid-cols-1';
-    if (count === 2) {
-      if (layout === 'column') return 'grid-cols-1 grid-rows-2';
-      return 'grid-cols-2';
-    }
-    if (count === 3) {
-      if (layout === 'column') return 'grid-cols-1 grid-rows-3';
-      if (layout === 'row') return 'grid-cols-3 grid-rows-1';
-      if (isHorizontal) return 'grid-cols-3 grid-rows-1';
-      if (isVertical) return 'grid-cols-1 grid-rows-3';
-      return 'grid-cols-3';
-    }
-    if (count === 4) return 'grid-cols-2 grid-rows-2';
-    if (count === 6) {
-      if (isHorizontal) return 'grid-cols-3 grid-rows-2';
-      if (isVertical) return 'grid-cols-2 grid-rows-3';
-      return 'grid-cols-3 grid-rows-2';
-    }
-    if (count === 9) return 'grid-cols-3 grid-rows-3';
-    return 'grid-cols-2 grid-rows-2';
-  };
 
   // Máximo de páginas que justifican las fotos subidas (mínimo 1 foto por página).
   // Es el tope de la barra del selector, dinámico según cuántas fotos haya.
@@ -1458,6 +1439,30 @@ export default function PhotoOrganizer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedPhotosPerPage.join(',')]);
 
+  // ── Variantes guardadas que el formato ya no admite ──────────────────────────
+  // Vertical no tiene layout de 4 fotos, pero álbumes creados antes (o pasados
+  // desde Horizontal) pueden traer páginas con `variant: 4` guardado. El editor
+  // ya las pinta con la variante siguiente vía getRenderSlotCount; si no se
+  // guarda ese ajuste, el PDF de impresión sigue leyendo el 4 y sale una página
+  // distinta a la que se aprobó. Aquí se normaliza el estado guardado.
+  // Las variantes por encima del máximo del formato no se tocan aquí: de esas se
+  // ocupa el modal de migración de arriba, que además reparte las fotos.
+  useEffect(() => {
+    const max = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
+    const normalized: Record<number, number> = {};
+    let changed = false;
+    for (const [key, variant] of Object.entries(pageLayoutVariants)) {
+      if (variant > max || allowedPhotosPerPage.includes(variant)) {
+        normalized[Number(key)] = variant;
+        continue;
+      }
+      normalized[Number(key)] = getNextAllowed(variant);
+      changed = true;
+    }
+    if (changed) onPageLayoutVariantsChange(normalized);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedPhotosPerPage.join(','), pageLayoutVariants]);
+
   const applySizeMigration = () => {
     const result = migrateAlbumToConfig(currentAlbumState(), albumConfig, setNumPages);
     if (result.warnings.some(w => w.code === 'max_pages_reached')) {
@@ -1703,6 +1708,7 @@ export default function PhotoOrganizer({
     const pagePhotos = photos[pageIndex];
     const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
+    const currentSlotRects = getPageSlots(currentVariant, currentLayout, sizeStr);
 
     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
 
@@ -1724,16 +1730,22 @@ export default function PhotoOrganizer({
               </p>
               
               <div className="bg-white rounded-none shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all flex flex-col items-center justify-center" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
-                <div className={`grid gap-2 p-3 sm:p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, currentLayout)}`}>
+                <div className="relative w-full h-full">
                   {slots.map((photo, photoIndex) => {
                     const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                     const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                    const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && currentLayout !== 'column';
-                    
+                    const rect = currentSlotRects[photoIndex];
+                    if (!rect) return null;
+
                     return (
+                      <div
+                        key={photoIndex}
+                        className="absolute"
+                        style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+                      >
                       <AlbumEditorPhotoSlot
-                        key={photoIndex} photo={photo} textBox={textBox} crop={crop}
-                        isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                        photo={photo} textBox={textBox} crop={crop}
+                        pageIndex={pageIndex} photoIndex={photoIndex}
                         photoCount={currentVariant}
                         editingPageIndex={pageIndex}
                         isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
@@ -1749,6 +1761,7 @@ export default function PhotoOrganizer({
                         onPhotoRetry={handlePhotoRetry}
                         t={t}
                       />
+                      </div>
                     );
                   })}
                 </div>
@@ -1781,7 +1794,10 @@ export default function PhotoOrganizer({
                     </div>
                   </div>
 
-                  {(currentVariant === 2 || currentVariant === 3) && (
+                  {/* Solo donde el pliego define de verdad dos disposiciones: las
+                      páginas de 2 fotos en cuadrado y en horizontal. No hay ningún
+                      layout de 3 apiladas, ni de 2 lado a lado en vertical. */}
+                  {hasOrientationChoice(currentVariant, sizeStr) && (
                     <div className="pt-2 border-t border-gray-50">
                       <label className="block text-xs font-medium text-gray-700 mb-1.5">Orientación del Layout</label>
                       <div className="flex gap-1.5 sm:gap-2">
@@ -1818,6 +1834,7 @@ export default function PhotoOrganizer({
           const variant = pageLayoutVariants[idx] || getNextAllowed(pgPhotos.length);
           const layout = pageLayouts[idx] || 'grid';
           const slots = Array.from({ length: variant }, (_, i) => !!(pgPhotos[i] && pgPhotos[i].trim() !== ''));
+          const slotRects = getPageSlots(variant, layout, sizeStr);
 
           return (
             <button
@@ -1826,14 +1843,22 @@ export default function PhotoOrganizer({
               onClick={() => handleSendPhotoToPage(sendPhotoPicker.pageIndex, sendPhotoPicker.photoIndex, idx)}
               className={`relative flex flex-col items-center gap-1 group ${isSource ? 'opacity-30 cursor-not-allowed' : ''}`}
             >
-              <div className={`w-full aspect-square rounded-lg border-2 overflow-hidden bg-gray-50 p-1.5 transition-all ${isSource ? 'border-gray-200' : 'border-gray-200 group-hover:border-black'}`}>
-                <div className={`grid gap-1 w-full h-full ${getGridLayout(variant, layout)}`}>
-                  {slots.map((hasPhoto, slotIdx) => (
-                    <div
-                      key={slotIdx}
-                      className={hasPhoto ? 'bg-gray-300 rounded-sm' : 'border border-dashed border-gray-200 rounded-sm'}
-                    />
-                  ))}
+              <div
+                className={`w-full rounded-lg border-2 overflow-hidden bg-gray-50 transition-all ${isSource ? 'border-gray-200' : 'border-gray-200 group-hover:border-black'}`}
+                style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+              >
+                <div className="relative w-full h-full">
+                  {slots.map((hasPhoto, slotIdx) => {
+                    const rect = slotRects[slotIdx];
+                    if (!rect) return null;
+                    return (
+                      <div
+                        key={slotIdx}
+                        className={`absolute rounded-sm ${hasPhoto ? 'bg-gray-300' : 'border border-dashed border-gray-200'}`}
+                        style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
               <span className={`text-[10px] font-bold ${isSource ? 'text-gray-300' : 'text-gray-500 group-hover:text-black'}`}>Pág. {idx + 1}</span>
@@ -2869,18 +2894,24 @@ export default function PhotoOrganizer({
                   {(() => {
                     const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
                     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
+                    const slotRects = getPageSlots(currentVariant, pageLayouts[pageIndex], sizeStr);
                     return (
-                      <div className={`grid gap-2 p-4 w-full ${currentVariant === 3 ? 'h-4/5' : 'h-full'} ${getGridLayout(currentVariant, pageLayouts[pageIndex])}`}>
+                      <div className="relative w-full h-full">
                         {slots.map((photo, photoIndex) => {
                           const textBox = textBoxSlots[pageIndex]?.[photoIndex];
                           const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                          const isHalfHeightLayout = (currentVariant === 2 || currentVariant === 3) && pageLayouts[pageIndex] !== 'column';
+                          const rect = slotRects[photoIndex];
                           const isPhotoLowRes = photo && lowResInfo[photo];
+                          if (!rect) return null;
                           return (
-                            <div key={photoIndex} className="relative h-full">
+                            <div
+                              key={photoIndex}
+                              className="absolute"
+                              style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+                            >
                               <AlbumEditorPhotoSlot
                                 photo={photo} textBox={textBox} crop={crop}
-                                isHalfHeightLayout={isHalfHeightLayout} pageIndex={pageIndex} photoIndex={photoIndex}
+                                pageIndex={pageIndex} photoIndex={photoIndex}
                                 photoCount={currentVariant}
                                 editingPageIndex={null}
                                 isDragging={false}
