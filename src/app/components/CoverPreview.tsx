@@ -516,7 +516,13 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   {renderImageSlot()}
                 </div>
               </div>
-              <div data-cover-text-frame className="flex-shrink-0 bg-white z-10 flex items-start justify-end" style={{ height: footerH, paddingTop: pad, paddingRight: lrI }}>
+              {/* En 20x20 la banda del pie mide 7,5% del alto y el padding se
+                  resuelve contra el ANCHO: el subtítulo quedaba a 10,5 px del
+                  borde superior y a 3,4 px del inferior, pegado al canto. Se
+                  centra en su banda en vez de colgarlo de un padding fijo, así
+                  se mantiene equilibrado aunque el texto reduzca de tamaño.
+                  El 30x30 ya repartía bien y se deja como estaba. */}
+              <div data-cover-text-frame className={`flex-shrink-0 bg-white z-10 flex justify-end ${is30 ? 'items-start' : 'items-center'}`} style={{ height: footerH, ...(is30 ? { paddingTop: pad } : {}), paddingRight: lrI }}>
                 {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="leading-none" style={{ fontSize: titleF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
               </div>
             </div>
