@@ -16,6 +16,8 @@ import {
   compactPage as albumCompactPage,
   occupiedSlotCount,
   analyzeConfigChange,
+  distributePhotosAcrossPages,
+  redistributeAlbum,
   migrateAlbumToConfig,
   type AlbumState,
   type AlbumConfig,
@@ -33,7 +35,7 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify
+  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -407,6 +409,9 @@ export default function PhotoOrganizer({
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
   const [reorderTargetPage, setReorderTargetPage] = useState<number | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  // Modal de "reorganizar el album entero". `confirmed` es la casilla de
+  // seguridad: sin marcarla no se puede lanzar una operacion destructiva.
+  const [redistributeModal, setRedistributeModal] = useState<{ pages: number; confirmed: boolean } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>(() => initialFileSignatures ?? []);
@@ -933,70 +938,53 @@ export default function PhotoOrganizer({
     if (safeVal % 2 !== 0) safeVal = Math.min(safeVal + 1, maxP);
     setNumPages(safeVal);
 
-    const totalPages = safeVal;
-    
-    let pageCapacities = new Array(totalPages).fill(1);
-    let remainingPhotos = Math.max(0, sortedPhotos.length - totalPages);
-    let allowPageZero = totalPages <= 1;
-    const maxAllowed = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
-
-    while (remainingPhotos > 0) {
-      let availablePages = [];
-      for (let i = (allowPageZero ? 0 : 1); i < totalPages; i++) {
-        if (pageCapacities[i] < maxAllowed) {
-          availablePages.push(i);
-        }
-      }
-
-      if (availablePages.length === 0) {
-        if (!allowPageZero && pageCapacities[0] < maxAllowed) {
-          allowPageZero = true; 
-          continue;
-        } else {
-          pageCapacities[totalPages - 1] += remainingPhotos;
-          remainingPhotos = 0;
-          break;
-        }
-      }
-
-      const minCap = Math.min(...availablePages.map(p => pageCapacities[p]));
-      const candidatePages = availablePages.filter(p => pageCapacities[p] === minCap);
-
-      let incrementsCount = Math.min(remainingPhotos, candidatePages.length);
-      let spacing = candidatePages.length / incrementsCount;
-
-      for (let i = 0; i < incrementsCount; i++) {
-        let pageIdx = candidatePages[Math.floor(i * spacing)];
-        pageCapacities[pageIdx] += 1;
-        remainingPhotos -= 1;
-      }
-    }
-
-    const photosToDistribute = [...sortedPhotos];
-    const newPhotos: string[][] = Array.from({ length: totalPages }, () => []);
-    
-    for (let i = 0; i < totalPages; i++) {
-      let cap = pageCapacities[i];
-      for (let j = 0; j < cap; j++) {
-        if (photosToDistribute.length > 0) {
-          newPhotos[i].push(photosToDistribute.shift()!);
-        }
-      }
-    }
-    
-    while (photosToDistribute.length > 0) {
-       newPhotos[totalPages - 1].push(photosToDistribute.shift()!);
-    }
-
-    // Construir fileSignatures[][] desde el mapa URL→clave registrado en processUpload
-    const newSigs: string[][] = newPhotos.map(page =>
-      page.map(url => pendingFileKeysRef.current.get(url) ?? '')
+    // El reparto vive en albumStateUtils para que "reorganizar" desde el editor
+    // (handleRedistribute) produzca exactamente el mismo resultado que esta
+    // primera carga, en vez de tener dos algoritmos que se van separando.
+    const distributed = distributePhotosAcrossPages(
+      sortedPhotos.map(url => ({ photo: url, signature: pendingFileKeysRef.current.get(url) ?? '' })),
+      safeVal,
+      albumConfig
     );
+    const { photos: newPhotos, fileSignatures: newSigs } = fromAlbumStateToProps(distributed);
+
     setFileSignatures(newSigs);
     pendingFileKeysRef.current.clear(); // consumido, limpiar para el siguiente lote
 
     onPhotosChange(newPhotos);
     setStep('editor');
+  };
+
+  // ── REORGANIZAR EL ÁLBUM ENTERO ─────────────────────────────────────────────
+  // Vuelve a repartir todas las fotos desde cero, igual que en la carga inicial
+  // (mismo `distributePhotosAcrossPages`). Es destructivo: se pierden recortes,
+  // cajas de texto, diseños de página y el orden manual, así que la operación
+  // vive detrás de un modal con casilla de confirmación.
+  const openRedistributeModal = () => {
+    if (pagesLocked) return;
+    let start = Math.min(Math.max(safePhotos.length, 40), ALBUM_MAX_PAGES);
+    if (start % 2 !== 0) start = Math.min(start + 1, ALBUM_MAX_PAGES);
+    setRedistributeModal({ pages: start, confirmed: false });
+  };
+
+  const executeRedistribute = () => {
+    // Doble cinturón: aunque el botón esté deshabilitado sin la casilla marcada,
+    // no se toca el álbum si llega aquí sin confirmar o con las páginas bloqueadas.
+    if (!redistributeModal || !redistributeModal.confirmed || pagesLocked) return;
+    const totalPages = redistributeModal.pages;
+    const photoCount = safePhotos.flat().filter(p => p && p.trim() !== '').length;
+
+    // Cerrar cualquier panel abierto: sus índices apuntan al álbum anterior.
+    exitReorderMode();
+    setEditingPageIndex(null);
+    setAdvancedSettingsModal(null);
+    setCropModalData(null);
+    setEditingTextSlot(null);
+
+    applyAlbumState(redistributeAlbum(currentAlbumState(), totalPages, albumConfig));
+    setNumPages(totalPages);
+    setRedistributeModal(null);
+    setAlbumWarning(`Álbum reorganizado: ${photoCount} foto(s) repartidas en ${totalPages} páginas.`);
   };
 
   const handleAddPage = (index: number) => {
@@ -2649,6 +2637,156 @@ export default function PhotoOrganizer({
         </div>
       )}
 
+      {/* MODAL DE REORGANIZACIÓN COMPLETA DEL ÁLBUM */}
+      {redistributeModal && (() => {
+        const totalPhotos = safePhotos.flat().filter(p => p && p.trim() !== '').length;
+        const cropCount = Object.keys(photoCrops || {}).length;
+        const textCount = Object.values(textBoxSlots || {}).reduce(
+          (n, slots) => n + Object.keys(slots || {}).length, 0
+        );
+        const pages = redistributeModal.pages;
+        // Mismo tope que el paso inicial: mas paginas que fotos = paginas vacias.
+        const maxPhotoP = getMaxPhotoPages(totalPhotos);
+        const emptyPages = Math.max(0, pages - totalPhotos);
+        const setPages = (v: number) => {
+          let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), ALBUM_MAX_PAGES);
+          if (val % 2 !== 0) val = Math.min(val + 1, ALBUM_MAX_PAGES);
+          setRedistributeModal(m => (m ? { ...m, pages: val } : m));
+        };
+
+        return (
+          <div className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
+                  <Shuffle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Reorganizar el álbum</h3>
+                  <p className="text-sm text-gray-500">
+                    Reparte otra vez tus {totalPhotos} fotos desde cero, como cuando se cargaron al principio.
+                  </p>
+                </div>
+              </div>
+
+              {/* AVISO DE SEGURIDAD: qué se pierde exactamente */}
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-5">
+                <p className="text-sm font-bold text-red-800 mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Esto reinicia todo el orden actual
+                </p>
+                <ul className="text-[13px] text-red-700 space-y-1.5 list-disc pl-5">
+                  <li>El orden en que colocaste las fotos <strong>se pierde</strong>: se reparten de nuevo de la primera a la última página.</li>
+                  <li>
+                    {cropCount > 0 || textCount > 0 ? (
+                      <>Se borrarán <strong>{cropCount} recorte(s)</strong> y <strong>{textCount} caja(s) de texto</strong>.</>
+                    ) : (
+                      <>Se borrarán los recortes y las cajas de texto de todas las páginas.</>
+                    )}
+                  </li>
+                  <li>Los diseños de cada página y las páginas en blanco que hayas insertado vuelven al reparto automático.</li>
+                  <li><strong>No se puede deshacer.</strong> Ninguna foto se borra: las {totalPhotos} siguen en el álbum.</li>
+                </ul>
+              </div>
+
+              {/* SELECTOR DE PÁGINAS: mismo control que en la creación del álbum */}
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="font-medium">Páginas del álbum</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Quitar 2 páginas"
+                      disabled={pages <= 40}
+                      onClick={() => setPages(pages - 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={40}
+                      max={ALBUM_MAX_PAGES}
+                      step={2}
+                      value={pages}
+                      onChange={(e) => setPages(parseInt(e.target.value, 10))}
+                      className="w-20 text-xl font-bold border-2 border-gray-300 rounded px-2 py-1 focus:border-black outline-none text-center"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Añadir 2 páginas"
+                      disabled={pages >= ALBUM_MAX_PAGES}
+                      onClick={() => setPages(pages + 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {maxPhotoP > 40 && (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. 40</span>
+                      <span>Máx. {maxPhotoP} con foto</span>
+                    </div>
+                    <PageRangeSlider
+                      min={40}
+                      max={maxPhotoP}
+                      step={2}
+                      value={Math.min(Math.max(pages, 40), maxPhotoP)}
+                      onChange={setPages}
+                    />
+                  </>
+                )}
+
+                <p className="text-xs text-gray-500 mt-3">
+                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong>, equilibrando cuántas caen en cada una.
+                </p>
+                {emptyPages > 0 && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700">
+                      Hay más páginas que fotos: <strong>{emptyPages} quedarán vacías</strong> y tendrás que rellenarlas o eliminarlas después.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* CONFIRMACIÓN EXPLÍCITA */}
+              <label className="flex items-start gap-3 mb-5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={redistributeModal.confirmed}
+                  onChange={(e) => setRedistributeModal(m => (m ? { ...m, confirmed: e.target.checked } : m))}
+                  className="mt-0.5 w-5 h-5 shrink-0 accent-red-600 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">
+                  Entiendo que se reiniciará el orden de mis fotos y que se perderán los recortes, los textos y los diseños de página.
+                </span>
+              </label>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRedistributeModal(null)}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600 hover:border-gray-400 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executeRedistribute}
+                  disabled={!redistributeModal.confirmed}
+                  className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  Reorganizar {pages} páginas
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* MODAL DE AYUDA */}
       {showHelpModal && (
         <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
@@ -2774,6 +2912,16 @@ export default function PhotoOrganizer({
             <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
           </div>
           <div className="flex items-center gap-2">
+            {!pagesLocked && safePhotos.flat().some(p => p && p.trim() !== '') && (
+              <button
+                onClick={openRedistributeModal}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border-2 border-gray-200 hover:border-black text-gray-500 hover:text-black transition-all text-xs font-bold"
+                title="Reorganizar el álbum: repartir de nuevo todas las fotos y elegir cuántas páginas"
+              >
+                <Shuffle className="w-4 h-4" />
+                <span className="hidden sm:inline">Reorganizar</span>
+              </button>
+            )}
             <button
               onClick={() => setShowHelpModal(true)}
               className="p-2 rounded-full border-2 border-gray-200 hover:border-black text-gray-400 hover:text-black transition-all"
