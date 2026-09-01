@@ -7,11 +7,13 @@
 // duplicate-detection signatures in sync atomically.
 // ============================================================================
 
+import type { PageVariantId } from './pageLayouts';
+
 export interface PageState {
   photos: string[];
   crops: Record<number, any>;     // photoIndex → crop data
   texts: Record<number, any>;     // photoIndex → text box data
-  layout?: 'grid' | 'row' | 'column';
+  layout?: PageVariantId;
   variant?: number;
   signatures: string[];           // same length / order as photos
 }
@@ -181,7 +183,7 @@ export function fromPropsToAlbumState(
   photos: string[][],
   photoCrops: Record<string, any>,
   textBoxSlots: Record<number, Record<number, any>>,
-  pageLayouts: Record<number, 'grid' | 'row' | 'column'>,
+  pageLayouts: Record<number, PageVariantId>,
   pageLayoutVariants: Record<number, number>,
   fileSignatures: string[][]
 ): AlbumState {
@@ -212,14 +214,14 @@ export function fromAlbumStateToProps(state: AlbumState): {
   photos: string[][];
   photoCrops: Record<string, any>;
   textBoxSlots: Record<number, Record<number, any>>;
-  pageLayouts: Record<number, 'grid' | 'row' | 'column'>;
+  pageLayouts: Record<number, PageVariantId>;
   pageLayoutVariants: Record<number, number>;
   fileSignatures: string[][];
 } {
   const photos: string[][] = [];
   const photoCrops: Record<string, any> = {};
   const textBoxSlots: Record<number, Record<number, any>> = {};
-  const pageLayouts: Record<number, 'grid' | 'row' | 'column'> = {};
+  const pageLayouts: Record<number, PageVariantId> = {};
   const pageLayoutVariants: Record<number, number> = {};
   const fileSignatures: string[][] = [];
 
