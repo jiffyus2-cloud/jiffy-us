@@ -21,9 +21,9 @@ import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
-import { getEffectiveFontSize } from '../utils/textOverflowUtils';
 import { getCoverDimensions } from '../utils/cropMath';
-import { getClosestAllowed, getPageSlots } from '../utils/pageLayouts';
+import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
+import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
@@ -236,65 +236,24 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
 // ============================================================================
 // COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
-const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number, preloadedMap?: Record<string, string>}> = ({pageObj, customization, pageIndex, order, pxWidth, preloadedMap}) => {
+// La página impresa se arma con los mismos marcos y el mismo contenido que el
+// editor y el visor del pedido (`AlbumPageSlots`); lo único propio de aquí es
+// que la foto se dibuja con `CanvasCropper`, porque html-to-image no captura
+// bien el `ImageCropper` de pantalla.
+const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order: any, preloadedMap?: Record<string, string>}> = ({customization, pageIndex, order, preloadedMap}) => {
   const size = customization?.size || '';
-  
-  const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
-  const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
-  const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
-  
-  const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
-  const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
-  const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
-
-  const slotRects = getPageSlots(currentPhotosPerPage, layout, size);
+  const slots = getAlbumPageSlots(order, pageIndex, size);
 
   return (
     <div className="w-full h-full bg-white">
-    <div className="relative w-full h-full">
-      {slots.map((photo: string | null, photoIndex: number) => {
-        const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
-        const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
-        const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-
-        const rect = slotRects[photoIndex];
-        if (!rect) return null;
-        const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
-
-        return (
-          <div
-            key={photoIndex}
-            className="absolute overflow-hidden rounded-lg bg-white flex items-center justify-center border border-gray-100/50"
-            style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
-          >
-            {resolvedSrc ? (
-              <div className="w-full h-full relative bg-gray-100">
-                <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={resolvedSrc} crop={crop} />
-                </div>
-              </div>
-            ) : textBox ? (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
-                <div style={{ 
-                  width: '90%', 
-                  fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
-                  fontFamily: textBox.fontFamily || 'Arial',
-                  color: textBox.color || '#000',
-                  textAlign: textBox.textAlign || 'center',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: '1.3'
-                }}>
-                  {textBox.text}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-50 w-full h-full" />
-            )}
+      <AlbumPageSlots
+        slots={slots}
+        renderPhoto={(photo, crop) => (
+          <div className="absolute inset-0 w-full h-full pointer-events-none">
+            <CanvasCropper src={preloadedMap?.[photo] || photo} crop={crop} />
           </div>
-        );
-      })}
-    </div>
+        )}
+      />
     </div>
   );
 };
@@ -909,10 +868,10 @@ const OwnerDashboard: React.FC = () => {
           for (let i = 0; i < order.pages.length; i++) {
             if (i > 0) pdf.addPage();
             const currentPage = order.pages[i];
-            const pageImages = ((currentPage as any)?.images || []).filter(Boolean) as string[];
+            const pageImages = getPageImages(currentPage).filter(Boolean) as string[];
             const pageDataUrl = await renderAndCapture(
               (preloadedMap) => (
-                <AlbumPagePrintView key={i} pageObj={currentPage} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+                <AlbumPagePrintView key={i} customization={order.customization} pageIndex={i} order={order} preloadedMap={preloadedMap} />
               ),
               pageImages
             );
