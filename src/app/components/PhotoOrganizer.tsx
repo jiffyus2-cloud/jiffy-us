@@ -40,7 +40,9 @@ import {
 import {
   getAllowedPhotosPerPage,
   getPageSlots,
-  hasOrientationChoice,
+  getPageVariants,
+  getSelectedVariantId,
+  type PageVariantId,
 } from '../utils/pageLayouts';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -141,8 +143,8 @@ interface PhotoOrganizerProps {
   onPhotoCropsChange: (crops: Record<string, { x: number; y: number; zoom: number }>) => void;
   textBoxSlots: Record<number, Record<number, any>>;
   onTextBoxSlotsChange: (slots: Record<number, Record<number, any>>) => void;
-  pageLayouts: Record<number, 'grid' | 'row' | 'column'>;
-  onPageLayoutsChange: (layouts: Record<number, 'grid' | 'row' | 'column'>) => void;
+  pageLayouts: Record<number, PageVariantId>;
+  onPageLayoutsChange: (layouts: Record<number, PageVariantId>) => void;
   pageLayoutVariants: Record<number, number>;
   onPageLayoutVariantsChange: (variants: Record<number, number>) => void;
   onComplete?: () => void;
@@ -1697,6 +1699,8 @@ export default function PhotoOrganizer({
     const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
     const currentSlotRects = getPageSlots(currentVariant, currentLayout, sizeStr);
+    const currentVariants = getPageVariants(currentVariant, sizeStr);
+    const currentVariantId = getSelectedVariantId(currentVariant, currentLayout, sizeStr);
 
     const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
 
@@ -1782,15 +1786,43 @@ export default function PhotoOrganizer({
                     </div>
                   </div>
 
-                  {/* Solo donde el pliego define de verdad dos disposiciones: las
-                      páginas de 2 fotos en cuadrado y en horizontal. No hay ningún
-                      layout de 3 apiladas, ni de 2 lado a lado en vertical. */}
-                  {hasOrientationChoice(currentVariant, sizeStr) && (
+                  {/* El pliego define varias páginas distintas para un mismo
+                      número de fotos —con 1 foto hay hasta cuatro—, así que la
+                      elección se muestra dibujada: con texto solo no se sabe en
+                      qué se diferencian «Vertical» y «Panorámica». */}
+                  {currentVariants.length > 1 && (
                     <div className="pt-2 border-t border-gray-50">
-                      <label className="block text-xs font-medium text-gray-700 mb-1.5">Orientación del Layout</label>
-                      <div className="flex gap-1.5 sm:gap-2">
-                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'row' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout !== 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>Vertical</button>
-                        <button onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: 'column' })} className={`flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${currentLayout === 'column' ? 'border-black bg-black text-white shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-black'}`}>Horizontal</button>
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">Variante del layout</label>
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                        {currentVariants.map(variant => {
+                          const isCurrent = variant.id === currentVariantId;
+                          return (
+                            <button
+                              key={variant.id}
+                              onClick={() => onPageLayoutsChange({ ...pageLayouts, [pageIndex]: variant.id })}
+                              className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 transition-all ${isCurrent ? 'border-black bg-gray-50 shadow-sm' : 'border-gray-200 bg-white hover:border-black'}`}
+                              aria-pressed={isCurrent}
+                              title={variant.label}
+                            >
+                              <span
+                                className="relative block bg-white border border-gray-200"
+                                style={{ width: '3.25rem', aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
+                              >
+                                {/* Borde blanco: las calles del pliego son de ~1 %,
+                                    que a este tamaño no llega a medio píxel, y los
+                                    marcos contiguos se fundían en un solo bloque. */}
+                                {variant.slots.map((rect, i) => (
+                                  <span
+                                    key={i}
+                                    className={`absolute border border-white ${isCurrent ? 'bg-black' : 'bg-gray-300'}`}
+                                    style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
+                                  />
+                                ))}
+                              </span>
+                              <span className={`text-[10px] font-bold leading-none ${isCurrent ? 'text-black' : 'text-gray-500'}`}>{variant.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

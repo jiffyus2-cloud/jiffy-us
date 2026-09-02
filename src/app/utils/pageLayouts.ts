@@ -14,8 +14,11 @@
 // la página, con origen arriba-izquierda: los pliegos no usan una cuadrícula
 // uniforme, sino márgenes y proporciones distintos en cada layout (17,3 % a los
 // lados en las dos apiladas del cuadrado, 13,2 % en el 2x2 horizontal, 3,2 % en
-// el 3x3). Antes se pintaba todo con una cuadrícula de margen 4 % y calle 2 %,
-// estirando cada foto a su celda.
+// el 3x3).
+//
+// Un mismo número de fotos puede tener varias páginas distintas en el pliego
+// —con 1 foto hay hasta cuatro—, así que cada combinación de formato y conteo
+// es una LISTA de variantes. La primera es la que se aplica por defecto.
 //
 // Los dos tamaños cuadrados comparten exactamente los mismos nueve layouts, por
 // eso aquí solo hay tres formatos.
@@ -23,8 +26,15 @@
 
 export type AlbumFormat = 'square' | 'horizontal' | 'vertical';
 
-/** Orientación elegida por el usuario cuando el pliego ofrece dos variantes. */
-export type PageLayoutOrientation = 'grid' | 'row' | 'column';
+/**
+ * Identificador de la variante elegida para una página.
+ *
+ * Los álbumes anteriores guardaban 'grid' | 'row' | 'column'. 'row' y 'column'
+ * siguen siendo los ids de las dos variantes de las páginas de 2 fotos, y
+ * cualquier valor desconocido —'grid' incluido— cae en la variante por defecto,
+ * así que los pedidos ya cursados se siguen viendo igual.
+ */
+export type PageVariantId = string;
 
 /** Marco de una foto, en % del ancho y del alto de la página. */
 export interface SlotRect {
@@ -32,6 +42,14 @@ export interface SlotRect {
   y: number;
   w: number;
   h: number;
+}
+
+/** Una de las páginas que el pliego define para un número de fotos dado. */
+export interface PageVariant {
+  id: PageVariantId;
+  /** Cómo se llama en el selector del editor. */
+  label: string;
+  slots: SlotRect[];
 }
 
 /** Proporción ancho/alto de la página de cada formato. */
@@ -52,50 +70,45 @@ export const ALLOWED_PHOTOS_PER_PAGE: Record<AlbumFormat, number[]> = {
   vertical: [1, 2, 3, 6],
 };
 
-/**
- * Marcos de cada layout del pliego.
- *
- * `row` es la variante por defecto; `column` solo existe donde el pliego define
- * de verdad una segunda disposición (las páginas de 2 fotos en cuadrado y en
- * horizontal). En vertical hay una sola forma de página de 2 fotos, y no hay
- * ningún layout de 3 fotos apiladas en ninguno de los cuatro documentos.
- */
-const PAGE_SLOTS: Record<AlbumFormat, Record<number, { row: SlotRect[]; column?: SlotRect[] }>> = {
+const FULL_BLEED: SlotRect[] = [{ x: 0, y: 0, w: 100, h: 100 }];
+
+/** Las 33 páginas de los pliegos, agrupadas por formato y número de fotos. */
+const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   square: {
-    1: {
-      // Una foto cuadrada con margen del 5 % (1 cm en 20x20, 1,5 cm en 30x30).
-      row: [
-        { x: 5.03, y: 5.03, w: 89.93, h: 89.93 },
-      ],
-    },
-    2: {
-      // Dos verticales lado a lado / dos horizontales apiladas.
-      row: [
+    1: [
+      // Margen del 5 % (1 cm en 20x20, 1,5 cm en 30x30).
+      { id: 'margin', label: 'Con margen', slots: [{ x: 5.03, y: 5.03, w: 89.93, h: 89.93 }] },
+      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'portrait', label: 'Vertical', slots: [{ x: 15.02, y: 0, w: 69.97, h: 100 }] },
+      { id: 'landscape', label: 'Horizontal', slots: [{ x: 0, y: 15.02, w: 100, h: 69.97 }] },
+    ],
+    2: [
+      { id: 'row', label: 'Verticales', slots: [
         { x: 3.78, y: 17.34, w: 45.7, h: 65.32 },
         { x: 50.51, y: 17.34, w: 45.7, h: 65.32 },
-      ],
-      column: [
+      ] },
+      { id: 'column', label: 'Horizontales', slots: [
         { x: 17.34, y: 3.78, w: 65.32, h: 45.7 },
         { x: 17.34, y: 50.51, w: 65.32, h: 45.7 },
-      ],
-    },
-    3: {
-      row: [
+      ] },
+    ],
+    3: [
+      { id: 'row', label: 'Fila de tres', slots: [
         { x: 0.87, y: 28.74, w: 31.83, h: 42.52 },
         { x: 34.09, y: 28.74, w: 31.83, h: 42.52 },
         { x: 67.31, y: 28.74, w: 31.83, h: 42.52 },
-      ],
-    },
-    4: {
-      row: [
+      ] },
+    ],
+    4: [
+      { id: 'row', label: 'Cuadrícula 2×2', slots: [
         { x: 3.53, y: 3.75, w: 45.53, h: 45.53 },
         { x: 50.94, y: 3.75, w: 45.53, h: 45.53 },
         { x: 3.53, y: 50.72, w: 45.53, h: 45.53 },
         { x: 50.94, y: 50.72, w: 45.53, h: 45.53 },
-      ],
-    },
-    9: {
-      row: [
+      ] },
+    ],
+    9: [
+      { id: 'row', label: 'Cuadrícula 3×3', slots: [
         { x: 3.23, y: 3.14, w: 30.17, h: 30.17 },
         { x: 34.92, y: 3.14, w: 30.17, h: 30.17 },
         { x: 66.6, y: 3.14, w: 30.17, h: 30.17 },
@@ -105,83 +118,83 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, { row: SlotRect[]; column?:
         { x: 3.23, y: 66.69, w: 30.17, h: 30.17 },
         { x: 34.92, y: 66.69, w: 30.17, h: 30.17 },
         { x: 66.6, y: 66.69, w: 30.17, h: 30.17 },
-      ],
-    },
+      ] },
+    ],
   },
   horizontal: {
-    1: {
-      row: [
-        { x: 5.53, y: 7.09, w: 88.94, h: 85.83 },
-      ],
-    },
-    2: {
-      // Dos verticales lado a lado / dos panorámicas apiladas.
-      row: [
+    1: [
+      { id: 'margin', label: 'Con margen', slots: [{ x: 5.53, y: 7.09, w: 88.94, h: 85.83 }] },
+      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'panorama', label: 'Panorámica', slots: [{ x: 0, y: 17.23, w: 100, h: 65.54 }] },
+      { id: 'portrait', label: 'Vertical', slots: [{ x: 24.85, y: 0, w: 50.3, h: 100 }] },
+    ],
+    2: [
+      { id: 'row', label: 'Verticales', slots: [
         { x: 4.54, y: 5.8, w: 44.5, h: 88.41 },
         { x: 50.96, y: 5.8, w: 44.5, h: 88.41 },
-      ],
-      column: [
+      ] },
+      { id: 'column', label: 'Panorámicas', slots: [
         { x: 17.15, y: 4.87, w: 65.71, h: 43.06 },
         { x: 17.15, y: 52.07, w: 65.71, h: 43.06 },
-      ],
-    },
-    3: {
-      row: [
+      ] },
+    ],
+    3: [
+      { id: 'row', label: 'Fila de tres', slots: [
         { x: 10.75, y: 27.46, w: 25.47, h: 45.08 },
         { x: 37.27, y: 27.46, w: 25.47, h: 45.08 },
         { x: 63.78, y: 27.46, w: 25.47, h: 45.08 },
-      ],
-    },
-    4: {
-      row: [
+      ] },
+    ],
+    4: [
+      { id: 'row', label: 'Cuadrícula 2×2', slots: [
         { x: 13.23, y: 6.43, w: 36.09, h: 42.89 },
         { x: 50.68, y: 6.43, w: 36.09, h: 42.89 },
         { x: 13.23, y: 50.68, w: 36.09, h: 42.89 },
         { x: 50.68, y: 50.68, w: 36.09, h: 42.89 },
-      ],
-    },
-    6: {
+      ] },
+    ],
+    6: [
       // Slots cuadrados exactos aunque la página no lo sea.
-      row: [
+      { id: 'row', label: 'Cuadrícula 3×2', slots: [
         { x: 2.65, y: 7.9, w: 30.36, h: 40.45 },
         { x: 34.82, y: 7.9, w: 30.36, h: 40.45 },
         { x: 66.99, y: 7.9, w: 30.36, h: 40.45 },
         { x: 2.65, y: 51.65, w: 30.36, h: 40.45 },
         { x: 34.82, y: 51.65, w: 30.36, h: 40.45 },
         { x: 66.99, y: 51.65, w: 30.36, h: 40.45 },
-      ],
-    },
+      ] },
+    ],
   },
   vertical: {
-    1: {
-      row: [
-        { x: 7.2, y: 5.33, w: 85.61, h: 89.34 },
-      ],
-    },
-    2: {
+    1: [
+      { id: 'margin', label: 'Con margen', slots: [{ x: 7.2, y: 5.33, w: 85.61, h: 89.34 }] },
+      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'landscape', label: 'Horizontal', slots: [{ x: 0, y: 17.85, w: 100, h: 64.3 }] },
+    ],
+    2: [
       // El pliego vertical solo trae las apiladas.
-      row: [
+      { id: 'row', label: 'Apiladas', slots: [
         { x: 14.52, y: 9.16, w: 70.96, h: 39.17 },
         { x: 14.52, y: 51.67, w: 70.96, h: 39.17 },
-      ],
-    },
-    3: {
-      row: [
+      ] },
+    ],
+    3: [
+      { id: 'row', label: 'Fila de tres', slots: [
         { x: 3.82, y: 34.46, w: 30.29, h: 31.07 },
         { x: 34.86, y: 34.46, w: 30.29, h: 31.07 },
         { x: 65.89, y: 34.46, w: 30.29, h: 31.07 },
-      ],
-    },
-    6: {
-      row: [
+      ] },
+    ],
+    6: [
+      { id: 'row', label: 'Cuadrícula 3×2', slots: [
         { x: 3.82, y: 16.74, w: 30.29, h: 31.07 },
         { x: 34.86, y: 16.74, w: 30.29, h: 31.07 },
         { x: 65.89, y: 16.74, w: 30.29, h: 31.07 },
         { x: 3.82, y: 52.19, w: 30.29, h: 31.07 },
         { x: 34.86, y: 52.19, w: 30.29, h: 31.07 },
         { x: 65.89, y: 52.19, w: 30.29, h: 31.07 },
-      ],
-    },
+      ] },
+    ],
   },
 };
 
@@ -198,6 +211,10 @@ export function getAlbumFormat(size?: string | null): AlbumFormat {
   return 'square';
 }
 
+export function getPageAspectRatio(size?: string | null): number {
+  return PAGE_ASPECT_RATIO[getAlbumFormat(size)];
+}
+
 export function getAllowedPhotosPerPage(size?: string | null): number[] {
   return ALLOWED_PHOTOS_PER_PAGE[getAlbumFormat(size)];
 }
@@ -209,11 +226,25 @@ export function getClosestAllowed(count: number, size?: string | null): number {
 }
 
 /**
- * ¿Esta página admite elegir orientación? Solo donde el pliego define las dos
- * variantes: páginas de 2 fotos en cuadrado y en horizontal.
+ * Las páginas que el pliego define para ese número de fotos, en orden: la
+ * primera es la que se aplica si la página no tiene variante elegida.
+ *
+ * Vacío para los conteos que el pliego no define (una página vertical de 4
+ * fotos de un pedido antiguo): esos no ofrecen nada que elegir.
  */
-export function hasOrientationChoice(count: number, size?: string | null): boolean {
-  return PAGE_SLOTS[getAlbumFormat(size)][count]?.column !== undefined;
+export function getPageVariants(count: number, size?: string | null): PageVariant[] {
+  return PAGE_SLOTS[getAlbumFormat(size)][count] ?? [];
+}
+
+/** Qué variante está aplicada de verdad, resolviendo valores viejos o vacíos. */
+export function getSelectedVariantId(
+  count: number,
+  layout?: PageVariantId | null,
+  size?: string | null,
+): PageVariantId | null {
+  const variants = getPageVariants(count, size);
+  if (variants.length === 0) return null;
+  return variants.find(v => v.id === layout)?.id ?? variants[0].id;
 }
 
 /**
@@ -246,11 +277,10 @@ function fallbackSlots(count: number, format: AlbumFormat): SlotRect[] {
  */
 export function getPageSlots(
   count: number,
-  layout?: PageLayoutOrientation | string | null,
+  layout?: PageVariantId | null,
   size?: string | null,
 ): SlotRect[] {
-  const format = getAlbumFormat(size);
-  const entry = PAGE_SLOTS[format][count];
-  if (!entry) return fallbackSlots(count, format);
-  return layout === 'column' && entry.column ? entry.column : entry.row;
+  const variants = getPageVariants(count, size);
+  if (variants.length === 0) return fallbackSlots(count, getAlbumFormat(size));
+  return (variants.find(v => v.id === layout) ?? variants[0]).slots;
 }

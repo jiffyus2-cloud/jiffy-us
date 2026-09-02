@@ -18,6 +18,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, MugProduct, PhotoPack, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK, BASE_CUSTOM_ALBUM } from '../types/products';
 import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
+import type { PageVariantId } from '../utils/pageLayouts';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -434,7 +435,7 @@ export default function Creator() {
   const [photoPackPhotoCrops, setPhotoPackPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
   const [mugItems, setMugItems] = useState<MugItem[]>([]);
   const [textBoxSlots, setTextBoxSlots] = useState<Record<number, Record<number, any>>>({});  
-  const [pageLayouts, setPageLayouts] = useState<Record<number, 'grid' | 'row' | 'column'>>({});
+  const [pageLayouts, setPageLayouts] = useState<Record<number, PageVariantId>>({});
   const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, number>>({});
   const progressRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
