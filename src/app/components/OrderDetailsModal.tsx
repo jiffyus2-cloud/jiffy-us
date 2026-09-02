@@ -7,8 +7,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
-import { getEffectiveFontSize } from '../utils/textOverflowUtils';
-import { getClosestAllowed, getPageSlots } from '../utils/pageLayouts';
+import { getAlbumPageSlots } from '../utils/albumPageData';
+import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -56,49 +56,8 @@ const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21'
   return '20x20';
 };
 
-// El marco ya viene con la proporción del pliego, así que la foto lo llena sin
-// más: antes había que compensar con zoom porque las páginas de 2 y 3 fotos
-// recortaban la imagen al 65 % de una celda con otra proporción.
-const AlbumPagePhoto: React.FC<{
-  photo: string | null;
-  textBox: any;
-  crop: { x: number; y: number; zoom: number } | undefined;
-  photoIndex: number;
-}> = ({ photo, textBox, crop, photoIndex }) => {
-  return (
-    <div className={`relative overflow-hidden rounded-[2%] bg-white flex items-center justify-center w-full h-full`}>
-      {photo ? (
-        <div className="w-full h-full relative">
-          <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIndex + 1}`} />
-        </div>
-      ) : textBox ? (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
-          <div
-            style={{
-              width: '90%',
-              fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
-              fontFamily: textBox.fontFamily,
-              color: textBox.color,
-              textAlign: textBox.textAlign || 'center',
-              wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap',
-              lineHeight: '1.3'
-            }}
-          >
-            {textBox.text}
-          </div>
-        </div>
-      ) : (
-        <div className="text-gray-300"><BookOpen className="w-8 h-8 opacity-20" /></div>
-      )}
-    </div>
-  );
-};
-
 const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const size = order.customization?.size || '';
-  const isHorizontal = size.includes('Horizontal');
-  const isVertical = size.includes('Vertical');
 
   const coverImageFixed = (() => {
     const img = order.coverData?.image;
@@ -130,89 +89,33 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         />
       </div>
 
+      {/* Mismo emparejado que el editor: la página 1 va junto al interior de la
+          portada, y de ahí en adelante las páginas van de a pares (2-3, 4-5...). */}
       <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 md:gap-x-4 gap-y-12 sm:gap-y-16 mt-12">
         <div className="space-y-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Portada</p>
-          <div
-            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 overflow-hidden mx-auto w-full flex items-center justify-center"
-            style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
-          >
-            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
-              <Layers className="w-10 h-10 md:w-12 md:h-12" />
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso</span>
-            </div>
-          </div>
+          <AlbumFillerPage size={size} kind="innerCover" />
         </div>
 
-        {order.pages?.map((pageObj, pageIndex) => {
-          const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
-          const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
-          const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
-          
-          const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
-          const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
-          const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
-          const slotRects = getPageSlots(currentPhotosPerPage, layout, size);
-
-          return (
-            <div key={pageIndex} className="space-y-4">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página {pageIndex + 1}</p>
-              <div
-                className="bg-white rounded-[3%] shadow-lg border border-gray-100 overflow-hidden mx-auto w-full"
-                style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
-              >
-                <div className="relative w-full h-full">
-                  {slots.map((photo, photoIndex) => {
-                    const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
-                    const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
-                    const crop = (pageObj as any)?.crops?.[photoIndex] || order.photoCrops?.[`${pageIndex}-${photoIndex}`];
-                    const rect = slotRects[photoIndex];
-                    if (!rect) return null;
-
-                    return (
-                      <div
-                        key={photoIndex}
-                        className="absolute"
-                        style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
-                      >
-                        <AlbumPagePhoto
-                          photo={photo}
-                          textBox={textBox}
-                          crop={crop}
-                          photoIndex={photoIndex}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {order.pages?.map((_pageObj, pageIndex) => (
+          <div key={pageIndex} className="space-y-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página {pageIndex + 1}</p>
+            <AlbumPageFrame size={size}>
+              <AlbumPageSlots slots={getAlbumPageSlots(order, pageIndex, size)} />
+            </AlbumPageFrame>
+          </div>
+        ))}
 
         {order.pages && order.pages.length % 2 !== 0 && (
           <div className="space-y-4">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página en Blanco</p>
-            <div
-              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full flex items-center justify-center"
-              style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
-            >
-              <span className="text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest">En Blanco</span>
-            </div>
+            <AlbumFillerPage size={size} kind="blank" />
           </div>
         )}
 
         <div className="space-y-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Interior Contraportada</p>
-          <div
-            className="bg-gray-100 rounded-[3%] shadow-inner border-2 border-gray-200 overflow-hidden mx-auto w-full flex items-center justify-center"
-            style={{ aspectRatio: isHorizontal ? '28/21' : isVertical ? '21/28' : '1/1' }}
-          >
-            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
-              <Layers className="w-10 h-10 md:w-12 md:h-12" />
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso Final</span>
-            </div>
-          </div>
+          <AlbumFillerPage size={size} kind="innerBackCover" />
         </div>
 
       </div>

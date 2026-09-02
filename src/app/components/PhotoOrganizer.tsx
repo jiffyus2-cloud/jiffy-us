@@ -44,6 +44,8 @@ import {
   getSelectedVariantId,
   type PageVariantId,
 } from '../utils/pageLayouts';
+import { getAlbumPageSlots, getPageSlotCount } from '../utils/albumPageData';
+import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
@@ -496,6 +498,10 @@ export default function PhotoOrganizer({
   const isVertical = sizeStr.includes('Vertical');
   const allowedPhotosPerPage = getAllowedPhotosPerPage(sizeStr);
 
+  // El estado del editor leído como lo lee el visor del pedido y el PDF: los
+  // tres sacan sus marcos de getAlbumPageSlots, así que no pueden divergir.
+  const albumPageSource = { pages: safePhotos, pageLayouts, pageLayoutVariants, textBoxSlots, photoCrops };
+
   const getNextAllowed = (count: number) => {
     for (const opt of allowedPhotosPerPage) {
       if (opt >= count) return opt;
@@ -511,11 +517,7 @@ export default function PhotoOrganizer({
    * fotos en los índices sobrantes, sin ningún aviso.
    */
   const getRenderSlotCount = (pageIndex: number, pagePhotos: string[]) =>
-    Math.max(
-      pageLayoutVariants[pageIndex] ?? 0,
-      getNextAllowed(pagePhotos.length),
-      pagePhotos.length
-    );
+    getPageSlotCount(pagePhotos.length, pageLayoutVariants[pageIndex], sizeStr);
 
   // Máximo de páginas que justifican las fotos subidas (mínimo 1 foto por página).
   // Es el tope de la barra del selector, dinámico según cuántas fotos haya.
@@ -1698,11 +1700,10 @@ export default function PhotoOrganizer({
     const pagePhotos = photos[pageIndex];
     const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
     const currentLayout = pageLayouts[pageIndex] || 'grid';
-    const currentSlotRects = getPageSlots(currentVariant, currentLayout, sizeStr);
     const currentVariants = getPageVariants(currentVariant, sizeStr);
     const currentVariantId = getSelectedVariantId(currentVariant, currentLayout, sizeStr);
 
-    const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
+    const modalSlots = getAlbumPageSlots(albumPageSource, pageIndex, sizeStr);
 
     return (
       <>
@@ -1721,43 +1722,34 @@ export default function PhotoOrganizer({
                 <AlertCircle className="w-4 h-4 text-amber-500" /> Previsualización Interactiva
               </p>
               
-              <div className="bg-white rounded-none shadow-md border-2 border-black ring-4 ring-black/5 overflow-hidden w-full max-w-sm transition-all flex flex-col items-center justify-center" style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}>
-                <div className="relative w-full h-full">
-                  {slots.map((photo, photoIndex) => {
-                    const textBox = textBoxSlots[pageIndex]?.[photoIndex];
-                    const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                    const rect = currentSlotRects[photoIndex];
-                    if (!rect) return null;
-
-                    return (
-                      <div
-                        key={photoIndex}
-                        className="absolute"
-                        style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
-                      >
-                      <AlbumEditorPhotoSlot
-                        photo={photo} textBox={textBox} crop={crop}
-                        pageIndex={pageIndex} photoIndex={photoIndex}
-                        photoCount={currentVariant}
-                        editingPageIndex={pageIndex}
-                        isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
-                        isDragTarget={dragVisual?.pageIndex === pageIndex && dragVisual?.toIndex === photoIndex && dragVisual?.fromIndex !== photoIndex}
-                        onDragStart={handleDragStart}
-                        handleRemovePhotoFromPage={handleRemovePhotoFromPage}
-                        setEditingTextSlot={setEditingTextSlot}
-                        handleRemoveTextBox={handleRemoveTextBox}
-                        handleAddPhotoToPage={handleSpecificFileSelection}
-                        handleAddTextBox={handleAddTextBox}
-                        onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
-                        onPhotoError={handlePhotoError}
-                        onPhotoRetry={handlePhotoRetry}
-                        t={t}
-                      />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <AlbumPageFrame
+                size={sizeStr}
+                className="shadow-md border-black ring-4 ring-black/5 max-w-sm transition-all flex flex-col items-center justify-center"
+              >
+                <AlbumPageSlots
+                  slots={modalSlots}
+                  renderSlot={(slot, photoIndex) => (
+                    <AlbumEditorPhotoSlot
+                      photo={slot.photo} textBox={slot.text} crop={slot.crop}
+                      pageIndex={pageIndex} photoIndex={photoIndex}
+                      photoCount={currentVariant}
+                      editingPageIndex={pageIndex}
+                      isDragging={dragVisual?.pageIndex === pageIndex && dragVisual?.fromIndex === photoIndex}
+                      isDragTarget={dragVisual?.pageIndex === pageIndex && dragVisual?.toIndex === photoIndex && dragVisual?.fromIndex !== photoIndex}
+                      onDragStart={handleDragStart}
+                      handleRemovePhotoFromPage={handleRemovePhotoFromPage}
+                      setEditingTextSlot={setEditingTextSlot}
+                      handleRemoveTextBox={handleRemoveTextBox}
+                      handleAddPhotoToPage={handleSpecificFileSelection}
+                      handleAddTextBox={handleAddTextBox}
+                      onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                      onPhotoError={handlePhotoError}
+                      onPhotoRetry={handlePhotoRetry}
+                      t={t}
+                    />
+                  )}
+                />
+              </AlbumPageFrame>
 
               {/* Zona de suelta: arrastra una foto aquí para enviarla a otra página */}
               <div
@@ -1851,7 +1843,7 @@ export default function PhotoOrganizer({
         const renderPageOption = (idx: number) => {
           const pgPhotos = safePhotos[idx] || [];
           const isSource = idx === sendPhotoPicker.pageIndex;
-          const variant = pageLayoutVariants[idx] || getNextAllowed(pgPhotos.length);
+          const variant = getPageSlotCount(pgPhotos.length, pageLayoutVariants[idx], sizeStr);
           const layout = pageLayouts[idx] || 'grid';
           const slots = Array.from({ length: variant }, (_, i) => !!(pgPhotos[i] && pgPhotos[i].trim() !== ''));
           const slotRects = getPageSlots(variant, layout, sizeStr);
@@ -2983,15 +2975,7 @@ export default function PhotoOrganizer({
           <div className="flex items-center justify-between mb-4 h-10 md:h-12">
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Portada</span>
           </div>
-          <div 
-            className="bg-gray-100 rounded-none shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
-            style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
-          >
-            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
-              <Layers className="w-10 h-10 md:w-12 md:h-12" />
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso</span>
-            </div>
-          </div>
+          <AlbumFillerPage size={sizeStr} kind="innerCover" className="transition-all mt-auto" />
         </div>
 
         {/* CUADROS INTERMEDIOS: Páginas reales del usuario */}
@@ -3060,68 +3044,57 @@ export default function PhotoOrganizer({
 
               {/* Thumbnail de la página con overlay de acciones */}
               <div className="relative mt-auto">
-                <div
-                  className={`bg-white rounded-none shadow-sm border-2 transition-all overflow-hidden flex flex-col items-center justify-center ${
+                <AlbumPageFrame
+                  size={sizeStr}
+                  className={`transition-all flex flex-col items-center justify-center ${
                     isSelected
                       ? 'border-black ring-4 ring-black/15'
                       : isTarget
                       ? 'border-black ring-2 ring-black/30'
                       : 'border-gray-100'
                   }`}
-                  style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1', userSelect: 'none' }}
+                  style={{ userSelect: 'none' }}
                   onPointerDown={!isReorderMode ? e => handlePageLongPress(pageIndex, e) : undefined}
                 >
                   {(() => {
-                    const currentVariant = getRenderSlotCount(pageIndex, pagePhotos);
-                    const slots = Array.from({ length: currentVariant }, (_, i) => pagePhotos[i] || null);
-                    const slotRects = getPageSlots(currentVariant, pageLayouts[pageIndex], sizeStr);
+                    const slots = getAlbumPageSlots(albumPageSource, pageIndex, sizeStr);
                     return (
-                      <div className="relative w-full h-full">
-                        {slots.map((photo, photoIndex) => {
-                          const textBox = textBoxSlots[pageIndex]?.[photoIndex];
-                          const crop = photoCrops[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-                          const rect = slotRects[photoIndex];
-                          const isPhotoLowRes = photo && lowResInfo[photo];
-                          if (!rect) return null;
-                          return (
-                            <div
-                              key={photoIndex}
-                              className="absolute"
-                              style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
-                            >
-                              <AlbumEditorPhotoSlot
-                                photo={photo} textBox={textBox} crop={crop}
-                                pageIndex={pageIndex} photoIndex={photoIndex}
-                                photoCount={currentVariant}
-                                editingPageIndex={null}
-                                isDragging={false}
-                                isDragTarget={false}
-                                onDragStart={handleDragStart}
-                                handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
-                                onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
-                                onPhotoError={handlePhotoError}
-                                onPhotoRetry={handlePhotoRetry}
-                                t={t}
-                              />
-                              {isPhotoLowRes && (
-                                <button
-                                  className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedLowResWarning({ url: photo!, pageIndex, photoIndex, ...lowResInfo[photo!] });
-                                  }}
-                                  title="Advertencia de resolución"
-                                >
-                                  !
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <AlbumPageSlots
+                        slots={slots}
+                        renderSlot={(slot, photoIndex) => (
+                          <>
+                            <AlbumEditorPhotoSlot
+                              photo={slot.photo} textBox={slot.text} crop={slot.crop}
+                              pageIndex={pageIndex} photoIndex={photoIndex}
+                              photoCount={slots.length}
+                              editingPageIndex={null}
+                              isDragging={false}
+                              isDragTarget={false}
+                              onDragStart={handleDragStart}
+                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                              onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
+                              onPhotoError={handlePhotoError}
+                              onPhotoRetry={handlePhotoRetry}
+                              t={t}
+                            />
+                            {slot.photo && lowResInfo[slot.photo] && (
+                              <button
+                                className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedLowResWarning({ url: slot.photo!, pageIndex, photoIndex, ...lowResInfo[slot.photo!] });
+                                }}
+                                title="Advertencia de resolución"
+                              >
+                                !
+                              </button>
+                            )}
+                          </>
+                        )}
+                      />
                     );
                   })()}
-                </div>
+                </AlbumPageFrame>
 
                 {/* Overlay de acciones al seleccionar página destino */}
                 {isTarget && reorderSelectedPage !== null && (
@@ -3173,12 +3146,7 @@ export default function PhotoOrganizer({
             <div className="flex items-center justify-between mb-4 h-10 md:h-12">
               <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Página en Blanco</span>
             </div>
-            <div 
-              className="bg-white rounded-none shadow-sm border-2 border-gray-100 transition-all overflow-hidden flex items-center justify-center mt-auto"
-              style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
-            >
-              <span className="text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest">En Blanco</span>
-            </div>
+            <AlbumFillerPage size={sizeStr} kind="blank" className="transition-all mt-auto" />
           </div>
         )}
 
@@ -3187,15 +3155,7 @@ export default function PhotoOrganizer({
           <div className="flex items-center justify-between mb-4 h-10 md:h-12">
             <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Interior Contraportada</span>
           </div>
-          <div 
-            className="bg-gray-100 rounded-none shadow-inner border-2 border-gray-200 transition-all overflow-hidden flex items-center justify-center mt-auto"
-            style={{ aspectRatio: isHorizontal ? '4/3' : isVertical ? '3/4' : '1/1' }}
-          >
-            <div className="text-gray-300 flex flex-col items-center gap-2 opacity-60">
-              <Layers className="w-10 h-10 md:w-12 md:h-12" />
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Reverso Final</span>
-            </div>
-          </div>
+          <AlbumFillerPage size={sizeStr} kind="innerBackCover" className="transition-all mt-auto" />
         </div>
 
       </div>
