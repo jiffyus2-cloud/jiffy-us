@@ -2007,8 +2007,17 @@ export default function PhotoOrganizer({
               <p className="text-2xl font-bold">Cargando fotos del carrete...</p>
               <p className="text-gray-500 mt-2">Esto puede tardar unos segundos</p>
             </div>
+
+            {/* AVISO: el menú del sistema (iOS/Android) se abre ENCIMA de esta pantalla.
+                Muchos usuarios no lo notan, creen que la app está cargando y no eligen nada. */}
+            <div className="w-full max-w-xs bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-3 text-center">
+              <p className="text-base font-bold text-amber-900">
+                👆 Hay un menú en pantalla, selecciona la opción de dónde quieres seleccionar tus fotos
+              </p>
+            </div>
+
             <p className="text-sm text-gray-400 text-center max-w-xs">
-              Por favor espera sin cerrar la app
+              Cuando ya hayas elegido, por favor espera sin cerrar la app
             </p>
             <button
               onClick={() => {
