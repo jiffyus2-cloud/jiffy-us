@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import {
+  savePendingPhotos,
+  loadPendingPhotos,
+  clearPendingPhotos,
+  purgeExpiredPendingPhotos,
+  findPendingPhotoBySignature,
+} from '../utils/photoStore';
+import {
   fromPropsToAlbumState,
   fromAlbumStateToProps,
   swapPhotosOnPage as albumSwapPhotosOnPage,
@@ -19,6 +26,7 @@ import {
   distributePhotosAcrossPages,
   redistributeAlbum,
   migrateAlbumToConfig,
+  replacePhotoUrl,
   type AlbumState,
   type AlbumConfig,
   type AlbumOpResult,
@@ -356,6 +364,13 @@ export default function PhotoOrganizer({
   // Para detectar cancelación del picker de iOS vía recuperación de foco
   const pickerFocusHandlerRef = useRef<(() => void) | null>(null);
   const pickerFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Posición dentro de la copia de IndexedDB, para restaurar la selección en orden
+  const pendingOrderRef = useRef(0);
+  // Fotos recuperadas de la copia al montar; se avisa al usuario en la pantalla de subida
+  const [recoveredSelection, setRecoveredSelection] = useState<number | null>(null);
+  // URLs que fallaron al pintar y esperan un intento de recuperación desde IndexedDB
+  const brokenQueueRef = useRef<Set<string>>(new Set());
+  const brokenFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
@@ -451,14 +466,56 @@ export default function PhotoOrganizer({
     setShowBrokenBanner(true);
   }, [failedUploadUrls]);
 
-  const handlePhotoError = useCallback((url: string) => {
-    setBrokenPhotoUrls(prev => {
-      const next = new Set(prev);
-      next.add(url);
-      return next;
-    });
-    setShowBrokenBanner(true);
+  // ── RECUPERAR LA SELECCIÓN TRAS UNA RECARGA ────────────────────────────────
+  // iOS descarta la pestaña sin avisar (memoria, Fototeca/Files abiertos encima,
+  // PWA en segundo plano) y al volver todas las `blob:` están muertas: el
+  // contador aparecía en cero y había que elegir las fotos otra vez. Los bytes
+  // siguen en IndexedDB, así que se rehacen las URLs desde esa copia.
+  useEffect(() => {
+    void purgeExpiredPendingPhotos();
+    if (safePhotos.length > 0) return;                    // el álbum ya está montado: manda lo que venga por props
+    if ((initialFileSignatures?.length ?? 0) > 0) return; // se está retomando un pedido guardado
+    let cancelled = false;
+    (async () => {
+      const stored = await loadPendingPhotos();
+      if (cancelled || stored.length === 0) return;
+      const restored: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      for (const row of stored) {
+        try {
+          const url = URL.createObjectURL(row.blob);
+          if (!url) continue;
+          restored.push({
+            id: row.id,
+            url,
+            metadata: { name: row.name, size: row.size, type: row.type, lastModified: row.lastModified },
+          });
+          pendingFileKeysRef.current.set(url, row.signature);
+          sessionKeysRef.current.add(row.signature);
+        } catch {
+          // un blob ilegible no debe impedir recuperar los demás
+        }
+      }
+      if (cancelled || restored.length === 0) return;
+      pendingOrderRef.current = stored.length;
+      setPendingFilesData(restored);
+      setUploadedPhotos(restored.map(f => f.url));
+      setRecoveredSelection(restored.length);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Vacía la selección y su copia en disco: «Quitar todas» y «Descartar» comparten esto. */
+  const clearSelection = () => {
+    pendingFilesData.forEach(f => { try { URL.revokeObjectURL(f.url); } catch { /* ya revocada */ } });
+    setUploadedPhotos([]);
+    setPendingFilesData([]);
+    sessionKeysRef.current.clear();
+    pendingFileKeysRef.current.clear();
+    pendingOrderRef.current = 0;
+    setRecoveredSelection(null);
+    void clearPendingPhotos();
+  };
 
   const handlePhotoRetry = useCallback((url: string, pageIndex: number, photoIndex: number) => {
     retryTargetRef.current = { pageIndex, photoIndex };
@@ -728,9 +785,12 @@ export default function PhotoOrganizer({
       else unique.push(file);
     }
 
-    const doUpload = (files: File[]) => {
+    const doUpload = async (files: File[]) => {
       if (files.length === 0) return;
-      const newFilesData: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      // Se guarda el par archivo↔registro: antes la info de baja resolución se
+      // cruzaba por índice contra `files`, así que un solo archivo descartado
+      // desplazaba el resto y la marca acababa en la foto equivocada.
+      const accepted: { file: File; data: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } } }[] = [];
       const skipped: string[] = [];
       for (const file of files) {
         let url: string;
@@ -742,24 +802,28 @@ export default function PhotoOrganizer({
           continue;
         }
         sessionKeysRef.current.add(getFileKey(file));
-        newFilesData.push({
-          id: Math.random().toString(36).substring(2, 11),
-          url,
-          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+        accepted.push({
+          file,
+          data: {
+            id: Math.random().toString(36).substring(2, 11),
+            url,
+            metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+          },
         });
       }
       if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
-      if (newFilesData.length === 0) return;
+      if (accepted.length === 0) return;
+      const newFilesData = accepted.map(a => a.data);
       // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
       newFilesData.forEach(f => {
         pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
       });
       // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
       const newLowResInfo: Record<string, {width: number, height: number}> = {};
-      files.forEach((file, i) => {
+      accepted.forEach(({ file, data }) => {
         const fk = getFileKey(file);
         if (pendingLowResRef.current.has(fk)) {
-          newLowResInfo[newFilesData[i].url] = pendingLowResRef.current.get(fk)!;
+          newLowResInfo[data.url] = pendingLowResRef.current.get(fk)!;
           pendingLowResRef.current.delete(fk);
         }
       });
@@ -768,13 +832,25 @@ export default function PhotoOrganizer({
       }
       setPendingFilesData(prev => [...prev, ...newFilesData]);
       setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+
+      // Copia en disco: si iOS descarta la pestaña, la selección se recupera al volver.
+      await savePendingPhotos(accepted.map(({ file, data }) => ({
+        id: data.id,
+        blob: file,
+        name: data.metadata.name,
+        size: data.metadata.size,
+        type: data.metadata.type,
+        lastModified: data.metadata.lastModified,
+        signature: getFileKey(file),
+        order: pendingOrderRef.current++,
+      })));
     };
 
     if (duplicates.length > 0) {
       const decision = await askDuplicateDecision(duplicates[0]);
-      doUpload(decision === 'use' ? [...unique, ...duplicates] : unique);
+      await doUpload(decision === 'use' ? [...unique, ...duplicates] : unique);
     } else {
-      doUpload(unique);
+      await doUpload(unique);
     }
   };
 
@@ -868,6 +944,18 @@ export default function PhotoOrganizer({
       }
 
       onPhotosChange(newPhotos);
+
+      // Copia en disco, igual que en la subida masiva.
+      void savePendingPhotos([{
+        id: Math.random().toString(36).substring(2, 11),
+        blob: file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+        signature: key,
+        order: pendingOrderRef.current++,
+      }]);
     };
 
     if (existingKeys.has(key)) {
@@ -1388,6 +1476,83 @@ export default function PhotoOrganizer({
   const applyIncreaseVariantOnly = (pageIndex: number, newVariant: number) => {
     onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: newVariant });
   };
+
+  /**
+   * Una foto que no pinta suele ser una `blob:` muerta: iOS descartó la pestaña
+   * y la URL ya no resuelve, aunque los bytes sigan en la copia de IndexedDB.
+   * Los fallos se juntan 200 ms y se resuelven en UNA sola actualización del
+   * álbum: al volver al editor fallan decenas de imágenes a la vez y aplicarlas
+   * de una en una haría que cada recuperación pisara a la anterior.
+   */
+  const recoverBrokenPhotos = async () => {
+    const urls = Array.from(brokenQueueRef.current);
+    brokenQueueRef.current.clear();
+    if (urls.length === 0) return;
+
+    const pending = new Set(urls);
+    const signatureByUrl = new Map<string, string>();
+    const p = propsRef.current;
+    p.photos.forEach((page, i) => {
+      page.forEach((url, j) => {
+        if (url && pending.has(url) && !signatureByUrl.has(url)) {
+          signatureByUrl.set(url, p.fileSignatures[i]?.[j] ?? '');
+        }
+      });
+    });
+
+    let state = currentAlbumState();
+    const stillBroken: string[] = [];
+    const recoveredPairs: [string, string][] = [];
+
+    for (const url of urls) {
+      const signature = signatureByUrl.get(url) ?? '';
+      const stored = signature ? await findPendingPhotoBySignature(signature) : null;
+      if (!stored) { stillBroken.push(url); continue; }
+      let newUrl: string;
+      try {
+        newUrl = URL.createObjectURL(stored.blob);
+      } catch {
+        stillBroken.push(url);
+        continue;
+      }
+      state = replacePhotoUrl(state, url, newUrl);
+      recoveredPairs.push([url, newUrl]);
+    }
+
+    if (recoveredPairs.length > 0) {
+      applyAlbumState(state);
+      // La info de baja resolución va indexada por URL: se traslada a la nueva.
+      setLowResInfo(prev => {
+        const moved: Record<string, {width: number, height: number}> = {};
+        recoveredPairs.forEach(([oldUrl, newUrl]) => { if (prev[oldUrl]) moved[newUrl] = prev[oldUrl]; });
+        return Object.keys(moved).length > 0 ? { ...prev, ...moved } : prev;
+      });
+      setAlbumWarning(`Recuperamos ${recoveredPairs.length} foto(s) desde la copia guardada en este dispositivo.`);
+    }
+    if (stillBroken.length > 0) {
+      setBrokenPhotoUrls(prev => {
+        const next = new Set(prev);
+        stillBroken.forEach(url => next.add(url));
+        return next;
+      });
+      setShowBrokenBanner(true);
+    }
+  };
+
+  // handlePhotoError se pasa a los hijos con dependencias vacías (no debe recrearse
+  // en cada render), así que la recuperación se llama a través de un ref siempre al día.
+  const recoverBrokenPhotosRef = useRef(recoverBrokenPhotos);
+  useEffect(() => { recoverBrokenPhotosRef.current = recoverBrokenPhotos; });
+
+  const handlePhotoError = useCallback((url: string) => {
+    brokenQueueRef.current.add(url);
+    if (brokenFlushTimerRef.current) clearTimeout(brokenFlushTimerRef.current);
+    brokenFlushTimerRef.current = setTimeout(() => { void recoverBrokenPhotosRef.current(); }, 200);
+  }, []);
+
+  useEffect(() => () => {
+    if (brokenFlushTimerRef.current) clearTimeout(brokenFlushTimerRef.current);
+  }, []);
 
   // Cierra los huecos de la página y fija la nueva variante en una sola
   // actualización: el excedente cabía entero una vez reacomodado.
@@ -2109,6 +2274,23 @@ export default function PhotoOrganizer({
           </div>
         )}
 
+        {recoveredSelection !== null && (
+          <div className="mb-6 flex items-start gap-3 bg-green-50 border-2 border-green-300 rounded-xl px-4 py-3">
+            <ImageIcon className="w-5 h-5 text-green-700 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-bold text-green-900">
+                Recuperamos {recoveredSelection} foto(s) que ya habías elegido
+              </p>
+              <p className="text-green-800 mt-0.5">
+                La app se reinició, pero tus fotos seguían guardadas en este dispositivo. Puedes seguir añadiendo más.
+              </p>
+            </div>
+            <button onClick={clearSelection} className="text-green-800 underline font-medium shrink-0">
+              Descartar
+            </button>
+          </div>
+        )}
+
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
@@ -2140,7 +2322,7 @@ export default function PhotoOrganizer({
             {uploadedPhotos.length > 0 && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <span className="font-medium">{uploadedPhotos.length} {t('organizer.photosSelected')}</span>
-                <button onClick={() => { setUploadedPhotos([]); setPendingFilesData([]); }} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
+                <button onClick={clearSelection} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
               </div>
             )}
             <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>

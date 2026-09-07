@@ -913,3 +913,22 @@ export function redistributeAlbum(
   }
   return distributePhotosAcrossPages(items, totalPages, config);
 }
+
+/**
+ * Cambia la URL de una foto dejando TODO lo demás en su sitio: la posición
+ * dentro de la página, su recorte, su caja de texto y su firma.
+ *
+ * Lo usa la recuperación de `blob:` muertas — cuando iOS descarta la pestaña,
+ * la URL deja de resolver pero los bytes siguen en IndexedDB, así que se crea
+ * una URL nueva sobre el mismo hueco. Va por AlbumState (y no por un
+ * `photos.map` suelto) para que recortes y textos, que van indexados por
+ * posición, no se despeguen de su foto.
+ */
+export function replacePhotoUrl(state: AlbumState, oldUrl: string, newUrl: string): AlbumState {
+  if (!oldUrl || oldUrl === newUrl) return state;
+  return state.map(page =>
+    page.photos.includes(oldUrl)
+      ? { ...page, photos: page.photos.map(photo => (photo === oldUrl ? newUrl : photo)) }
+      : page
+  );
+}

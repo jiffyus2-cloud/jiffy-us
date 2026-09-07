@@ -23,6 +23,7 @@ import {
   occupiedSlotCount,
   distributePhotosAcrossPages,
   redistributeAlbum,
+  replacePhotoUrl,
 } from './albumStateUtils';
 
 // ── Configuraciones reales de la app ─────────────────────────────────────────
@@ -667,5 +668,43 @@ describe('redistributeAlbum', () => {
   it('reorganizar un álbum recién repartido con las mismas páginas lo deja igual', () => {
     const first = distributePhotosAcrossPages(items(97), 40, SQUARE);
     expect(redistributeAlbum(first, 40, SQUARE)).toEqual(first);
+  });
+});
+
+describe('replacePhotoUrl', () => {
+  const state: AlbumState = [
+    { photos: ['blob:a', 'blob:b'], crops: { 0: { x: 10 }, 1: { x: 20 } }, texts: { 1: { text: 'hola' } }, variant: 2, signatures: ['sa', 'sb'] },
+    { photos: ['blob:c'], crops: {}, texts: {}, variant: 1, signatures: ['sc'] },
+  ];
+
+  it('sustituye la URL sin tocar posición, recorte, texto ni firma', () => {
+    const next = replacePhotoUrl(state, 'blob:b', 'blob:nueva');
+    expect(next[0].photos).toEqual(['blob:a', 'blob:nueva']);
+    expect(next[0].crops).toEqual(state[0].crops);
+    expect(next[0].texts).toEqual(state[0].texts);
+    expect(next[0].signatures).toEqual(['sa', 'sb']);
+    expect(next[1]).toBe(state[1]); // páginas sin la foto: misma referencia
+  });
+
+  it('sustituye la misma URL repetida en varias páginas', () => {
+    const repeated: AlbumState = [
+      { photos: ['blob:x'], crops: {}, texts: {}, signatures: ['sx'] },
+      { photos: ['blob:y', 'blob:x'], crops: {}, texts: {}, signatures: ['sy', 'sx'] },
+    ];
+    const next = replacePhotoUrl(repeated, 'blob:x', 'blob:z');
+    expect(next[0].photos).toEqual(['blob:z']);
+    expect(next[1].photos).toEqual(['blob:y', 'blob:z']);
+  });
+
+  it('no muta el estado de entrada', () => {
+    const copy = JSON.parse(JSON.stringify(state));
+    replacePhotoUrl(state, 'blob:a', 'blob:otra');
+    expect(state).toEqual(copy);
+  });
+
+  it('devuelve el mismo estado si la URL no existe o no cambia', () => {
+    expect(replacePhotoUrl(state, 'blob:zzz', 'blob:nueva')).toEqual(state);
+    expect(replacePhotoUrl(state, 'blob:a', 'blob:a')).toBe(state);
+    expect(replacePhotoUrl(state, '', 'blob:nueva')).toBe(state);
   });
 });
