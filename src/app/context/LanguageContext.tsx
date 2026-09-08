@@ -20,6 +20,7 @@ const translations = {
     // Support chat panel
     'support.title': 'Support',
     'support.close': 'Close support chat',
+    'support.whatsapp': 'Chat with us on WhatsApp',
     'support.placeholder': 'How can we help you today?',
     'support.inputPlaceholder': 'Type your message...',
     'support.send': 'Send',
@@ -420,6 +421,7 @@ const translations = {
     // Panel de chat de soporte
     'support.title': 'Soporte',
     'support.close': 'Cerrar chat de soporte',
+    'support.whatsapp': 'Escríbenos por WhatsApp',
     'support.placeholder': '¿En qué podemos ayudarte hoy?',
     'support.inputPlaceholder': 'Escribe tu mensaje...',
     'support.send': 'Enviar',
