@@ -12,7 +12,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
 
 // --- IMÁGENES DEL SISTEMA (sustituibles desde el panel de administración) ---
-import { useSystemImage } from '../context/SystemImagesContext';
+import { useSystemImage, useCarouselSlides } from '../context/SystemImagesContext';
 
 export default function LandingPage() {
   const { t } = useLanguage();
@@ -27,10 +27,8 @@ export default function LandingPage() {
   const calendarImage = useSystemImage('landing.product.calendar');
   const mugImage = useSystemImage('landing.product.mug');
   const photoPackImage = useSystemImage('landing.product.photoPack');
-  const Slide1 = useSystemImage('landing.hero.1');
-  const Slide2 = useSystemImage('landing.hero.2');
-  const Slide3 = useSystemImage('landing.hero.3');
-  const Slide4 = useSystemImage('landing.hero.4');
+  // Diapositivas (imagen + textos) tal y como las haya dejado la administración.
+  const heroImages = useCarouselSlides();
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();
@@ -41,34 +39,6 @@ export default function LandingPage() {
 
   // 3 por fila en md con gap-5 (1.25rem): (100% - 2×1.25rem)/3
   const CARD_WIDTH = 'w-full md:w-[calc(33.333%_-_0.834rem)]';
-
-  // --- NUEVOS TEXTOS DEL CARRUSEL ---
-  const heroImages = [
-    { 
-      url: Slide1, 
-      title: 'Esos momentos que no quieres olvidar', 
-      description: 'Cada photobook es un pedacito de tu historia', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide2, 
-      title: 'Tus momentos en las mejores manos', 
-      description: 'Porque tus recuerdos merecen lo mejor', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide3, 
-      title: 'Lo que más amas, siempre cerca de ti', 
-      description: 'Que cada día te recuerde lo que realmente importa', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide4, 
-      title: 'Recuerdos que vuelves a sentir cada vez que los miras', 
-      description: 'Llena tus días de momentos que amas', 
-      cta: 'Vamos a Diseñar' 
-    }
-  ];
 
   // --- PREGUNTAS FRECUENTES (Desde tu documento) ---
   const faqs = [
@@ -144,11 +114,18 @@ export default function LandingPage() {
   ];
 
   useEffect(() => {
+    if (heroImages.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
     }, 10000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
+
+  // Si la administración borra diapositivas, el índice puede quedar apuntando
+  // fuera de la lista: se recorta al pintar en vez de reventar con undefined.
+  const activeSlide = heroImages.length > 0
+    ? heroImages[Math.min(currentSlide, heroImages.length - 1)]
+    : null;
 
   // Diccionario Dinámico de Íconos
   const getIconComponent = (iconName: string) => {
@@ -179,6 +156,7 @@ export default function LandingPage() {
       <Header />
       
       {/* Hero Carousel Section */}
+      {activeSlide && (
       <section className="relative h-[60vh] w-full overflow-hidden">
         <motion.div
           key={currentSlide}
@@ -189,7 +167,7 @@ export default function LandingPage() {
           className="absolute inset-0"
         >
           <img
-            src={heroImages[currentSlide].url}
+            src={activeSlide.url}
             alt="Hero"
             className="w-full h-full object-cover"
           />
@@ -205,7 +183,7 @@ export default function LandingPage() {
               transition={{ delay: 0.2 }}
               className="text-3xl md:text-4xl font-medium mb-2 text-white max-w-2xl"
             >
-              {heroImages[currentSlide].title}
+              {activeSlide.title}
             </motion.h1>
             <motion.p
               key={`desc-${currentSlide}`}
@@ -214,7 +192,7 @@ export default function LandingPage() {
               transition={{ delay: 0.35 }}
               className="text-base text-white/80 mb-5 max-w-lg"
             >
-              {heroImages[currentSlide].description}
+              {activeSlide.description}
             </motion.p>
             <motion.button
               initial={{ y: 10, opacity: 0 }}
@@ -223,12 +201,13 @@ export default function LandingPage() {
               onClick={() => navigate('/create')}
               className="px-6 py-2.5 rounded-lg bg-white text-black text-sm font-medium hover:bg-gray-100 transition-colors"
             >
-              {heroImages[currentSlide].cta}
+              {activeSlide.cta}
             </motion.button>
           </div>
         </div>
 
       </section>
+      )}
 
       {/* Promociones */}
       {activePromotions.length > 0 && (
