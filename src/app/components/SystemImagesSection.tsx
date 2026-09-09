@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
@@ -17,6 +17,7 @@ import {
   isUploadedRef,
   type CarouselSlide,
   type ImageSpec,
+  type SafeZoneDiagram,
 } from '../config/systemImages';
 import { useSystemImages, useCarouselSlideRefs } from '../context/SystemImagesContext';
 
@@ -58,17 +59,110 @@ const describeSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} M
  * pantalla, así que subir una foto con el motivo descentrado es la forma más
  * fácil de que en móvil salga cortada.
  */
+/**
+ * Dibujo de la zona segura: el rectángulo entero es la foto que se sube, el
+ * recuadro verde es lo que se ve seguro en cualquier pantalla, el rayado es lo
+ * que el recorte puede llevarse y la franja oscura, si la hay, es donde la web
+ * pinta textos encima.
+ *
+ * Va en SVG y no como imagen porque las medidas salen del catálogo: si mañana
+ * cambia el alto del carrusel, se corrige el número y el dibujo se corrige solo.
+ */
+function SafeZoneChart({ diagram }: { diagram: SafeZoneDiagram }) {
+  // Un id por instancia: dos tramas con el mismo id se pisarían entre tarjetas.
+  const hatchId = `hatch-${useId()}`;
+  const height = Math.round(100 / diagram.aspect);
+  const { safe, textBand } = diagram;
+  /** Los porcentajes verticales se miden sobre el alto real del dibujo. */
+  const vy = (value: number) => (value / 100) * height;
+
+  const safeCenterX = safe.x + safe.width / 2;
+  const safeCenterY = vy(safe.y + safe.height / 2);
+
+  return (
+    <svg
+      viewBox={`0 0 100 ${height}`}
+      className="w-full h-auto rounded"
+      role="img"
+      aria-label={`Zona segura: el contenido debe quedar dentro del recuadro central. ${diagram.caption}`}
+    >
+      <defs>
+        <pattern id={hatchId} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill="#f1f5f9" />
+          <line x1="0" y1="0" x2="0" y2="6" stroke="#cbd5e1" strokeWidth="2.5" />
+        </pattern>
+      </defs>
+
+      {/* la foto entera */}
+      <rect x="0.75" y="0.75" width="98.5" height={height - 1.5} fill={`url(#${hatchId})`} stroke="#94a3b8" strokeWidth="1.5" rx="2" />
+
+      {/* franja que la web tapa con textos */}
+      {textBand && (
+        <>
+          <rect x="0.75" y={vy(textBand.y)} width="98.5" height={vy(textBand.height) - 0.75} fill="#0f172a" opacity="0.6" />
+          <rect x="6" y={vy(textBand.y) + 4} width="42" height="4" rx="2" fill="#ffffff" opacity="0.85" />
+          <rect x="6" y={vy(textBand.y) + 11} width="26" height="3" rx="1.5" fill="#ffffff" opacity="0.6" />
+        </>
+      )}
+
+      {/* zona segura */}
+      <rect
+        x={safe.x}
+        y={vy(safe.y)}
+        width={safe.width}
+        height={vy(safe.height)}
+        fill="#ffffff"
+                stroke="#16a34a"
+        strokeWidth="2"
+        strokeDasharray="5 3.5"
+        rx="2"
+      />
+
+      {/* icono de foto, para que se lea como «aquí va lo importante» */}
+      <g transform={`translate(${safeCenterX} ${safeCenterY})`} fill="#16a34a" opacity="0.45">
+        <circle cx="-6" cy="-4" r="2.4" />
+        <path d="M -11 6 L -4 -2 L 0.5 3 L 4.5 -1 L 11 6 Z" />
+      </g>
+    </svg>
+  );
+}
+
 function SpecNote({ spec }: { spec: ImageSpec }) {
   return (
-    <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 space-y-1">
-      <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
-        <Ruler className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
-        <span><span className="font-bold text-gray-700">Tamaño: </span>{spec.size}</span>
-      </p>
-      <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
-        <Crop className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
-        <span><span className="font-bold text-gray-700">Zona segura: </span>{spec.safeZone}</span>
-      </p>
+    <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex flex-wrap gap-3">
+      <figure className="w-24 shrink-0 space-y-1">
+        <SafeZoneChart diagram={spec.diagram} />
+        <figcaption className="text-[10px] leading-tight text-gray-500 text-center">
+          {spec.diagram.caption}
+        </figcaption>
+      </figure>
+
+      <div className="flex-1 min-w-[180px] space-y-1">
+        <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
+          <Ruler className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
+          <span><span className="font-bold text-gray-700">Tamaño: </span>{spec.size}</span>
+        </p>
+        <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
+          <Crop className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
+          <span><span className="font-bold text-gray-700">Zona segura: </span>{spec.safeZone}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-[10px] text-gray-500">
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3.5 h-2.5 rounded-[2px] border-2 border-dashed border-green-600" />
+            aquí va lo importante
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3.5 h-2.5 rounded-[2px] border border-gray-400 bg-gray-200" />
+            se puede recortar
+          </span>
+          {spec.diagram.textBand && (
+            <span className="inline-flex items-center gap-1">
+              <span className="w-3.5 h-2.5 rounded-[2px] bg-slate-800/70" />
+              textos encima
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
