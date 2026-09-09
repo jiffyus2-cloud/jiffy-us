@@ -29,13 +29,10 @@ import heroSlide3 from '../../assets/Carousel/c8.jpg';
 import heroSlide4 from '../../assets/Carousel/C100153.jpg';
 import landingAlbum from '../../assets/IMG_8973.jpg';
 import landingCalendar from '../../assets/Calendario.jpg';
-import landingMug from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
-import landingPhotoPack from '../../assets/926a104c374871caf4fcad0882de38be9da36b8a.png';
 
 // Creador (elige tu producto)
 import creatorAlbum from '../../assets/Album2.jpeg';
 import creatorCalendar from '../../assets/ec28dc812bed68927d47becc060a8091e563d836.png';
-import creatorMug from '../../assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png';
 
 // Organizador de fotos
 import organizerMascot from '../../assets/Jiffy2.png';
@@ -90,6 +87,30 @@ export function resolveImageRef(ref: string | null | undefined): string {
 export const isUploadedRef = (ref: string | null | undefined): boolean =>
   !!ref && !ref.startsWith(INITIAL_REF_PREFIX);
 
+/**
+ * Lo que necesita saber quien sube la imagen. Todas se pintan con
+ * `object-cover`, es decir, la web las RECORTA para llenar su hueco: el recorte
+ * cambia con el ancho de la pantalla, así que lo que quede fuera del centro
+ * puede desaparecer en móvil.
+ */
+export interface ImageSpec {
+  /** Tamaño recomendado del archivo. */
+  size: string;
+  /** Dónde tiene que quedar el contenido para que el recorte no se lo lleve. */
+  safeZone: string;
+}
+
+/** Instrucciones del carrusel: valen para todas las diapositivas. */
+export const CAROUSEL_SPEC: ImageSpec = {
+  size: '2400 × 1350 px (16:9), JPG de menos de 8 MB.',
+  safeZone:
+    'Ocupa todo el ancho y el 60% del alto de la pantalla, así que el recorte cambia mucho: ' +
+    'en escritorio se ve una franja muy ancha y en móvil una mucho más estrecha y alta. ' +
+    'Deja lo importante dentro del 60% central de la foto y no pegues nada a los bordes. ' +
+    'Ten en cuenta también que el tercio inferior queda bajo el degradado con el título, la ' +
+    'descripción y el botón.',
+};
+
 /** Grupos con los que se ordena el panel de administración. */
 export type SystemImageGroup = 'Portada' | 'Productos en la portada' | 'Creador' | 'Galerías de muestra';
 
@@ -104,6 +125,8 @@ export interface SystemImageSlot {
   aspect: string;
   /** Imagen con la que arranca la tienda mientras nadie suba otra. */
   defaultUrl: string;
+  /** Qué tamaño necesita y dónde debe quedar el contenido. */
+  spec: ImageSpec;
 }
 
 export interface SystemImageGallery {
@@ -114,6 +137,8 @@ export interface SystemImageGallery {
   aspect: string;
   /** Referencias `initial:` a las imágenes con las que arranca la galería. */
   defaultRefs: string[];
+  /** Qué tamaño necesita y dónde debe quedar el contenido. */
+  spec: ImageSpec;
 }
 
 /**
@@ -167,38 +192,53 @@ export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
 /** Proporción con la que se previsualiza una diapositiva en el panel. */
 export const CAROUSEL_ASPECT = '16 / 9';
 
+const LANDING_CARD_SPEC: ImageSpec = {
+  size: '1600 × 1200 px (4:3), JPG.',
+  safeZone:
+    'Se recorta a una franja apaisada de 288 px de alto que en móvil ocupa todo el ancho y en ' +
+    'escritorio un tercio: centra el producto y déjale aire arriba y abajo. En la esquina ' +
+    'inferior izquierda van el nombre y el botón «Más», así que evita poner ahí nada importante.',
+};
+
+const SQUARE_CARD_SPEC: ImageSpec = {
+  size: '1200 × 1200 px (cuadrada), JPG o PNG.',
+  safeZone:
+    'Se ve cuadrada y completa, sin recorte lateral: centra el producto y deja un margen de ' +
+    'alrededor del 10% por cada lado para que no toque los bordes de la tarjeta.',
+};
+
+const MASCOT_SPEC: ImageSpec = {
+  size: '600 × 600 px (cuadrada), PNG con fondo transparente.',
+  safeZone:
+    'Se pinta pequeña (112 px) y entera, sin recortar: centra el dibujo y deja un 10% de ' +
+    'margen alrededor. El fondo tiene que ser transparente, no blanco.',
+};
+
+const GALLERY_SPEC: ImageSpec = {
+  size: '1200 × 1200 px (cuadrada), JPG.',
+  safeZone:
+    'Se recorta a un cuadrado: centra la muestra del material y evita texto o detalles cerca ' +
+    'de los bordes, porque son lo primero que se pierde al recortar.',
+};
+
 export const SYSTEM_IMAGE_SLOTS = [
   {
     id: 'landing.product.album',
     group: 'Productos en la portada',
     label: 'Álbumes de fotos',
     hint: 'Tarjeta de álbumes en «Nuestros Productos».',
-    aspect: '1 / 1',
+    aspect: '4 / 3',
     defaultUrl: landingAlbum,
+    spec: LANDING_CARD_SPEC,
   },
   {
     id: 'landing.product.calendar',
     group: 'Productos en la portada',
     label: 'Calendarios',
     hint: 'Tarjeta de calendarios en «Nuestros Productos».',
-    aspect: '1 / 1',
+    aspect: '4 / 3',
     defaultUrl: landingCalendar,
-  },
-  {
-    id: 'landing.product.mug',
-    group: 'Productos en la portada',
-    label: 'Tazas',
-    hint: 'Tarjeta de tazas en «Nuestros Productos» (solo si las tazas están activas).',
-    aspect: '1 / 1',
-    defaultUrl: landingMug,
-  },
-  {
-    id: 'landing.product.photoPack',
-    group: 'Productos en la portada',
-    label: 'Paquetes de fotos',
-    hint: 'Tarjeta de paquetes de fotos en «Nuestros Productos» (solo si están activos).',
-    aspect: '1 / 1',
-    defaultUrl: landingPhotoPack,
+    spec: LANDING_CARD_SPEC,
   },
   {
     id: 'creator.product.album',
@@ -207,6 +247,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     hint: 'Tarjeta de álbum en la pantalla «Elige Tu Producto».',
     aspect: '1 / 1',
     defaultUrl: creatorAlbum,
+    spec: SQUARE_CARD_SPEC,
   },
   {
     id: 'creator.product.calendar',
@@ -215,14 +256,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     hint: 'Tarjeta de calendario en la pantalla «Elige Tu Producto».',
     aspect: '1 / 1',
     defaultUrl: creatorCalendar,
-  },
-  {
-    id: 'creator.product.mug',
-    group: 'Creador',
-    label: 'Taza personalizada',
-    hint: 'Tarjeta de taza en la pantalla «Elige Tu Producto» (solo si las tazas están activas).',
-    aspect: '1 / 1',
-    defaultUrl: creatorMug,
+    spec: SQUARE_CARD_SPEC,
   },
   {
     id: 'organizer.upload.mascot',
@@ -231,6 +265,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     hint: 'Imagen grande del botón para seleccionar fotos del álbum.',
     aspect: '1 / 1',
     defaultUrl: organizerMascot,
+    spec: MASCOT_SPEC,
   },
 ] as const satisfies readonly SystemImageSlot[];
 
@@ -244,6 +279,7 @@ export const SYSTEM_IMAGE_GALLERIES = [
     hint: 'Carrusel de fotos de clientes dentro del detalle de cada producto.',
     aspect: '1 / 1',
     defaultRefs: DEFAULT_CLIENTES_REFS,
+    spec: GALLERY_SPEC,
   },
   {
     id: 'samples.papel',
@@ -252,6 +288,7 @@ export const SYSTEM_IMAGE_GALLERIES = [
     hint: 'Muestras del estilo en papel, en el detalle del álbum.',
     aspect: '1 / 1',
     defaultRefs: DEFAULT_PAPEL_REFS,
+    spec: GALLERY_SPEC,
   },
   {
     id: 'samples.tela',
@@ -260,6 +297,7 @@ export const SYSTEM_IMAGE_GALLERIES = [
     hint: 'Muestras del estilo en tela, en el detalle del álbum.',
     aspect: '1 / 1',
     defaultRefs: DEFAULT_TELA_REFS,
+    spec: GALLERY_SPEC,
   },
 ] as const satisfies readonly SystemImageGallery[];
 

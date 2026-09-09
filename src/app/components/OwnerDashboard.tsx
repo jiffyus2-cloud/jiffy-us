@@ -1040,11 +1040,6 @@ const OwnerDashboard: React.FC = () => {
           'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
           'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
         }));
-      } else if (order.items && Array.isArray(order.items)) {
-        detallesData = order.items.map((item, i) => ({
-          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
-          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
-        }));
       }
       if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
 
@@ -1237,11 +1232,6 @@ const OwnerDashboard: React.FC = () => {
           'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
           'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
           'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
-        }));
-      } else if (order.items && Array.isArray(order.items)) {
-        detallesData = order.items.map((item, i) => ({
-          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
-          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
         }));
       }
       if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
@@ -1827,14 +1817,6 @@ const OwnerDashboard: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Calendario Escritorio</label>
                     <input type="number" value={localConfig.prices.calendarDesk} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, calendarDesk: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Taza Personalizada</label>
-                    <input type="number" value={localConfig.prices.mug} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, mug: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Pack Fotos (Por foto)</label>
-                    <input type="number" value={localConfig.prices.photoPackBase} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, photoPackBase: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
                   </div>
                 </div>
 

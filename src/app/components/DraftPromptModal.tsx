@@ -1,7 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
-import { X, Trash2, BookMarked, Calendar, Coffee, Image as ImageIcon } from 'lucide-react';
+import { X, Trash2, BookMarked, Calendar, Image as ImageIcon } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 interface SavedDraft {
@@ -34,8 +34,6 @@ function getDraftPreviewImage(draft: SavedDraft): string | null {
       const first = draft.photos[0];
       return typeof first === 'string' ? first : null;
     }
-  } else if (productString.includes('mug') || productString.includes('taza')) {
-    return draft.items?.[0]?.photo || draft.items?.[0]?.photos?.[0] || null;
   } else {
     if (draft.coverData?.image) return draft.coverData.image;
     if (Array.isArray(draft.photos) && draft.photos.length > 0) {
@@ -51,7 +49,6 @@ function getDraftProductIcon(draft: SavedDraft) {
     draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || ''
   ).toLowerCase();
   if (productString.includes('calendar') || productString.includes('calendario')) return Calendar;
-  if (productString.includes('mug') || productString.includes('taza')) return Coffee;
   return ImageIcon;
 }
 

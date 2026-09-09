@@ -2,7 +2,7 @@ import { useSystemImage } from '../context/SystemImagesContext';
 import { DESIGN } from '../../styles/design-system';
 import { useLanguage } from '../context/LanguageContext';
 
-export type ProductType = 'album' | 'calendar' | 'mug' | 'photo-pack' | 'custom-album';
+export type ProductType = 'album' | 'calendar' | 'custom-album';
 
 interface ProductSelectionProps {
   onSelectProduct: (product: ProductType) => void;
@@ -14,11 +14,6 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
   // Sustituibles desde el panel de administración; por defecto, los assets originales.
   const albumImage = useSystemImage('creator.product.album');
   const calendarImage = useSystemImage('creator.product.calendar');
-  const mugImage = useSystemImage('creator.product.mug');
-
-  // Lectura de variables de entorno para mostrar/ocultar productos
-  const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
-  const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
   // Ancho equivalente a las columnas de la grilla previa (gap-8 = 2rem):
   // 2 por fila en md, 4 por fila en lg. flex-wrap + justify-center centra la última fila.
@@ -99,56 +94,6 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           </div>
         </button>
 
-        {/* Mug Option */}
-        {showMugs && (
-          <button
-            onClick={() => onSelectProduct('mug')}
-            className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
-          >
-            {/* Mug Image */}
-            <div className="w-full aspect-square overflow-hidden">
-              <img 
-                src={mugImage} 
-                alt="Photo Mugs" 
-                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-              />
-            </div>
-
-            <div className="p-6">
-              <h3 className={DESIGN.text.h4}>{t('product.mug')}</h3>
-              <p className="text-sm mb-4 text-gray-600">
-                {t('product.mugDesc')}
-              </p>
-            </div>
-          </button>
-        )}
-
-        {/* Photo Pack Option */}
-        {showPhotoPacks && (
-          <button
-            onClick={() => onSelectProduct('photo-pack')}
-            className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
-          >
-            {/* Photo Pack Image */}
-            <div className="w-full aspect-square overflow-hidden bg-gray-100 flex items-center justify-center">
-              <div className="relative w-32 h-32">
-                <div className="absolute inset-0 bg-white border border-gray-200 rotate-3 shadow-sm flex items-center justify-center overflow-hidden">
-                  <img src="https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=200&h=200&fit=crop" alt="photo" className="w-full h-full object-cover" />
-                </div>
-                <div className="absolute inset-0 bg-white border border-gray-200 -rotate-3 shadow-sm flex items-center justify-center overflow-hidden translate-x-2 translate-y-2">
-                  <img src="https://images.unsplash.com/photo-1554080353-a576cf803bda?w=200&h=200&fit=crop" alt="photo" className="w-full h-full object-cover" />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <h3 className={DESIGN.text.h4}>{t('product.photoPack')}</h3>
-              <p className="text-sm mb-4 text-gray-600">
-                {t('product.photoPackDesc')}
-              </p>
-            </div>
-          </button>
-        )}
       </div>
     </div>
   );

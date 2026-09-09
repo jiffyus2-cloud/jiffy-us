@@ -25,17 +25,12 @@ export default function LandingPage() {
   // Cada imagen sale del panel de administración si la han cambiado; si no, del asset original.
   const albumImage = useSystemImage('landing.product.album');
   const calendarImage = useSystemImage('landing.product.calendar');
-  const mugImage = useSystemImage('landing.product.mug');
-  const photoPackImage = useSystemImage('landing.product.photoPack');
   // Diapositivas (imagen + textos) tal y como las haya dejado la administración.
   const heroImages = useCarouselSlides();
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();
   const activePromotions = configLoaded ? (promotions || []).filter(p => p.active) : [];
-
-  const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
-  const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
 
   // 3 por fila en md con gap-5 (1.25rem): (100% - 2×1.25rem)/3
   const CARD_WIDTH = 'w-full md:w-[calc(33.333%_-_0.834rem)]';
@@ -101,7 +96,7 @@ export default function LandingPage() {
     },
     {
       question: '10. ¿Qué otros productos ofrece Jiffy además de álbumes?',
-      answer: 'Además de álbumes, también tenemos calendarios, imanes, mugs e impresión de fotos que puedes personalizar para ti o para regalar.'
+      answer: 'Además de álbumes, tenemos calendarios personalizados y el servicio de Álbum Personalizado, en el que una curadora diseña cada página por ti.'
     },
     {
       question: '11. Política de calidad de imagen e impresión',
@@ -271,35 +266,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {showMugs && (
-              <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
-                <div className="relative h-72">
-                  <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
-                  <div className={DESIGN.card.overlay} />
-                  <div className={DESIGN.card.content}>
-                    <h3 className="text-lg font-medium mb-1">{t('product.mug')}</h3>
-                    <button onClick={() => setSelectedProduct('mug')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
-                      {t('landing.more')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {showPhotoPacks && (
-              <div className={`w-full ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
-                <div className="relative h-56">
-                  <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
-                  <div className={DESIGN.card.overlay} />
-                  <div className={DESIGN.card.content}>
-                    <h3 className="text-lg font-medium mb-1">{t('product.photoPack')}</h3>
-                    <button onClick={() => setSelectedProduct('photo-pack')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
-                      {t('landing.more')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -391,8 +357,6 @@ export default function LandingPage() {
               <ul className="space-y-2">
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.album')}</a></li>
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.calendar')}</a></li>
-                {showMugs && <li><a href="#" className={DESIGN.text.footerLink}>{t('product.mug')}</a></li>}
-                {showPhotoPacks && <li><a href="#" className={DESIGN.text.footerLink}>{t('product.photoPack')}</a></li>}
               </ul>
             </div>
             <div>

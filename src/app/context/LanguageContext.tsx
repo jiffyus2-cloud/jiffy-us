@@ -141,13 +141,9 @@ const translations = {
     'product.subtitle': 'Select the type of product you want to create',
     'product.album': 'Photo Album',
     'product.calendar': 'Photo Calendar',
-    'product.mug': 'Photo Mug',
-    'product.photoPack': 'Photo Pack',
     'product.continue': 'Continue',
     'product.albumDesc': 'Create a beautiful, professionally printed photo album. Customizable hardcover and premium opaline interior pages.',
     'product.calendarDesc': 'Design a personalized wall calendar featuring your favorite photos for each month of the year.',
-    'product.mugDesc': 'Create a unique photo mug with your favorite image, perfect for coffee or tea.',
-    'product.photoPackDesc': 'High-quality prints of your favorite moments, delivered in a beautiful package.',
 
     // Calendar
     'calendar.preview': 'Calendar Preview',
@@ -170,7 +166,7 @@ const translations = {
     'landing.simpleProcess': 'Simple Process',
     'landing.processSubtitle': 'Create your personalized product in just 3 easy steps',
     'landing.step1Title': 'Choose Your Project',
-    'landing.step1Desc': 'Select from photo albums, calendars, mugs, and more customizable products.',
+    'landing.step1Desc': 'Select from photo albums, calendars and our Custom Album service.',
     'landing.step2Title': 'Customize It',
     'landing.step2Desc': 'Choose colors, sizes, materials, and design your cover with our intuitive editor.',
     'landing.step3Title': 'Pick Your Moments',
@@ -185,7 +181,7 @@ const translations = {
     'testimonial.1.comment': 'Absolutely love my photo album! The quality is exceptional and the customization options made it truly special.',
     'testimonial.2.comment': 'The photo calendar I created is stunning! It made the perfect gift for my parents. Will definitely order again.',
     'testimonial.3.comment': 'Easy to use and the final product exceeded my expectations. El printing quality is top-notch!',
-    'testimonial.4.comment': 'Created a custom mug with family photos. It turned out amazing! Great quality and fast shipping.',
+    'testimonial.4.comment': 'The album with our family photos turned out amazing! Great quality and fast shipping.',
 
     // FAQ
     'faq.1.q': 'How long does it take to receive my order?',
@@ -499,33 +495,8 @@ const translations = {
     'calendar.orientation.vertical': 'vertical',
     'calendar.orientation.horizontal': 'horizontal',
 
-    // Mug
-    'mug.capacity': 'Capacidad de la Taza',
-    'mug.material': 'Material de la Taza',
-    'mug.material.ceramic': 'Cerámica',
-    'mug.material.ceramicDesc': 'Clásico y apto para microondas',
-    'mug.material.porcelain': 'Porcelana',
-    'mug.material.porcelainDesc': 'Calidad premium y elegante',
-    'mug.material.steel': 'Acero Inoxidable',
-    'mug.material.steelDesc': 'Duradero y para viajes',
-    'mug.style': 'Estilo de Diseño',
-    'mug.style.separate': 'Imagen y Texto',
-    'mug.style.separateDesc': 'La imagen y el texto se muestran por separado en la taza.',
-    'mug.style.cutout': 'Texto con Foto',
-    'mug.style.cutoutDesc': 'Tu foto aparece dentro de las letras de un texto grande.',
-    'mug.uploadDesc': 'Sube fotos para tus tazas personalizadas. Cada foto creará un diseño de taza separado.',
-    'mug.startEmpty': 'Empezar con una taza vacía',
-    'mug.size.standard': 'Estándar',
-    'mug.size.large': 'Grande',
 
     // Photo Pack
-    'photopack.finish': 'Acabado de las Fotos',
-    'photopack.finish.matteDesc': 'Sin reflejos, aspecto profesional',
-    'photopack.finish.glossyDesc': 'Brillante, colores vibrantes',
-    'photopack.uploadDesc': 'Selecciona las fotos que quieres imprimir. Cada foto se puede ajustar individualmente.',
-    'photopack.size.standard': 'Tamaño estándar',
-    'photopack.size.medium': 'Algo más grande',
-    'photopack.size.large': 'Retratos',
 
     // Photo Organizer Setup
     'organizer.uploadTitle': 'Sube Tus Fotos',
@@ -584,13 +555,9 @@ const translations = {
     'product.subtitle': 'Selecciona el tipo de producto que quieres crear',
     'product.album': 'Álbum de Fotos',
     'product.calendar': 'Calendario de Fotos',
-    'product.mug': 'Taza de Fotos',
-    'product.photoPack': 'Pack de Fotos',
     'product.continue': 'Continuar',
     'product.albumDesc': 'Crea un hermoso álbum de fotos impreso profesionalmente. Portada de pasta dura personalizable y páginas interiores en papel opalina de calidad premium.',
     'product.calendarDesc': 'Diseña un calendario de pared personalizado con tus fotos favoritas para cada mes del año.',
-    'product.mugDesc': 'Crea una taza de fotos única con tu imagen favorita, perfecta para café o té.',
-    'product.photoPackDesc': 'Impresiones de alta calidad de tus momentos favoritos, entregadas en un paquete hermoso.',
 
     // Landing Page
     'landing.letsDesign': 'Vamos a Diseñar',
@@ -600,7 +567,7 @@ const translations = {
     'landing.simpleProcess': 'Proceso Simple',
     'landing.processSubtitle': 'Crea tu producto personalizado en solo 3 pasos fáciles',
     'landing.step1Title': 'Elige Tu Proyecto',
-    'landing.step1Desc': 'Selecciona entre álbumes de fotos, calendarios, tazas y más productos personalizables.',
+    'landing.step1Desc': 'Selecciona entre álbumes de fotos, calendarios y el servicio de Álbum Personalizado.',
     'landing.step2Title': 'Personalízalo',
     'landing.step2Desc': 'Elige colores, tamaños, materiales y diseña tu portada con nuestro editor intuitivo.',
     'landing.step3Title': 'Elige Tus Momentos',
@@ -615,7 +582,7 @@ const translations = {
     'testimonial.1.comment': '¡Me encanta mi álbum de fotos! La calidad es excepcional y las opciones de personalización lo hicieron realmente especial.',
     'testimonial.2.comment': '¡El calendario de fotos que creé es impresionante! Fue el regalo perfecto para mis padres. Definitivamente volveré a pedir.',
     'testimonial.3.comment': 'Fácil de usar y el producto final superó mis expectativas. ¡La calidad de impresión es de primera clase!',
-    'testimonial.4.comment': 'Creé una taza personalizada con fotos familiares. ¡Quedó increíble! Gran calidad y envío rápido.',
+    'testimonial.4.comment': 'El álbum con las fotos de la familia quedó increíble. Gran calidad y envío rápido.',
 
     // FAQ
     'faq.1.q': '¿Cuánto tiempo tarda en llegar mi pedido?',

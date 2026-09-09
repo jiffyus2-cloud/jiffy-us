@@ -87,16 +87,10 @@ export function countAlbumPhotos(pages: any[] | undefined | null): number {
   );
 }
 
-/** Fotos de un documento/payload, sea álbum, taza, calendario o pack. */
+/** Fotos de un documento/payload, sea álbum o calendario. */
 export function countPersistedPhotos(data: any): number {
   const fromPages = countAlbumPhotos(data?.pages);
   if (fromPages > 0) return fromPages;
-
-  const fromItems = (data?.items || data?.mugItems || []).reduce(
-    (n: number, it: any) => n + (it?.photos || []).filter(Boolean).length,
-    0
-  );
-  if (fromItems > 0) return fromItems;
 
   return (data?.photos || []).filter(Boolean).length;
 }
@@ -248,22 +242,6 @@ async function buildAlbumPages(designData: any, ctx: UploadContext): Promise<any
   return pages;
 }
 
-async function buildMugItems(items: any[], ctx: UploadContext): Promise<any[]> {
-  const finalItems: any[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const uploadedItemPhotos: string[] = [];
-    for (let j = 0; j < (item.photos?.length || 0); j++) {
-      const url = await resolvePhotoUrl(
-        item.photos[j], ctx, () => `${ctx.folderPath}/mugs/mug${i}_photo${j}`, i, j
-      );
-      if (url) uploadedItemPhotos.push(url);
-    }
-    finalItems.push({ ...item, photos: uploadedItemPhotos });
-  }
-  return finalItems;
-}
-
 async function buildLoosePhotos(photos: any[], ctx: UploadContext): Promise<string[]> {
   const finalPhotos: string[] = [];
   for (let i = 0; i < photos.length; i++) {
@@ -286,17 +264,12 @@ function countPendingUploads(designData: any): number {
     else if (isLocalUrl(item)) total++;
   });
 
-  (designData?.items || designData?.mugItems || []).forEach((item: any) => {
-    (item?.photos || []).forEach((url: any) => { if (isLocalUrl(url)) total++; });
-  });
-
   return total;
 }
 
 interface ProcessedAssets {
   coverData: any;
   finalPages: any[];
-  finalItems: any[];
   finalPhotos: string[];
   newUrls: Record<string, string>;
   failures: UploadFailure[];
@@ -337,26 +310,19 @@ async function processDesignAssets(
     coverData.image = resolved ?? '';
   }
 
-  const isMugType = productString.includes('mug') || productString.includes('taza');
-  const itemsToProcess = designData.items || designData.mugItems || [];
-
   let finalPages: any[] = [];
-  let finalItems: any[] = [];
   let finalPhotos: string[] = [];
 
   if (productString.includes('album') || productString.includes('photobook')) {
     finalPages = await buildAlbumPages(designData, ctx);
-  } else if (isMugType) {
-    finalItems = await buildMugItems(itemsToProcess, ctx);
   } else if (
     productString.includes('calendar') ||
-    productString.includes('calendario') ||
-    productString.includes('pack')
+    productString.includes('calendario')
   ) {
     finalPhotos = await buildLoosePhotos(designData.photos || [], ctx);
   }
 
-  return { coverData, finalPages, finalItems, finalPhotos, newUrls: ctx.newUrls, failures: ctx.failures };
+  return { coverData, finalPages, finalPhotos, newUrls: ctx.newUrls, failures: ctx.failures };
 }
 
 /**
@@ -443,8 +409,6 @@ export async function createDraftOrder(
     pageLayouts: designData.pageLayouts || {},
     pageLayoutVariants: designData.pageLayoutVariants || {},
     pages: assets.finalPages,
-    items: assets.finalItems.length > 0 ? assets.finalItems : (designData.items || []),
-    mugItems: assets.finalItems.length > 0 ? assets.finalItems : (designData.mugItems || []),
     photos: safePhotosToSave,
     schemaVersion: SCHEMA_VERSION,
     photoCount: 0, // se rellena justo debajo
@@ -640,8 +604,6 @@ export async function updateOrderDesign(
     pageLayouts: designData.pageLayouts || {},
     pageLayoutVariants: designData.pageLayoutVariants || {},
     pages: assets.finalPages,
-    items: assets.finalItems.length > 0 ? assets.finalItems : (designData.items || []),
-    mugItems: assets.finalItems.length > 0 ? assets.finalItems : (designData.mugItems || []),
     photos: buildFlatPhotoList(assets, designData),
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
