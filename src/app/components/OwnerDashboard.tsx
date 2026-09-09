@@ -30,6 +30,7 @@ import jiffyLogo from '../../assets/JiffyLogo.svg';
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
+import { pickStoreConfig } from '../utils/storeConfigState';
 
 interface ConfigHistoryEntry {
   id: string;
@@ -456,11 +457,11 @@ const OwnerDashboard: React.FC = () => {
 
   // --- CONTEXTO GLOBAL DE LA TIENDA ---
   const storeConfig = useStoreConfig();
-  const [localConfig, setLocalConfig] = useState<StoreConfig>(storeConfig);
+  const [localConfig, setLocalConfig] = useState<StoreConfig>(() => pickStoreConfig(storeConfig));
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const hasSeededConfig = useRef(false);
-  const lastRemoteConfigRef = useRef<StoreConfig>(storeConfig);
+  const lastRemoteConfigRef = useRef<StoreConfig>(pickStoreConfig(storeConfig));
   const [remoteConfigChangedElsewhere, setRemoteConfigChangedElsewhere] = useState(false);
 
   const [historyEntries, setHistoryEntries] = useState<ConfigHistoryEntry[]>([]);
@@ -485,17 +486,21 @@ const OwnerDashboard: React.FC = () => {
   useEffect(() => {
     if (!storeConfig.configLoaded) return;
 
+    const remote = pickStoreConfig(storeConfig);
+
     if (!hasSeededConfig.current) {
-      setLocalConfig(storeConfig);
+      setLocalConfig(remote);
       hasSeededConfig.current = true;
-      lastRemoteConfigRef.current = storeConfig;
+      lastRemoteConfigRef.current = remote;
       return;
     }
 
     // Ya sembrado antes: si llega un cambio remoto (otra sesión guardó algo),
-    // no pisamos silenciosamente las ediciones locales — solo avisamos.
-    if (JSON.stringify(storeConfig) !== JSON.stringify(lastRemoteConfigRef.current)) {
-      lastRemoteConfigRef.current = storeConfig;
+    // no pisamos silenciosamente las ediciones locales — solo avisamos. Se
+    // comparan solo los datos: las banderas del contexto cambian solas y
+    // dispararían el aviso sin que nadie haya tocado nada.
+    if (JSON.stringify(remote) !== JSON.stringify(lastRemoteConfigRef.current)) {
+      lastRemoteConfigRef.current = remote;
       setRemoteConfigChangedElsewhere(true);
     }
   }, [storeConfig]);
@@ -554,8 +559,10 @@ const OwnerDashboard: React.FC = () => {
     }
     setIsSavingConfig(true);
     try {
-      await backupCurrentConfig(storeConfig);
-      await setDoc(doc(db, 'settings', 'store_config'), localConfig, { merge: true });
+      await backupCurrentConfig(pickStoreConfig(storeConfig));
+      // Sin merge: el documento ES el estado actual de la tienda. Con merge, una
+      // promoción borrada o una clave retirada sobrevivía dentro del documento.
+      await setDoc(doc(db, 'settings', 'store_config'), pickStoreConfig(localConfig));
       setRemoteConfigChangedElsewhere(false);
       if (showHistory) fetchConfigHistory();
       alert('¡Configuración guardada exitosamente! Los cambios ya están en vivo en toda la tienda.');
@@ -575,10 +582,11 @@ const OwnerDashboard: React.FC = () => {
     if (!window.confirm('¿Restaurar la configuración a esta versión anterior? Esto reemplazará los valores actuales de precios y promociones.')) return;
     setIsSavingConfig(true);
     try {
-      await backupCurrentConfig(storeConfig);
-      await setDoc(doc(db, 'settings', 'store_config'), entry.config, { merge: true });
-      setLocalConfig(entry.config);
-      lastRemoteConfigRef.current = entry.config;
+      await backupCurrentConfig(pickStoreConfig(storeConfig));
+      const restored = pickStoreConfig(entry.config);
+      await setDoc(doc(db, 'settings', 'store_config'), restored);
+      setLocalConfig(restored);
+      lastRemoteConfigRef.current = restored;
       setRemoteConfigChangedElsewhere(false);
       fetchConfigHistory();
       alert('Configuración restaurada exitosamente.');
@@ -1617,6 +1625,16 @@ const OwnerDashboard: React.FC = () => {
               <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
                 <AlertCircle className="w-4 h-4" />
                 No se pudo cargar la configuración ({storeConfig.configError}). Verifica tu conexión antes de intentar guardar.
+              </div>
+            )}
+            {storeConfig.configLoaded && !storeConfig.configExists && (
+              <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-medium">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  Todavía no hay ninguna configuración guardada: la tienda está usando los valores
+                  iniciales del sistema. En cuanto guardes, estos valores quedarán fijados y dejarán
+                  de depender del código.
+                </span>
               </div>
             )}
             {remoteConfigChangedElsewhere && (
