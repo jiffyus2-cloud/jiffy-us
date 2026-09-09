@@ -1,4 +1,4 @@
-import { X, BookImage, Calendar, Coffee, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, BookImage, Calendar, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -249,51 +249,6 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
             'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800',
             'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=800',
             'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=800'
-          ]
-        };
-      case 'mug':
-        return {
-          title: t('product.mug'),
-          description: t('product.mugDesc'),
-          styles: [
-            { name: 'Clásica', description: 'Taza de cerámica tradicional', image: 'https://images.unsplash.com/photo-1601746905447-a5d058ee7c7f?w=800' },
-            { name: 'Premium', description: 'Porcelana de alta calidad', image: 'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800' }
-          ],
-          specifications: [
-            { label: 'Materiales', value: 'Cerámica, Porcelana, Acero Inoxidable' },
-            { label: 'Capacidad', value: '11oz, 15oz' },
-            { label: 'Estilo', value: 'Imagen y Texto o Texto con Foto' },
-            { label: 'Uso', value: 'Apto para microondas y lavavajillas' }
-          ],
-          galleryTitle: undefined,
-          gallerySubtitle: undefined,
-          gallery: [
-            'https://images.unsplash.com/photo-1539042357369-956fb344118f?w=800',
-            'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=800',
-            'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800',
-            'https://images.unsplash.com/photo-1534353436294-0dbd4bdac845?w=800'
-          ]
-        };
-      case 'photo-pack':
-        return {
-          title: t('product.photoPack'),
-          description: t('product.photoPackDesc'),
-          styles: [
-            { name: 'Impresiones Estándar', description: 'Fotos clásicas en varios tamaños', image: 'https://images.unsplash.com/photo-1541517155340-0220c1d1a8a3?w=800' }
-          ],
-          specifications: [
-            { label: 'Tamaños', value: 'Estándar, Grandes, Retratos' },
-            { label: 'Papel', value: 'Papel Fotográfico Premium' },
-            { label: 'Acabado', value: 'Mate o Brillante' },
-            { label: 'Empaque', value: 'Incluye caja de regalo' }
-          ],
-          galleryTitle: undefined,
-          gallerySubtitle: undefined,
-          gallery: [
-            'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=800',
-            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800',
-            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800',
-            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800'
           ]
         };
       default:

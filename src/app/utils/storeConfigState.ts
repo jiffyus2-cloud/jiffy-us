@@ -35,10 +35,8 @@ export interface StoreConfig {
     customAlbum20x20: number;
     customAlbum30x30: number;
     customAlbumRect: number;
-    mug: number;
     calendarWall: number;
     calendarDesk: number;
-    photoPackBase: number;
     shippingCali: number;
     shippingNational: number;
   };
@@ -64,10 +62,8 @@ export const INITIAL_STORE_CONFIG: StoreConfig = {
     customAlbum20x20: 280000,
     customAlbum30x30: 350000,
     customAlbumRect: 330000,
-    mug: 45000,
     calendarWall: 80000,
     calendarDesk: 60000,
-    photoPackBase: 1000,
     shippingCali: 15000,
     shippingNational: 20000,
   },

@@ -52,11 +52,7 @@ describe('countPersistedPhotos', () => {
     expect(countPersistedPhotos({ pages: [{ images: ['a', 'b'] }], photos: [] })).toBe(2);
   });
 
-  it('usa items para tazas', () => {
-    expect(countPersistedPhotos({ items: [{ photos: ['a'] }, { photos: ['b', 'c'] }] })).toBe(3);
-  });
-
-  it('usa el array plano para calendarios y packs', () => {
+  it('usa el array plano para calendarios', () => {
     expect(countPersistedPhotos({ photos: ['a', 'b', null] })).toBe(2);
   });
 

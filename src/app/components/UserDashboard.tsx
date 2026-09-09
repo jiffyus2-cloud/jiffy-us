@@ -27,7 +27,6 @@ import {
   FileText,
   Image as ImageIcon,
   AlertCircle,
-  Coffee,
   BookMarked,
   Trash2,
   Pencil,
@@ -80,7 +79,6 @@ function getPreviewImage(order: Order): string | null {
   if (order.productType === 'custom-album') return null;
   const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
-  const isMug = productString.includes('mug') || productString.includes('taza');
 
   let imageUrl: string | null = null;
 
@@ -93,10 +91,6 @@ function getPreviewImage(order: Order): string | null {
     if (!imageUrl && order.photos && order.photos.length > 0) {
       const firstPhoto = order.photos[0];
       imageUrl = Array.isArray(firstPhoto) ? firstPhoto[0] : firstPhoto as string;
-    }
-  } else if (isMug) {
-    if (order.items && order.items.length > 0) {
-      imageUrl = order.items[0].photo || order.items[0].photos?.[0];
     }
   } else {
     const isTela =
@@ -493,8 +487,7 @@ const UserDashboard: React.FC = () => {
                     return savedDrafts.map((draft) => {
                     const productString = String(draft.product?.type || draft.product?.id || draft.product?.name || draft.productType || '').toLowerCase();
                     const isCalendar = productString.includes('calendar') || productString.includes('calendario');
-                    const isMug = productString.includes('mug') || productString.includes('taza');
-                    const ProductIcon = isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+                    const ProductIcon = isCalendar ? Calendar : ImageIcon;
                     const imageUrl = getPreviewImage(draft);
                     const updatedDate = draft.updatedAt
                       ? format(new Date(draft.updatedAt), 'PP', { locale: dateLocale })
@@ -576,8 +569,7 @@ const UserDashboard: React.FC = () => {
                     const isCustomAlbum = order.productType === 'custom-album';
                     const productString = String(order.product?.type || order.product?.id || order.product?.name || order.productType || '').toLowerCase();
                     const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
-                    const isMug = productString.includes('mug') || productString.includes('taza');
-                    const ProductIcon = isCustomAlbum ? Sparkles : isCalendar ? Calendar : isMug ? Coffee : ImageIcon;
+                    const ProductIcon = isCustomAlbum ? Sparkles : isCalendar ? Calendar : ImageIcon;
                     const imageUrl = getPreviewImage(order);
 
                     if (isCustomAlbum) {

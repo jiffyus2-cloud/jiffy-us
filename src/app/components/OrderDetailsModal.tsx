@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Coffee, Image as ImageIcon, Pencil } from 'lucide-react';
+import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Image as ImageIcon, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
@@ -220,51 +220,6 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   );
 };
 
-const MugViewer: React.FC<{ order: Order }> = ({ order }) => (
-  <div className="space-y-6">
-    <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
-      <Coffee className="w-5 h-5 text-primary" />
-      <h4>Diseños de Tazas</h4>
-    </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-      {order.items?.map((item, index) => {
-        const photo = item.photo || item.photos?.[0];
-        const crop = item.crop || item.photoCrops?.[0];
-        return (<div key={item.id || index} className="space-y-3">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Taza #{index + 1}</p>
-          <div className="aspect-square bg-gray-100 rounded-[3%] shadow-inner border-4 border-white overflow-hidden relative group">
-            {photo ? (
-              <div className="absolute inset-0 w-full h-full">
-                <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Taza ${index + 1}`} />
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-300">
-                <Package className="w-16 h-16 opacity-20" />
-              </div>
-            )}
-            {item.text && (
-              <div
-                className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none z-10"
-                style={{
-                  fontSize: `${item.fontSize}px`,
-                  fontFamily: item.fontFamily,
-                  color: photo ? 'white' : 'black',
-                  textShadow: photo ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
-                  textAlign: item.textAlign || 'center',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap'
-                }}
-              >
-                {item.text}
-              </div>
-            )}
-          </div>
-        </div>)
-      })}
-    </div>
-  </div>
-);
-
 const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
   const year = order.customization?.year || new Date().getFullYear();
   const orientation = order.customization?.orientation || 'vertical';
@@ -450,12 +405,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
 
   const productString = String(order.product?.type || order.product?.id || order.product?.name || (order as any).productType || '').toLowerCase();
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
-  const isMug = productString.includes('mug') || productString.includes('taza');
   const isAlbum = productString.includes('album') || productString.includes('photobook');
 
   // --- LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Para miniatura) ---
   let displayImage = order.coverData?.image;
-  let ProductIcon = isCalendar ? CalendarIcon : isMug ? Coffee : BookOpen;
+  let ProductIcon = isCalendar ? CalendarIcon : BookOpen;
 
   if (isCalendar) {
     const januaryPage = order.pages?.[0];
@@ -473,10 +427,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
       } else if (typeof firstPhoto === 'string') {
         displayImage = firstPhoto as string;
       }
-    }
-  } else if (isMug) {
-    if (order.items && order.items.length > 0) {
-      displayImage = order.items[0].photo || order.items[0].photos?.[0];
     }
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
@@ -548,18 +498,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     elementsText = '12 Meses';
   } else if (isAlbum) {
     elementsText = order.pages ? `${order.pages.length} Páginas` : 'N/A';
-  } else if (isMug) {
-    elementsText = order.items ? `${order.items.length} Tazas` : 'N/A';
   } else if (order.photos?.length) {
     elementsText = `${order.photos.length} Fotos`;
   }
 
   const renderPagesPreview = () => {
     if (isAlbum) return <AlbumViewer order={order} />;
-    if (isMug) return <MugViewer order={order} />;
     if (isCalendar) return <CalendarViewer order={order} />;
     if (order.pages && Array.isArray(order.pages)) return <AlbumViewer order={order} />;
-    if (order.items && Array.isArray(order.items)) return <MugViewer order={order} />;
 
     return (
       <div className="text-center py-10 text-gray-500">

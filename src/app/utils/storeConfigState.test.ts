@@ -27,7 +27,7 @@ describe('mergeStoredConfig', () => {
     // Es el caso de un producto nuevo: el documento viejo no lo conoce y sin
     // este relleno se quedaría sin precio.
     const merged = mergeStoredConfig({ prices: { album20x20: 1 } as any });
-    expect(merged.prices.mug).toBe(INITIAL_STORE_CONFIG.prices.mug);
+    expect(merged.prices.calendarWall).toBe(INITIAL_STORE_CONFIG.prices.calendarWall);
   });
 
   it('respeta un precio a cero en vez de tomarlo por ausente', () => {
@@ -81,9 +81,9 @@ describe('pickStoreConfig', () => {
 
   it('copia en profundidad: editar el formulario no toca el estado ya guardado', () => {
     const picked = pickStoreConfig(INITIAL_STORE_CONFIG);
-    picked.prices.mug = 1;
+    picked.prices.calendarWall = 1;
     picked.promotions[0].title = 'otra cosa';
-    expect(INITIAL_STORE_CONFIG.prices.mug).not.toBe(1);
+    expect(INITIAL_STORE_CONFIG.prices.calendarWall).not.toBe(1);
     expect(INITIAL_STORE_CONFIG.promotions[0].title).not.toBe('otra cosa');
   });
 });

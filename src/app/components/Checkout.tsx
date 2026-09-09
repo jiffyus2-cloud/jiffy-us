@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Coffee, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
+import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
 import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
@@ -134,7 +134,6 @@ export default function Checkout() {
 
   const product = orderData.product;
   const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
-  const isMugType = productTypeStr.includes('mug') || productTypeStr.includes('taza');
   const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
   const isAlbum = productTypeStr.includes('album') || productTypeStr.includes('photobook');
   const isTela = isAlbum && (
@@ -142,11 +141,6 @@ export default function Checkout() {
     orderData?.customization?.material === 'Tela'
   );
   
-  const getMugCount = () => {
-    const arr = orderData.items || orderData.mugItems || [];
-    return Array.isArray(arr) && arr.length > 0 ? arr.length : 1;
-  };
-
   // --- CÁLCULO DE DESGLOSE PARA ÁLBUMES ---
   let albumBasePrice = 0;
   let albumExtraPagePrice = 0;
@@ -184,7 +178,6 @@ export default function Checkout() {
     if (!product || !orderData) return 0;
     
     if (isAlbum) return albumBasePrice + extraPagesCost;
-    if (isMugType) return config.prices.mug * getMugCount(); 
     
     if (isCalendar) {
       const calendarFormat = String(orderData.customization?.type || orderData.customization?.format || orderData.customization?.size || '').toLowerCase();
@@ -192,11 +185,6 @@ export default function Checkout() {
       return config.prices.calendarDesk;
     }
     
-    if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) {
-      const perPhoto = config.prices.photoPackBase || Number(product.basePrice || product.price || 0);
-      return perPhoto * (orderData.photos?.length || 0);
-    }
-
     return Number(product.basePrice || product.price || 0);
   };
 
@@ -336,9 +324,6 @@ export default function Checkout() {
       if (Array.isArray(firstPhoto) && firstPhoto.length > 0) displayImage = firstPhoto[0];
       else if (typeof firstPhoto === 'string') displayImage = firstPhoto as string;
     }
-  } else if (isMugType) {
-    const arr = orderData.items || orderData.mugItems || [];
-    if (arr.length > 0) displayImage = arr[0].photo || arr[0].photos?.[0];
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
     if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
@@ -637,13 +622,6 @@ export default function Checkout() {
                    </div>
                  </>
               )}
-
-              {/* --- DESGLOSE DE TAZAS --- */}
-              {isMugType && (
-                 <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
-                   <span className="text-gray-600">Cantidad Tazas</span><span className="font-medium">{getMugCount()} x ${config.prices.mug.toLocaleString('es-CO')} COP</span>
-                 </div>
-              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
@@ -712,8 +690,7 @@ export default function Checkout() {
                   <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-300"><ImageIcon className="w-16 h-16" /></div>
                 )}
               </div>
-              {orderData.coverData?.title && !isMugType && <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>}
-              {isMugType && (<button type="button" onClick={() => setIsModalOpen(true)} className="w-full mt-4 py-4 bg-white hover:bg-gray-50 rounded-xl flex items-center justify-center gap-3 border border-gray-200 hover:border-black transition-all shadow-sm group"><Coffee className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" /><span className="font-bold text-gray-700 group-hover:text-black">Revisar mis diseños</span></button>)}
+              {orderData.coverData?.title && <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>}
             </div>
           </div>
         </div>

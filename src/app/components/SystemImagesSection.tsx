@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
-import { AlertCircle, Check, Images, Loader2, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { AlertCircle, Check, Crop, Images, Loader2, Plus, Ruler, Trash2, Upload, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import {
   SYSTEM_IMAGE_SLOTS,
   SYSTEM_IMAGE_GALLERIES,
@@ -12,9 +12,11 @@ import {
   ACCEPTED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
   CAROUSEL_ASPECT,
+  CAROUSEL_SPEC,
   resolveImageRef,
   isUploadedRef,
   type CarouselSlide,
+  type ImageSpec,
 } from '../config/systemImages';
 import { useSystemImages, useCarouselSlideRefs } from '../context/SystemImagesContext';
 
@@ -49,6 +51,27 @@ const extensionFor = (file: File) => {
 };
 
 const describeSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+/**
+ * Instrucciones de la imagen. Se enseñan siempre, no escondidas tras un tooltip:
+ * la web recorta con `object-cover` y el recorte cambia con el ancho de la
+ * pantalla, así que subir una foto con el motivo descentrado es la forma más
+ * fácil de que en móvil salga cortada.
+ */
+function SpecNote({ spec }: { spec: ImageSpec }) {
+  return (
+    <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 space-y-1">
+      <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
+        <Ruler className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
+        <span><span className="font-bold text-gray-700">Tamaño: </span>{spec.size}</span>
+      </p>
+      <p className="text-[11px] leading-snug text-gray-600 flex gap-1.5">
+        <Crop className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
+        <span><span className="font-bold text-gray-700">Zona segura: </span>{spec.safeZone}</span>
+      </p>
+    </div>
+  );
+}
 
 const newSlideId = () =>
   `slide-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -383,6 +406,8 @@ export default function SystemImagesSection({ adminEmail }: SystemImagesSectionP
             {/* ── CARRUSEL: imagen + textos de cada diapositiva ── */}
             {group === 'Portada' && (
               <div className="space-y-4">
+                <SpecNote spec={CAROUSEL_SPEC} />
+
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm text-gray-500">
                     {slides.length} diapositiva(s). Se muestran en este orden, cambiando solas cada
@@ -561,7 +586,10 @@ export default function SystemImagesSection({ adminEmail }: SystemImagesSectionP
 
                       <div className="p-4 flex flex-col gap-2 flex-1">
                         <p className="font-bold text-sm">{slot.label}</p>
-                        <p className="text-xs text-gray-500 flex-1">{slot.hint}</p>
+                        <p className="text-xs text-gray-500">{slot.hint}</p>
+                        <div className="flex-1">
+                          <SpecNote spec={slot.spec} />
+                        </div>
                         <label className={`${uploadButtonClass(isBusy)} w-full mt-1`}>
                           <Upload className="w-3.5 h-3.5" />
                           Cambiar imagen
@@ -597,6 +625,9 @@ export default function SystemImagesSection({ adminEmail }: SystemImagesSectionP
                       <p className="text-xs text-gray-500 mt-0.5">
                         {gallery.hint} · {current.length} imagen(es)
                       </p>
+                      <div className="mt-2 max-w-xl">
+                        <SpecNote spec={gallery.spec} />
+                      </div>
                     </div>
                     <label className={uploadButtonClass(isBusy)}>
                       {isBusy ? (
