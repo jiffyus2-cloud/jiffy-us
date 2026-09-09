@@ -1,6 +1,4 @@
-import albumImage from '../../assets/Album2.jpeg';
-import calendarImage from '../../assets/ec28dc812bed68927d47becc060a8091e563d836.png';
-import mugImage from '../../assets/eb118a5bec949d55aceb42319ab38162a57c22ff.png';
+import { useSystemImage } from '../context/SystemImagesContext';
 import { DESIGN } from '../../styles/design-system';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -12,6 +10,11 @@ interface ProductSelectionProps {
 
 export default function ProductSelection({ onSelectProduct }: ProductSelectionProps) {
   const { t } = useLanguage();
+
+  // Sustituibles desde el panel de administración; por defecto, los assets originales.
+  const albumImage = useSystemImage('creator.product.album');
+  const calendarImage = useSystemImage('creator.product.calendar');
+  const mugImage = useSystemImage('creator.product.mug');
 
   // Lectura de variables de entorno para mostrar/ocultar productos
   const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
