@@ -98,7 +98,27 @@ export interface ImageSpec {
   size: string;
   /** Dónde tiene que quedar el contenido para que el recorte no se lo lleve. */
   safeZone: string;
+  /** Los mismos datos en forma de dibujo, para no depender de que alguien lea el texto. */
+  diagram: SafeZoneDiagram;
 }
+
+/**
+ * Medidas para dibujar la zona segura. Todo va en porcentaje (0-100) sobre la
+ * foto, para que el mismo dato sirva sea cual sea el tamaño del dibujo.
+ */
+export interface SafeZoneDiagram {
+  /** Proporción de la foto (ancho ÷ alto): 16/9 ≈ 1.78, cuadrada = 1. */
+  aspect: number;
+  /** Rectángulo donde tiene que quedar lo importante. */
+  safe: { x: number; y: number; width: number; height: number };
+  /** Franja que la web tapa con textos encima de la foto (si la hay). */
+  textBand?: { y: number; height: number };
+  /** Pie del dibujo, de tres o cuatro palabras. */
+  caption: string;
+}
+
+/** Margen del 10% por lado: el encuadre que sirve para casi todo. */
+const CENTERED_SAFE = { x: 10, y: 10, width: 80, height: 80 };
 
 /** Instrucciones del carrusel: valen para todas las diapositivas. */
 export const CAROUSEL_SPEC: ImageSpec = {
@@ -109,6 +129,12 @@ export const CAROUSEL_SPEC: ImageSpec = {
     'Deja lo importante dentro del 60% central de la foto y no pegues nada a los bordes. ' +
     'Ten en cuenta también que el tercio inferior queda bajo el degradado con el título, la ' +
     'descripción y el botón.',
+  diagram: {
+    aspect: 16 / 9,
+    safe: { x: 20, y: 6, width: 60, height: 58 },
+    textBand: { y: 64, height: 36 },
+    caption: 'Los lados se pierden en móvil',
+  },
 };
 
 /** Grupos con los que se ordena el panel de administración. */
@@ -198,6 +224,12 @@ const LANDING_CARD_SPEC: ImageSpec = {
     'Se recorta a una franja apaisada de 288 px de alto que en móvil ocupa todo el ancho y en ' +
     'escritorio un tercio: centra el producto y déjale aire arriba y abajo. En la esquina ' +
     'inferior izquierda van el nombre y el botón «Más», así que evita poner ahí nada importante.',
+  diagram: {
+    aspect: 4 / 3,
+    safe: { x: 12, y: 8, width: 76, height: 60 },
+    textBand: { y: 68, height: 32 },
+    caption: 'Abajo van el nombre y el botón',
+  },
 };
 
 const SQUARE_CARD_SPEC: ImageSpec = {
@@ -205,6 +237,11 @@ const SQUARE_CARD_SPEC: ImageSpec = {
   safeZone:
     'Se ve cuadrada y completa, sin recorte lateral: centra el producto y deja un margen de ' +
     'alrededor del 10% por cada lado para que no toque los bordes de la tarjeta.',
+  diagram: {
+    aspect: 1,
+    safe: CENTERED_SAFE,
+    caption: 'Deja un margen de aire',
+  },
 };
 
 const MASCOT_SPEC: ImageSpec = {
@@ -212,6 +249,11 @@ const MASCOT_SPEC: ImageSpec = {
   safeZone:
     'Se pinta pequeña (112 px) y entera, sin recortar: centra el dibujo y deja un 10% de ' +
     'margen alrededor. El fondo tiene que ser transparente, no blanco.',
+  diagram: {
+    aspect: 1,
+    safe: CENTERED_SAFE,
+    caption: 'No se recorta: se ve entera',
+  },
 };
 
 const GALLERY_SPEC: ImageSpec = {
@@ -219,6 +261,11 @@ const GALLERY_SPEC: ImageSpec = {
   safeZone:
     'Se recorta a un cuadrado: centra la muestra del material y evita texto o detalles cerca ' +
     'de los bordes, porque son lo primero que se pierde al recortar.',
+  diagram: {
+    aspect: 1,
+    safe: CENTERED_SAFE,
+    caption: 'Los bordes se pierden al recortar',
+  },
 };
 
 export const SYSTEM_IMAGE_SLOTS = [
