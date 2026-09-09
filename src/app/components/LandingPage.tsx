@@ -11,17 +11,8 @@ import { useLanguage } from '../context/LanguageContext';
 // --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 
-// --- IMÁGENES DE LOS PRODUCTOS ACTUALIZADAS ---
-import albumImage from '../../assets/IMG_8973.jpg';
-import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
-import calendarImage from '../../assets/Calendario.jpg';
-import photoPackImage from '../../assets/926a104c374871caf4fcad0882de38be9da36b8a.png';
-
-// --- NUEVAS IMÁGENES DEL CARRUSEL ---
-import Slide1 from '../../assets/Carousel/c4.jpg';
-import Slide2 from '../../assets/Carousel/C100164.jpg';
-import Slide3 from '../../assets/Carousel/c8.jpg';
-import Slide4 from '../../assets/Carousel/C100153.jpg';
+// --- IMÁGENES DEL SISTEMA (sustituibles desde el panel de administración) ---
+import { useSystemImage } from '../context/SystemImagesContext';
 
 export default function LandingPage() {
   const { t } = useLanguage();
@@ -30,6 +21,16 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
+
+  // Cada imagen sale del panel de administración si la han cambiado; si no, del asset original.
+  const albumImage = useSystemImage('landing.product.album');
+  const calendarImage = useSystemImage('landing.product.calendar');
+  const mugImage = useSystemImage('landing.product.mug');
+  const photoPackImage = useSystemImage('landing.product.photoPack');
+  const Slide1 = useSystemImage('landing.hero.1');
+  const Slide2 = useSystemImage('landing.hero.2');
+  const Slide3 = useSystemImage('landing.hero.3');
+  const Slide4 = useSystemImage('landing.hero.4');
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();

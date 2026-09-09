@@ -5,15 +5,9 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
-// --- IMPORTACIÓN DINÁMICA DE CARPETAS (Magia de Vite) ---
-const clientImagesGlob = import.meta.glob('../../assets/Clientes/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
-const allClientImages = Object.values(clientImagesGlob).map((module: any) => module.default);
-
-const papelImagesGlob = import.meta.glob('../../assets/Papel/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
-const allPapelImages = Object.values(papelImagesGlob).map((module: any) => module.default);
-
-const telaImagesGlob = import.meta.glob('../../assets/Tela/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
-const allTelaImages = Object.values(telaImagesGlob).map((module: any) => module.default);
+// Las carpetas de muestras viven en el catálogo de imágenes del sistema, para que
+// se puedan añadir, quitar y reordenar desde el panel de administración.
+import { useSystemGallery } from '../context/SystemImagesContext';
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -109,6 +103,11 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
 export default function ProductDetailsModal({ isOpen, onClose, productType, onConfirm }: ProductDetailsModalProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+
+  // Galerías de muestra: lo que haya puesto la administración o, si no ha tocado nada, las carpetas del bundle.
+  const allClientImages = useSystemGallery('samples.clientes');
+  const allPapelImages = useSystemGallery('samples.papel');
+  const allTelaImages = useSystemGallery('samples.tela');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSpecsOpen, setIsSpecsOpen] = useState(false);
   const [sizePreviewImage, setSizePreviewImage] = useState<string | null>(null);
@@ -138,7 +137,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
     if (!isOpen || allClientImages.length === 0) return [];
     const shuffled = [...allClientImages].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 6);
-  }, [isOpen]);
+  }, [isOpen, allClientImages]);
 
   const handleMakeYourOwn = () => {
     if (onConfirm) {

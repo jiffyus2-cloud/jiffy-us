@@ -63,7 +63,7 @@ import { Switch } from './ui/switch';
 import { PageRangeSlider } from './ui/page-range-slider';
 
 // --- NUEVA IMAGEN DE JIFFY ---
-import jiffy2Img from '../../assets/Jiffy2.png';
+import { useSystemImage } from '../context/SystemImagesContext';
 import iosAnimVideo from '../../assets/Anim_IOS.mp4';
 
 // ============================================================================
@@ -302,6 +302,8 @@ export default function PhotoOrganizer({
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
+  // Sustituible desde el panel de administración; por defecto, el asset original.
+  const jiffy2Img = useSystemImage('organizer.upload.mascot');
   const { user } = useAuth();
 
   const safePhotos = photos || [];
