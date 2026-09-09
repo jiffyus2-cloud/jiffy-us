@@ -3,7 +3,8 @@ import { Button } from '../ui/button';
 import React from 'react';
 import logo from '../../../assets/JiffyLogo.svg';
 import { useLanguage } from '../../context/LanguageContext';
-import { LogOut, Plus, MessageCircle, Menu } from 'lucide-react';
+import { LogOut, Plus, Menu } from 'lucide-react';
+import { WhatsAppIcon } from '../support/WhatsAppIcon';
 import { useAuth } from '../../../hooks/useAuth';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
 import { buttonVariants } from '../ui/button';
@@ -50,7 +51,7 @@ export function Header() {
                 title={t('nav.support')}
                 className="flex items-center justify-center w-8 h-8 rounded-md transition-colors text-gray-500 hover:text-black hover:bg-gray-50"
               >
-                <MessageCircle className="w-4.5 h-4.5" />
+                <WhatsAppIcon className="w-4.5 h-4.5" />
               </button>
             </nav>
           </div>
@@ -111,7 +112,7 @@ export function Header() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={handleSupportClick}>
-                  <MessageCircle className="w-3.5 h-3.5" />
+                  <WhatsAppIcon className="w-3.5 h-3.5" />
                   {t('nav.support')}
                 </DropdownMenuItem>
                 {user ? (

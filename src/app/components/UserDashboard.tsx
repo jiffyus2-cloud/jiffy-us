@@ -38,11 +38,11 @@ import {
   Check,
   X,
   Sparkles,
-  MessageCircle,
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import { useLanguage } from '../context/LanguageContext';
 import { buildWhatsAppUrl } from '../config/contact';
+import { WhatsAppIcon } from './support/WhatsAppIcon';
 
 import justWhiteImg from '../../assets/justwhite.png';
 
@@ -622,7 +622,7 @@ const UserDashboard: React.FC = () => {
                               onClick={handleContactWhatsApp}
                               className="w-full py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center gap-2"
                             >
-                              <MessageCircle className="w-4 h-4" />
+                              <WhatsAppIcon className="w-4 h-4" />
                               Contactar por WhatsApp
                             </button>
                           </CardFooter>
