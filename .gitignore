@@ -48,3 +48,6 @@ next-env.d.ts
 
 cursor/
 /.claude
+
+# Copias temporales que deja scripts/rules-diff.mjs
+*.rules.live
