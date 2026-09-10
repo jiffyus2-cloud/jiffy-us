@@ -263,6 +263,11 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
         const rect = slotRects[photoIndex];
         if (!rect) return null;
         const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
+        const hasText = !!(textBox && String(textBox.text ?? '').trim());
+
+        // Un slot sin foto ni texto debe salir realmente en blanco en el PDF: no se
+        // pinta nada (ni fondo gris ni borde), para que quede el blanco de la página.
+        if (!resolvedSrc && !hasText) return null;
 
         return (
           <div
@@ -276,7 +281,7 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                   <CanvasCropper src={resolvedSrc} crop={crop} />
                 </div>
               </div>
-            ) : textBox ? (
+            ) : (
               <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
                 <div style={{ 
                   width: '90%', 
@@ -291,8 +296,6 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
                   {textBox.text}
                 </div>
               </div>
-            ) : (
-              <div className="bg-gray-50 w-full h-full" />
             )}
           </div>
         );
