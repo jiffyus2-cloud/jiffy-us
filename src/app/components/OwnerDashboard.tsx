@@ -272,7 +272,7 @@ const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex:
         return (
           <div
             key={photoIndex}
-            className="absolute overflow-hidden rounded-lg bg-white flex items-center justify-center border border-gray-100/50"
+            className="absolute overflow-hidden rounded-lg bg-white flex items-center justify-center"
             style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
           >
             {resolvedSrc ? (
