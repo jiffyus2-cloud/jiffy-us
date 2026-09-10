@@ -60,16 +60,20 @@ salta las reglas**; por eso no hay ninguna regla que permita a un cliente tocar
 
 ### Storage
 
-- `/{allPaths=**}`: cualquier usuario con sesión puede leer y escribir.
-- `/system_images/**`: lectura pública (los visitantes sin sesión tienen que ver
-  las imágenes de la tienda) y escritura o borrado solo del correo de
-  administración.
+- `orders/{uid}/**`: cada cliente entra solo en la carpeta que lleva su propio
+  uid, que es justo donde escribe la app — `orderService` construye la ruta con
+  el uid de la sesión. El dueño de la tienda entra en todas, porque tiene que
+  revisar y descargar los pedidos para producción.
+- `system_images/**`: lectura pública (los visitantes sin sesión tienen que ver
+  las imágenes de la tienda) y escritura solo del correo de administración.
 
-> **Riesgo conocido, sin resolver.** La primera regla es muy amplia: cualquier
-> cliente con cuenta puede leer, sobrescribir o borrar **cualquier** archivo del
-> bucket, incluidas las fotos de los pedidos de otras personas y las imágenes de
-> la tienda. En Storage las reglas se combinan con OR, así que el bloque
-> específico de `system_images` no restringe nada: solo añade la lectura
-> pública. Acotarlo (por ejemplo, que cada quien solo escriba bajo
-> `orders/{su-uid}/**`) exige comprobar antes que ninguna ruta en uso se quede
-> fuera, y por eso no se ha tocado aquí.
+No hay ninguna regla que abarque el bucket entero, y es a propósito: en Storage
+las reglas se combinan con OR, así que una regla amplia no se puede «acotar»
+después con otra más específica. Hasta septiembre de 2026 existía
+`/{allPaths=**}` con `allow read, write: if request.auth != null`, que dejaba a
+cualquier cliente con cuenta leer, sobrescribir o borrar los archivos de
+cualquier otro pedido.
+
+Las URLs de descarga que guarda la app (`getDownloadURL`) llevan un token y
+siguen funcionando al margen de las reglas; por eso endurecerlas no afecta a las
+galerías ya guardadas ni a las descargas del panel.
