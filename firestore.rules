@@ -56,6 +56,15 @@ service cloud.firestore {
       }
     }
 
+    // Códigos de descuento.
+    // `get` es público a propósito: el checkout tiene que poder comprobar un
+    // código concreto sin sesión de administración. `list` NO lo es, así que
+    // quien no conozca un código no puede descargarse el catálogo entero.
+    match /discount_codes/{code} {
+      allow get: if true;
+      allow list, write: if isOwner();
+    }
+
     // MCP API keys — owner-only
     match /mcp_api_keys/{keyId} {
       allow read, write: if isOwner();
