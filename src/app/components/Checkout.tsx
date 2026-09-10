@@ -12,6 +12,7 @@ import justWhiteImg from '../../assets/justwhite.png';
 
 // --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
 import { useStoreConfig } from '../context/StoreConfigContext';
+import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
 
 export default function Checkout() {
   const { state } = useLocation();
@@ -23,6 +24,11 @@ export default function Checkout() {
   const config = useStoreConfig();
 
   const [isProcessing, setIsProcessing] = useState(false);
+  // Código de descuento: lo valida el backend, aquí solo se guarda la respuesta.
+  const [codeInput, setCodeInput] = useState('');
+  const [appliedCode, setAppliedCode] = useState<AppliedDiscount | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [orderData, setOrderData] = useState<any>(null);
@@ -190,6 +196,8 @@ export default function Checkout() {
 
   const subtotal = calculateSubtotal();
   const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
+  // Lo calcula el backend sobre el subtotal; aquí solo se pinta y se resta.
+  const codeDiscount = appliedCode?.discount ?? 0;
   const isPickup = pickupLocation !== '';
   const cityLower = formData.city.trim().toLowerCase();
   const shipping = isPickup
@@ -200,7 +208,38 @@ export default function Checkout() {
         ? config.prices.shippingCali
         : config.prices.shippingNational;
   const tax = 0;
-  const total = subtotal - discountAmount + shipping + tax;
+  const total = Math.max(0, subtotal - discountAmount - codeDiscount) + shipping + tax;
+
+  /**
+   * Comprueba el código contra el backend. Se llama al pulsar «Aplicar» y otra
+   * vez justo antes de pagar: entre una cosa y otra el código puede haberse
+   * agotado, haber vencido o haber cambiado el subtotal.
+   */
+  const applyCode = async (raw: string): Promise<AppliedDiscount | null> => {
+    const code = raw.trim();
+    if (!code) return null;
+
+    setIsCheckingCode(true);
+    setCodeError(null);
+    try {
+      const result = await validateDiscountCode(code, subtotal);
+      if (!result.ok) {
+        setAppliedCode(null);
+        setCodeError(result.reason);
+        return null;
+      }
+      setAppliedCode(result.applied);
+      return result.applied;
+    } finally {
+      setIsCheckingCode(false);
+    }
+  };
+
+  const removeCode = () => {
+    setAppliedCode(null);
+    setCodeError(null);
+    setCodeInput('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +274,28 @@ export default function Checkout() {
       };
       const billingAddress = formData.sameAsShipping ? shippingAddress : { name: formData.billingName, email: formData.email, address: formData.billingAddress, city: formData.billingCity, zipCode: formData.billingZipCode };
 
-      await updateOrderAddresses(state.orderId, { shippingAddress, billingAddress }, total, 'pending_payment');
+      // Se revalida contra el backend por si el código venció o se agotó
+      // mientras el cliente rellenaba la dirección.
+      let confirmedCode: AppliedDiscount | null = null;
+      if (appliedCode) {
+        confirmedCode = await applyCode(appliedCode.code);
+        if (!confirmedCode) {
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const finalTotal = Math.max(0, subtotal - discountAmount - (confirmedCode?.discount ?? 0)) + shipping + tax;
+
+      await updateOrderAddresses(
+        state.orderId,
+        { shippingAddress, billingAddress },
+        finalTotal,
+        'pending_payment',
+        confirmedCode
+          ? { discountCode: confirmedCode.code, discountCodeAmount: confirmedCode.discount }
+          : { discountCode: null, discountCodeAmount: 0 }
+      );
       localStorage.setItem('pending_order_id', state.orderId);
 
       // Save address/billing to user profile if requested
@@ -273,7 +333,7 @@ export default function Checkout() {
           'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          amount: Math.round(total * 100),
+          amount: Math.round(finalTotal * 100),
           title: product.name || 'Pedido Jiffy',
           orderId: state.orderId,
         }),
@@ -635,6 +695,43 @@ export default function Checkout() {
                 <div className="flex justify-between text-green-600 font-bold">
                   <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> Descuento ({config.discounts.percentage}%)</span>
                   <span>-${discountAmount.toLocaleString('es-CO')} COP</span>
+                </div>
+              )}
+
+              {/* --- CÓDIGO DE DESCUENTO --- */}
+              {appliedCode ? (
+                <div className="flex justify-between text-green-600 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Tag className="w-4 h-4" /> Código {appliedCode.code}
+                    <button
+                      type="button"
+                      onClick={removeCode}
+                      className="ml-1 text-xs text-gray-400 hover:text-red-500 underline font-medium"
+                    >
+                      quitar
+                    </button>
+                  </span>
+                  <span>-${codeDiscount.toLocaleString('es-CO')} COP</span>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <input
+                      value={codeInput}
+                      onChange={e => { setCodeInput(e.target.value.toUpperCase()); setCodeError(null); }}
+                      placeholder="Código de descuento"
+                      className="flex-1 min-w-0 p-2 border border-gray-300 rounded-lg text-sm uppercase tracking-wide focus:outline-none focus:border-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void applyCode(codeInput)}
+                      disabled={isCheckingCode || codeInput.trim() === ''}
+                      className="px-4 py-2 rounded-lg bg-black text-white text-sm font-bold hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400"
+                    >
+                      {isCheckingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                    </button>
+                  </div>
+                  {codeError && <p className="text-xs text-red-600">{codeError}</p>}
                 </div>
               )}
 
