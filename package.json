@@ -8,7 +8,9 @@
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rules:check": "node scripts/rules-diff.mjs",
+    "rules:deploy": "firebase deploy --only firestore:rules,storage"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
