@@ -7,20 +7,33 @@ rules_version = '2';
 // rules:check` compara ambas y avisa.
 //
 // OJO con el orden mental: en Storage las reglas se combinan con OR. Basta que
-// UNA coincidencia permita la operación para que se permita. Un bloque más
-// específico no "restringe" al general.
+// UNA coincidencia permita la operación para que se permita, así que un bloque
+// específico nunca restringe a uno más general — por eso aquí no hay ninguna
+// regla que abarque todo el bucket.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      // Permite leer y escribir a cualquier usuario que haya iniciado sesión en tu app
-      allow read, write: if request.auth != null;
+
+    function isOwner() {
+      return request.auth != null && request.auth.token.email == 'jiffyus2@gmail.com';
     }
-    // Imágenes de la tienda que se cambian desde el panel de administración
+
+    // Fotos de los pedidos: `orders/{uid}/{orderId}/...`.
+    //
+    // Cada cliente solo entra en la carpeta que lleva su propio uid, que es
+    // exactamente donde escribe la app (orderService construye la ruta con el
+    // uid de la sesión). El dueño de la tienda entra en todas porque tiene que
+    // poder revisar y descargar los pedidos para producción.
+    match /orders/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner();
+    }
+
+    // Imágenes de la tienda que se cambian desde el panel de administración.
     match /system_images/{allPaths=**} {
-      // Lectura pública: las ve cualquier visitante de la tienda, sin sesión.
+      // Lectura pública: las ve cualquier visitante, sin sesión iniciada.
       allow read: if true;
-      allow write, delete: if request.auth != null
-                           && request.auth.token.email == 'jiffyus2@gmail.com';
+      // `write` ya incluye crear, sobrescribir y borrar.
+      allow write: if isOwner();
     }
   }
 }
