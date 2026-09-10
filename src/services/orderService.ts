@@ -508,11 +508,18 @@ export async function updateOrderAddresses(
   orderId: string,
   addresses: { shippingAddress: any, billingAddress: any },
   total: number,
-  status: string = 'pending_payment'
+  status: string = 'pending_payment',
+  /**
+   * Campos extra del pedido. Hoy lo usa el código de descuento: el webhook del
+   * backend lee `discountCode` del pedido para contar el canje cuando el pago se
+   * confirma, así que tiene que quedar guardado antes de ir a Stripe.
+   */
+  extra: Record<string, any> = {}
 ) {
   const docRef = doc(db, 'orders', orderId);
   await updateDoc(docRef, {
     ...addresses,
+    ...extra,
     total,
     status,
     updatedAt: new Date().toISOString()
