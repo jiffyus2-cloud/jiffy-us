@@ -584,9 +584,13 @@ export default function PhotoOrganizer({
 
   // Máximo de páginas que justifican las fotos subidas (mínimo 1 foto por página).
   // Es el tope de la barra del selector, dinámico según cuántas fotos haya.
+  // Se redondea a par HACIA ABAJO: con 45 fotos el tope es 44, no 46 — 46
+  // páginas con 45 fotos dejaría una sin foto, que la regla 1 rechaza. Antes
+  // se redondeaba hacia arriba y el propio tope de la barra era infactible.
+  // Lo que pase de aquí solo entra como páginas en blanco a propósito.
   const getMaxPhotoPages = (photoCount: number) => {
     const baseMax = Math.max(40, photoCount);
-    return Math.min(ALBUM_MAX_PAGES, baseMax % 2 === 0 ? baseMax : baseMax + 1);
+    return Math.min(ALBUM_MAX_PAGES, baseMax - (baseMax % 2));
   };
 
   // Tope duro del álbum. Se puede superar el máximo anterior sumando páginas en
@@ -601,11 +605,31 @@ export default function PhotoOrganizer({
   const distributionVariant = variantForAlbumSize(sizeStr);
 
   /**
-   * Páginas en blanco efectivas para un total dado: siempre un número par y sin
-   * dejar por debajo del mínimo de 40 las que llevan fotos.
+   * Mínimo de páginas en las que caben `photoCount` fotos: la primera cantidad
+   * par, desde 40, que tenga reparto exacto. Casi siempre es ceil(N / tamaño
+   * mayor) redondeado a par; el bucle solo avanza cuando ese valor cae en un
+   * hueco de la regla 1 (359 fotos cuadradas: 40 páginas no, 42 sí).
+   * Es el suelo de la barra del selector, igual que getMaxPhotoPages es el techo.
    */
-  const evenBlankPages = (total: number) => {
-    const capped = Math.min(blankPages, Math.max(0, total - 40));
+  const getMinPhotoPages = (photoCount: number) => {
+    if (photoCount < 40) return 40; // por debajo del mínimo de fotos no hay nada que calcular
+    const sizes = VARIANT_SIZES[distributionVariant];
+    const big = sizes[sizes.length - 1];
+    let g = Math.max(40, Math.ceil(photoCount / big));
+    if (g % 2 !== 0) g += 1;
+    while (
+      g < ALBUM_MAX_PAGES &&
+      !checkFeasibility(photoCount, g, distributionVariant, { maxPages: ALBUM_MAX_PAGES }).feasible
+    ) g += 2;
+    return Math.min(g, ALBUM_MAX_PAGES);
+  };
+
+  /**
+   * Páginas en blanco efectivas para un total dado: siempre un número par y sin
+   * dejar por debajo del mínimo las que llevan fotos.
+   */
+  const evenBlankPages = (total: number, photoCount: number) => {
+    const capped = Math.min(blankPages, Math.max(0, total - getMinPhotoPages(photoCount)));
     return capped - (capped % 2);
   };
 
@@ -614,7 +638,7 @@ export default function PhotoOrganizer({
    * Las páginas en blanco pedidas a propósito no cuentan: van vacías al final.
    */
   const feasibilityFor = (photoCount: number, total: number) => {
-    const blanks = evenBlankPages(total);
+    const blanks = evenBlankPages(total, photoCount);
     const photoPages = total - blanks;
     return {
       blanks,
@@ -662,17 +686,22 @@ export default function PhotoOrganizer({
     }
   };
 
+  // Al cambiar cuántas fotos hay, el número de páginas se reencaja en el rango
+  // que esas fotos permiten: el suelo sube con muchas fotos (1000 cuadradas no
+  // caben en 40 páginas) y el techo total sigue siendo 250.
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
       const maxP = getMaxPages(uploadedPhotos.length);
+      const minP = getMinPhotoPages(uploadedPhotos.length);
       if (typeof numPages === 'number') {
         let newNum = numPages;
-        if (newNum < 40) newNum = 40;
+        if (newNum < minP) newNum = minP;
         if (newNum > maxP) newNum = maxP;
         if (newNum % 2 !== 0) newNum = Math.min(newNum + 1, maxP);
         setNumPages(newNum);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedPhotos.length]);
 
   // Al abrir el selector de página destino, centra el scroll en la página de origen
@@ -1093,12 +1122,12 @@ export default function PhotoOrganizer({
     const maxP = getMaxPages(sortedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
 
-    safeVal = Math.min(Math.max(safeVal, 40), maxP);
+    safeVal = Math.min(Math.max(safeVal, getMinPhotoPages(sortedPhotos.length)), maxP);
     if (safeVal % 2 !== 0) safeVal = Math.min(safeVal + 1, maxP);
 
     // Las páginas en blanco pedidas a propósito no entran en el reparto: no
     // llevan fotos, así que no son de las que el plan tiene que dimensionar.
-    const blanks = evenBlankPages(safeVal);
+    const blanks = evenBlankPages(safeVal, sortedPhotos.length);
     const photoPages = safeVal - blanks;
 
     // El reparto vive en albumStateUtils para que "reorganizar" desde el editor
@@ -2441,22 +2470,25 @@ export default function PhotoOrganizer({
 
   if (step === 'pages') {
     const maxP = getMaxPages(uploadedPhotos.length);
-    // El número de páginas siempre es par y está entre 40 y maxP.
+    // Rango de la barra: lo que dan de sí las fotos subidas por ambos lados.
+    // Suelo: las páginas mínimas en que caben (40, o más si hay muchas fotos).
+    // Techo: una foto por página. Para pasar del techo hay que sumar páginas en
+    // blanco a propósito (control de más abajo); el total nunca pasa de maxP.
+    const minPhotoP = getMinPhotoPages(uploadedPhotos.length);
+    const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
+    // El número de páginas siempre es par y está entre minPhotoP y maxP.
     const clampPages = (v: number) => {
-      let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), maxP);
+      let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxP);
       if (val % 2 !== 0) val = Math.min(val + 1, maxP);
       return val;
     };
-    const currentPages = typeof numPages === 'number' ? numPages : 40;
-    // Tope de la barra: lo que dan de sí las fotos subidas. Para pasar de ahí
-    // hay que sumar páginas en blanco a propósito (control de más abajo).
-    const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
+    const currentPages = typeof numPages === 'number' ? numPages : minPhotoP;
     // Las páginas en blanco no pueden dejar la barra por debajo del mínimo, y
     // tanto ellas como la barra son siempre pares (el total puede ser impar
     // mientras se teclea en el campo; el onBlur lo redondea).
     const toEven = (v: number) => v - (v % 2);
-    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - 40)));
-    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, 40), maxPhotoP));
+    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - minPhotoP)));
+    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, minPhotoP), maxPhotoP));
     const emptyPages = Math.max(0, currentPages - uploadedPhotos.length);
 
     // REGLA 1: la combinación fotos ↔ páginas o tiene reparto exacto o no lo
@@ -2474,8 +2506,8 @@ export default function PhotoOrganizer({
     // cuando esa parte llega a su tope, se tocan las páginas en blanco.
     const stepPages = (delta: 2 | -2) => {
       const next = currentPages + delta;
-      if (next < 40 || next > maxP) return;
-      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= 40;
+      if (next < minPhotoP || next > maxP) return;
+      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= minPhotoP;
       if (!canUsePhotoPages) setBlankPages(safeBlank + delta);
       else if (safeBlank !== blankPages) setBlankPages(safeBlank);
       setNumPages(next);
@@ -2484,7 +2516,7 @@ export default function PhotoOrganizer({
     const stepBlankPages = (delta: 2 | -2) => {
       const nextBlank = safeBlank + delta;
       const next = currentPages + delta;
-      if (nextBlank < 0 || next > maxP || next < 40) return;
+      if (nextBlank < 0 || next > maxP || next < minPhotoP) return;
       setBlankPages(nextBlank);
       setNumPages(next);
     };
@@ -2509,7 +2541,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Quitar 2 páginas"
-                      disabled={currentPages <= 40}
+                      disabled={currentPages <= minPhotoP}
                       onClick={() => stepPages(-2)}
                       className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -2519,7 +2551,7 @@ export default function PhotoOrganizer({
                       type="number"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      min={40}
+                      min={minPhotoP}
                       max={maxP}
                       step={2}
                       value={numPages}
@@ -2529,7 +2561,7 @@ export default function PhotoOrganizer({
                         // contar como páginas en blanco pedidas a propósito.
                         const val = clampPages(currentPages);
                         setNumPages(val);
-                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - 40)));
+                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - minPhotoP)));
                       }}
                       className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-center"
                     />
@@ -2544,14 +2576,14 @@ export default function PhotoOrganizer({
                     </button>
                   </div>
                 </div>
-                {maxPhotoP > 40 ? (
+                {maxPhotoP > minPhotoP ? (
                   <>
                     <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. 40</span>
+                      <span>Mín. {minPhotoP}</span>
                       <span>Máx. {maxPhotoP}</span>
                     </div>
                     <PageRangeSlider
-                      min={40}
+                      min={minPhotoP}
                       max={maxPhotoP}
                       step={2}
                       value={sliderPages}
@@ -2563,7 +2595,7 @@ export default function PhotoOrganizer({
                     <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, así que tus fotos dan para <strong>40 páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
+                    <span>Con <strong>{uploadedPhotos.length} fotos</strong> y 1 foto por página como mínimo, tus fotos dan para <strong>{maxPhotoP} páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
                   </div>
                 )}
 
@@ -2994,12 +3026,14 @@ export default function PhotoOrganizer({
           (n, slots) => n + Object.keys(slots || {}).length, 0
         );
         const pages = redistributeModal.pages;
-        // Mismo tope que el paso inicial: mas paginas que fotos = paginas vacias.
+        // Mismo rango que el paso inicial: aquí no hay páginas en blanco a
+        // propósito, así que el total se acota a lo que las fotos permiten.
+        const minPhotoP = getMinPhotoPages(totalPhotos);
         const maxPhotoP = getMaxPhotoPages(totalPhotos);
         const emptyPages = Math.max(0, pages - totalPhotos);
         const setPages = (v: number) => {
-          let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), ALBUM_MAX_PAGES);
-          if (val % 2 !== 0) val = Math.min(val + 1, ALBUM_MAX_PAGES);
+          let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxPhotoP);
+          if (val % 2 !== 0) val = Math.min(val + 1, maxPhotoP);
           setRedistributeModal(m => (m ? { ...m, pages: val } : m));
         };
 
@@ -3046,7 +3080,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Quitar 2 páginas"
-                      disabled={pages <= 40}
+                      disabled={pages <= minPhotoP}
                       onClick={() => setPages(pages - 2)}
                       className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -3055,8 +3089,8 @@ export default function PhotoOrganizer({
                     <input
                       type="number"
                       inputMode="numeric"
-                      min={40}
-                      max={ALBUM_MAX_PAGES}
+                      min={minPhotoP}
+                      max={maxPhotoP}
                       step={2}
                       value={pages}
                       onChange={(e) => setPages(parseInt(e.target.value, 10))}
@@ -3065,7 +3099,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Añadir 2 páginas"
-                      disabled={pages >= ALBUM_MAX_PAGES}
+                      disabled={pages >= maxPhotoP}
                       onClick={() => setPages(pages + 2)}
                       className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -3074,24 +3108,24 @@ export default function PhotoOrganizer({
                   </div>
                 </div>
 
-                {maxPhotoP > 40 && (
+                {maxPhotoP > minPhotoP && (
                   <>
                     <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. 40</span>
+                      <span>Mín. {minPhotoP}</span>
                       <span>Máx. {maxPhotoP} con foto</span>
                     </div>
                     <PageRangeSlider
-                      min={40}
+                      min={minPhotoP}
                       max={maxPhotoP}
                       step={2}
-                      value={Math.min(Math.max(pages, 40), maxPhotoP)}
+                      value={Math.min(Math.max(pages, minPhotoP), maxPhotoP)}
                       onChange={setPages}
                     />
                   </>
                 )}
 
                 <p className="text-xs text-gray-500 mt-3">
-                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong>, equilibrando cuántas caen en cada una.
+                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong> con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.
                 </p>
                 {emptyPages > 0 && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
