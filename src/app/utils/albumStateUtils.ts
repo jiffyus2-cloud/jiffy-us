@@ -8,6 +8,7 @@
 // ============================================================================
 
 import type { PageVariantId } from './pageLayouts';
+import { buildDistributionPlan, variantForAllowedSizes } from './pageDistribution';
 
 export interface PageState {
   photos: string[];
@@ -811,15 +812,20 @@ export interface DistributableItem {
 }
 
 /**
- * Reparte `items` entre `totalPages` páginas equilibrando la carga: primero una
- * foto por página y después las sobrantes de una en una, siempre sobre las
- * páginas menos llenas y espaciándolas por el álbum en vez de amontonarlas al
- * principio.
+ * Reparte `items` entre `totalPages` páginas siguiendo las reglas de
+ * pageDistribution: cada página recibe un número de fotos que el pliego sabe
+ * maquetar, la primera va sola siempre que se pueda, no se repiten tamaños
+ * seguidos salvo el mayoritario y se usan las menos páginas de 3 posibles.
+ *
+ * Devuelve **null** cuando esa combinación de fotos y páginas no tiene solución
+ * exacta (p. ej. 599 fotos en 100 páginas horizontales). Antes se repartía "a
+ * ojo" y siempre salía algo; ahora quien llame tiene que avisar al usuario, no
+ * redondear el número de páginas ni dejar fotos fuera.
  *
  * Es EL MISMO reparto que se hace al crear el álbum (`handleFinalizeSetup` en
- * PhotoOrganizer.tsx lo llama tras ordenar las fotos con la IA), extraído aquí
- * para que "reorganizar" desde el editor dé exactamente el mismo resultado que
- * la primera carga y para poder testearlo sin montar el componente.
+ * PhotoOrganizer.tsx lo llama tras ordenar las fotos), extraído aquí para que
+ * "reorganizar" desde el editor dé exactamente el mismo resultado que la primera
+ * carga y para poder testearlo sin montar el componente.
  *
  * Devuelve páginas limpias: sin recortes, sin cajas de texto y sin layout ni
  * variante fijados — igual que un álbum recién creado, donde la variante se
@@ -829,64 +835,24 @@ export function distributePhotosAcrossPages(
   items: DistributableItem[],
   totalPages: number,
   config: AlbumConfig
-): AlbumState {
-  const pages = Math.max(1, Math.min(Math.floor(totalPages), config.maxPages));
-  const maxAllowed = maxPhotosPerPage(config);
+): AlbumState | null {
+  const variant = variantForAllowedSizes(config.allowedPhotosPerPage);
+  if (!variant) return null;
 
-  const capacities = new Array(pages).fill(1);
-  let remaining = Math.max(0, items.length - pages);
-  // La página 1 (índice 0) se deja con una sola foto mientras haya sitio en las
-  // demás: es la que abre el álbum y luce mejor sola.
-  let allowPageZero = pages <= 1;
-
-  while (remaining > 0) {
-    const available: number[] = [];
-    for (let i = allowPageZero ? 0 : 1; i < pages; i++) {
-      if (capacities[i] < maxAllowed) available.push(i);
-    }
-
-    if (available.length === 0) {
-      if (!allowPageZero && capacities[0] < maxAllowed) {
-        allowPageZero = true;
-        continue;
-      }
-      // No cabe en ninguna página respetando el máximo: el resto se apila en la
-      // última. Solo ocurre si el álbum entero está al tope.
-      capacities[pages - 1] += remaining;
-      remaining = 0;
-      break;
-    }
-
-    const minCap = Math.min(...available.map(p => capacities[p]));
-    const candidates = available.filter(p => capacities[p] === minCap);
-    const increments = Math.min(remaining, candidates.length);
-    const spacing = candidates.length / increments;
-
-    for (let i = 0; i < increments; i++) {
-      capacities[candidates[Math.floor(i * spacing)]] += 1;
-      remaining -= 1;
-    }
-  }
+  const plan = buildDistributionPlan(items.length, totalPages, variant, { maxPages: config.maxPages });
+  if (!plan) return null;
 
   const queue = [...items];
-  const state: AlbumState = Array.from({ length: pages }, () => blankPage());
-
-  for (let i = 0; i < pages; i++) {
-    for (let j = 0; j < capacities[i]; j++) {
+  return plan.sizes.map(size => {
+    const page = blankPage();
+    for (let i = 0; i < size; i++) {
       const item = queue.shift();
       if (!item) break;
-      state[i].photos.push(item.photo);
-      state[i].signatures.push(item.signature);
+      page.photos.push(item.photo);
+      page.signatures.push(item.signature);
     }
-  }
-
-  while (queue.length > 0) {
-    const item = queue.shift()!;
-    state[pages - 1].photos.push(item.photo);
-    state[pages - 1].signatures.push(item.signature);
-  }
-
-  return state;
+    return page;
+  });
 }
 
 /**
@@ -897,12 +863,15 @@ export function distributePhotosAcrossPages(
  * DESTRUCTIVO a propósito: se pierden recortes, cajas de texto, diseños de
  * página y el orden manual. No se pierde ninguna foto — esa es la invariante que
  * cubren los tests. Quien lo llame debe pedir confirmación explícita antes.
+ *
+ * Devuelve null si esas fotos no caben exactamente en ese número de páginas; en
+ * ese caso el álbum se queda como estaba.
  */
 export function redistributeAlbum(
   state: AlbumState,
   totalPages: number,
   config: AlbumConfig
-): AlbumState {
+): AlbumState | null {
   const items: DistributableItem[] = [];
   for (const page of state) {
     page.photos.forEach((photo, i) => {
