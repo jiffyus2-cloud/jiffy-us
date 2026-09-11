@@ -566,21 +566,24 @@ const items = (n: number, prefix = 'f') =>
   Array.from({ length: n }, (_, i) => ({ photo: `${prefix}${i}`, signature: `sig:${prefix}${i}` }));
 
 describe('distributePhotosAcrossPages', () => {
+  // El reparto lo decide pageDistribution (reglas 1-3); aquí se comprueba el
+  // acoplamiento: que las fotos y sus firmas caigan en el sitio que dice el plan
+  // y que una combinación imposible no produzca un álbum a medias.
   it('crea exactamente las páginas pedidas y no pierde ni reordena fotos', () => {
-    const state = distributePhotosAcrossPages(items(97), 40, SQUARE);
+    const state = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
     expect(state).toHaveLength(40);
     expect(state.flatMap(p => p.photos)).toEqual(items(97).map(i => i.photo));
   });
 
   it('cada firma viaja con su foto', () => {
-    const state = distributePhotosAcrossPages(items(97), 40, SQUARE);
+    const state = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
     for (const p of state) {
       p.photos.forEach((photo, i) => expect(p.signatures[i]).toBe(`sig:${photo}`));
     }
   });
 
   it('las páginas salen limpias: sin recortes, textos, layout ni variante', () => {
-    const state = distributePhotosAcrossPages(items(97), 40, SQUARE);
+    const state = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
     for (const p of state) {
       expect(p.crops).toEqual({});
       expect(p.texts).toEqual({});
@@ -589,66 +592,78 @@ describe('distributePhotosAcrossPages', () => {
     }
   });
 
-  it('equilibra: entre las páginas que reparten sobrante no hay más de 1 de diferencia', () => {
-    const state = distributePhotosAcrossPages(items(150), 40, SQUARE);
-    const counts = state.slice(1).map(p => p.photos.length); // la 1 va aparte
-    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+  it('solo usa tamaños de página que el formato sabe maquetar', () => {
+    for (const config of [SQUARE, RECT]) {
+      const allowed = new Set(config.allowedPhotosPerPage);
+      const state = distributePhotosAcrossPages(items(137), 60, config)!;
+      expect(state).not.toBeNull();
+      for (const p of state) expect(allowed.has(p.photos.length)).toBe(true);
+    }
   });
 
   it('deja la primera página con una sola foto mientras quepa en las demás', () => {
-    const state = distributePhotosAcrossPages(items(120), 40, SQUARE);
+    const state = distributePhotosAcrossPages(items(120), 40, SQUARE)!;
     expect(state[0].photos).toHaveLength(1);
   });
 
-  it('usa la página 1 solo cuando las demás ya están al máximo', () => {
+  it('llena la página 1 solo cuando el álbum va justo al máximo', () => {
     const max = SQUARE.allowedPhotosPerPage[SQUARE.allowedPhotosPerPage.length - 1];
-    // 40 páginas × 9 = 360 caben justas; con 360 fotos la página 1 tiene que llenarse.
-    const state = distributePhotosAcrossPages(items(360), 40, SQUARE);
+    // 40 páginas × 9 = 360 caben justas: no sobra sitio para dejar la 1 sola.
+    const state = distributePhotosAcrossPages(items(360), 40, SQUARE)!;
     expect(state[0].photos).toHaveLength(max);
     expect(state.flatMap(p => p.photos)).toHaveLength(360);
   });
 
-  it('con menos fotos que páginas, las sobrantes quedan vacías', () => {
-    const state = distributePhotosAcrossPages(items(12), 40, RECT);
-    expect(state).toHaveLength(40);
-    expect(state.slice(0, 12).every(p => p.photos.length === 1)).toBe(true);
-    expect(state.slice(12).every(p => p.photos.length === 0)).toBe(true);
+  it('rechaza (null) cuando hay menos fotos que páginas', () => {
+    // Antes esto repartía igual y dejaba 28 páginas vacías sin avisar.
+    expect(distributePhotosAcrossPages(items(12), 40, RECT)).toBeNull();
   });
 
-  it('respeta el máximo por página del formato mientras haya sitio', () => {
+  it('rechaza (null) las combinaciones sin solución exacta', () => {
+    // 40 páginas horizontales admiten hasta 240 fotos, pero nunca exactamente 239.
+    expect(distributePhotosAcrossPages(items(239), 40, RECT)).toBeNull();
+    expect(distributePhotosAcrossPages(items(240), 40, RECT)).not.toBeNull();
+    expect(distributePhotosAcrossPages(items(238), 40, RECT)).not.toBeNull();
+  });
+
+  it('rechaza (null) si se pide más páginas que el tope del álbum', () => {
+    expect(distributePhotosAcrossPages(items(600), 999, RECT)).toBeNull();
+  });
+
+  it('respeta el máximo por página del formato', () => {
     const max = RECT.allowedPhotosPerPage[RECT.allowedPhotosPerPage.length - 1];
-    const state = distributePhotosAcrossPages(items(200), 40, RECT);
+    const state = distributePhotosAcrossPages(items(200), 40, RECT)!;
     expect(state.every(p => p.photos.length <= max)).toBe(true);
-  });
-
-  it('no supera el tope de páginas del álbum', () => {
-    const state = distributePhotosAcrossPages(items(10), 999, RECT);
-    expect(state).toHaveLength(RECT.maxPages);
   });
 });
 
 describe('redistributeAlbum', () => {
-  const messy: AlbumState = [
-    { photos: ['a', '', 'b'], crops: { 0: { zoom: 2 } }, texts: { 1: { text: 'hola' } }, layout: 'row', variant: 3, signatures: ['sig:a', '', 'sig:b'] },
-    { photos: ['c'], crops: {}, texts: {}, variant: 1, signatures: ['sig:c'] },
-    { photos: ['d', 'e'], crops: { 1: { zoom: 3 } }, texts: {}, layout: 'grid', variant: 2, signatures: ['sig:d', 'sig:e'] },
-  ];
+  /** Álbum de 45 fotos repartido de cualquier manera, con recortes y textos. */
+  const messy: AlbumState = (() => {
+    const base = distributePhotosAcrossPages(items(45), 40, SQUARE)!;
+    const copy = base.map(p => ({ ...p, photos: [...p.photos], signatures: [...p.signatures], crops: { ...p.crops }, texts: { ...p.texts } }));
+    copy[0].crops = { 0: { zoom: 2 } };
+    copy[0].layout = 'row';
+    copy[0].variant = 3;
+    copy[1].texts = { 1: { text: 'hola' } };
+    return copy;
+  })();
 
   it('conserva todas las fotos, en orden y sin los huecos', () => {
-    const state = redistributeAlbum(messy, 40, SQUARE);
-    expect(state.flatMap(p => p.photos)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    const state = redistributeAlbum(messy, 40, SQUARE)!;
+    expect(state.flatMap(p => p.photos)).toEqual(items(45).map(i => i.photo));
     expect(bag(state)).toEqual(bag(messy));
   });
 
   it('mantiene la firma de cada foto tras el reparto', () => {
-    const state = redistributeAlbum(messy, 40, SQUARE);
+    const state = redistributeAlbum(messy, 40, SQUARE)!;
     for (const p of state) {
       p.photos.forEach((photo, i) => expect(p.signatures[i]).toBe(`sig:${photo}`));
     }
   });
 
   it('borra recortes, textos, layouts y variantes (es el reinicio que se avisa)', () => {
-    const state = redistributeAlbum(messy, 40, SQUARE);
+    const state = redistributeAlbum(messy, 40, SQUARE)!;
     expect(state.every(p => Object.keys(p.crops).length === 0)).toBe(true);
     expect(state.every(p => Object.keys(p.texts).length === 0)).toBe(true);
     expect(state.every(p => p.layout === undefined && p.variant === undefined)).toBe(true);
@@ -656,17 +671,22 @@ describe('redistributeAlbum', () => {
 
   it('deja el álbum con el número de páginas pedido', () => {
     expect(redistributeAlbum(messy, 40, SQUARE)).toHaveLength(40);
-    expect(redistributeAlbum(messy, 60, SQUARE)).toHaveLength(60);
+    expect(redistributeAlbum(messy, 44, SQUARE)).toHaveLength(44);
+  });
+
+  it('devuelve null y no toca nada si las fotos no caben en esas páginas', () => {
+    // 45 fotos no llegan a una por página en 60 páginas.
+    expect(redistributeAlbum(messy, 60, SQUARE)).toBeNull();
   });
 
   it('no muta el estado de entrada', () => {
     const snapshot = JSON.stringify(messy);
-    redistributeAlbum(messy, 60, SQUARE);
+    redistributeAlbum(messy, 44, SQUARE);
     expect(JSON.stringify(messy)).toBe(snapshot);
   });
 
   it('reorganizar un álbum recién repartido con las mismas páginas lo deja igual', () => {
-    const first = distributePhotosAcrossPages(items(97), 40, SQUARE);
+    const first = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
     expect(redistributeAlbum(first, 40, SQUARE)).toEqual(first);
   });
 });
