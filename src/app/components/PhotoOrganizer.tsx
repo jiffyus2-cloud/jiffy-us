@@ -1716,10 +1716,11 @@ export default function PhotoOrganizer({
   }, [allowedPhotosPerPage.join(',')]);
 
   // ── Variantes guardadas que el formato ya no admite ──────────────────────────
-  // Vertical no tiene layout de 4 fotos, pero álbumes creados antes (o pasados
-  // desde Horizontal) pueden traer páginas con `variant: 4` guardado. El editor
-  // ya las pinta con la variante siguiente vía getRenderSlotCount; si no se
-  // guarda ese ajuste, el PDF de impresión sigue leyendo el 4 y sale una página
+  // Un álbum puede traer un conteo que su formato no maqueta: páginas de 5 del
+  // reparto "a ojo" anterior, o un conteo que dejó de existir en el pliego (en
+  // vertical no hubo página de 4 hasta septiembre de 2026). El editor ya las
+  // pinta con la variante siguiente vía getRenderSlotCount; si no se guarda ese
+  // ajuste, el PDF de impresión sigue leyendo el conteo viejo y sale una página
   // distinta a la que se aprobó. Aquí se normaliza el estado guardado.
   // Las variantes por encima del máximo del formato no se tocan aquí: de esas se
   // ocupa el modal de migración de arriba, que además reparte las fotos.
