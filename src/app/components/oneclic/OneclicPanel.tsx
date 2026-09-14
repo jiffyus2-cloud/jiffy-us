@@ -24,14 +24,16 @@ import {
  * en propuesta hasta que una persona la aprueba.
  *
  * ATTESTATIONS apunta a las líneas de este archivo que demuestran las dos
- * reglas que 1clic no puede observar por red. Los marcadores `@1clic:` de esas
- * líneas están cubiertos por OneclicPanel.attestations.test.ts para que un
- * cambio de formato no deje la atestación apuntando a otra cosa.
+ * reglas que 1clic no puede observar por red. La línea declarada es el CÓDIGO
+ * (donde se pinta el coste; el botón de aprobar), no un comentario, y lleva un
+ * marcador `@1clic:` justo encima. OneclicPanel.attestations.test.ts comprueba
+ * ambas cosas para que un cambio de formato no deje la atestación apuntando a
+ * otra cosa.
  */
 export const ONECLIC_PANEL_FILE = 'src/app/components/oneclic/OneclicPanel.tsx';
 export const ATTESTATIONS = {
-  cost_visible: { file: ONECLIC_PANEL_FILE, line: 287 },
-  proposal_only: { file: ONECLIC_PANEL_FILE, line: 305 },
+  cost_visible: { file: ONECLIC_PANEL_FILE, line: 299 },
+  proposal_only: { file: ONECLIC_PANEL_FILE, line: 318 },
 } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -194,6 +196,14 @@ const ProposalCard: React.FC<{ status: OneclicStatus | null }> = ({ status }) =>
   const [error, setError] = useState<unknown>(null);
   const [proposal, setProposal] = useState<OneclicProposal | null>(null);
   const [decision, setDecision] = useState<'approved' | 'discarded' | null>(null);
+
+  // Si el agente elegido deja de estar en la lista (se desasignó en 1clic y se
+  // recargó el estado), el <select> mostraría la primera opción mientras el
+  // estado seguiría mandando el id viejo — y con "en seco" desmarcado, un run
+  // real. Se vuelve al agente de prueba para que pantalla y petición coincidan.
+  useEffect(() => {
+    if (!agentOptions.some(a => a.id === agentId)) setAgentId(ONECLIC_TEST_AGENT_ID);
+  }, [agentOptions, agentId]);
 
   const isTestAgent = agentId === ONECLIC_TEST_AGENT_ID;
   const canSubmit = !loading && message.trim().length > 0 && recordId.trim().length > 0 && Boolean(status?.configured.api_key);
