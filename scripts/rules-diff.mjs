@@ -96,9 +96,11 @@ async function fetchPublishedRules(projectId, token) {
 }
 
 /** Compara ignorando diferencias que no cambian el comportamiento. */
+// Se parte por \r?\n porque el checkout en Windows lleva CRLF y `.` no casa
+// con `\r`: el comentario no se quitaba y todas las líneas parecían distintas.
 const normalize = text =>
   text
-    .split('\n')
+    .split(/\r?\n/)
     .map(line => line.replace(/\/\/.*$/, '').trimEnd())
     .filter(line => line.trim() !== '')
     .join('\n');
