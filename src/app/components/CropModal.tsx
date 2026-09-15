@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { X, Maximize, ZoomIn, Search, Image as ImageIcon, RotateCcw, RotateCw } from 'lucide-react';
+import { X, Maximize, ZoomIn, Search, Image as ImageIcon, RotateCcw, RotateCw, AlignCenterHorizontal, AlignCenterVertical } from 'lucide-react';
 import ImageCropper from './ImageCropper';
 import { getCoverDimensions, getMinZoom } from '../utils/cropMath';
 
@@ -99,6 +99,11 @@ export default function CropModal({
     if (!naturalSize || !frameSize) return { Rw: 0, Rh: 0 };
     return getCoverDimensions(frameSize.w, frameSize.h, naturalSize.w, naturalSize.h);
   }, [naturalSize, frameSize]);
+
+  // Centrado: x/y = 50 pone el centro de la imagen sobre el centro del marco
+  const centerHorizontal = () => setX(50);
+  const centerVertical = () => setY(50);
+  const centerBoth = () => { setX(50); setY(50); };
 
   const applyPan = (clientX: number, clientY: number) => {
     const pan = panRef.current;
@@ -251,9 +256,9 @@ export default function CropModal({
           {/* Zoom */}
           <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl mx-auto">
             <button
-              onClick={() => setZoom(minZoom)}
+              onClick={() => { setZoom(minZoom); centerBoth(); }}
               className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-xs shrink-0"
-              title="Ver la foto completa (puede dejar partes en blanco)"
+              title="Ver la foto completa y centrada (puede dejar partes en blanco)"
             >
               <Maximize className="w-4 h-4" /> Foto completa
             </button>
@@ -273,11 +278,29 @@ export default function CropModal({
             </div>
 
             <button
-              onClick={() => setZoom(1)}
+              onClick={() => { setZoom(1); centerBoth(); }}
               className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-xs shrink-0"
-              title="Cubrir todo el marco"
+              title="Cubrir todo el marco con la foto centrada"
             >
               <ZoomIn className="w-4 h-4" /> Cubrir marco
+            </button>
+          </div>
+
+          {/* Centrado */}
+          <div className="flex items-center justify-center gap-3 max-w-2xl mx-auto">
+            <button
+              onClick={centerHorizontal}
+              className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-xs"
+              title="Centrar la foto horizontalmente en el marco"
+            >
+              <AlignCenterVertical className="w-4 h-4" /> Centrar horizontal
+            </button>
+            <button
+              onClick={centerVertical}
+              className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors flex items-center gap-2 font-medium text-xs"
+              title="Centrar la foto verticalmente en el marco"
+            >
+              <AlignCenterHorizontal className="w-4 h-4" /> Centrar vertical
             </button>
           </div>
 
