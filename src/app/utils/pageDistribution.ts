@@ -16,11 +16,17 @@
 // Tres variantes, una por formato de página:
 //   A — horizontal: {1, 2, 3, 4, 6}
 //   B — cuadrado:   {1, 2, 3, 4, 9}
-//   C — vertical:   {1, 2, 3, 6}     (el pliego vertical no tiene página de 4)
+//   C — vertical:   {1, 2, 3, 4, 6}
 //
-// Coinciden con ALLOWED_PHOTOS_PER_PAGE de pageLayouts.ts, que sigue siendo la
+// Los tamaños salen de ALLOWED_PHOTOS_PER_PAGE de pageLayouts.ts, que es la
 // única fuente de verdad de qué sabe maquetar cada formato; aquí solo se le
-// pone nombre de variante (ver variantForFormat).
+// pone nombre de variante (ver variantForFormat). Antes había una copia local
+// de las tres listas, y cuando el pliego vertical ganó su página de 4 fotos
+// habría quedado desincronizada sin avisar.
+//
+// C coincide hoy con A porque el pliego vertical original no tenía página de 4
+// y la ganó después en un pliego aparte. Se mantiene como variante propia
+// porque nada garantiza que sigan iguales.
 //
 // Prioridades, en este orden:
 //   REGLA 1  factibilidad matemática — obligatoria, o se rechaza
@@ -29,15 +35,15 @@
 //   REGLA 3  usar el menor número posible de páginas de 3
 // ============================================================================
 
-import { getAlbumFormat, type AlbumFormat } from './pageLayouts';
+import { ALLOWED_PHOTOS_PER_PAGE, getAlbumFormat, type AlbumFormat } from './pageLayouts';
 
 export type DistributionVariant = 'A' | 'B' | 'C';
 
 /** Tamaños de página que admite cada variante, en orden ascendente. */
 export const VARIANT_SIZES: Record<DistributionVariant, number[]> = {
-  A: [1, 2, 3, 4, 6],
-  B: [1, 2, 3, 4, 9],
-  C: [1, 2, 3, 6],
+  A: ALLOWED_PHOTOS_PER_PAGE.horizontal,
+  B: ALLOWED_PHOTOS_PER_PAGE.square,
+  C: ALLOWED_PHOTOS_PER_PAGE.vertical,
 };
 
 /** El tamaño que la regla 3 pide minimizar. */
@@ -79,7 +85,7 @@ interface VariantSpec {
   sizes: number[];
   /** Tamaño mayor de la variante (6, 9 o 6). */
   big: number;
-  /** Tamaño inmediatamente inferior al mayor (4, 4 o 3). */
+  /** Tamaño inmediatamente inferior al mayor (4 en las tres). */
   second: number;
   hasFour: boolean;
 }
@@ -150,9 +156,10 @@ export interface FeasibilityOptions {
  * que aquí no hay que tratar aparte: las cotas se cruzan solas.
  *
  * Los huecos cerca del tope no son uno por variante sino tantos como distancia
- * haya entre los dos tamaños mayores: A no alcanza 6G−1; B no alcanza 9G−1 a
- * 9G−4; C no alcanza 6G−1 ni 6G−2. Son los N que exigirían bajar del máximo
- * "menos de lo que mide el salto" entre el tamaño mayor y el siguiente.
+ * haya entre los dos tamaños mayores: A y C no alcanzan 6G−1; B no alcanza
+ * 9G−1 a 9G−4. Son los N que exigirían bajar del máximo "menos de lo que mide
+ * el salto" entre el tamaño mayor y el siguiente. (Mientras el pliego vertical
+ * no tenía página de 4, C tampoco alcanzaba 6G−2: el salto de 6 a 3 era de 3.)
  */
 export function checkFeasibility(
   photos: number,

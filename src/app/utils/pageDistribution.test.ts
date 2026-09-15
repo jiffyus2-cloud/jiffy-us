@@ -14,6 +14,7 @@ import {
   buildDistributionPlan,
   planIsConsistent,
 } from './pageDistribution';
+import { ALLOWED_PHOTOS_PER_PAGE } from './pageLayouts';
 
 const VARIANTS: DistributionVariant[] = ['A', 'B', 'C'];
 const bigOf = (v: DistributionVariant) => VARIANT_SIZES[v][VARIANT_SIZES[v].length - 1];
@@ -55,10 +56,19 @@ describe('identificación de la variante', () => {
   });
 
   it('coincide con los tamaños que declara pageLayouts', () => {
+    // A y C comparten tamaños desde que el pliego vertical ganó su página de 4:
+    // por lista de tamaños se resuelve la primera, y a efectos del reparto da
+    // igual porque las fórmulas solo miran los tamaños.
     expect(variantForAllowedSizes([1, 2, 3, 4, 6])).toBe('A');
     expect(variantForAllowedSizes([1, 2, 3, 4, 9])).toBe('B');
-    expect(variantForAllowedSizes([1, 2, 3, 6])).toBe('C');
+    expect(variantForAllowedSizes([1, 2, 3, 6])).toBeNull();
     expect(variantForAllowedSizes([1, 2, 5])).toBeNull();
+  });
+
+  it('VARIANT_SIZES es la misma tabla que ALLOWED_PHOTOS_PER_PAGE, no una copia', () => {
+    expect(VARIANT_SIZES.A).toBe(ALLOWED_PHOTOS_PER_PAGE.horizontal);
+    expect(VARIANT_SIZES.B).toBe(ALLOWED_PHOTOS_PER_PAGE.square);
+    expect(VARIANT_SIZES.C).toBe(ALLOWED_PHOTOS_PER_PAGE.vertical);
   });
 
   it('el máximo de fotos es el tamaño mayor en las 250 páginas', () => {
@@ -143,13 +153,14 @@ describe('REGLA 1 — factibilidad', () => {
     }
   });
 
-  it('variante C: 6G − 1 y 6G − 2 son inalcanzables, 6G − 3 ya no', () => {
+  it('variante C: con la página de 4 solo 6G − 1 es inalcanzable, como en A', () => {
+    // Antes del pliego vertical de 4 el salto de 6 a 3 dejaba también 6G − 2
+    // fuera; con el 4 el salto es de 2 y el hueco se reduce a uno.
     for (const pages of [MIN_PAGES, 41, 100, MAX_PAGES]) {
-      for (const gap of [1, 2]) {
-        const r = checkFeasibility(6 * pages - gap, pages, 'C');
-        expect(r.feasible, `G=${pages}, 6G-${gap}`).toBe(false);
-        expect(r.reason).toBe('unreachable_combination');
-      }
+      const r = checkFeasibility(6 * pages - 1, pages, 'C');
+      expect(r.feasible, `G=${pages}, 6G-1`).toBe(false);
+      expect(r.reason).toBe('unreachable_combination');
+      expect(checkFeasibility(6 * pages - 2, pages, 'C').feasible, `G=${pages}, 6G-2`).toBe(true);
       expect(checkFeasibility(6 * pages - 3, pages, 'C').feasible, `G=${pages}`).toBe(true);
       expect(checkFeasibility(6 * pages, pages, 'C').feasible).toBe(true);
     }
@@ -240,7 +251,7 @@ describe('buildDistributionPlan', () => {
   it('devuelve null en las combinaciones no factibles, sin aproximar', () => {
     expect(buildDistributionPlan(6 * 100 - 1, 100, 'A')).toBeNull();
     expect(buildDistributionPlan(9 * 100 - 3, 100, 'B')).toBeNull();
-    expect(buildDistributionPlan(6 * 100 - 2, 100, 'C')).toBeNull();
+    expect(buildDistributionPlan(6 * 100 - 1, 100, 'C')).toBeNull();
     expect(buildDistributionPlan(39, 40, 'B')).toBeNull();
   });
 
