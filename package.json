@@ -10,7 +10,11 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "rules:check": "node scripts/rules-diff.mjs",
-    "rules:deploy": "firebase deploy --only firestore:rules,storage"
+    "rules:deploy": "firebase deploy --only firestore:rules,storage",
+    "gcp:status": "bash scripts/gcp/status.sh",
+    "gcp:deploy:frontend": "bash scripts/gcp/deploy-frontend.sh",
+    "gcp:deploy:backend": "bash scripts/gcp/deploy-backend.sh",
+    "gcp:logs": "bash scripts/gcp/logs.sh"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
