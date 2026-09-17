@@ -27,10 +27,17 @@ import {
   redistributeAlbum,
   migrateAlbumToConfig,
   replacePhotoUrl,
+  appendPhotosAsNewPages,
+  appendPageBounds,
+  suggestAppendPages,
+  canAppendPhotos,
+  emptySlotIndexes,
+  fillEmptySlots,
   type AlbumState,
   type AlbumConfig,
   type AlbumOpResult,
   type AlbumWarning,
+  type DistributableItem,
 } from '../utils/albumStateUtils';
 import {
   FONT_SIZES,
@@ -426,6 +433,24 @@ export default function PhotoOrganizer({
   // Modal de "reorganizar el album entero". `confirmed` es la casilla de
   // seguridad: sin marcarla no se puede lanzar una operacion destructiva.
   const [redistributeModal, setRedistributeModal] = useState<{ pages: number; confirmed: boolean } | null>(null);
+  // ── Cargas masivas desde el editor ──────────────────────────────────────────
+  // "Añadir fotos": el lote ya procesado (URLs creadas, duplicados resueltos)
+  // espera en este modal a que el usuario elija cuántas páginas nuevas ocupa.
+  // Las fotos van SIEMPRE a páginas nuevas al final; lo que ya está no se toca.
+  const [appendModal, setAppendModal] = useState<{
+    items: DistributableItem[];
+    pages: number;
+    min: number;
+    max: number;
+  } | null>(null);
+  const appendInputRef = useRef<HTMLInputElement>(null);
+  // "Rellenar huecos": la página cuyos slots vacíos se van a llenar de un solo lote.
+  const fillInputRef = useRef<HTMLInputElement>(null);
+  const fillTargetRef = useRef<number | null>(null);
+  // Progreso del lote que se está procesando desde el editor (HEIC, duplicados,
+  // resolución). Separado de `conversionProgress`, que pinta la pantalla del paso
+  // de carga inicial y no existe en el editor.
+  const [editorBatchProgress, setEditorBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>(() => initialFileSignatures ?? []);
@@ -872,9 +897,11 @@ export default function PhotoOrganizer({
       });
     });
 
-  const processUpload = async (finalFiles: File[]) => {
-    if (finalFiles.length === 0) return;
-
+  /**
+   * Separa los archivos que ya están en el álbum (o en esta sesión) y pregunta
+   * una sola vez por lote si se usan igualmente. Devuelve los que siguen adelante.
+   */
+  const resolveDuplicates = async (finalFiles: File[]): Promise<File[]> => {
     // Firmas ya presentes en el álbum + las subidas en esta misma sesión
     // (fileSignatures no se rellena hasta handleFinalizeSetup).
     const existingKeys = new Set([
@@ -889,76 +916,271 @@ export default function PhotoOrganizer({
       else unique.push(file);
     }
 
-    const doUpload = async (files: File[]) => {
-      if (files.length === 0) return;
-      // Se guarda el par archivo↔registro: antes la info de baja resolución se
-      // cruzaba por índice contra `files`, así que un solo archivo descartado
-      // desplazaba el resto y la marca acababa en la foto equivocada.
-      const accepted: { file: File; data: { id: string; url: string; order: number; metadata: { name: string; size: number; type: string; lastModified: number } } }[] = [];
-      const skipped: string[] = [];
-      for (const file of files) {
-        let url: string;
-        try {
-          url = URL.createObjectURL(file);
-          if (!url) { skipped.push(file.name); continue; }
-        } catch {
-          skipped.push(file.name);
-          continue;
-        }
-        sessionKeysRef.current.add(getFileKey(file));
-        accepted.push({
-          file,
-          data: {
-            id: Math.random().toString(36).substring(2, 11),
-            url,
-            // Se reserva aquí, en el mismo recorrido en que se acepta el archivo, para
-            // que la posición del estado y la de la copia en disco sean la misma.
-            order: pendingOrderRef.current++,
-            metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-          },
-        });
-      }
-      if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
-      if (accepted.length === 0) return;
-      const newFilesData = accepted.map(a => a.data);
-      // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
-      newFilesData.forEach(f => {
-        pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
-      });
-      // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
-      const newLowResInfo: Record<string, {width: number, height: number}> = {};
-      accepted.forEach(({ file, data }) => {
-        const fk = getFileKey(file);
-        if (pendingLowResRef.current.has(fk)) {
-          newLowResInfo[data.url] = pendingLowResRef.current.get(fk)!;
-          pendingLowResRef.current.delete(fk);
-        }
-      });
-      if (Object.keys(newLowResInfo).length > 0) {
-        setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
-      }
-      setPendingFilesData(prev => [...prev, ...newFilesData]);
-      setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+    if (duplicates.length === 0) return unique;
+    const decision = await askDuplicateDecision(duplicates[0]);
+    return decision === 'use' ? [...unique, ...duplicates] : unique;
+  };
 
-      // Copia en disco: si iOS descarta la pestaña, la selección se recupera al volver.
-      await savePendingPhotos(accepted.map(({ file, data }) => ({
-        id: data.id,
-        blob: file,
-        name: data.metadata.name,
-        size: data.metadata.size,
-        type: data.metadata.type,
-        lastModified: data.metadata.lastModified,
-        signature: getFileKey(file),
-        order: data.order,
-      })));
-    };
+  type AcceptedFile = {
+    file: File;
+    data: { id: string; url: string; order: number; metadata: { name: string; size: number; type: string; lastModified: number } };
+  };
 
-    if (duplicates.length > 0) {
-      const decision = await askDuplicateDecision(duplicates[0]);
-      await doUpload(decision === 'use' ? [...unique, ...duplicates] : unique);
-    } else {
-      await doUpload(unique);
+  /**
+   * Crea la URL de cada archivo y lo registra (clave de sesión, URL→clave,
+   * info de baja resolución). Es la parte común de la carga inicial y de las
+   * cargas desde el editor; NO toca `uploadedPhotos`, que solo existe en el
+   * paso de carga.
+   */
+  const acceptFiles = (files: File[]): AcceptedFile[] => {
+    // Se guarda el par archivo↔registro: antes la info de baja resolución se
+    // cruzaba por índice contra `files`, así que un solo archivo descartado
+    // desplazaba el resto y la marca acababa en la foto equivocada.
+    const accepted: AcceptedFile[] = [];
+    const skipped: string[] = [];
+    for (const file of files) {
+      let url: string;
+      try {
+        url = URL.createObjectURL(file);
+        if (!url) { skipped.push(file.name); continue; }
+      } catch {
+        skipped.push(file.name);
+        continue;
+      }
+      sessionKeysRef.current.add(getFileKey(file));
+      accepted.push({
+        file,
+        data: {
+          id: Math.random().toString(36).substring(2, 11),
+          url,
+          // Se reserva aquí, en el mismo recorrido en que se acepta el archivo, para
+          // que la posición del estado y la de la copia en disco sean la misma.
+          order: pendingOrderRef.current++,
+          metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
+        },
+      });
     }
+    if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
+    if (accepted.length === 0) return accepted;
+    // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
+    accepted.forEach(({ file, data }) => {
+      pendingFileKeysRef.current.set(data.url, getFileKey(file));
+    });
+    // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
+    const newLowResInfo: Record<string, {width: number, height: number}> = {};
+    accepted.forEach(({ file, data }) => {
+      const fk = getFileKey(file);
+      if (pendingLowResRef.current.has(fk)) {
+        newLowResInfo[data.url] = pendingLowResRef.current.get(fk)!;
+        pendingLowResRef.current.delete(fk);
+      }
+    });
+    if (Object.keys(newLowResInfo).length > 0) {
+      setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
+    }
+    return accepted;
+  };
+
+  /** Copia en disco: si iOS descarta la pestaña, la selección se recupera al volver. */
+  const persistAccepted = (accepted: AcceptedFile[]) =>
+    savePendingPhotos(accepted.map(({ file, data }) => ({
+      id: data.id,
+      blob: file,
+      name: data.metadata.name,
+      size: data.metadata.size,
+      type: data.metadata.type,
+      lastModified: data.metadata.lastModified,
+      signature: getFileKey(file),
+      order: data.order,
+    })));
+
+  const processUpload = async (finalFiles: File[]) => {
+    if (finalFiles.length === 0) return;
+    const files = await resolveDuplicates(finalFiles);
+    const accepted = acceptFiles(files);
+    if (accepted.length === 0) return;
+    const newFilesData = accepted.map(a => a.data);
+    setPendingFilesData(prev => [...prev, ...newFilesData]);
+    setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+    await persistAccepted(accepted);
+  };
+
+  /**
+   * Lote elegido desde el editor (añadir al final o rellenar huecos): convierte
+   * HEIC, comprueba la resolución, resuelve duplicados y registra cada archivo,
+   * en tandas de 5 como la carga inicial para no congelar el hilo. Devuelve las
+   * fotos listas para colocar, en el orden en que el usuario las eligió.
+   *
+   * La resolución se comprueba ANTES de crear la URL (como en la subida de una
+   * foto suelta) para que la marca de baja resolución llegue a la foto.
+   */
+  const ingestEditorFiles = async (filesArray: File[]): Promise<AcceptedFile[]> => {
+    const BATCH_SIZE = 5;
+    const all: AcceptedFile[] = [];
+    setEditorBatchProgress({ done: 0, total: filesArray.length });
+    try {
+      for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
+        const batch = filesArray.slice(i, i + BATCH_SIZE);
+        const converted = await Promise.all(batch.map(convertFileIfHeic));
+        const dims = await Promise.all(converted.map(checkImageDimensions));
+        dims.filter(r => r.isLowRes).forEach(r => {
+          pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
+        });
+        // El await es imprescindible: si esta tanda abre el modal de duplicados,
+        // la siguiente no debe pisarlo (ver askDuplicateDecision).
+        const files = await resolveDuplicates(converted);
+        const accepted = acceptFiles(files);
+        all.push(...accepted);
+        if (accepted.length > 0) await persistAccepted(accepted);
+        setEditorBatchProgress({ done: Math.min(i + BATCH_SIZE, filesArray.length), total: filesArray.length });
+        await new Promise<void>(r => setTimeout(r, 80));
+      }
+    } finally {
+      setEditorBatchProgress(null);
+    }
+    return all;
+  };
+
+  /** Foto lista para el reparto: URL + firma, en el orden de selección del usuario. */
+  const toDistributable = (accepted: AcceptedFile[]): DistributableItem[] =>
+    sortPhotosBySelection(
+      accepted.map(a => ({ url: a.data.url, name: a.data.metadata.name, order: a.data.order }))
+    ).map(f => ({ photo: f.url, signature: pendingFileKeysRef.current.get(f.url) ?? '' }));
+
+  /**
+   * Deshace la aceptación de un lote que al final no se colocó (el usuario
+   * canceló el modal o no había sitio): libera las URLs y borra las claves de
+   * sesión para que esas mismas fotos se puedan volver a elegir sin que salten
+   * como duplicadas.
+   */
+  const discardItems = (items: DistributableItem[]) => {
+    for (const item of items) {
+      try { URL.revokeObjectURL(item.photo); } catch { /* ya revocada */ }
+      pendingFileKeysRef.current.delete(item.photo);
+      if (item.signature) sessionKeysRef.current.delete(item.signature);
+      setLowResInfo(prev => {
+        if (!(item.photo in prev)) return prev;
+        const next = { ...prev };
+        delete next[item.photo];
+        return next;
+      });
+    }
+  };
+
+  // ── AÑADIR FOTOS AL FINAL (páginas nuevas) ──────────────────────────────────
+  // Tras la carga inicial el usuario puede traer otro lote grande. Va entero a
+  // páginas nuevas después de la última, repartido con las mismas reglas que la
+  // primera carga; ninguna página existente cambia.
+  const handleAppendFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const filesArray = Array.from(files);
+    event.target.value = '';
+
+    const accepted = await ingestEditorFiles(filesArray);
+    if (accepted.length === 0) return;
+    const items = toDistributable(accepted);
+
+    const state = currentAlbumState();
+    const bounds = appendPageBounds(state, items.length, albumConfig);
+    const suggested = bounds ? suggestAppendPages(state, items.length, albumConfig) : null;
+    if (!bounds || suggested === null) {
+      discardItems(items);
+      setAlbumWarning(
+        state.length >= ALBUM_MAX_PAGES - 1
+          ? `El álbum ya está en el máximo de ${ALBUM_MAX_PAGES} páginas: no hay sitio para páginas nuevas.`
+          : `${items.length} foto(s) no caben en las ${ALBUM_MAX_PAGES - state.length} páginas que quedan libres.`
+      );
+      return;
+    }
+    setAppendModal({ items, pages: suggested, min: bounds.min, max: bounds.max });
+  };
+
+  const cancelAppend = () => {
+    if (!appendModal) return;
+    discardItems(appendModal.items);
+    setAppendModal(null);
+  };
+
+  const executeAppend = () => {
+    if (!appendModal || pagesLocked) return;
+    const { items, pages } = appendModal;
+    const state = currentAlbumState();
+    const next = appendPhotosAsNewPages(state, items, pages, albumConfig);
+    if (!next) {
+      // Regla 1: el botón ya va deshabilitado si no hay reparto exacto; segundo cinturón.
+      setAlbumWarning(
+        `${items.length} foto(s) no se pueden repartir exactamente en ${pages} páginas nuevas ` +
+        `usando páginas de ${allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.`
+      );
+      return;
+    }
+
+    const firstNew = state.length;
+    applyAlbumState(next);
+    setNumPages(next.length);
+    setAppendModal(null);
+    setAlbumWarning(
+      `Añadimos ${items.length} foto(s) en ${pages} página(s) nueva(s) al final ` +
+      `(páginas ${firstNew + 1} a ${next.length}). Lo que ya tenías no cambió.`
+    );
+    // Llevar al usuario a la primera página nueva: si el álbum es largo, queda
+    // muy abajo y no vería que pasó nada.
+    setTimeout(() => {
+      document.getElementById(`album-page-${firstNew}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  // ── RELLENAR LOS HUECOS DE UNA PÁGINA DE UN SOLO LOTE ───────────────────────
+  // Una página con diseño de 6 y 3 huecos recibe 3 fotos de una vez, en orden
+  // de hueco, sin tocar las que ya tiene ni su diseño.
+  const openFillEmptySlots = (pageIndex: number) => {
+    fillTargetRef.current = pageIndex;
+    fillInputRef.current?.click();
+  };
+
+  const handleFillFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    const pageIndex = fillTargetRef.current;
+    fillTargetRef.current = null;
+    if (!files || files.length === 0 || pageIndex === null) return;
+    const filesArray = Array.from(files);
+    event.target.value = '';
+
+    const before = currentAlbumState();
+    const page = before[pageIndex];
+    if (!page) return;
+    const emptyCount = emptySlotIndexes(page, albumConfig).length;
+    if (emptyCount === 0) {
+      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      return;
+    }
+
+    // Solo se procesan las que caben: subir 50 archivos para 3 huecos sería
+    // trabajo perdido, y las sobrantes se avisan en vez de descartarse en silencio.
+    const usable = filesArray.slice(0, emptyCount);
+    const extra = filesArray.length - usable.length;
+
+    const accepted = await ingestEditorFiles(usable);
+    if (accepted.length === 0) return;
+    const items = toDistributable(accepted);
+
+    // El estado se relee DESPUÉS de procesar: el modal de duplicados puede haber
+    // tardado y el usuario no ha podido tocar nada mientras, pero la fuente de
+    // verdad es siempre la más reciente.
+    const result = fillEmptySlots(currentAlbumState(), pageIndex, items, albumConfig);
+    if (result.leftover.length > 0) discardItems(result.leftover);
+    if (result.filled === 0) {
+      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      return;
+    }
+    applyAlbumState(result.state);
+
+    const leftOut = extra + result.leftover.length;
+    setAlbumWarning(
+      `Colocamos ${result.filled} foto(s) en los huecos de la página ${pageIndex + 1}.` +
+      (leftOut > 0 ? ` ${leftOut} foto(s) se quedaron fuera porque la página solo tenía ${emptyCount} hueco(s).` : '')
+    );
   };
 
   const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
@@ -2061,6 +2283,33 @@ export default function PhotoOrganizer({
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
+              {/* Rellenar todos los huecos de la página con un solo lote: un
+                  diseño de 6 con 3 vacíos pide 3 fotos de una vez, en vez de
+                  abrir el selector hueco por hueco. */}
+              {(() => {
+                const emptyCount = emptySlotIndexes(
+                  { photos: pagePhotos, crops: {}, texts: textBoxSlots[pageIndex] ?? {}, variant: pageLayoutVariants[pageIndex], signatures: [] },
+                  albumConfig
+                ).length;
+                if (emptyCount === 0) return null;
+                return (
+                  <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Huecos vacíos</h4>
+                    <p className="text-xs text-gray-600 mb-2.5">
+                      Esta página tiene <strong>{emptyCount} hueco(s)</strong> sin foto. Puedes elegir las {emptyCount} de una vez y se colocan en orden.
+                    </p>
+                    <button
+                      onClick={() => openFillEmptySlots(pageIndex)}
+                      disabled={!!editorBatchProgress}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 border-black bg-black text-white text-xs sm:text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      Rellenar {emptyCount === 1 ? 'el hueco' : `los ${emptyCount} huecos`} de una vez
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
                 <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Diseño y Distribución</h4>
                 <div className="space-y-2.5">
@@ -2719,6 +2968,148 @@ export default function PhotoOrganizer({
       {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
 
+      {/* SELECTORES DE ARCHIVOS DE LAS CARGAS MASIVAS DESDE EL EDITOR */}
+      <input ref={appendInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleAppendFileSelection} className="hidden" />
+      <input ref={fillInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFillFileSelection} className="hidden" />
+
+      {/* PROGRESO DEL LOTE QUE SE ESTÁ PROCESANDO DESDE EL EDITOR */}
+      {editorBatchProgress && (
+        <div className="fixed inset-0 z-[200] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-8">
+          <Loader2 className="w-16 h-16 text-black animate-spin" />
+          <div className="text-center">
+            <p className="text-2xl font-bold">Preparando tus fotos</p>
+            <p className="text-gray-500 mt-2">
+              Foto {editorBatchProgress.done} de {editorBatchProgress.total}
+            </p>
+          </div>
+          <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-black h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(editorBatchProgress.done / editorBatchProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-sm text-gray-400 text-center max-w-xs">Por favor espera sin cerrar la app</p>
+        </div>
+      )}
+
+      {/* MODAL: AÑADIR FOTOS EN PÁGINAS NUEVAS AL FINAL */}
+      {appendModal && (() => {
+        const { items, pages, min, max } = appendModal;
+        const firstNew = safePhotos.length + 1;
+        const feasible = canAppendPhotos(currentAlbumState(), items.length, pages, albumConfig);
+        const setPages = (v: number) => {
+          let val = Math.min(Math.max(Number.isFinite(v) ? v : min, min), max);
+          if (val % 2 !== 0) val = Math.min(val + 1, max);
+          setAppendModal(m => (m ? { ...m, pages: val } : m));
+        };
+
+        return (
+          <div className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shrink-0">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Añadir {items.length} foto(s) al final</h3>
+                  <p className="text-sm text-gray-500">
+                    Se crearán páginas nuevas después de la página {safePhotos.length}. Las que ya tienes no cambian.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-5">
+                <ul className="text-[13px] text-green-800 space-y-1.5 list-disc pl-5">
+                  <li>Tus páginas actuales, con sus fotos, recortes, textos y diseños, <strong>quedan igual</strong>.</li>
+                  <li>Las fotos nuevas se reparten con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.</li>
+                </ul>
+              </div>
+
+              {/* SELECTOR DE PÁGINAS NUEVAS: mismo control que en la creación del álbum */}
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="font-medium">Páginas nuevas</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Quitar 2 páginas"
+                      disabled={pages <= min}
+                      onClick={() => setPages(pages - 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={min}
+                      max={max}
+                      step={2}
+                      value={pages}
+                      onChange={(e) => setPages(parseInt(e.target.value, 10))}
+                      className="w-20 text-xl font-bold border-2 border-gray-300 rounded px-2 py-1 focus:border-black outline-none text-center"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Añadir 2 páginas"
+                      disabled={pages >= max}
+                      onClick={() => setPages(pages + 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {max > min && (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. {min}</span>
+                      <span>Máx. {max}</span>
+                    </div>
+                    <PageRangeSlider min={min} max={max} step={2} value={pages} onChange={setPages} />
+                  </>
+                )}
+
+                <p className="text-xs text-gray-500 mt-3">
+                  El álbum pasará de <strong>{safePhotos.length}</strong> a <strong>{safePhotos.length + pages} páginas</strong>
+                  {' '}(las nuevas serán de la {firstNew} a la {safePhotos.length + pages}).
+                </p>
+                {safePhotos.length + pages > 40 && (
+                  <p className="text-xs text-fuchsia-700 mt-1">
+                    Cada página por encima de las 40 base cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
+                  </p>
+                )}
+                {!feasible && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700">
+                      {items.length} foto(s) no se pueden repartir exactamente en {pages} páginas usando páginas de {allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelAppend}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600 hover:border-gray-400 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executeAppend}
+                  disabled={!feasible}
+                  className="flex-1 px-4 py-3 rounded-xl bg-black text-white text-sm font-bold hover:bg-gray-800 transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  Añadir en {pages} páginas
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* AVISOS DE OPERACIONES SOBRE EL ÁLBUM (antes eran alert() bloqueantes) */}
       {albumWarning && (
         <div className="fixed bottom-20 left-0 right-0 z-[125] flex justify-center px-4">
@@ -3296,6 +3687,17 @@ export default function PhotoOrganizer({
             <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
           </div>
           <div className="flex items-center gap-2">
+            {!pagesLocked && (
+              <button
+                onClick={() => appendInputRef.current?.click()}
+                disabled={!!editorBatchProgress}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border-2 border-black bg-black text-white hover:bg-gray-800 transition-all text-xs font-bold disabled:opacity-50"
+                title="Añadir más fotos: van a páginas nuevas al final, sin tocar las que ya tienes"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">Añadir fotos</span>
+              </button>
+            )}
             {!pagesLocked && safePhotos.flat().some(p => p && p.trim() !== '') && (
               <button
                 onClick={openRedistributeModal}
@@ -3361,6 +3763,7 @@ export default function PhotoOrganizer({
           return (
             <Fragment key={pageIndex}>
             <div
+              id={`album-page-${pageIndex}`}
               className={`relative flex flex-col transition-all duration-200 ${isReorderMode && !isSelected && !isTarget ? 'opacity-50' : ''}`}
             >
               {/* Capa de toque para seleccionar destino (modo reordenamiento, páginas no seleccionadas) */}

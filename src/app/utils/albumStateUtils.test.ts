@@ -24,6 +24,11 @@ import {
   distributePhotosAcrossPages,
   redistributeAlbum,
   replacePhotoUrl,
+  appendPhotosAsNewPages,
+  appendPageBounds,
+  suggestAppendPages,
+  emptySlotIndexes,
+  fillEmptySlots,
 } from './albumStateUtils';
 
 // ── Configuraciones reales de la app ─────────────────────────────────────────
@@ -726,5 +731,200 @@ describe('replacePhotoUrl', () => {
     expect(replacePhotoUrl(state, 'blob:zzz', 'blob:nueva')).toEqual(state);
     expect(replacePhotoUrl(state, 'blob:a', 'blob:a')).toBe(state);
     expect(replacePhotoUrl(state, '', 'blob:nueva')).toBe(state);
+  });
+});
+
+// ── añadir un lote nuevo al final ────────────────────────────────────────────
+
+describe('appendPhotosAsNewPages', () => {
+  /** Álbum "ya organizado": 100 fotos en 40 páginas, con recortes, textos y diseños. */
+  const organized: AlbumState = (() => {
+    const base = distributePhotosAcrossPages(items(100), 40, SQUARE)!;
+    base[0].crops = { 0: { zoom: 1.5 } };
+    base[3].texts = { 1: { text: 'viaje' } };
+    base[5].layout = 'row';
+    base[5].variant = 4;
+    return base;
+  })();
+  const batch = items(20, 'nuevo');
+
+  it('deja intactas las páginas que ya existían', () => {
+    const next = appendPhotosAsNewPages(organized, batch, 8, SQUARE)!;
+    expect(next).not.toBeNull();
+    expect(next.slice(0, organized.length)).toEqual(organized);
+  });
+
+  it('crea exactamente las páginas nuevas pedidas, al final', () => {
+    const next = appendPhotosAsNewPages(organized, batch, 8, SQUARE)!;
+    expect(next).toHaveLength(48);
+    expect(next.slice(40).flatMap(p => p.photos)).toEqual(batch.map(i => i.photo));
+  });
+
+  it('cada firma viaja con su foto', () => {
+    const next = appendPhotosAsNewPages(organized, batch, 8, SQUARE)!;
+    for (const p of next.slice(40)) {
+      p.photos.forEach((photo, i) => expect(p.signatures[i]).toBe(`sig:${photo}`));
+    }
+  });
+
+  it('el lote sigue las reglas del reparto: tamaños del formato y sin dos iguales seguidas salvo el mayoritario', () => {
+    const allowed = new Set(SQUARE.allowedPhotosPerPage);
+    const next = appendPhotosAsNewPages(organized, items(37, 'n'), 12, SQUARE)!;
+    const sizes = next.slice(40).map(p => p.photos.length);
+    for (const s of sizes) expect(allowed.has(s)).toBe(true);
+    expect(sizes.reduce((a, b) => a + b, 0)).toBe(37);
+  });
+
+  it('un lote pequeño no está sujeto al mínimo de 40 fotos ni de 40 páginas', () => {
+    expect(appendPhotosAsNewPages(organized, items(3, 'n'), 2, SQUARE)).toHaveLength(42);
+    expect(appendPhotosAsNewPages(organized, items(2, 'n'), 2, RECT)).toHaveLength(42);
+  });
+
+  it('un lote de una sola foto ocupa 2 páginas: la foto y una en blanco', () => {
+    const next = appendPhotosAsNewPages(organized, items(1, 'n'), 2, SQUARE)!;
+    expect(next).toHaveLength(42);
+    expect(next[40].photos).toEqual(['n0']);
+    expect(next[41].photos).toEqual([]);
+  });
+
+  it('devuelve null y no toca nada si el lote no cabe exactamente en esas páginas', () => {
+    // 30 fotos cuadradas no caben en 2 páginas (máx. 18) ni 5 fotos en 6 páginas.
+    expect(appendPhotosAsNewPages(organized, items(30, 'n'), 2, SQUARE)).toBeNull();
+    expect(appendPhotosAsNewPages(organized, items(5, 'n'), 6, SQUARE)).toBeNull();
+    // 11 horizontales en 2 páginas: el hueco 6G−1 de la variante A.
+    expect(appendPhotosAsNewPages(organized, items(11, 'n'), 2, RECT)).toBeNull();
+  });
+
+  it('devuelve null si el álbum superaría el tope de páginas', () => {
+    const full = fullAlbum(SQUARE);
+    const small = items(10, 'n'); // cabe en 2 páginas cuadradas (máx. 18)
+    expect(appendPhotosAsNewPages(full, small, 2, SQUARE)).toBeNull();
+    const almost = full.slice(0, 248);
+    expect(appendPhotosAsNewPages(almost, small, 4, SQUARE)).toBeNull();
+    expect(appendPhotosAsNewPages(almost, small, 2, SQUARE)).toHaveLength(250);
+  });
+
+  it('no muta el estado de entrada', () => {
+    const snapshot = JSON.stringify(organized);
+    appendPhotosAsNewPages(organized, batch, 8, SQUARE);
+    expect(JSON.stringify(organized)).toBe(snapshot);
+  });
+});
+
+describe('appendPageBounds / suggestAppendPages', () => {
+  const organized = distributePhotosAcrossPages(items(100), 40, SQUARE)!;
+
+  it('el rango va de 2 páginas al número de fotos, siempre par', () => {
+    expect(appendPageBounds(organized, 12, SQUARE)).toEqual({ min: 2, max: 12 });
+    expect(appendPageBounds(organized, 7, SQUARE)).toEqual({ min: 2, max: 6 });
+    expect(appendPageBounds(organized, 1, SQUARE)).toEqual({ min: 2, max: 2 });
+  });
+
+  it('el mínimo sube cuando el lote no cabe en 2 páginas', () => {
+    // 20 fotos cuadradas: 2 páginas admiten 18 como mucho, 4 admiten 36.
+    expect(appendPageBounds(organized, 20, SQUARE)).toEqual({ min: 4, max: 20 });
+    // 50 horizontales: 2×6 = 12, 4×6 = 24, ..., 10×6 = 60 → 10 páginas.
+    expect(appendPageBounds(organized, 50, RECT)?.min).toBe(10);
+  });
+
+  it('el máximo respeta las páginas que quedan hasta el tope del álbum', () => {
+    const almost = fullAlbum(SQUARE).slice(0, 247); // quedan 3 → solo 2 (par)
+    expect(appendPageBounds(almost, 10, SQUARE)).toEqual({ min: 2, max: 2 });
+    expect(appendPageBounds(fullAlbum(SQUARE), 10, SQUARE)).toBeNull();
+  });
+
+  it('devuelve null sin fotos o cuando ni el máximo de páginas alcanza', () => {
+    expect(appendPageBounds(organized, 0, SQUARE)).toBeNull();
+    // 30 fotos cuadradas con solo 2 páginas libres: no caben.
+    const almost = fullAlbum(SQUARE).slice(0, 248);
+    expect(appendPageBounds(almost, 30, SQUARE)).toBeNull();
+  });
+
+  it('propone mantener la densidad del álbum (100 fotos en 40 páginas = 2,5 por página)', () => {
+    expect(suggestAppendPages(organized, 20, SQUARE)).toBe(8);
+    expect(suggestAppendPages(organized, 10, SQUARE)).toBe(4);
+  });
+
+  it('la propuesta siempre cae dentro del rango y es factible', () => {
+    const dense = distributePhotosAcrossPages(items(300), 40, SQUARE)!; // 7,5 por página
+    for (const n of [1, 2, 3, 5, 11, 20, 45, 100]) {
+      for (const config of [SQUARE, RECT]) {
+        const bounds = appendPageBounds(dense, n, config)!;
+        const suggested = suggestAppendPages(dense, n, config)!;
+        expect(suggested).toBeGreaterThanOrEqual(bounds.min);
+        expect(suggested).toBeLessThanOrEqual(bounds.max);
+        expect(suggested % 2).toBe(0);
+        expect(appendPhotosAsNewPages(dense, items(n, 'n'), suggested, config)).not.toBeNull();
+      }
+    }
+  });
+
+  it('sobre un álbum sin fotos propone el mínimo', () => {
+    const blank: AlbumState = Array.from({ length: 40 }, () => page([]));
+    expect(suggestAppendPages(blank, 10, SQUARE)).toBe(2);
+    expect(suggestAppendPages(blank, 20, SQUARE)).toBe(4);
+  });
+});
+
+// ── rellenar los huecos de una página ────────────────────────────────────────
+
+describe('emptySlotIndexes / fillEmptySlots', () => {
+  it('cuenta como huecos los slots del diseño sin foto ni texto', () => {
+    const p = page(['a', '', 'c'], { variant: 6, texts: { 4: { text: 'hola' } } });
+    expect(emptySlotIndexes(p, SQUARE)).toEqual([1, 3, 5]);
+  });
+
+  it('sin variante fijada usa el diseño que corresponde a las fotos que hay', () => {
+    // 3 fotos → diseño de 3 → sin huecos; 2 fotos y un hueco → diseño de 3 → 1 hueco.
+    expect(emptySlotIndexes(page(['a', 'b', 'c']), SQUARE)).toEqual([]);
+    expect(emptySlotIndexes(page(['a', '', 'c']), SQUARE)).toEqual([1]);
+  });
+
+  it('rellena los huecos en orden y deja lo demás como estaba', () => {
+    const state: AlbumState = [
+      page(['x']),
+      page(['a', '', 'c', ''], { variant: 6, crops: { 0: { zoom: 2 } }, texts: { 4: { text: 'hola' } }, layout: 'row' }),
+    ];
+    const { state: next, filled, leftover } = fillEmptySlots(state, 1, items(3, 'n'), SQUARE);
+    expect(filled).toBe(3);
+    expect(leftover).toEqual([]);
+    expect(next[1].photos).toEqual(['a', 'n0', 'c', 'n1', '', 'n2']);
+    expect(next[1].signatures).toEqual(['sig:a', 'sig:n0', 'sig:c', 'sig:n1', '', 'sig:n2']);
+    expect(next[1].crops).toEqual({ 0: { zoom: 2 } });
+    expect(next[1].texts).toEqual({ 4: { text: 'hola' } });
+    expect(next[1].layout).toBe('row');
+    expect(next[1].variant).toBe(6);
+    expect(next[0]).toEqual(state[0]);
+  });
+
+  it('con menos fotos que huecos rellena las primeras posiciones libres', () => {
+    const state: AlbumState = [page(['a'], { variant: 4 })];
+    const { state: next, filled } = fillEmptySlots(state, 0, items(2, 'n'), SQUARE);
+    expect(filled).toBe(2);
+    expect(next[0].photos).toEqual(['a', 'n0', 'n1']);
+  });
+
+  it('con más fotos que huecos devuelve las sobrantes sin forzar el diseño (R3)', () => {
+    const state: AlbumState = [page(['a', 'b'], { variant: 4 })];
+    const { state: next, filled, leftover } = fillEmptySlots(state, 0, items(5, 'n'), SQUARE);
+    expect(filled).toBe(2);
+    expect(leftover.map(i => i.photo)).toEqual(['n2', 'n3', 'n4']);
+    expect(next[0].photos).toEqual(['a', 'b', 'n0', 'n1']);
+    expect(next[0].variant).toBe(4);
+  });
+
+  it('sin huecos no toca nada y devuelve el lote entero', () => {
+    const state: AlbumState = [page(['a', 'b'], { variant: 2 })];
+    const result = fillEmptySlots(state, 0, items(2, 'n'), SQUARE);
+    expect(result.state).toBe(state);
+    expect(result.filled).toBe(0);
+    expect(result.leftover).toHaveLength(2);
+  });
+
+  it('no muta el estado de entrada', () => {
+    const state: AlbumState = [page(['a', ''], { variant: 4 })];
+    const snapshot = JSON.stringify(state);
+    fillEmptySlots(state, 0, items(3, 'n'), SQUARE);
+    expect(JSON.stringify(state)).toBe(snapshot);
   });
 });
