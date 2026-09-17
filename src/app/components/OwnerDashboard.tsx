@@ -708,8 +708,13 @@ const OwnerDashboard: React.FC = () => {
         // ── Dimensiones del lienzo (canvas) ──────────────────────────────────
         // Papel: lienzos fijos por tamaño con márgenes centrados
         // Tela:  sólo la portada, sin cambios
-        const spineCm  = isTela ? 0 : 2;
+        // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm, lomo 0.6 cm
+        const is20x20  = !isTela && coverSizeProp === '20x20';
+        const cmToPx   = (cm: number) => Math.round((cm / 2.54) * 300);
+        const panelWCm = is20x20 ? 19 : wCm;          // ancho real de portada/contraportada
+        const spineCm  = isTela ? 0 : (is20x20 ? 0.6 : 2);
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
+        const panelPxW = cmToPx(panelWCm);
 
         let canvasWCm: number;
         let canvasHCm: number;
@@ -727,11 +732,13 @@ const OwnerDashboard: React.FC = () => {
         const totalHCm     = canvasHCm;
         const totalPxWidth  = Math.round((totalWCm  / 2.54) * 300);
         const totalPxHeight = Math.round((totalHCm  / 2.54) * 300);
-        const spinePxWidth  = isTela ? 0 : Math.round((spineCm / 2.54) * 300);
-        const pxGap         = isTela ? 0 : Math.round((gapCm   / 2.54) * 300);
+        const spinePxWidth  = isTela ? 0 : cmToPx(spineCm);
+        const pxGap         = isTela ? 0 : cmToPx(gapCm);
+        // Texto del lomo: 25% del ancho del lomo, pero nunca menos de 11pt (0.3881 cm) para lomos finos
+        const spineFontPx   = Math.max(spinePxWidth * 0.25, cmToPx(0.3881));
 
         // Contenido total (horizontal): contraportada + gap + lomo + gap + portada
-        const contentPxW = isTela ? pxWidth : (pxWidth * 2) + spinePxWidth + (pxGap * 2);
+        const contentPxW = isTela ? pxWidth : (panelPxW * 2) + spinePxWidth + (pxGap * 2);
         const marginXPx  = isTela ? 0 : Math.round((totalPxWidth  - contentPxW) / 2);
         const marginYPx  = isTela ? 0 : Math.round((totalPxHeight - pxHeight)   / 2);
 
@@ -794,10 +801,10 @@ const OwnerDashboard: React.FC = () => {
                   {!isTela && (
                     <>
                       {/* Contraportada */}
-                      <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
-                          <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                          <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                      <div style={{ width: panelPxW, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${panelPxW * 0.01}px` }}>
+                          <img src={jiffyLogo} style={{ width: `${panelPxW * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: `${panelPxW * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
                         </div>
                       </div>
 
@@ -812,7 +819,7 @@ const OwnerDashboard: React.FC = () => {
                             transform: 'rotate(90deg) translateY(-50%)',
                             transformOrigin: 'top left',
                             whiteSpace: 'nowrap',
-                            fontSize: `${spinePxWidth * 0.25}px`,
+                            fontSize: `${spineFontPx}px`,
                             fontWeight: 'bold',
                             letterSpacing: '8px',
                             color: textColor,
@@ -828,7 +835,7 @@ const OwnerDashboard: React.FC = () => {
                   )}
 
                   {/* Portada */}
-                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                  <div style={{ width: panelPxW, height: pxHeight, position: 'relative' }}>
                     <CoverPreview
                       coverSize={coverSizeProp as any}
                       coverType={isTela ? 'Tela' : 'Papel'}
@@ -841,6 +848,7 @@ const OwnerDashboard: React.FC = () => {
                       typographyColor={textColor}
                       hideSpine={true}
                       forPdf={true}
+                      printAspectRatio={is20x20 ? `${panelWCm} / ${hCm}` : undefined}
                     />
                   </div>
                 </div>
@@ -853,7 +861,7 @@ const OwnerDashboard: React.FC = () => {
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
 
         // ── Cm-space layout for cut lines ─────────────────────────────────────
-        const contentWCm = isTela ? wCm : (wCm * 2) + spineCm + (gapCm * 2);
+        const contentWCm = isTela ? wCm : (panelWCm * 2) + spineCm + (gapCm * 2);
         const marginXCm  = isTela ? 0 : (totalWCm - contentWCm) / 2;
         const marginYCm  = isTela ? 0 : (totalHCm - hCm) / 2;
 
@@ -865,11 +873,12 @@ const OwnerDashboard: React.FC = () => {
         if (isTela) {
           pdf.rect(0, 0, wCm, hCm, 'S');
         } else {
-          pdf.rect(marginXCm,                                   marginYCm, wCm,     hCm, 'S'); // contraportada
-          pdf.rect(marginXCm + wCm,                             marginYCm, gapCm,   hCm, 'S'); // gap 1
-          pdf.rect(marginXCm + wCm + gapCm,                    marginYCm, spineCm, hCm, 'S'); // lomo
-          pdf.rect(marginXCm + wCm + gapCm + spineCm,          marginYCm, gapCm,   hCm, 'S'); // gap 2
-          pdf.rect(marginXCm + wCm + gapCm + spineCm + gapCm,  marginYCm, wCm,     hCm, 'S'); // portada
+          const w = panelWCm;
+          pdf.rect(marginXCm,                               marginYCm, w,       hCm, 'S'); // contraportada
+          pdf.rect(marginXCm + w,                           marginYCm, gapCm,   hCm, 'S'); // callejón 1
+          pdf.rect(marginXCm + w + gapCm,                   marginYCm, spineCm, hCm, 'S'); // lomo
+          pdf.rect(marginXCm + w + gapCm + spineCm,         marginYCm, gapCm,   hCm, 'S'); // callejón 2
+          pdf.rect(marginXCm + w + gapCm + spineCm + gapCm, marginYCm, w,       hCm, 'S'); // portada
         }
 
         onProgress(100);

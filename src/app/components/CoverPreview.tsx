@@ -38,6 +38,7 @@ interface CoverPreviewProps {
 
   hideSpine?: boolean;
   forPdf?: boolean; // true solo en el render offscreen de impresión: desactiva efectos de pantalla
+  printAspectRatio?: string; // sólo impresión: proporción real del panel (p.ej. '19 / 20' en la carátula 20x20)
   subtitlePlaceholder?: boolean; // Cuando es true, coverSubtitle es texto de muestra (no guardado) y se renderiza atenuado
   customization?: any;
   photos?: (string | null)[];
@@ -57,6 +58,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   typographyColor = '#000000',
   hideSpine = false,
   forPdf = false,
+  printAspectRatio,
   subtitlePlaceholder = false,
 }) => {
   const isVertical = coverSize === '28x21';
@@ -64,10 +66,11 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   const isHorizontal = coverSize === '21x28';
 
   const aspectRatio = useMemo(() => {
+    if (printAspectRatio) return printAspectRatio;
     if (isVertical) return '21 / 28';
     if (isHorizontal) return '28 / 21';
     return '1 / 1';
-  }, [isVertical, isHorizontal]);
+  }, [isVertical, isHorizontal, printAspectRatio]);
 
   const containerShadow = hideSpine ? 'shadow-none' : 'shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)]';
   const floatingBoxShadow = hideSpine ? 'shadow-none' : 'shadow-2xl';
@@ -183,7 +186,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     // Usuario lo llama "Albunes 21x28"
     // ========================================================================
     if (isVertical) {
-      const baseStyle = { width: '100%', aspectRatio: '21 / 28', containerType: 'inline-size' as const };
+      const baseStyle = { width: '100%', aspectRatio, containerType: 'inline-size' as const };
 
       switch (selectedLayout) {
         // L1: zona texto (23.57%) arriba, título izq a 0.7cm del borde (left=3.33%) y a 3.7cm del tope (top=56.07% del header)
@@ -282,7 +285,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     // Usuario lo llama "Albunes 28x21"
     // ========================================================================
     if (isHorizontal) {
-      const baseStyle = { width: '100%', aspectRatio: '28 / 21', containerType: 'inline-size' as const };
+      const baseStyle = { width: '100%', aspectRatio, containerType: 'inline-size' as const };
 
       switch (selectedLayout) {
         // L1: header=17.62% (título centrado a 1.2cm del tope, subtítulo a 0.2cm del título), imagen=75.24%, footer vacío=7.14%
@@ -395,7 +398,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
     // ========================================================================
     if (isSquare) {
       const is30 = coverSize === '30x30';
-      const baseStyle = { width: '100%', aspectRatio: '1 / 1', containerType: 'inline-size' as const };
+      const baseStyle = { width: '100%', aspectRatio, containerType: 'inline-size' as const };
 
       switch (selectedLayout) {
         // L1: margen top + imagen flex-1 + divisor+texto + margen bottom
