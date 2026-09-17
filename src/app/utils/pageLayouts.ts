@@ -62,17 +62,18 @@ export const PAGE_ASPECT_RATIO: Record<AlbumFormat, number> = {
 /**
  * Fotos por página que admite cada pliego.
  *
- * Vertical no tiene layout de 4: el pliego solo define páginas de 1, 2, 3 y 6.
+ * El pliego vertical original solo definía 1, 2, 3 y 6; la página de 4 llegó
+ * después en un pliego aparte (septiembre de 2026).
  */
 export const ALLOWED_PHOTOS_PER_PAGE: Record<AlbumFormat, number[]> = {
   square: [1, 2, 3, 4, 9],
   horizontal: [1, 2, 3, 4, 6],
-  vertical: [1, 2, 3, 6],
+  vertical: [1, 2, 3, 4, 6],
 };
 
 const FULL_BLEED: SlotRect[] = [{ x: 0, y: 0, w: 100, h: 100 }];
 
-/** Las 33 páginas de los pliegos, agrupadas por formato y número de fotos. */
+/** Las 34 páginas de los pliegos, agrupadas por formato y número de fotos. */
 const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   square: {
     1: [
@@ -185,6 +186,17 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 65.89, y: 34.46, w: 30.29, h: 31.07 },
       ] },
     ],
+    4: [
+      // Pliego aparte, posterior al original. Slots verticales de proporción
+      // 0,745 —la misma familia que el 3 y el 6—, calle de 5,6 % en ambos ejes
+      // y márgenes de 7,1 % a los lados y 6,8 % arriba y abajo.
+      { id: 'row', label: 'Cuadrícula 2×2', slots: [
+        { x: 7.07, y: 6.8, w: 40.1, h: 40.39 },
+        { x: 52.83, y: 6.8, w: 40.1, h: 40.39 },
+        { x: 7.07, y: 52.82, w: 40.1, h: 40.39 },
+        { x: 52.83, y: 52.82, w: 40.1, h: 40.39 },
+      ] },
+    ],
     6: [
       { id: 'row', label: 'Cuadrícula 3×2', slots: [
         { x: 3.82, y: 16.74, w: 30.29, h: 31.07 },
@@ -229,8 +241,8 @@ export function getClosestAllowed(count: number, size?: string | null): number {
  * Las páginas que el pliego define para ese número de fotos, en orden: la
  * primera es la que se aplica si la página no tiene variante elegida.
  *
- * Vacío para los conteos que el pliego no define (una página vertical de 4
- * fotos de un pedido antiguo): esos no ofrecen nada que elegir.
+ * Vacío para los conteos que el pliego no define (una página de 5 fotos que
+ * venga de datos antiguos): esos no ofrecen nada que elegir.
  */
 export function getPageVariants(count: number, size?: string | null): PageVariant[] {
   return PAGE_SLOTS[getAlbumFormat(size)][count] ?? [];
@@ -249,9 +261,10 @@ export function getSelectedVariantId(
 
 /**
  * Cuadrícula de reserva para conteos que el pliego no define. Solo la alcanzan
- * pedidos antiguos con variantes que ya no se pueden crear (p. ej. una página
- * vertical de 4 fotos): mantiene el reparto uniforme de margen 4 % y calle 2 %
- * que se usaba antes, para que esos álbumes se sigan viendo como se aprobaron.
+ * datos antiguos con conteos que hoy no se pueden crear (p. ej. una página de
+ * 5 fotos del reparto "a ojo" anterior): mantiene el reparto uniforme de margen
+ * 4 % y calle 2 % que se usaba antes, para que esos álbumes se sigan viendo
+ * como se aprobaron.
  */
 function fallbackSlots(count: number, format: AlbumFormat): SlotRect[] {
   const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3;

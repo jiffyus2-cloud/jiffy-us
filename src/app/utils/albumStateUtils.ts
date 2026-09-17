@@ -8,6 +8,7 @@
 // ============================================================================
 
 import type { PageVariantId } from './pageLayouts';
+import { buildDistributionPlan, checkFeasibility, variantForAllowedSizes } from './pageDistribution';
 
 export interface PageState {
   photos: string[];
@@ -811,15 +812,31 @@ export interface DistributableItem {
 }
 
 /**
- * Reparte `items` entre `totalPages` páginas equilibrando la carga: primero una
- * foto por página y después las sobrantes de una en una, siempre sobre las
- * páginas menos llenas y espaciándolas por el álbum en vez de amontonarlas al
- * principio.
+ * Límites que el reparto acepta además del tope de páginas del álbum. Por
+ * defecto rigen los del álbum entero (40 páginas y 40 fotos como mínimo); un
+ * lote que se añade a un álbum ya montado es mucho más pequeño y los relaja.
+ */
+export interface DistributeOptions {
+  minPages?: number;
+  minPhotos?: number;
+  maxPages?: number;
+}
+
+/**
+ * Reparte `items` entre `totalPages` páginas siguiendo las reglas de
+ * pageDistribution: cada página recibe un número de fotos que el pliego sabe
+ * maquetar, la primera va sola siempre que se pueda, no se repiten tamaños
+ * seguidos salvo el mayoritario y se usan las menos páginas de 3 posibles.
+ *
+ * Devuelve **null** cuando esa combinación de fotos y páginas no tiene solución
+ * exacta (p. ej. 599 fotos en 100 páginas horizontales). Antes se repartía "a
+ * ojo" y siempre salía algo; ahora quien llame tiene que avisar al usuario, no
+ * redondear el número de páginas ni dejar fotos fuera.
  *
  * Es EL MISMO reparto que se hace al crear el álbum (`handleFinalizeSetup` en
- * PhotoOrganizer.tsx lo llama tras ordenar las fotos con la IA), extraído aquí
- * para que "reorganizar" desde el editor dé exactamente el mismo resultado que
- * la primera carga y para poder testearlo sin montar el componente.
+ * PhotoOrganizer.tsx lo llama tras ordenar las fotos), extraído aquí para que
+ * "reorganizar" desde el editor dé exactamente el mismo resultado que la primera
+ * carga y para poder testearlo sin montar el componente.
  *
  * Devuelve páginas limpias: sin recortes, sin cajas de texto y sin layout ni
  * variante fijados — igual que un álbum recién creado, donde la variante se
@@ -828,65 +845,26 @@ export interface DistributableItem {
 export function distributePhotosAcrossPages(
   items: DistributableItem[],
   totalPages: number,
-  config: AlbumConfig
-): AlbumState {
-  const pages = Math.max(1, Math.min(Math.floor(totalPages), config.maxPages));
-  const maxAllowed = maxPhotosPerPage(config);
+  config: AlbumConfig,
+  opts: DistributeOptions = {}
+): AlbumState | null {
+  const variant = variantForAllowedSizes(config.allowedPhotosPerPage);
+  if (!variant) return null;
 
-  const capacities = new Array(pages).fill(1);
-  let remaining = Math.max(0, items.length - pages);
-  // La página 1 (índice 0) se deja con una sola foto mientras haya sitio en las
-  // demás: es la que abre el álbum y luce mejor sola.
-  let allowPageZero = pages <= 1;
-
-  while (remaining > 0) {
-    const available: number[] = [];
-    for (let i = allowPageZero ? 0 : 1; i < pages; i++) {
-      if (capacities[i] < maxAllowed) available.push(i);
-    }
-
-    if (available.length === 0) {
-      if (!allowPageZero && capacities[0] < maxAllowed) {
-        allowPageZero = true;
-        continue;
-      }
-      // No cabe en ninguna página respetando el máximo: el resto se apila en la
-      // última. Solo ocurre si el álbum entero está al tope.
-      capacities[pages - 1] += remaining;
-      remaining = 0;
-      break;
-    }
-
-    const minCap = Math.min(...available.map(p => capacities[p]));
-    const candidates = available.filter(p => capacities[p] === minCap);
-    const increments = Math.min(remaining, candidates.length);
-    const spacing = candidates.length / increments;
-
-    for (let i = 0; i < increments; i++) {
-      capacities[candidates[Math.floor(i * spacing)]] += 1;
-      remaining -= 1;
-    }
-  }
+  const plan = buildDistributionPlan(items.length, totalPages, variant, { maxPages: config.maxPages, ...opts });
+  if (!plan) return null;
 
   const queue = [...items];
-  const state: AlbumState = Array.from({ length: pages }, () => blankPage());
-
-  for (let i = 0; i < pages; i++) {
-    for (let j = 0; j < capacities[i]; j++) {
+  return plan.sizes.map(size => {
+    const page = blankPage();
+    for (let i = 0; i < size; i++) {
       const item = queue.shift();
       if (!item) break;
-      state[i].photos.push(item.photo);
-      state[i].signatures.push(item.signature);
+      page.photos.push(item.photo);
+      page.signatures.push(item.signature);
     }
-  }
-
-  while (queue.length > 0) {
-    const item = queue.shift()!;
-    state[pages - 1].photos.push(item.photo);
-    state[pages - 1].signatures.push(item.signature);
-  }
-
-  return state;
+    return page;
+  });
 }
 
 /**
@@ -897,12 +875,15 @@ export function distributePhotosAcrossPages(
  * DESTRUCTIVO a propósito: se pierden recortes, cajas de texto, diseños de
  * página y el orden manual. No se pierde ninguna foto — esa es la invariante que
  * cubren los tests. Quien lo llame debe pedir confirmación explícita antes.
+ *
+ * Devuelve null si esas fotos no caben exactamente en ese número de páginas; en
+ * ese caso el álbum se queda como estaba.
  */
 export function redistributeAlbum(
   state: AlbumState,
   totalPages: number,
   config: AlbumConfig
-): AlbumState {
+): AlbumState | null {
   const items: DistributableItem[] = [];
   for (const page of state) {
     page.photos.forEach((photo, i) => {
@@ -912,4 +893,222 @@ export function redistributeAlbum(
     });
   }
   return distributePhotosAcrossPages(items, totalPages, config);
+}
+
+/**
+ * Cambia la URL de una foto dejando TODO lo demás en su sitio: la posición
+ * dentro de la página, su recorte, su caja de texto y su firma.
+ *
+ * Lo usa la recuperación de `blob:` muertas — cuando iOS descarta la pestaña,
+ * la URL deja de resolver pero los bytes siguen en IndexedDB, así que se crea
+ * una URL nueva sobre el mismo hueco. Va por AlbumState (y no por un
+ * `photos.map` suelto) para que recortes y textos, que van indexados por
+ * posición, no se despeguen de su foto.
+ */
+export function replacePhotoUrl(state: AlbumState, oldUrl: string, newUrl: string): AlbumState {
+  if (!oldUrl || oldUrl === newUrl) return state;
+  return state.map(page =>
+    page.photos.includes(oldUrl)
+      ? { ...page, photos: page.photos.map(photo => (photo === oldUrl ? newUrl : photo)) }
+      : page
+  );
+}
+
+// ── añadir un lote nuevo en páginas nuevas al final ──────────────────────────
+
+/**
+ * Páginas con foto y páginas en blanco que resultan de pedir `newPages` páginas
+ * para `photoCount` fotos. Solo hay blanco en el lote de 1 foto (que necesita
+ * 2 páginas para mantener el álbum en pares); con más fotos que páginas no se
+ * inventan páginas vacías: devuelve null y el llamante rechaza la petición.
+ */
+function splitAppendPages(photoCount: number, newPages: number): { photoPages: number; blankPages: number } | null {
+  if (photoCount < 1 || newPages < 1) return null;
+  if (newPages > Math.max(2, photoCount)) return null;
+  const photoPages = Math.min(newPages, photoCount);
+  return { photoPages, blankPages: newPages - photoPages };
+}
+
+/** ¿`photoCount` fotos tienen reparto exacto en `newPages` páginas nuevas? (regla 1) */
+export function canAppendPhotos(
+  state: AlbumState,
+  photoCount: number,
+  newPages: number,
+  config: AlbumConfig
+): boolean {
+  const variant = variantForAllowedSizes(config.allowedPhotosPerPage);
+  if (!variant) return false;
+  if (state.length + newPages > config.maxPages) return false;
+  const split = splitAppendPages(photoCount, newPages);
+  if (!split) return false;
+  const { photoPages } = split;
+  return checkFeasibility(photoCount, photoPages, variant, {
+    minPages: 1,
+    minPhotos: 1,
+    maxPages: config.maxPages - state.length,
+  }).feasible;
+}
+
+/**
+ * Cuántas páginas nuevas se pueden pedir para un lote de `photoCount` fotos.
+ *
+ * Siempre un número par (los álbumes mantienen las páginas de dos en dos), sin
+ * pasar del tope del álbum y sin más páginas que fotos — con la única excepción
+ * del lote de una sola foto, que necesita 2 páginas y deja la segunda en
+ * blanco. El mínimo sube cuando el lote no cabe en 2 páginas (por ejemplo 30
+ * fotos cuadradas necesitan 4). Devuelve null si no hay ningún reparto posible,
+ * normalmente porque el álbum ya está en el máximo de páginas.
+ */
+export function appendPageBounds(
+  state: AlbumState,
+  photoCount: number,
+  config: AlbumConfig
+): { min: number; max: number } | null {
+  if (photoCount < 1) return null;
+  const remaining = config.maxPages - state.length;
+  const remainingEven = remaining - (remaining % 2);
+  if (remainingEven < 2) return null;
+
+  const maxByPhotos = Math.max(2, photoCount - (photoCount % 2));
+  const max = Math.min(maxByPhotos, remainingEven);
+
+  let min = 2;
+  while (min <= max && !canAppendPhotos(state, photoCount, min, config)) min += 2;
+  if (min > max) return null;
+  return { min, max };
+}
+
+/**
+ * Cuántas páginas nuevas proponer para un lote: las que mantienen la densidad
+ * que ya lleva el álbum (fotos por página con foto), redondeadas a par y
+ * llevadas al número factible más cercano dentro de `appendPageBounds`.
+ *
+ * Así 20 fotos sobre un álbum de 100 fotos en 40 páginas proponen 8 páginas,
+ * y el mismo lote sobre uno más apretado (100 en 20) propone 4. El usuario
+ * puede cambiarlo después; esto solo evita que el selector abra en un número
+ * sin relación con el resto del álbum.
+ */
+export function suggestAppendPages(
+  state: AlbumState,
+  photoCount: number,
+  config: AlbumConfig
+): number | null {
+  const bounds = appendPageBounds(state, photoCount, config);
+  if (!bounds) return null;
+
+  const photoPages = state.filter(p => p.photos.some(ph => ph && ph.trim() !== '')).length;
+  const density = photoPages > 0 ? countPhotos(state) / photoPages : 0;
+  let target = density > 0 ? Math.round(photoCount / density) : bounds.min;
+  target = Math.round(target / 2) * 2;
+  target = Math.min(Math.max(target, bounds.min), bounds.max);
+
+  // El número más cercano al objetivo que tenga reparto exacto, primero hacia
+  // abajo y luego hacia arriba (la mayoría son factibles; esto salva huecos
+  // como 239 fotos horizontales en 40 páginas).
+  for (let delta = 0; target - delta >= bounds.min || target + delta <= bounds.max; delta += 2) {
+    if (target - delta >= bounds.min && canAppendPhotos(state, photoCount, target - delta, config)) return target - delta;
+    if (target + delta <= bounds.max && canAppendPhotos(state, photoCount, target + delta, config)) return target + delta;
+  }
+  return null;
+}
+
+/**
+ * Añade `items` al álbum en `newPages` páginas nuevas AL FINAL, repartidas con
+ * las mismas reglas de la carga inicial (`distributePhotosAcrossPages`). Las
+ * páginas que ya existían no se tocan: ni sus fotos, ni sus recortes, textos,
+ * diseños ni variantes.
+ *
+ * Es la operación de "ya subí y organicé 100 fotos, ahora quiero añadir 20
+ * más": el reparto se hace solo sobre el lote nuevo, así que no hay nada que
+ * rehacer ni confirmar como en `redistributeAlbum`.
+ *
+ * Devuelve null, sin tocar nada, si el lote no cabe exactamente en esas
+ * páginas o si el álbum superaría su tope de páginas.
+ */
+export function appendPhotosAsNewPages(
+  state: AlbumState,
+  items: DistributableItem[],
+  newPages: number,
+  config: AlbumConfig
+): AlbumState | null {
+  if (state.length + newPages > config.maxPages) return null;
+  const split = splitAppendPages(items.length, newPages);
+  if (!split) return null;
+
+  const { photoPages, blankPages } = split;
+  const distributed = distributePhotosAcrossPages(items, photoPages, config, {
+    minPages: 1,
+    minPhotos: 1,
+    maxPages: config.maxPages - state.length,
+  });
+  if (!distributed) return null;
+
+  const blanks = Array.from({ length: blankPages }, () => blankPage());
+  return [...cloneState(state), ...distributed, ...blanks];
+}
+
+// ── rellenar los huecos de una página de un solo lote ────────────────────────
+
+/**
+ * Índices de los slots de la página que están vacíos: sin foto y sin caja de
+ * texto, dentro de los que su diseño actual pinta. Es el mismo recuento que
+ * usa el editor para dibujar la página (`getRenderSlotCount`): nunca menos
+ * slots que fotos reales, para no esconder ninguna.
+ */
+export function emptySlotIndexes(page: PageState, config: AlbumConfig): number[] {
+  const slotCount = Math.max(
+    page.variant ?? 0,
+    getNextAllowed(page.photos.length, config.allowedPhotosPerPage),
+    page.photos.length
+  );
+  const empty: number[] = [];
+  for (let i = 0; i < slotCount; i++) {
+    const photo = page.photos[i];
+    if ((photo && photo.trim() !== '') || page.texts[i] !== undefined) continue;
+    empty.push(i);
+  }
+  return empty;
+}
+
+export interface FillResult {
+  state: AlbumState;
+  /** Cuántas fotos entraron en la página. */
+  filled: number;
+  /** Las que no cabían: el diseño tenía menos huecos que fotos traía el lote. */
+  leftover: DistributableItem[];
+}
+
+/**
+ * Coloca `items` en los huecos vacíos de la página, en orden, de un solo
+ * golpe. Un diseño de 6 con 3 huecos recibe 3 fotos; si el lote trae más, las
+ * sobrantes se devuelven en `leftover` para que quien llame decida (avisar,
+ * mandarlas a páginas nuevas…): nunca se descartan en silencio ni se fuerza
+ * un diseño mayor (R3: el layout no se toca).
+ *
+ * Las fotos, recortes y textos que ya estaban se quedan donde estaban.
+ */
+export function fillEmptySlots(
+  state: AlbumState,
+  pageIndex: number,
+  items: DistributableItem[],
+  config: AlbumConfig
+): FillResult {
+  const page = state[pageIndex];
+  if (!page || items.length === 0) return { state, filled: 0, leftover: [...items] };
+
+  const empty = emptySlotIndexes(page, config);
+  const toPlace = items.slice(0, empty.length);
+  if (toPlace.length === 0) return { state, filled: 0, leftover: [...items] };
+
+  const next = cloneState(state);
+  const target = next[pageIndex];
+  toPlace.forEach((item, i) => {
+    const slot = empty[i];
+    while (target.photos.length <= slot) target.photos.push('');
+    while (target.signatures.length <= slot) target.signatures.push('');
+    target.photos[slot] = item.photo;
+    target.signatures[slot] = item.signature;
+  });
+
+  return { state: next, filled: toPlace.length, leftover: items.slice(toPlace.length) };
 }

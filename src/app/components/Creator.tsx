@@ -6,16 +6,12 @@ import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
 import CalendarCustomization, { CalendarCustomizationOptions } from './CalendarCustomization';
 import CalendarOrganizer from './CalendarOrganizer';
-import MugCustomization, { MugCustomizationOptions } from './MugCustomization';
-import MugOrganizer, { MugItem } from './MugOrganizer';
-import PhotoPackCustomization, { PhotoPackCustomizationOptions } from './PhotoPackCustomization';
-import PhotoPackOrganizer from './PhotoPackOrganizer';
 import ProductDetailsModal from './ProductDetailsModal';
 import DraftPromptModal from './DraftPromptModal';
 import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { Album, Calendar, MugProduct, PhotoPack, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_MUG, BASE_PHOTO_PACK, BASE_CUSTOM_ALBUM } from '../types/products';
+import { Album, Calendar, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_CUSTOM_ALBUM } from '../types/products';
 import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
 import type { PageVariantId } from '../utils/pageLayouts';
@@ -200,7 +196,6 @@ export default function Creator() {
 
   const buildDesignData = (overrides?: {
     photos?: string[][] | string[];
-    mugItems?: MugItem[];
     textBoxSlots?: Record<number, Record<number, any>>;
     customization?: any;
   }) => {
@@ -210,30 +205,22 @@ export default function Creator() {
     const activeCustomization = overrides?.customization ?? (
       product === 'album' ? d.customization
       : product === 'calendar' ? d.calendarCustomization
-      : product === 'mug' ? d.mugCustomization
-      : product === 'photo-pack' ? d.photoPackCustomization
       : null
     );
 
     const activeProduct = product === 'album' ? d.selectedAlbum
                         : product === 'calendar' ? d.selectedCalendar
-                        : product === 'mug' ? d.selectedMug
-                        : product === 'photo-pack' ? d.selectedPhotoPack
                         : null;
 
     const activePhotos = overrides?.photos ?? (
       product === 'album' ? d.photos
       : product === 'calendar' ? d.calendarPhotos
-      : product === 'photo-pack' ? d.photoPackPhotos
       : []
     );
 
     const activePhotoCrops = product === 'album' ? d.photoCrops
                            : product === 'calendar' ? d.calendarPhotoCrops
-                           : product === 'photo-pack' ? d.photoPackPhotoCrops
                            : {};
-
-    const currentMugItems = overrides?.mugItems ?? (product === 'mug' ? d.mugItems : []);
 
     let coverData: any = { image: '', title: activeProduct?.name || '' };
     if (product === 'album' && (activeCustomization as any)?.coverContent) {
@@ -258,8 +245,6 @@ export default function Creator() {
         customization: activeCustomization,
         coverData,
         photoCrops: activePhotoCrops,
-        items: currentMugItems,
-        mugItems: currentMugItems,
         uploadedUrlMap: d.uploadedUrlMap,
       },
     };
@@ -352,12 +337,10 @@ export default function Creator() {
 
   const handleCheckoutRedirect = async (finalData?: {
     photos?: string[][] | string[], 
-    mugItems?: MugItem[], 
     textBoxSlots?: Record<number, Record<number, any>> 
   }) => {
     const overrides = {
       photos: finalData?.photos,
-      mugItems: finalData?.mugItems,
       textBoxSlots: finalData?.textBoxSlots,
     };
 
@@ -418,22 +401,15 @@ export default function Creator() {
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedCalendar, setSelectedCalendar] = useState<Calendar | null>(null);
-  const [selectedMug, setSelectedMug] = useState<MugProduct | null>(null);
-  const [selectedPhotoPack, setSelectedPhotoPack] = useState<PhotoPack | null>(null);
   
   const [customization, setCustomization] = useState<CustomizationOptions | null>(null);
   const [calendarCustomization, setCalendarCustomization] = useState<CalendarCustomizationOptions | null>(null);
-  const [mugCustomization, setMugCustomization] = useState<MugCustomizationOptions | null>(null);
-  const [photoPackCustomization, setPhotoPackCustomization] = useState<PhotoPackCustomizationOptions | null>(null);
   
   const [photos, setPhotos] = useState<string[][]>([]);
   const [fileSignatures, setFileSignatures] = useState<string[][]>([]);
   const [photoCrops, setPhotoCrops] = useState<Record<string, { x: number, y: number, zoom: number }>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<string[]>([]);
   const [calendarPhotoCrops, setCalendarPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
-  const [photoPackPhotos, setPhotoPackPhotos] = useState<string[]>([]);
-  const [photoPackPhotoCrops, setPhotoPackPhotoCrops] = useState<Record<number, { x: number, y: number, zoom: number }>>({});
-  const [mugItems, setMugItems] = useState<MugItem[]>([]);
   const [textBoxSlots, setTextBoxSlots] = useState<Record<number, Record<number, any>>>({});  
   const [pageLayouts, setPageLayouts] = useState<Record<number, PageVariantId>>({});
   const [pageLayoutVariants, setPageLayoutVariants] = useState<Record<number, number>>({});
@@ -443,11 +419,11 @@ export default function Creator() {
   // Sin array de dependencias a propósito: designRef debe reflejar el último render.
   useEffect(() => {
     designRef.current = {
-      selectedProduct, selectedAlbum, selectedCalendar, selectedMug, selectedPhotoPack,
-      customization, calendarCustomization, mugCustomization, photoPackCustomization,
+      selectedProduct, selectedAlbum, selectedCalendar,
+      customization, calendarCustomization,
       photos, photoCrops, textBoxSlots, pageLayouts, pageLayoutVariants,
-      calendarPhotos, calendarPhotoCrops, photoPackPhotos, photoPackPhotoCrops,
-      mugItems, uploadedUrlMap,
+      calendarPhotos, calendarPhotoCrops,
+      uploadedUrlMap,
     };
   });
 
@@ -515,8 +491,6 @@ export default function Creator() {
       pageLayoutVariants: order.pageLayoutVariants || {},
       customization: order.customization,
       coverData: order.coverData,
-      items: order.items || order.mugItems || [],
-      mugItems: order.items || order.mugItems || [],
     };
   };
 
@@ -557,16 +531,6 @@ export default function Creator() {
       setCalendarCustomization(designData.customization);
       setCalendarPhotos(designData.photos || []);
       setCalendarPhotoCrops(designData.photoCrops || {});
-    } else if (productType === 'mug') {
-      setSelectedMug(product);
-      setMugCustomization(designData.customization);
-      setMugItems(designData.items || designData.mugItems || []);
-      setTextBoxSlots(designData.textBoxSlots || {});
-    } else if (productType === 'photo-pack') {
-      setSelectedPhotoPack(product);
-      setPhotoPackCustomization(designData.customization);
-      setPhotoPackPhotos(designData.photos || []);
-      setPhotoPackPhotoCrops(designData.photoCrops || {});
     }
   };
 
@@ -581,8 +545,6 @@ export default function Creator() {
             const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
             let detectedType: ProductType = 'album';
             if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
-            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
-            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
             restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             updateActiveDraftId(state.resumeSavedDraft);
@@ -600,8 +562,6 @@ export default function Creator() {
             const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
             let detectedType: ProductType = 'album';
             if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
-            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
-            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
             restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setEditingPaidOrderId(state.editPaidOrder);
@@ -620,8 +580,6 @@ export default function Creator() {
             const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
             let detectedType: ProductType = 'album';
             if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
-            else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
-            else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
             restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
             setResumingOrderId(state.orderId);
@@ -754,8 +712,6 @@ export default function Creator() {
     const productTypeStr = String(draft.productType || draft.product?.type || draft.product?.id || draft.product?.name || '').toLowerCase();
     let detectedType: ProductType = 'album';
     if (productTypeStr.includes('calendar') || productTypeStr.includes('calendario')) detectedType = 'calendar';
-    else if (productTypeStr.includes('mug') || productTypeStr.includes('taza')) detectedType = 'mug';
-    else if (productTypeStr.includes('photo') || productTypeStr.includes('foto') || productTypeStr.includes('pack')) detectedType = 'photo-pack';
 
     restoreDesignToState(buildDesignDataFromOrder(draft, detectedType), draft.product, detectedType);
     updateActiveDraftId(draft.id);
@@ -791,8 +747,6 @@ export default function Creator() {
     setSelectedProduct(product);
     if (product === 'album') setSelectedAlbum(BASE_ALBUM);
     if (product === 'calendar') setSelectedCalendar(BASE_CALENDAR);
-    if (product === 'mug') setSelectedMug(BASE_MUG);
-    if (product === 'photo-pack') setSelectedPhotoPack(BASE_PHOTO_PACK);
     if (product === 'custom-album') {
       setSelectedCustomAlbum(BASE_CUSTOM_ALBUM);
       setCurrentStep('custom-album-info');
@@ -867,7 +821,7 @@ export default function Creator() {
   useEffect(() => {
     if (currentStep !== 'organize' || !user) return;
     if (editingPaidOrderId) return; // los pedidos pagados solo se guardan explícitamente
-    if (photos.length === 0 && mugItems.length === 0) return;
+    if (photos.length === 0) return;
 
     hasUnsavedChangesRef.current = true;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -879,7 +833,7 @@ export default function Creator() {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [photos, pageLayouts, pageLayoutVariants, textBoxSlots, photoCrops, mugItems, currentStep, user, editingPaidOrderId]);
+  }, [photos, pageLayouts, pageLayoutVariants, textBoxSlots, photoCrops, currentStep, user, editingPaidOrderId]);
 
   useEffect(() => {
     // `visibilitychange` es más fiable que `beforeunload` en iOS/PWA.
@@ -905,28 +859,9 @@ export default function Creator() {
     setCurrentStep('organize');
   };
 
-  const handleMugCustomizationComplete = (options: MugCustomizationOptions) => {
-    setMugCustomization(options);
-    setCurrentStep('organize');
-  };
-
-  const handlePhotoPackCustomizationComplete = (options: PhotoPackCustomizationOptions) => {
-    setPhotoPackCustomization(options);
-    setCurrentStep('organize');
-  };
-
   const handleCalendarPhotosComplete = (uploadedPhotos: string[]) => {
     setCalendarPhotos(uploadedPhotos);
     handleCheckoutRedirect({ photos: uploadedPhotos });
-  };
-
-  const handlePhotoPackPhotosComplete = (uploadedPhotos: string[]) => {
-    setPhotoPackPhotos(uploadedPhotos);
-    handleCheckoutRedirect({ photos: uploadedPhotos });
-  };
-
-  const handleMugItemsComplete = () => {
-    handleCheckoutRedirect({ mugItems: mugItems });
   };
 
   const handleBack = () => {
@@ -939,8 +874,6 @@ export default function Creator() {
       setSelectedProduct(null);
       setSelectedAlbum(null);
       setSelectedCalendar(null);
-      setSelectedMug(null);
-      setSelectedPhotoPack(null);
     } else if (currentStep === 'organize') {
       setCurrentStep('customization');
       // No limpiamos el estado para preservar los datos del cover al retroceder
@@ -948,8 +881,6 @@ export default function Creator() {
       setCurrentStep('organize');
       setPhotos([]);
       setCalendarPhotos([]);
-      setMugItems([]);
-      setPhotoPackPhotos([]);
       setPhotoCrops({});
     }
   };
@@ -969,10 +900,6 @@ export default function Creator() {
       { id: 'checkout', label: t('step.checkout'), active: currentStep === 'checkout' },
     ];
 
-    if (selectedProduct === 'mug') {
-      commonSteps[2].label = t('step.design');
-    }
-    
     if (selectedProduct) return commonSteps;
     
     return [
@@ -1030,20 +957,6 @@ export default function Creator() {
           onCustomizationComplete={handleCalendarCustomizationComplete}
         />
       );
-    } else if (selectedProduct === 'mug' && selectedMug) {
-      return (
-        <MugCustomization 
-          product={selectedMug}
-          onCustomizationComplete={handleMugCustomizationComplete}
-        />
-      );
-    } else if (selectedProduct === 'photo-pack' && selectedPhotoPack) {
-      return (
-        <PhotoPackCustomization 
-          photoPack={selectedPhotoPack}
-          onCustomizationComplete={handlePhotoPackCustomizationComplete}
-        />
-      );
     }
     return null;
   };
@@ -1083,29 +996,6 @@ export default function Creator() {
           onPhotoCropsChange={setCalendarPhotoCrops}
           onComplete={handleCalendarPhotosComplete}
           isSaving={isSaving}
-        />
-      );
-    } else if (selectedProduct === 'mug' && mugCustomization) {
-      return (
-        <MugOrganizer
-          mug={selectedMug!}
-          customization={mugCustomization}
-          items={mugItems}
-          onItemsChange={setMugItems}
-          onComplete={handleMugItemsComplete}
-          isSaving={isSaving}
-        />
-      );
-    } else if (selectedProduct === 'photo-pack' && photoPackCustomization) {
-      return (
-        <PhotoPackOrganizer 
-          photoPack={selectedPhotoPack!}
-          customization={photoPackCustomization}
-          photos={photoPackPhotos}
-          onPhotosChange={setPhotoPackPhotos}
-          photoCrops={photoPackPhotoCrops}
-          onPhotoCropsChange={setPhotoPackPhotoCrops}
-          onComplete={handlePhotoPackPhotosComplete}
         />
       );
     }

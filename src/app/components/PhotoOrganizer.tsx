@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import {
+  savePendingPhotos,
+  loadPendingPhotos,
+  clearPendingPhotos,
+  purgeExpiredPendingPhotos,
+  findPendingPhotoBySignature,
+} from '../utils/photoStore';
+import {
   fromPropsToAlbumState,
   fromAlbumStateToProps,
   swapPhotosOnPage as albumSwapPhotosOnPage,
@@ -19,10 +26,18 @@ import {
   distributePhotosAcrossPages,
   redistributeAlbum,
   migrateAlbumToConfig,
+  replacePhotoUrl,
+  appendPhotosAsNewPages,
+  appendPageBounds,
+  suggestAppendPages,
+  canAppendPhotos,
+  emptySlotIndexes,
+  fillEmptySlots,
   type AlbumState,
   type AlbumConfig,
   type AlbumOpResult,
   type AlbumWarning,
+  type DistributableItem,
 } from '../utils/albumStateUtils';
 import {
   FONT_SIZES,
@@ -46,10 +61,18 @@ import {
 } from '../utils/pageLayouts';
 import { getAlbumPageSlots, getPageSlotCount } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
+import { sortPhotosBySelection } from '../utils/photoOrdering';
+import {
+  variantForAlbumSize,
+  checkFeasibility,
+  nearestFeasiblePages,
+  maxPhotosFor,
+  VARIANT_SIZES,
+  type FeasibilityResult,
+} from '../utils/pageDistribution';
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
-import { useAuth } from '../../hooks/useAuth';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -57,7 +80,7 @@ import { Switch } from './ui/switch';
 import { PageRangeSlider } from './ui/page-range-slider';
 
 // --- NUEVA IMAGEN DE JIFFY ---
-import jiffy2Img from '../../assets/Jiffy2.png';
+import { useSystemImage } from '../context/SystemImagesContext';
 import iosAnimVideo from '../../assets/Anim_IOS.mp4';
 
 // ============================================================================
@@ -65,19 +88,12 @@ import iosAnimVideo from '../../assets/Anim_IOS.mp4';
 // ============================================================================
 interface JiffyLoaderProps {
   t?: (key: string) => string;
-  photoCount?: number;
 }
 
-const getEstimatedTime = (count: number): string => {
-  const seconds = Math.round(count * 1);
-  if (seconds < 60) return `~${seconds} segundos`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return secs > 0 ? `~${mins} min ${secs} seg` : `~${mins} min`;
-};
-
-const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
-  const estimated = photoCount ? getEstimatedTime(photoCount) : null;
+// El tiempo estimado que se mostraba aquí medía la latencia de la llamada a
+// 1clic.ai (≈1 s por foto). El orden y el reparto ya son locales y tardan un
+// instante, así que no hay nada que estimar.
+const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
   return (
     <div className="w-full py-16 flex flex-col items-center justify-center gap-10 bg-gray-50 rounded-none border border-gray-200 shadow-inner">
       <div className="relative w-24 h-24 flex items-center justify-center">
@@ -102,21 +118,12 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t, photoCount }) => {
 
       <div className="text-center animate-pulse px-6 py-3 bg-white rounded-lg border border-gray-200 shadow-sm mx-4">
         <p className="text-xl font-bold text-gray-900">
-          {t ? t('organizer.aiSorting') : 'Organizando con 1Clic.ai'}
+          {t ? t('organizer.preparingAlbum') : 'Preparando tu álbum'}
         </p>
         <p className="text-sm text-gray-500 mt-1">
-          {t ? t('organizer.aiSortingDesc') : 'Preparando tu diseño...'}
+          {t ? t('organizer.preparingAlbumDesc') : 'Ordenando tus fotos y repartiéndolas en las páginas.'}
         </p>
       </div>
-
-      {estimated && (
-        <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border border-amber-200 rounded-lg mx-4 text-sm text-amber-800">
-          <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>Tiempo estimado: <strong>{estimated}</strong></span>
-        </div>
-      )}
 
       <style>{`
         @keyframes spinRightT1 {
@@ -296,7 +303,8 @@ export default function PhotoOrganizer({
 }: PhotoOrganizerProps) {
   const { t } = useLanguage();
   const storeConfig = useStoreConfig();
-  const { user } = useAuth();
+  // Sustituible desde el panel de administración; por defecto, el asset original.
+  const jiffy2Img = useSystemImage('organizer.upload.mascot');
 
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
@@ -309,7 +317,11 @@ export default function PhotoOrganizer({
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, metadata: any}[]>([]);
+  // `order` es la posición con la que el selector entregó el archivo: el orden en
+  // que el usuario fue tocando las fotos en el carrete. Es lo que decide en qué
+  // orden entran al álbum (ver sortPhotosBySelection). Puede faltar en fotos
+  // recuperadas de una copia antigua de IndexedDB; esas caen a orden por nombre.
+  const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, order?: number, metadata: any}[]>([]);
   const [numPages, setNumPages] = useState<number | string>(40);
   // Cuántas de esas páginas son en blanco pedidas a propósito (siempre par).
   // Permiten superar el máximo que justifican las fotos, hasta ALBUM_MAX_PAGES.
@@ -318,7 +330,7 @@ export default function PhotoOrganizer({
   
   const [advancedSettingsModal, setAdvancedSettingsModal] = useState<number | null>(null);
   const [cropModalData, setCropModalData] = useState<{ pageIndex: number, photoIndex: number, aspectRatio: number } | null>(null);
-  const [isSortingWithAI, setIsSortingWithAI] = useState(false);
+  const [isPreparingAlbum, setIsPreparingAlbum] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
   
   const [layoutChangeModal, setLayoutChangeModal] = useState<{
@@ -358,6 +370,13 @@ export default function PhotoOrganizer({
   // Para detectar cancelación del picker de iOS vía recuperación de foco
   const pickerFocusHandlerRef = useRef<(() => void) | null>(null);
   const pickerFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Posición dentro de la copia de IndexedDB, para restaurar la selección en orden
+  const pendingOrderRef = useRef(0);
+  // Fotos recuperadas de la copia al montar; se avisa al usuario en la pantalla de subida
+  const [recoveredSelection, setRecoveredSelection] = useState<number | null>(null);
+  // URLs que fallaron al pintar y esperan un intento de recuperación desde IndexedDB
+  const brokenQueueRef = useRef<Set<string>>(new Set());
+  const brokenFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
@@ -416,6 +435,24 @@ export default function PhotoOrganizer({
   // Modal de "reorganizar el album entero". `confirmed` es la casilla de
   // seguridad: sin marcarla no se puede lanzar una operacion destructiva.
   const [redistributeModal, setRedistributeModal] = useState<{ pages: number; confirmed: boolean } | null>(null);
+  // ── Cargas masivas desde el editor ──────────────────────────────────────────
+  // "Añadir fotos": el lote ya procesado (URLs creadas, duplicados resueltos)
+  // espera en este modal a que el usuario elija cuántas páginas nuevas ocupa.
+  // Las fotos van SIEMPRE a páginas nuevas al final; lo que ya está no se toca.
+  const [appendModal, setAppendModal] = useState<{
+    items: DistributableItem[];
+    pages: number;
+    min: number;
+    max: number;
+  } | null>(null);
+  const appendInputRef = useRef<HTMLInputElement>(null);
+  // "Rellenar huecos": la página cuyos slots vacíos se van a llenar de un solo lote.
+  const fillInputRef = useRef<HTMLInputElement>(null);
+  const fillTargetRef = useRef<number | null>(null);
+  // Progreso del lote que se está procesando desde el editor (HEIC, duplicados,
+  // resolución). Separado de `conversionProgress`, que pinta la pantalla del paso
+  // de carga inicial y no existe en el editor.
+  const [editorBatchProgress, setEditorBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Firmas de archivo para detección de duplicados (misma forma 2D que photos)
   const [fileSignatures, setFileSignatures] = useState<string[][]>(() => initialFileSignatures ?? []);
@@ -436,6 +473,9 @@ export default function PhotoOrganizer({
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
   /** Avisos devueltos por las operaciones de albumStateUtils (antes eran alert() bloqueantes). */
   const [albumWarning, setAlbumWarning] = useState<string | null>(null);
+  // Aviso del paso 'pages' cuando la combinación de fotos y páginas no tiene
+  // reparto exacto (regla 1 de pageDistribution).
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [sizeMigrationModal, setSizeMigrationModal] = useState<{
     pagesAffected: number[];
     photosAtRisk: number;
@@ -453,14 +493,65 @@ export default function PhotoOrganizer({
     setShowBrokenBanner(true);
   }, [failedUploadUrls]);
 
-  const handlePhotoError = useCallback((url: string) => {
-    setBrokenPhotoUrls(prev => {
-      const next = new Set(prev);
-      next.add(url);
-      return next;
-    });
-    setShowBrokenBanner(true);
+  // ── RECUPERAR LA SELECCIÓN TRAS UNA RECARGA ────────────────────────────────
+  // iOS descarta la pestaña sin avisar (memoria, Fototeca/Files abiertos encima,
+  // PWA en segundo plano) y al volver todas las `blob:` están muertas: el
+  // contador aparecía en cero y había que elegir las fotos otra vez. Los bytes
+  // siguen en IndexedDB, así que se rehacen las URLs desde esa copia.
+  useEffect(() => {
+    void purgeExpiredPendingPhotos();
+    if (safePhotos.length > 0) return;                    // el álbum ya está montado: manda lo que venga por props
+    if ((initialFileSignatures?.length ?? 0) > 0) return; // se está retomando un pedido guardado
+    let cancelled = false;
+    (async () => {
+      const stored = await loadPendingPhotos();
+      if (cancelled || stored.length === 0) return;
+      const restored: { id: string; url: string; order?: number; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
+      for (const row of stored) {
+        try {
+          const url = URL.createObjectURL(row.blob);
+          if (!url) continue;
+          restored.push({
+            id: row.id,
+            url,
+            // Copias guardadas antes de que existiera `order` no lo traen: se deja
+            // sin definir para que el orden salga del nombre del archivo.
+            order: Number.isFinite(row.order) ? row.order : undefined,
+            metadata: { name: row.name, size: row.size, type: row.type, lastModified: row.lastModified },
+          });
+          pendingFileKeysRef.current.set(url, row.signature);
+          sessionKeysRef.current.add(row.signature);
+        } catch {
+          // un blob ilegible no debe impedir recuperar los demás
+        }
+      }
+      if (cancelled || restored.length === 0) return;
+      // El contador sigue DESPUÉS del mayor orden recuperado, no en `stored.length`:
+      // si alguna fila venía sin orden, esa cuenta se quedaría corta y el siguiente
+      // archivo añadido pisaría la posición de una foto ya recuperada.
+      pendingOrderRef.current = stored.reduce(
+        (max, row) => (Number.isFinite(row.order) ? Math.max(max, row.order + 1) : max),
+        stored.length
+      );
+      setPendingFilesData(restored);
+      setUploadedPhotos(restored.map(f => f.url));
+      setRecoveredSelection(restored.length);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Vacía la selección y su copia en disco: «Quitar todas» y «Descartar» comparten esto. */
+  const clearSelection = () => {
+    pendingFilesData.forEach(f => { try { URL.revokeObjectURL(f.url); } catch { /* ya revocada */ } });
+    setUploadedPhotos([]);
+    setPendingFilesData([]);
+    sessionKeysRef.current.clear();
+    pendingFileKeysRef.current.clear();
+    pendingOrderRef.current = 0;
+    setRecoveredSelection(null);
+    void clearPendingPhotos();
+  };
 
   const handlePhotoRetry = useCallback((url: string, pageIndex: number, photoIndex: number) => {
     retryTargetRef.current = { pageIndex, photoIndex };
@@ -493,7 +584,6 @@ export default function PhotoOrganizer({
     setShowBrokenBanner(false);
   };
 
-  const isSquare = sizeStr.includes('Cuadrado');
   const isHorizontal = sizeStr.includes('Horizontal');
   const isVertical = sizeStr.includes('Vertical');
   const allowedPhotosPerPage = getAllowedPhotosPerPage(sizeStr);
@@ -521,9 +611,13 @@ export default function PhotoOrganizer({
 
   // Máximo de páginas que justifican las fotos subidas (mínimo 1 foto por página).
   // Es el tope de la barra del selector, dinámico según cuántas fotos haya.
+  // Se redondea a par HACIA ABAJO: con 45 fotos el tope es 44, no 46 — 46
+  // páginas con 45 fotos dejaría una sin foto, que la regla 1 rechaza. Antes
+  // se redondeaba hacia arriba y el propio tope de la barra era infactible.
+  // Lo que pase de aquí solo entra como páginas en blanco a propósito.
   const getMaxPhotoPages = (photoCount: number) => {
     const baseMax = Math.max(40, photoCount);
-    return Math.min(ALBUM_MAX_PAGES, baseMax % 2 === 0 ? baseMax : baseMax + 1);
+    return Math.min(ALBUM_MAX_PAGES, baseMax - (baseMax % 2));
   };
 
   // Tope duro del álbum. Se puede superar el máximo anterior sumando páginas en
@@ -532,17 +626,109 @@ export default function PhotoOrganizer({
   // handleAddPage en el editor.
   const getMaxPages = (_photoCount: number) => ALBUM_MAX_PAGES;
 
+  // ── Factibilidad del reparto (regla 1 de pageDistribution) ──────────────────
+  // Qué variante de reparto toca según el formato: A horizontal, B cuadrado,
+  // C vertical. Los tamaños de página salen del mismo pliego que allowedPhotosPerPage.
+  const distributionVariant = variantForAlbumSize(sizeStr);
+
+  /**
+   * Mínimo de páginas en las que caben `photoCount` fotos: la primera cantidad
+   * par, desde 40, que tenga reparto exacto. Casi siempre es ceil(N / tamaño
+   * mayor) redondeado a par; el bucle solo avanza cuando ese valor cae en un
+   * hueco de la regla 1 (359 fotos cuadradas: 40 páginas no, 42 sí).
+   * Es el suelo de la barra del selector, igual que getMaxPhotoPages es el techo.
+   */
+  const getMinPhotoPages = (photoCount: number) => {
+    if (photoCount < 40) return 40; // por debajo del mínimo de fotos no hay nada que calcular
+    const sizes = VARIANT_SIZES[distributionVariant];
+    const big = sizes[sizes.length - 1];
+    let g = Math.max(40, Math.ceil(photoCount / big));
+    if (g % 2 !== 0) g += 1;
+    while (
+      g < ALBUM_MAX_PAGES &&
+      !checkFeasibility(photoCount, g, distributionVariant, { maxPages: ALBUM_MAX_PAGES }).feasible
+    ) g += 2;
+    return Math.min(g, ALBUM_MAX_PAGES);
+  };
+
+  /**
+   * Páginas en blanco efectivas para un total dado: siempre un número par y sin
+   * dejar por debajo del mínimo las que llevan fotos.
+   */
+  const evenBlankPages = (total: number, photoCount: number) => {
+    const capped = Math.min(blankPages, Math.max(0, total - getMinPhotoPages(photoCount)));
+    return capped - (capped % 2);
+  };
+
+  /**
+   * ¿Se pueden repartir `photoCount` fotos en las páginas que llevan foto?
+   * Las páginas en blanco pedidas a propósito no cuentan: van vacías al final.
+   */
+  const feasibilityFor = (photoCount: number, total: number) => {
+    const blanks = evenBlankPages(total, photoCount);
+    const photoPages = total - blanks;
+    return {
+      blanks,
+      photoPages,
+      result: checkFeasibility(photoCount, photoPages, distributionVariant, { maxPages: ALBUM_MAX_PAGES }),
+    };
+  };
+
+  /**
+   * El aviso que ve el usuario cuando su combinación no tiene reparto exacto.
+   * Nunca se redondea por él: se le dice qué falla y qué números sí funcionan.
+   */
+  const feasibilityMessage = (
+    photoCount: number, photoPages: number, result: FeasibilityResult
+  ): string => {
+    const sizes = VARIANT_SIZES[distributionVariant];
+    const big = sizes[sizes.length - 1];
+
+    switch (result.reason) {
+      case 'too_few_photos':
+        return `Tienes ${photoCount} foto(s) para ${photoPages} páginas con foto. Cada página necesita al menos una: ` +
+               `quita páginas hasta ${result.maxPages} o añade ${photoPages - photoCount} foto(s) más.`;
+      case 'too_many_photos':
+        return `${photoCount} foto(s) no caben en ${photoPages} páginas: en este formato cada página admite como mucho ${big}. ` +
+               `Necesitas al menos ${result.minPages} páginas.`;
+      case 'photos_out_of_range':
+        return photoCount < 40
+          ? `Necesitas mínimo 40 fotos para crear el álbum (llevas ${photoCount}).`
+          : `El máximo en este formato es ${maxPhotosFor(distributionVariant)} fotos (llevas ${photoCount}).`;
+      case 'pages_out_of_range':
+        return `El álbum debe tener entre 40 y ${ALBUM_MAX_PAGES} páginas con foto.`;
+      case 'unreachable_combination': {
+        const near = nearestFeasiblePages(photoCount, photoPages, distributionVariant, {
+          maxPages: ALBUM_MAX_PAGES, step: 2,
+        });
+        const opciones = [near.below, near.above].filter((p): p is number => p !== null);
+        const sugerencia = opciones.length > 0
+          ? ` Prueba con ${opciones.join(' o ')} páginas.`
+          : '';
+        return `${photoCount} foto(s) no se pueden repartir exactamente en ${photoPages} páginas ` +
+               `usando páginas de ${sizes.join(', ')} fotos.${sugerencia}`;
+      }
+      default:
+        return '';
+    }
+  };
+
+  // Al cambiar cuántas fotos hay, el número de páginas se reencaja en el rango
+  // que esas fotos permiten: el suelo sube con muchas fotos (1000 cuadradas no
+  // caben en 40 páginas) y el techo total sigue siendo 250.
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
       const maxP = getMaxPages(uploadedPhotos.length);
+      const minP = getMinPhotoPages(uploadedPhotos.length);
       if (typeof numPages === 'number') {
         let newNum = numPages;
-        if (newNum < 40) newNum = 40;
+        if (newNum < minP) newNum = minP;
         if (newNum > maxP) newNum = maxP;
         if (newNum % 2 !== 0) newNum = Math.min(newNum + 1, maxP);
         setNumPages(newNum);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedPhotos.length]);
 
   // Al abrir el selector de página destino, centra el scroll en la página de origen
@@ -713,9 +899,11 @@ export default function PhotoOrganizer({
       });
     });
 
-  const processUpload = async (finalFiles: File[]) => {
-    if (finalFiles.length === 0) return;
-
+  /**
+   * Separa los archivos que ya están en el álbum (o en esta sesión) y pregunta
+   * una sola vez por lote si se usan igualmente. Devuelve los que siguen adelante.
+   */
+  const resolveDuplicates = async (finalFiles: File[]): Promise<File[]> => {
     // Firmas ya presentes en el álbum + las subidas en esta misma sesión
     // (fileSignatures no se rellena hasta handleFinalizeSetup).
     const existingKeys = new Set([
@@ -730,54 +918,271 @@ export default function PhotoOrganizer({
       else unique.push(file);
     }
 
-    const doUpload = (files: File[]) => {
-      if (files.length === 0) return;
-      const newFilesData: { id: string; url: string; metadata: { name: string; size: number; type: string; lastModified: number } }[] = [];
-      const skipped: string[] = [];
-      for (const file of files) {
-        let url: string;
-        try {
-          url = URL.createObjectURL(file);
-          if (!url) { skipped.push(file.name); continue; }
-        } catch {
-          skipped.push(file.name);
-          continue;
-        }
-        sessionKeysRef.current.add(getFileKey(file));
-        newFilesData.push({
+    if (duplicates.length === 0) return unique;
+    const decision = await askDuplicateDecision(duplicates[0]);
+    return decision === 'use' ? [...unique, ...duplicates] : unique;
+  };
+
+  type AcceptedFile = {
+    file: File;
+    data: { id: string; url: string; order: number; metadata: { name: string; size: number; type: string; lastModified: number } };
+  };
+
+  /**
+   * Crea la URL de cada archivo y lo registra (clave de sesión, URL→clave,
+   * info de baja resolución). Es la parte común de la carga inicial y de las
+   * cargas desde el editor; NO toca `uploadedPhotos`, que solo existe en el
+   * paso de carga.
+   */
+  const acceptFiles = (files: File[]): AcceptedFile[] => {
+    // Se guarda el par archivo↔registro: antes la info de baja resolución se
+    // cruzaba por índice contra `files`, así que un solo archivo descartado
+    // desplazaba el resto y la marca acababa en la foto equivocada.
+    const accepted: AcceptedFile[] = [];
+    const skipped: string[] = [];
+    for (const file of files) {
+      let url: string;
+      try {
+        url = URL.createObjectURL(file);
+        if (!url) { skipped.push(file.name); continue; }
+      } catch {
+        skipped.push(file.name);
+        continue;
+      }
+      sessionKeysRef.current.add(getFileKey(file));
+      accepted.push({
+        file,
+        data: {
           id: Math.random().toString(36).substring(2, 11),
           url,
+          // Se reserva aquí, en el mismo recorrido en que se acepta el archivo, para
+          // que la posición del estado y la de la copia en disco sean la misma.
+          order: pendingOrderRef.current++,
           metadata: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }
-        });
-      }
-      if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
-      if (newFilesData.length === 0) return;
-      // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
-      newFilesData.forEach(f => {
-        pendingFileKeysRef.current.set(f.url, `${f.metadata.name}|${f.metadata.size}|${f.metadata.lastModified}`);
+        },
       });
-      // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
-      const newLowResInfo: Record<string, {width: number, height: number}> = {};
-      files.forEach((file, i) => {
-        const fk = getFileKey(file);
-        if (pendingLowResRef.current.has(fk)) {
-          newLowResInfo[newFilesData[i].url] = pendingLowResRef.current.get(fk)!;
-          pendingLowResRef.current.delete(fk);
-        }
-      });
-      if (Object.keys(newLowResInfo).length > 0) {
-        setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
-      }
-      setPendingFilesData(prev => [...prev, ...newFilesData]);
-      setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
-    };
-
-    if (duplicates.length > 0) {
-      const decision = await askDuplicateDecision(duplicates[0]);
-      doUpload(decision === 'use' ? [...unique, ...duplicates] : unique);
-    } else {
-      doUpload(unique);
     }
+    if (skipped.length > 0) setSkippedFiles(prev => [...prev, ...skipped]);
+    if (accepted.length === 0) return accepted;
+    // Registrar URL→clave para que handleFinalizeSetup pueda construir fileSignatures
+    accepted.forEach(({ file, data }) => {
+      pendingFileKeysRef.current.set(data.url, getFileKey(file));
+    });
+    // Transferir info de baja resolución (clave→info) a la URL nueva definitiva
+    const newLowResInfo: Record<string, {width: number, height: number}> = {};
+    accepted.forEach(({ file, data }) => {
+      const fk = getFileKey(file);
+      if (pendingLowResRef.current.has(fk)) {
+        newLowResInfo[data.url] = pendingLowResRef.current.get(fk)!;
+        pendingLowResRef.current.delete(fk);
+      }
+    });
+    if (Object.keys(newLowResInfo).length > 0) {
+      setLowResInfo(prev => ({ ...prev, ...newLowResInfo }));
+    }
+    return accepted;
+  };
+
+  /** Copia en disco: si iOS descarta la pestaña, la selección se recupera al volver. */
+  const persistAccepted = (accepted: AcceptedFile[]) =>
+    savePendingPhotos(accepted.map(({ file, data }) => ({
+      id: data.id,
+      blob: file,
+      name: data.metadata.name,
+      size: data.metadata.size,
+      type: data.metadata.type,
+      lastModified: data.metadata.lastModified,
+      signature: getFileKey(file),
+      order: data.order,
+    })));
+
+  const processUpload = async (finalFiles: File[]) => {
+    if (finalFiles.length === 0) return;
+    const files = await resolveDuplicates(finalFiles);
+    const accepted = acceptFiles(files);
+    if (accepted.length === 0) return;
+    const newFilesData = accepted.map(a => a.data);
+    setPendingFilesData(prev => [...prev, ...newFilesData]);
+    setUploadedPhotos(prev => [...prev, ...newFilesData.map(f => f.url)]);
+    await persistAccepted(accepted);
+  };
+
+  /**
+   * Lote elegido desde el editor (añadir al final o rellenar huecos): convierte
+   * HEIC, comprueba la resolución, resuelve duplicados y registra cada archivo,
+   * en tandas de 5 como la carga inicial para no congelar el hilo. Devuelve las
+   * fotos listas para colocar, en el orden en que el usuario las eligió.
+   *
+   * La resolución se comprueba ANTES de crear la URL (como en la subida de una
+   * foto suelta) para que la marca de baja resolución llegue a la foto.
+   */
+  const ingestEditorFiles = async (filesArray: File[]): Promise<AcceptedFile[]> => {
+    const BATCH_SIZE = 5;
+    const all: AcceptedFile[] = [];
+    setEditorBatchProgress({ done: 0, total: filesArray.length });
+    try {
+      for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
+        const batch = filesArray.slice(i, i + BATCH_SIZE);
+        const converted = await Promise.all(batch.map(convertFileIfHeic));
+        const dims = await Promise.all(converted.map(checkImageDimensions));
+        dims.filter(r => r.isLowRes).forEach(r => {
+          pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
+        });
+        // El await es imprescindible: si esta tanda abre el modal de duplicados,
+        // la siguiente no debe pisarlo (ver askDuplicateDecision).
+        const files = await resolveDuplicates(converted);
+        const accepted = acceptFiles(files);
+        all.push(...accepted);
+        if (accepted.length > 0) await persistAccepted(accepted);
+        setEditorBatchProgress({ done: Math.min(i + BATCH_SIZE, filesArray.length), total: filesArray.length });
+        await new Promise<void>(r => setTimeout(r, 80));
+      }
+    } finally {
+      setEditorBatchProgress(null);
+    }
+    return all;
+  };
+
+  /** Foto lista para el reparto: URL + firma, en el orden de selección del usuario. */
+  const toDistributable = (accepted: AcceptedFile[]): DistributableItem[] =>
+    sortPhotosBySelection(
+      accepted.map(a => ({ url: a.data.url, name: a.data.metadata.name, order: a.data.order }))
+    ).map(f => ({ photo: f.url, signature: pendingFileKeysRef.current.get(f.url) ?? '' }));
+
+  /**
+   * Deshace la aceptación de un lote que al final no se colocó (el usuario
+   * canceló el modal o no había sitio): libera las URLs y borra las claves de
+   * sesión para que esas mismas fotos se puedan volver a elegir sin que salten
+   * como duplicadas.
+   */
+  const discardItems = (items: DistributableItem[]) => {
+    for (const item of items) {
+      try { URL.revokeObjectURL(item.photo); } catch { /* ya revocada */ }
+      pendingFileKeysRef.current.delete(item.photo);
+      if (item.signature) sessionKeysRef.current.delete(item.signature);
+      setLowResInfo(prev => {
+        if (!(item.photo in prev)) return prev;
+        const next = { ...prev };
+        delete next[item.photo];
+        return next;
+      });
+    }
+  };
+
+  // ── AÑADIR FOTOS AL FINAL (páginas nuevas) ──────────────────────────────────
+  // Tras la carga inicial el usuario puede traer otro lote grande. Va entero a
+  // páginas nuevas después de la última, repartido con las mismas reglas que la
+  // primera carga; ninguna página existente cambia.
+  const handleAppendFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const filesArray = Array.from(files);
+    event.target.value = '';
+
+    const accepted = await ingestEditorFiles(filesArray);
+    if (accepted.length === 0) return;
+    const items = toDistributable(accepted);
+
+    const state = currentAlbumState();
+    const bounds = appendPageBounds(state, items.length, albumConfig);
+    const suggested = bounds ? suggestAppendPages(state, items.length, albumConfig) : null;
+    if (!bounds || suggested === null) {
+      discardItems(items);
+      setAlbumWarning(
+        state.length >= ALBUM_MAX_PAGES - 1
+          ? `El álbum ya está en el máximo de ${ALBUM_MAX_PAGES} páginas: no hay sitio para páginas nuevas.`
+          : `${items.length} foto(s) no caben en las ${ALBUM_MAX_PAGES - state.length} páginas que quedan libres.`
+      );
+      return;
+    }
+    setAppendModal({ items, pages: suggested, min: bounds.min, max: bounds.max });
+  };
+
+  const cancelAppend = () => {
+    if (!appendModal) return;
+    discardItems(appendModal.items);
+    setAppendModal(null);
+  };
+
+  const executeAppend = () => {
+    if (!appendModal || pagesLocked) return;
+    const { items, pages } = appendModal;
+    const state = currentAlbumState();
+    const next = appendPhotosAsNewPages(state, items, pages, albumConfig);
+    if (!next) {
+      // Regla 1: el botón ya va deshabilitado si no hay reparto exacto; segundo cinturón.
+      setAlbumWarning(
+        `${items.length} foto(s) no se pueden repartir exactamente en ${pages} páginas nuevas ` +
+        `usando páginas de ${allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.`
+      );
+      return;
+    }
+
+    const firstNew = state.length;
+    applyAlbumState(next);
+    setNumPages(next.length);
+    setAppendModal(null);
+    setAlbumWarning(
+      `Añadimos ${items.length} foto(s) en ${pages} página(s) nueva(s) al final ` +
+      `(páginas ${firstNew + 1} a ${next.length}). Lo que ya tenías no cambió.`
+    );
+    // Llevar al usuario a la primera página nueva: si el álbum es largo, queda
+    // muy abajo y no vería que pasó nada.
+    setTimeout(() => {
+      document.getElementById(`album-page-${firstNew}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  // ── RELLENAR LOS HUECOS DE UNA PÁGINA DE UN SOLO LOTE ───────────────────────
+  // Una página con diseño de 6 y 3 huecos recibe 3 fotos de una vez, en orden
+  // de hueco, sin tocar las que ya tiene ni su diseño.
+  const openFillEmptySlots = (pageIndex: number) => {
+    fillTargetRef.current = pageIndex;
+    fillInputRef.current?.click();
+  };
+
+  const handleFillFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    const pageIndex = fillTargetRef.current;
+    fillTargetRef.current = null;
+    if (!files || files.length === 0 || pageIndex === null) return;
+    const filesArray = Array.from(files);
+    event.target.value = '';
+
+    const before = currentAlbumState();
+    const page = before[pageIndex];
+    if (!page) return;
+    const emptyCount = emptySlotIndexes(page, albumConfig).length;
+    if (emptyCount === 0) {
+      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      return;
+    }
+
+    // Solo se procesan las que caben: subir 50 archivos para 3 huecos sería
+    // trabajo perdido, y las sobrantes se avisan en vez de descartarse en silencio.
+    const usable = filesArray.slice(0, emptyCount);
+    const extra = filesArray.length - usable.length;
+
+    const accepted = await ingestEditorFiles(usable);
+    if (accepted.length === 0) return;
+    const items = toDistributable(accepted);
+
+    // El estado se relee DESPUÉS de procesar: el modal de duplicados puede haber
+    // tardado y el usuario no ha podido tocar nada mientras, pero la fuente de
+    // verdad es siempre la más reciente.
+    const result = fillEmptySlots(currentAlbumState(), pageIndex, items, albumConfig);
+    if (result.leftover.length > 0) discardItems(result.leftover);
+    if (result.filled === 0) {
+      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      return;
+    }
+    applyAlbumState(result.state);
+
+    const leftOut = extra + result.leftover.length;
+    setAlbumWarning(
+      `Colocamos ${result.filled} foto(s) en los huecos de la página ${pageIndex + 1}.` +
+      (leftOut > 0 ? ` ${leftOut} foto(s) se quedaron fuera porque la página solo tenía ${emptyCount} hueco(s).` : '')
+    );
   };
 
   const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
@@ -870,6 +1275,18 @@ export default function PhotoOrganizer({
       }
 
       onPhotosChange(newPhotos);
+
+      // Copia en disco, igual que en la subida masiva.
+      void savePendingPhotos([{
+        id: Math.random().toString(36).substring(2, 11),
+        blob: file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+        signature: key,
+        order: pendingOrderRef.current++,
+      }]);
     };
 
     if (existingKeys.has(key)) {
@@ -880,83 +1297,86 @@ export default function PhotoOrganizer({
     }
   };
 
-  const runAISortingAndDistribute = async () => {
-    setIsSortingWithAI(true);
-
-    setTimeout(async () => {
+  /**
+   * Ordena la selección y pasa al editor.
+   *
+   * El orden lo decidía 1clic.ai: se le mandaban los metadatos de cada archivo y
+   * devolvía una secuencia. Ese módulo quedó obsoleto y el orden ahora sale del
+   * propio usuario — el orden en que fue tocando las fotos en el carrete, con el
+   * nombre del archivo como respaldo (ver sortPhotosBySelection).
+   *
+   * El reparto en páginas no cambia: sigue siendo distributePhotosAcrossPages,
+   * que es a quien llega esta lista ya ordenada.
+   */
+  const orderAndDistribute = () => {
+    const total = typeof numPages === 'number' ? numPages : 40;
+    const { photoPages, result } = feasibilityFor(pendingFilesData.length, total);
+    if (!result.feasible) {
+      // Regla 1: no se aproxima ni se redondea. Se avisa y no se avanza.
+      setSetupError(feasibilityMessage(pendingFilesData.length, photoPages, result));
+      return;
+    }
+    setSetupError(null);
+    setIsPreparingAlbum(true);
+    // Un tick antes de trabajar para que el loader llegue a pintarse: ordenar y
+    // repartir varios cientos de fotos bloquea el hilo un momento.
+    setTimeout(() => {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-        const idToken = user ? await user.getIdToken() : null;
-        const aiResponse = await fetch(`${backendUrl}/ai/sort-photos`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {}),
-          },
-          body: JSON.stringify({
-            photos_data: pendingFilesData.map(f => ({ id: f.id, ...f.metadata })),
-            page_count: typeof numPages === 'number' ? numPages : 40,
-            layout_preferences: { isSquare, isHorizontal, isVertical }
-          })
-        });
-
-        if (!aiResponse.ok) {
-          const errData = await aiResponse.json().catch(() => ({}));
-          // Registrar el error real en consola para diagnóstico, sin exponerlo al usuario
-          console.error('[IA] Error del servidor:', errData.message || `HTTP ${aiResponse.status}`);
-          throw new Error('sort_failed');
+        const ordered = sortPhotosBySelection(
+          pendingFilesData.map(f => ({ url: f.url, name: f.metadata?.name ?? '', order: f.order }))
+        );
+        if (!handleFinalizeSetup(ordered.map(f => f.url))) {
+          setSetupError(feasibilityMessage(ordered.length, photoPages, result));
         }
-        const responseData = await aiResponse.json();
-
-        let finalUrls: string[] = [];
-        if (responseData && responseData.success && Array.isArray(responseData.Albums)) {
-          const orderedIdsFromAI: string[] = [];
-          responseData.Albums.forEach((album: any) => {
-            if (album.photo_ids && Array.isArray(album.photo_ids)) orderedIdsFromAI.push(...album.photo_ids);
-          });
-          
-          const urlById = new Map(pendingFilesData.map(f => [f.id, f.url]));
-          finalUrls = orderedIdsFromAI.map((id: string) => urlById.get(id) ?? '').filter(Boolean);
-
-          const missingUrls = pendingFilesData.filter(f => !orderedIdsFromAI.includes(f.id)).map(f => f.url);
-          finalUrls = [...finalUrls, ...missingUrls];
-        } else {
-          finalUrls = pendingFilesData.map(f => f.url);
-        }
-
-        handleFinalizeSetup(finalUrls);
-      } catch (error) {
-        console.error("Error al procesar archivos con IA:", error);
-        handleFinalizeSetup(pendingFilesData.map(f => f.url));
       } finally {
-        setIsSortingWithAI(false);
+        setIsPreparingAlbum(false);
       }
-    }, 100); 
+    }, 50);
   };
 
-  const handleFinalizeSetup = (sortedPhotos: string[]) => {
+  /**
+   * Reparte las fotos ya ordenadas y pasa al editor.
+   *
+   * Devuelve false si la combinación de fotos y páginas no tiene reparto exacto
+   * (regla 1 de pageDistribution). En ese caso NO se toca nada: el usuario se
+   * queda en el paso de páginas con el aviso de `pagesFeasibility` delante. El
+   * botón ya está deshabilitado en ese caso; esto es el segundo cinturón.
+   */
+  const handleFinalizeSetup = (sortedPhotos: string[]): boolean => {
     const maxP = getMaxPages(sortedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
-    
-    safeVal = Math.min(Math.max(safeVal, 40), maxP);
+
+    safeVal = Math.min(Math.max(safeVal, getMinPhotoPages(sortedPhotos.length)), maxP);
     if (safeVal % 2 !== 0) safeVal = Math.min(safeVal + 1, maxP);
-    setNumPages(safeVal);
+
+    // Las páginas en blanco pedidas a propósito no entran en el reparto: no
+    // llevan fotos, así que no son de las que el plan tiene que dimensionar.
+    const blanks = evenBlankPages(safeVal, sortedPhotos.length);
+    const photoPages = safeVal - blanks;
 
     // El reparto vive en albumStateUtils para que "reorganizar" desde el editor
-    // (handleRedistribute) produzca exactamente el mismo resultado que esta
+    // (executeRedistribute) produzca exactamente el mismo resultado que esta
     // primera carga, en vez de tener dos algoritmos que se van separando.
     const distributed = distributePhotosAcrossPages(
       sortedPhotos.map(url => ({ photo: url, signature: pendingFileKeysRef.current.get(url) ?? '' })),
-      safeVal,
+      photoPages,
       albumConfig
     );
-    const { photos: newPhotos, fileSignatures: newSigs } = fromAlbumStateToProps(distributed);
+    if (!distributed) return false;
 
+    const withBlanks = blanks > 0
+      ? albumInsertBlankPages(distributed, distributed.length - 1, blanks)
+      : distributed;
+
+    const { photos: newPhotos, fileSignatures: newSigs } = fromAlbumStateToProps(withBlanks);
+
+    setNumPages(safeVal);
     setFileSignatures(newSigs);
     pendingFileKeysRef.current.clear(); // consumido, limpiar para el siguiente lote
 
     onPhotosChange(newPhotos);
     setStep('editor');
+    return true;
   };
 
   // ── REORGANIZAR EL ÁLBUM ENTERO ─────────────────────────────────────────────
@@ -978,6 +1398,17 @@ export default function PhotoOrganizer({
     const totalPages = redistributeModal.pages;
     const photoCount = safePhotos.flat().filter(p => p && p.trim() !== '').length;
 
+    // Regla 1 antes de tocar nada: si esas fotos no caben exactamente en esas
+    // páginas, el álbum se queda como está y se explica por qué.
+    const redistributed = redistributeAlbum(currentAlbumState(), totalPages, albumConfig);
+    if (!redistributed) {
+      // Aquí no hay páginas en blanco reservadas: se reparte sobre el álbum entero.
+      const result = checkFeasibility(photoCount, totalPages, distributionVariant, { maxPages: ALBUM_MAX_PAGES });
+      setRedistributeModal(null);
+      setAlbumWarning(feasibilityMessage(photoCount, totalPages, result));
+      return;
+    }
+
     // Cerrar cualquier panel abierto: sus índices apuntan al álbum anterior.
     exitReorderMode();
     setEditingPageIndex(null);
@@ -985,7 +1416,7 @@ export default function PhotoOrganizer({
     setCropModalData(null);
     setEditingTextSlot(null);
 
-    applyAlbumState(redistributeAlbum(currentAlbumState(), totalPages, albumConfig));
+    applyAlbumState(redistributed);
     setNumPages(totalPages);
     setRedistributeModal(null);
     setAlbumWarning(`Álbum reorganizado: ${photoCount} foto(s) repartidas en ${totalPages} páginas.`);
@@ -1391,6 +1822,83 @@ export default function PhotoOrganizer({
     onPageLayoutVariantsChange({ ...pageLayoutVariants, [pageIndex]: newVariant });
   };
 
+  /**
+   * Una foto que no pinta suele ser una `blob:` muerta: iOS descartó la pestaña
+   * y la URL ya no resuelve, aunque los bytes sigan en la copia de IndexedDB.
+   * Los fallos se juntan 200 ms y se resuelven en UNA sola actualización del
+   * álbum: al volver al editor fallan decenas de imágenes a la vez y aplicarlas
+   * de una en una haría que cada recuperación pisara a la anterior.
+   */
+  const recoverBrokenPhotos = async () => {
+    const urls = Array.from(brokenQueueRef.current);
+    brokenQueueRef.current.clear();
+    if (urls.length === 0) return;
+
+    const pending = new Set(urls);
+    const signatureByUrl = new Map<string, string>();
+    const p = propsRef.current;
+    p.photos.forEach((page, i) => {
+      page.forEach((url, j) => {
+        if (url && pending.has(url) && !signatureByUrl.has(url)) {
+          signatureByUrl.set(url, p.fileSignatures[i]?.[j] ?? '');
+        }
+      });
+    });
+
+    let state = currentAlbumState();
+    const stillBroken: string[] = [];
+    const recoveredPairs: [string, string][] = [];
+
+    for (const url of urls) {
+      const signature = signatureByUrl.get(url) ?? '';
+      const stored = signature ? await findPendingPhotoBySignature(signature) : null;
+      if (!stored) { stillBroken.push(url); continue; }
+      let newUrl: string;
+      try {
+        newUrl = URL.createObjectURL(stored.blob);
+      } catch {
+        stillBroken.push(url);
+        continue;
+      }
+      state = replacePhotoUrl(state, url, newUrl);
+      recoveredPairs.push([url, newUrl]);
+    }
+
+    if (recoveredPairs.length > 0) {
+      applyAlbumState(state);
+      // La info de baja resolución va indexada por URL: se traslada a la nueva.
+      setLowResInfo(prev => {
+        const moved: Record<string, {width: number, height: number}> = {};
+        recoveredPairs.forEach(([oldUrl, newUrl]) => { if (prev[oldUrl]) moved[newUrl] = prev[oldUrl]; });
+        return Object.keys(moved).length > 0 ? { ...prev, ...moved } : prev;
+      });
+      setAlbumWarning(`Recuperamos ${recoveredPairs.length} foto(s) desde la copia guardada en este dispositivo.`);
+    }
+    if (stillBroken.length > 0) {
+      setBrokenPhotoUrls(prev => {
+        const next = new Set(prev);
+        stillBroken.forEach(url => next.add(url));
+        return next;
+      });
+      setShowBrokenBanner(true);
+    }
+  };
+
+  // handlePhotoError se pasa a los hijos con dependencias vacías (no debe recrearse
+  // en cada render), así que la recuperación se llama a través de un ref siempre al día.
+  const recoverBrokenPhotosRef = useRef(recoverBrokenPhotos);
+  useEffect(() => { recoverBrokenPhotosRef.current = recoverBrokenPhotos; });
+
+  const handlePhotoError = useCallback((url: string) => {
+    brokenQueueRef.current.add(url);
+    if (brokenFlushTimerRef.current) clearTimeout(brokenFlushTimerRef.current);
+    brokenFlushTimerRef.current = setTimeout(() => { void recoverBrokenPhotosRef.current(); }, 200);
+  }, []);
+
+  useEffect(() => () => {
+    if (brokenFlushTimerRef.current) clearTimeout(brokenFlushTimerRef.current);
+  }, []);
+
   // Cierra los huecos de la página y fija la nueva variante en una sola
   // actualización: el excedente cabía entero una vez reacomodado.
   const applyCompactAndSetVariant = (pageIndex: number, newVariant: number) => {
@@ -1432,10 +1940,11 @@ export default function PhotoOrganizer({
   }, [allowedPhotosPerPage.join(',')]);
 
   // ── Variantes guardadas que el formato ya no admite ──────────────────────────
-  // Vertical no tiene layout de 4 fotos, pero álbumes creados antes (o pasados
-  // desde Horizontal) pueden traer páginas con `variant: 4` guardado. El editor
-  // ya las pinta con la variante siguiente vía getRenderSlotCount; si no se
-  // guarda ese ajuste, el PDF de impresión sigue leyendo el 4 y sale una página
+  // Un álbum puede traer un conteo que su formato no maqueta: páginas de 5 del
+  // reparto "a ojo" anterior, o un conteo que dejó de existir en el pliego (en
+  // vertical no hubo página de 4 hasta septiembre de 2026). El editor ya las
+  // pinta con la variante siguiente vía getRenderSlotCount; si no se guarda ese
+  // ajuste, el PDF de impresión sigue leyendo el conteo viejo y sale una página
   // distinta a la que se aprobó. Aquí se normaliza el estado guardado.
   // Las variantes por encima del máximo del formato no se tocan aquí: de esas se
   // ocupa el modal de migración de arriba, que además reparte las fotos.
@@ -1766,6 +2275,33 @@ export default function PhotoOrganizer({
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
+              {/* Rellenar todos los huecos de la página con un solo lote: un
+                  diseño de 6 con 3 vacíos pide 3 fotos de una vez, en vez de
+                  abrir el selector hueco por hueco. */}
+              {(() => {
+                const emptyCount = emptySlotIndexes(
+                  { photos: pagePhotos, crops: {}, texts: textBoxSlots[pageIndex] ?? {}, variant: pageLayoutVariants[pageIndex], signatures: [] },
+                  albumConfig
+                ).length;
+                if (emptyCount === 0) return null;
+                return (
+                  <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Huecos vacíos</h4>
+                    <p className="text-xs text-gray-600 mb-2.5">
+                      Esta página tiene <strong>{emptyCount} hueco(s)</strong> sin foto. Puedes elegir las {emptyCount} de una vez y se colocan en orden.
+                    </p>
+                    <button
+                      onClick={() => openFillEmptySlots(pageIndex)}
+                      disabled={!!editorBatchProgress}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 border-black bg-black text-white text-xs sm:text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      Rellenar {emptyCount === 1 ? 'el hueco' : `los ${emptyCount} huecos`} de una vez
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
                 <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Diseño y Distribución</h4>
                 <div className="space-y-2.5">
@@ -1999,8 +2535,17 @@ export default function PhotoOrganizer({
               <p className="text-2xl font-bold">Cargando fotos del carrete...</p>
               <p className="text-gray-500 mt-2">Esto puede tardar unos segundos</p>
             </div>
+
+            {/* AVISO: el menú del sistema (iOS/Android) se abre ENCIMA de esta pantalla.
+                Muchos usuarios no lo notan, creen que la app está cargando y no eligen nada. */}
+            <div className="w-full max-w-xs bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-3 text-center">
+              <p className="text-base font-bold text-amber-900">
+                👆 Hay un menú en pantalla, selecciona la opción de dónde quieres seleccionar tus fotos
+              </p>
+            </div>
+
             <p className="text-sm text-gray-400 text-center max-w-xs">
-              Por favor espera sin cerrar la app
+              Cuando ya hayas elegido, por favor espera sin cerrar la app
             </p>
             <button
               onClick={() => {
@@ -2092,6 +2637,23 @@ export default function PhotoOrganizer({
           </div>
         )}
 
+        {recoveredSelection !== null && (
+          <div className="mb-6 flex items-start gap-3 bg-green-50 border-2 border-green-300 rounded-xl px-4 py-3">
+            <ImageIcon className="w-5 h-5 text-green-700 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-bold text-green-900">
+                Recuperamos {recoveredSelection} foto(s) que ya habías elegido
+              </p>
+              <p className="text-green-800 mt-0.5">
+                La app se reinició, pero tus fotos seguían guardadas en este dispositivo. Puedes seguir añadiendo más.
+              </p>
+            </div>
+            <button onClick={clearSelection} className="text-green-800 underline font-medium shrink-0">
+              Descartar
+            </button>
+          </div>
+        )}
+
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12">
           {isValidating ? (
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
@@ -2123,7 +2685,7 @@ export default function PhotoOrganizer({
             {uploadedPhotos.length > 0 && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <span className="font-medium">{uploadedPhotos.length} {t('organizer.photosSelected')}</span>
-                <button onClick={() => { setUploadedPhotos([]); setPendingFilesData([]); }} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
+                <button onClick={clearSelection} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
               </div>
             )}
             <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
@@ -2150,30 +2712,44 @@ export default function PhotoOrganizer({
 
   if (step === 'pages') {
     const maxP = getMaxPages(uploadedPhotos.length);
-    // El número de páginas siempre es par y está entre 40 y maxP.
+    // Rango de la barra: lo que dan de sí las fotos subidas por ambos lados.
+    // Suelo: las páginas mínimas en que caben (40, o más si hay muchas fotos).
+    // Techo: una foto por página. Para pasar del techo hay que sumar páginas en
+    // blanco a propósito (control de más abajo); el total nunca pasa de maxP.
+    const minPhotoP = getMinPhotoPages(uploadedPhotos.length);
+    const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
+    // El número de páginas siempre es par y está entre minPhotoP y maxP.
     const clampPages = (v: number) => {
-      let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), maxP);
+      let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxP);
       if (val % 2 !== 0) val = Math.min(val + 1, maxP);
       return val;
     };
-    const currentPages = typeof numPages === 'number' ? numPages : 40;
-    // Tope de la barra: lo que dan de sí las fotos subidas. Para pasar de ahí
-    // hay que sumar páginas en blanco a propósito (control de más abajo).
-    const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
+    const currentPages = typeof numPages === 'number' ? numPages : minPhotoP;
     // Las páginas en blanco no pueden dejar la barra por debajo del mínimo, y
     // tanto ellas como la barra son siempre pares (el total puede ser impar
     // mientras se teclea en el campo; el onBlur lo redondea).
     const toEven = (v: number) => v - (v % 2);
-    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - 40)));
-    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, 40), maxPhotoP));
+    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - minPhotoP)));
+    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, minPhotoP), maxPhotoP));
     const emptyPages = Math.max(0, currentPages - uploadedPhotos.length);
+
+    // REGLA 1: la combinación fotos ↔ páginas o tiene reparto exacto o no lo
+    // tiene. Se comprueba en cada render para que el aviso siga al usuario
+    // mientras mueve la barra, en vez de saltarle al pulsar "Crear Álbum".
+    const feasibility = feasibilityFor(uploadedPhotos.length, currentPages);
+    const canBuild = feasibility.result.feasible;
+    // `setupError` solo se rellena si el reparto falla habiendo pasado la
+    // comprobación — no debería ocurrir, pero se pinta en vez de tragárselo.
+    const blockingMessage = canBuild
+      ? setupError
+      : feasibilityMessage(uploadedPhotos.length, feasibility.photoPages, feasibility.result);
 
     // Añade o quita 2 páginas: primero se mueve la parte que cubren las fotos y,
     // cuando esa parte llega a su tope, se tocan las páginas en blanco.
     const stepPages = (delta: 2 | -2) => {
       const next = currentPages + delta;
-      if (next < 40 || next > maxP) return;
-      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= 40;
+      if (next < minPhotoP || next > maxP) return;
+      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= minPhotoP;
       if (!canUsePhotoPages) setBlankPages(safeBlank + delta);
       else if (safeBlank !== blankPages) setBlankPages(safeBlank);
       setNumPages(next);
@@ -2182,7 +2758,7 @@ export default function PhotoOrganizer({
     const stepBlankPages = (delta: 2 | -2) => {
       const nextBlank = safeBlank + delta;
       const next = currentPages + delta;
-      if (nextBlank < 0 || next > maxP || next < 40) return;
+      if (nextBlank < 0 || next > maxP || next < minPhotoP) return;
       setBlankPages(nextBlank);
       setNumPages(next);
     };
@@ -2192,12 +2768,12 @@ export default function PhotoOrganizer({
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
         
-        {!isSortingWithAI && (
+        {!isPreparingAlbum && (
           <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         )}
         <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
-          {isSortingWithAI ? (
-            <JiffyLoader t={t} photoCount={uploadedPhotos.length} />
+          {isPreparingAlbum ? (
+            <JiffyLoader t={t} />
           ) : (
             <>
               <div>
@@ -2207,7 +2783,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Quitar 2 páginas"
-                      disabled={currentPages <= 40}
+                      disabled={currentPages <= minPhotoP}
                       onClick={() => stepPages(-2)}
                       className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -2217,7 +2793,7 @@ export default function PhotoOrganizer({
                       type="number"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      min={40}
+                      min={minPhotoP}
                       max={maxP}
                       step={2}
                       value={numPages}
@@ -2227,7 +2803,7 @@ export default function PhotoOrganizer({
                         // contar como páginas en blanco pedidas a propósito.
                         const val = clampPages(currentPages);
                         setNumPages(val);
-                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - 40)));
+                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - minPhotoP)));
                       }}
                       className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-center"
                     />
@@ -2242,14 +2818,14 @@ export default function PhotoOrganizer({
                     </button>
                   </div>
                 </div>
-                {maxPhotoP > 40 ? (
+                {maxPhotoP > minPhotoP ? (
                   <>
                     <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. 40</span>
+                      <span>Mín. {minPhotoP}</span>
                       <span>Máx. {maxPhotoP}</span>
                     </div>
                     <PageRangeSlider
-                      min={40}
+                      min={minPhotoP}
                       max={maxPhotoP}
                       step={2}
                       value={sliderPages}
@@ -2261,7 +2837,7 @@ export default function PhotoOrganizer({
                     <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Con <strong>40 fotos</strong> el mínimo es 1 foto por página, así que tus fotos dan para <strong>40 páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
+                    <span>Con <strong>{uploadedPhotos.length} fotos</strong> y 1 foto por página como mínimo, tus fotos dan para <strong>{maxPhotoP} páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
                   </div>
                 )}
 
@@ -2297,7 +2873,23 @@ export default function PhotoOrganizer({
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2">
-                  {emptyPages > 0 && (
+                  {/* REGLA 1: la combinación no tiene reparto exacto. No se
+                      redondea ni se aproxima por el usuario: se le dice qué
+                      falla y con qué números sí funciona. */}
+                  {blockingMessage && (
+                    <div
+                      role="alert"
+                      data-testid="feasibility-error"
+                      className="flex items-start gap-2 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3"
+                    >
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-red-700">
+                        <strong className="block mb-0.5">Esta combinación no se puede repartir</strong>
+                        {blockingMessage}
+                      </p>
+                    </div>
+                  )}
+                  {canBuild && emptyPages > 0 && (
                     <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                       <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                       <p className="text-sm text-amber-700">
@@ -2322,7 +2914,14 @@ export default function PhotoOrganizer({
               </div>
               <div className="flex gap-4">
                 <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>
-                <button onClick={runAISortingAndDistribute} className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12">{t('organizer.createAlbum')}</button>
+                <button
+                  onClick={orderAndDistribute}
+                  disabled={!canBuild}
+                  title={blockingMessage ?? undefined}
+                  className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-black"
+                >
+                  {t('organizer.createAlbum')}
+                </button>
               </div>
             </>
           )}
@@ -2360,6 +2959,148 @@ export default function PhotoOrganizer({
       {renderDuplicateModal()}
       {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
+
+      {/* SELECTORES DE ARCHIVOS DE LAS CARGAS MASIVAS DESDE EL EDITOR */}
+      <input ref={appendInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleAppendFileSelection} className="hidden" />
+      <input ref={fillInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFillFileSelection} className="hidden" />
+
+      {/* PROGRESO DEL LOTE QUE SE ESTÁ PROCESANDO DESDE EL EDITOR */}
+      {editorBatchProgress && (
+        <div className="fixed inset-0 z-[200] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-8">
+          <Loader2 className="w-16 h-16 text-black animate-spin" />
+          <div className="text-center">
+            <p className="text-2xl font-bold">Preparando tus fotos</p>
+            <p className="text-gray-500 mt-2">
+              Foto {editorBatchProgress.done} de {editorBatchProgress.total}
+            </p>
+          </div>
+          <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-black h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(editorBatchProgress.done / editorBatchProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-sm text-gray-400 text-center max-w-xs">Por favor espera sin cerrar la app</p>
+        </div>
+      )}
+
+      {/* MODAL: AÑADIR FOTOS EN PÁGINAS NUEVAS AL FINAL */}
+      {appendModal && (() => {
+        const { items, pages, min, max } = appendModal;
+        const firstNew = safePhotos.length + 1;
+        const feasible = canAppendPhotos(currentAlbumState(), items.length, pages, albumConfig);
+        const setPages = (v: number) => {
+          let val = Math.min(Math.max(Number.isFinite(v) ? v : min, min), max);
+          if (val % 2 !== 0) val = Math.min(val + 1, max);
+          setAppendModal(m => (m ? { ...m, pages: val } : m));
+        };
+
+        return (
+          <div className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shrink-0">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Añadir {items.length} foto(s) al final</h3>
+                  <p className="text-sm text-gray-500">
+                    Se crearán páginas nuevas después de la página {safePhotos.length}. Las que ya tienes no cambian.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-5">
+                <ul className="text-[13px] text-green-800 space-y-1.5 list-disc pl-5">
+                  <li>Tus páginas actuales, con sus fotos, recortes, textos y diseños, <strong>quedan igual</strong>.</li>
+                  <li>Las fotos nuevas se reparten con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.</li>
+                </ul>
+              </div>
+
+              {/* SELECTOR DE PÁGINAS NUEVAS: mismo control que en la creación del álbum */}
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="font-medium">Páginas nuevas</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Quitar 2 páginas"
+                      disabled={pages <= min}
+                      onClick={() => setPages(pages - 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={min}
+                      max={max}
+                      step={2}
+                      value={pages}
+                      onChange={(e) => setPages(parseInt(e.target.value, 10))}
+                      className="w-20 text-xl font-bold border-2 border-gray-300 rounded px-2 py-1 focus:border-black outline-none text-center"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Añadir 2 páginas"
+                      disabled={pages >= max}
+                      onClick={() => setPages(pages + 2)}
+                      className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {max > min && (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
+                      <span>Mín. {min}</span>
+                      <span>Máx. {max}</span>
+                    </div>
+                    <PageRangeSlider min={min} max={max} step={2} value={pages} onChange={setPages} />
+                  </>
+                )}
+
+                <p className="text-xs text-gray-500 mt-3">
+                  El álbum pasará de <strong>{safePhotos.length}</strong> a <strong>{safePhotos.length + pages} páginas</strong>
+                  {' '}(las nuevas serán de la {firstNew} a la {safePhotos.length + pages}).
+                </p>
+                {safePhotos.length + pages > 40 && (
+                  <p className="text-xs text-fuchsia-700 mt-1">
+                    Cada página por encima de las 40 base cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
+                  </p>
+                )}
+                {!feasible && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700">
+                      {items.length} foto(s) no se pueden repartir exactamente en {pages} páginas usando páginas de {allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelAppend}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600 hover:border-gray-400 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executeAppend}
+                  disabled={!feasible}
+                  className="flex-1 px-4 py-3 rounded-xl bg-black text-white text-sm font-bold hover:bg-gray-800 transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  Añadir en {pages} páginas
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* AVISOS DE OPERACIONES SOBRE EL ÁLBUM (antes eran alert() bloqueantes) */}
       {albumWarning && (
@@ -2669,12 +3410,14 @@ export default function PhotoOrganizer({
           (n, slots) => n + Object.keys(slots || {}).length, 0
         );
         const pages = redistributeModal.pages;
-        // Mismo tope que el paso inicial: mas paginas que fotos = paginas vacias.
+        // Mismo rango que el paso inicial: aquí no hay páginas en blanco a
+        // propósito, así que el total se acota a lo que las fotos permiten.
+        const minPhotoP = getMinPhotoPages(totalPhotos);
         const maxPhotoP = getMaxPhotoPages(totalPhotos);
         const emptyPages = Math.max(0, pages - totalPhotos);
         const setPages = (v: number) => {
-          let val = Math.min(Math.max(Number.isFinite(v) ? v : 40, 40), ALBUM_MAX_PAGES);
-          if (val % 2 !== 0) val = Math.min(val + 1, ALBUM_MAX_PAGES);
+          let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxPhotoP);
+          if (val % 2 !== 0) val = Math.min(val + 1, maxPhotoP);
           setRedistributeModal(m => (m ? { ...m, pages: val } : m));
         };
 
@@ -2721,7 +3464,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Quitar 2 páginas"
-                      disabled={pages <= 40}
+                      disabled={pages <= minPhotoP}
                       onClick={() => setPages(pages - 2)}
                       className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -2730,8 +3473,8 @@ export default function PhotoOrganizer({
                     <input
                       type="number"
                       inputMode="numeric"
-                      min={40}
-                      max={ALBUM_MAX_PAGES}
+                      min={minPhotoP}
+                      max={maxPhotoP}
                       step={2}
                       value={pages}
                       onChange={(e) => setPages(parseInt(e.target.value, 10))}
@@ -2740,7 +3483,7 @@ export default function PhotoOrganizer({
                     <button
                       type="button"
                       aria-label="Añadir 2 páginas"
-                      disabled={pages >= ALBUM_MAX_PAGES}
+                      disabled={pages >= maxPhotoP}
                       onClick={() => setPages(pages + 2)}
                       className="w-10 h-10 shrink-0 rounded-full border-2 border-gray-300 text-xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
                     >
@@ -2749,24 +3492,24 @@ export default function PhotoOrganizer({
                   </div>
                 </div>
 
-                {maxPhotoP > 40 && (
+                {maxPhotoP > minPhotoP && (
                   <>
                     <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. 40</span>
+                      <span>Mín. {minPhotoP}</span>
                       <span>Máx. {maxPhotoP} con foto</span>
                     </div>
                     <PageRangeSlider
-                      min={40}
+                      min={minPhotoP}
                       max={maxPhotoP}
                       step={2}
-                      value={Math.min(Math.max(pages, 40), maxPhotoP)}
+                      value={Math.min(Math.max(pages, minPhotoP), maxPhotoP)}
                       onChange={setPages}
                     />
                   </>
                 )}
 
                 <p className="text-xs text-gray-500 mt-3">
-                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong>, equilibrando cuántas caen en cada una.
+                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong> con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.
                 </p>
                 {emptyPages > 0 && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -2936,6 +3679,17 @@ export default function PhotoOrganizer({
             <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
           </div>
           <div className="flex items-center gap-2">
+            {!pagesLocked && (
+              <button
+                onClick={() => appendInputRef.current?.click()}
+                disabled={!!editorBatchProgress}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border-2 border-black bg-black text-white hover:bg-gray-800 transition-all text-xs font-bold disabled:opacity-50"
+                title="Añadir más fotos: van a páginas nuevas al final, sin tocar las que ya tienes"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">Añadir fotos</span>
+              </button>
+            )}
             {!pagesLocked && safePhotos.flat().some(p => p && p.trim() !== '') && (
               <button
                 onClick={openRedistributeModal}
@@ -2993,6 +3747,7 @@ export default function PhotoOrganizer({
           return (
             <Fragment key={pageIndex}>
             <div
+              id={`album-page-${pageIndex}`}
               className={`relative flex flex-col transition-all duration-200 ${isReorderMode && !isSelected && !isTarget ? 'opacity-50' : ''}`}
             >
               {/* Capa de toque para seleccionar destino (modo reordenamiento, páginas no seleccionadas) */}

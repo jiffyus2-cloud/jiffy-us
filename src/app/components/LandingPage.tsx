@@ -11,17 +11,8 @@ import { useLanguage } from '../context/LanguageContext';
 // --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 
-// --- IMÁGENES DE LOS PRODUCTOS ACTUALIZADAS ---
-import albumImage from '../../assets/IMG_8973.jpg';
-import mugImage from '../../assets/f4da798dda5ec8fb3dfb223bc7ad323042e3d27f.png';
-import calendarImage from '../../assets/Calendario.jpg';
-import photoPackImage from '../../assets/926a104c374871caf4fcad0882de38be9da36b8a.png';
-
-// --- NUEVAS IMÁGENES DEL CARRUSEL ---
-import Slide1 from '../../assets/Carousel/c4.jpg';
-import Slide2 from '../../assets/Carousel/C100164.jpg';
-import Slide3 from '../../assets/Carousel/c8.jpg';
-import Slide4 from '../../assets/Carousel/C100153.jpg';
+// --- IMÁGENES DEL SISTEMA (sustituibles desde el panel de administración) ---
+import { useSystemImage, useCarouselSlides } from '../context/SystemImagesContext';
 
 export default function LandingPage() {
   const { t } = useLanguage();
@@ -31,43 +22,18 @@ export default function LandingPage() {
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
+  // Cada imagen sale del panel de administración si la han cambiado; si no, del asset original.
+  const albumImage = useSystemImage('landing.product.album');
+  const calendarImage = useSystemImage('landing.product.calendar');
+  // Diapositivas (imagen + textos) tal y como las haya dejado la administración.
+  const heroImages = useCarouselSlides();
+
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();
   const activePromotions = configLoaded ? (promotions || []).filter(p => p.active) : [];
 
-  const showMugs = import.meta.env.VITE_SHOW_MUGS === 'true';
-  const showPhotoPacks = import.meta.env.VITE_SHOW_PHOTO_PACKS === 'true';
-
   // 3 por fila en md con gap-5 (1.25rem): (100% - 2×1.25rem)/3
   const CARD_WIDTH = 'w-full md:w-[calc(33.333%_-_0.834rem)]';
-
-  // --- NUEVOS TEXTOS DEL CARRUSEL ---
-  const heroImages = [
-    { 
-      url: Slide1, 
-      title: 'Esos momentos que no quieres olvidar', 
-      description: 'Cada photobook es un pedacito de tu historia', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide2, 
-      title: 'Tus momentos en las mejores manos', 
-      description: 'Porque tus recuerdos merecen lo mejor', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide3, 
-      title: 'Lo que más amas, siempre cerca de ti', 
-      description: 'Que cada día te recuerde lo que realmente importa', 
-      cta: 'Vamos a Diseñar' 
-    },
-    { 
-      url: Slide4, 
-      title: 'Recuerdos que vuelves a sentir cada vez que los miras', 
-      description: 'Llena tus días de momentos que amas', 
-      cta: 'Vamos a Diseñar' 
-    }
-  ];
 
   // --- PREGUNTAS FRECUENTES (Desde tu documento) ---
   const faqs = [
@@ -130,7 +96,7 @@ export default function LandingPage() {
     },
     {
       question: '10. ¿Qué otros productos ofrece Jiffy además de álbumes?',
-      answer: 'Además de álbumes, también tenemos calendarios, imanes, mugs e impresión de fotos que puedes personalizar para ti o para regalar.'
+      answer: 'Además de álbumes, tenemos calendarios personalizados y el servicio de Álbum Personalizado, en el que una curadora diseña cada página por ti.'
     },
     {
       question: '11. Política de calidad de imagen e impresión',
@@ -143,11 +109,18 @@ export default function LandingPage() {
   ];
 
   useEffect(() => {
+    if (heroImages.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length);
     }, 10000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
+
+  // Si la administración borra diapositivas, el índice puede quedar apuntando
+  // fuera de la lista: se recorta al pintar en vez de reventar con undefined.
+  const activeSlide = heroImages.length > 0
+    ? heroImages[Math.min(currentSlide, heroImages.length - 1)]
+    : null;
 
   // Diccionario Dinámico de Íconos
   const getIconComponent = (iconName: string) => {
@@ -178,6 +151,7 @@ export default function LandingPage() {
       <Header />
       
       {/* Hero Carousel Section */}
+      {activeSlide && (
       <section className="relative h-[60vh] w-full overflow-hidden">
         <motion.div
           key={currentSlide}
@@ -188,7 +162,7 @@ export default function LandingPage() {
           className="absolute inset-0"
         >
           <img
-            src={heroImages[currentSlide].url}
+            src={activeSlide.url}
             alt="Hero"
             className="w-full h-full object-cover"
           />
@@ -204,7 +178,7 @@ export default function LandingPage() {
               transition={{ delay: 0.2 }}
               className="text-3xl md:text-4xl font-medium mb-2 text-white max-w-2xl"
             >
-              {heroImages[currentSlide].title}
+              {activeSlide.title}
             </motion.h1>
             <motion.p
               key={`desc-${currentSlide}`}
@@ -213,7 +187,7 @@ export default function LandingPage() {
               transition={{ delay: 0.35 }}
               className="text-base text-white/80 mb-5 max-w-lg"
             >
-              {heroImages[currentSlide].description}
+              {activeSlide.description}
             </motion.p>
             <motion.button
               initial={{ y: 10, opacity: 0 }}
@@ -222,12 +196,13 @@ export default function LandingPage() {
               onClick={() => navigate('/create')}
               className="px-6 py-2.5 rounded-lg bg-white text-black text-sm font-medium hover:bg-gray-100 transition-colors"
             >
-              {heroImages[currentSlide].cta}
+              {activeSlide.cta}
             </motion.button>
           </div>
         </div>
 
       </section>
+      )}
 
       {/* Promociones */}
       {activePromotions.length > 0 && (
@@ -291,35 +266,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {showMugs && (
-              <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('mug')}>
-                <div className="relative h-72">
-                  <img src={mugImage} alt="Photo Mugs" className="w-full h-full object-cover" />
-                  <div className={DESIGN.card.overlay} />
-                  <div className={DESIGN.card.content}>
-                    <h3 className="text-lg font-medium mb-1">{t('product.mug')}</h3>
-                    <button onClick={() => setSelectedProduct('mug')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
-                      {t('landing.more')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {showPhotoPacks && (
-              <div className={`w-full ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('photo-pack')}>
-                <div className="relative h-56">
-                  <img src={photoPackImage} alt="Photo Packs" className="w-full h-full object-cover" />
-                  <div className={DESIGN.card.overlay} />
-                  <div className={DESIGN.card.content}>
-                    <h3 className="text-lg font-medium mb-1">{t('product.photoPack')}</h3>
-                    <button onClick={() => setSelectedProduct('photo-pack')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
-                      {t('landing.more')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -411,8 +357,6 @@ export default function LandingPage() {
               <ul className="space-y-2">
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.album')}</a></li>
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('product.calendar')}</a></li>
-                {showMugs && <li><a href="#" className={DESIGN.text.footerLink}>{t('product.mug')}</a></li>}
-                {showPhotoPacks && <li><a href="#" className={DESIGN.text.footerLink}>{t('product.photoPack')}</a></li>}
               </ul>
             </div>
             <div>

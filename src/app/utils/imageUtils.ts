@@ -1,11 +1,40 @@
 /**
  * Converts a HEIC/HEIF file to JPEG.
  *
- * Primary path: libheif-js (WASM, supports HEVC) — works in all desktop
- * browsers (Chrome/Firefox/Edge on Windows & macOS).
- * Fallback: canvas — for Safari/iOS where the browser natively decodes HEIC.
- * Final fallback: return the original file rather than crash.
+ * Primary path: canvas — el navegador decodifica el HEIC él mismo (Safari/iOS).
+ * Es el camino barato: no descarga el WASM y trabaja sobre una imagen ya
+ * decodificada por el sistema, escalada a 4096 px como mucho.
+ * Fallback: libheif-js (WASM, soporta HEVC) — necesario en Chrome/Firefox/Edge,
+ * que no saben decodificar HEIC de forma nativa.
+ * Último recurso: devolver el archivo original en vez de romper la carga.
+ *
+ * IMPORTANTE (iOS): las conversiones se serializan (una cada vez). El camino
+ * libheif reserva un ImageData a resolución completa MÁS el lienzo del mismo
+ * tamaño (≈100 MB por foto de 12 MP); varias en paralelo — los llamadores
+ * convierten en lotes de 5, o el lote entero — agotaban la memoria de Safari,
+ * que descarta la pestaña y se lleva por delante TODAS las fotos ya elegidas.
+ * Esto ocurría sobre todo al elegir desde «Explorar/Files», que sí entrega el
+ * .HEIC original (el carrete suele entregar JPEG ya convertido).
  */
+
+/** Cola global: solo una conversión HEIC viva a la vez, sin importar cómo agrupe el llamante. */
+let conversionQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueConversion<T>(task: () => Promise<T>): Promise<T> {
+  const run = conversionQueue.then(task, task);
+  // La cola nunca debe quedarse en estado rechazado: eso bloquearía las siguientes.
+  conversionQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+/** Libera el búfer del lienzo en cuanto deja de hacer falta (Safari no lo suelta solo). */
+function releaseCanvas(canvas: HTMLCanvasElement) {
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
+const MAX_DIM = 4096;
+
 export async function convertFileIfHeic(file: File): Promise<File> {
   const isHeic =
     /\.(heic|heif)$/i.test(file.name) ||
@@ -14,18 +43,20 @@ export async function convertFileIfHeic(file: File): Promise<File> {
 
   if (!isHeic) return file;
 
-  try {
-    return await convertHeicViaLibheif(file);
-  } catch (err) {
-    console.warn('[HEIC] libheif-js failed, trying canvas fallback:', err);
-  }
+  return enqueueConversion(async () => {
+    try {
+      return await convertHeicViaCanvas(file);
+    } catch (err) {
+      console.warn('[HEIC] El navegador no decodifica HEIC, probando libheif-js:', err);
+    }
 
-  try {
-    return await convertHeicViaCanvas(file);
-  } catch (err) {
-    console.error('[HEIC] Canvas fallback also failed, returning original file:', err);
-    return file;
-  }
+    try {
+      return await convertHeicViaLibheif(file);
+    } catch (err) {
+      console.error('[HEIC] libheif-js también falló, se devuelve el archivo original:', err);
+      return file;
+    }
+  });
 }
 
 async function convertHeicViaLibheif(file: File): Promise<File> {
@@ -56,13 +87,17 @@ async function convertHeicViaLibheif(file: File): Promise<File> {
   canvas.height = h;
   canvas.getContext('2d')!.putImageData(imageData, 0, 0);
 
-  return new Promise<File>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) { reject(new Error('toBlob failed')); return; }
-      const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-      resolve(new File([blob], name, { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.88);
-  });
+  try {
+    return await new Promise<File>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        resolve(new File([blob], name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.88);
+    });
+  } finally {
+    releaseCanvas(canvas);
+  }
 }
 
 async function convertHeicViaCanvas(file: File): Promise<File> {
@@ -76,25 +111,32 @@ async function convertHeicViaCanvas(file: File): Promise<File> {
   });
   URL.revokeObjectURL(url);
 
-  if (!loaded || img.naturalWidth === 0) throw new Error('Browser cannot decode HEIC natively');
+  if (!loaded || img.naturalWidth === 0) {
+    img.src = '';
+    throw new Error('Browser cannot decode HEIC natively');
+  }
 
   const canvas = document.createElement('canvas');
-  const maxDim = 4096;
   let w = img.naturalWidth;
   let h = img.naturalHeight;
-  if (w > maxDim || h > maxDim) {
-    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-    else { w = Math.round(w * maxDim / h); h = maxDim; }
+  if (w > MAX_DIM || h > MAX_DIM) {
+    if (w > h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+    else { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
   }
   canvas.width = w;
   canvas.height = h;
   canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  img.src = ''; // el bitmap decodificado ya está en el lienzo
 
-  return new Promise<File>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) { reject(new Error('toBlob failed')); return; }
-      const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-      resolve(new File([blob], name, { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.88);
-  });
+  try {
+    return await new Promise<File>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const name = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        resolve(new File([blob], name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.88);
+    });
+  } finally {
+    releaseCanvas(canvas);
+  }
 }

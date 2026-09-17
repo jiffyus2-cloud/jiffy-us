@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Outlet } from 'react-router';
 import LandingPage from './components/LandingPage';
 import Creator from './components/Creator';
 import UserDashboard from './components/UserDashboard';
@@ -9,6 +9,8 @@ import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Header } from './components/navigation/Header';
 import ProtectedRoute from './components/ProtectedRoute';
+import { SupportFab } from './components/support/SupportFab';
+import OneclicLabPage, { ONECLIC_LAB_PATH } from './components/oneclic/OneclicLabPage';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -19,7 +21,22 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
+/**
+ * Envoltorio de todas las rutas: cuelga el botón de soporte de la app entera,
+ * para que se pueda pedir ayuda en cualquier punto del proceso. Va dentro del
+ * router (y no en App) porque SupportFab necesita saber en qué ruta está.
+ */
+const RootLayout = () => (
+  <>
+    <Outlet />
+    <SupportFab />
+  </>
+);
+
 export const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
   {
     path: '/',
     element: <LandingPage />,
@@ -67,5 +84,13 @@ export const router = createBrowserRouter([
   {
     path: '/owner-dashboard',
     element: <OwnerDashboard />,
+  },
+  {
+    // Huérfana a propósito: no la enlaza nada. Panel de la conexión con 1clic.ai
+    // para probarlo sin exponerlo en el dashboard.
+    path: ONECLIC_LAB_PATH,
+    element: <OneclicLabPage />,
+  },
+    ],
   },
 ]);

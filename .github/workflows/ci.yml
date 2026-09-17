@@ -1,0 +1,43 @@
+# Comprobaciones mínimas de cada PR: tipos y tests.
+#
+# Hasta ahora el repo no tenía CI: los 229 tests de src/**/*.test.ts solo
+# corrían si alguien se acordaba de lanzarlos en local, y los PR #165-#183 se
+# mergearon sin que nada los ejecutara.
+#
+# Instala desde el lockfile (npm ci) para que la comprobación no dependa del
+# node_modules de nadie: en local el typecheck fallaba con 29 errores de tipos
+# de firebase/* porque el node_modules del checkout tenía una versión distinta
+# a la del lockfile y sin sus .d.ts; con una instalación limpia son 0.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Si llegan varios pushes seguidos a la misma rama, solo importa el último.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Tipos y tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar desde el lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test

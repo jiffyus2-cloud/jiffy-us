@@ -8,8 +8,10 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
+import SystemImagesSection from './SystemImagesSection';
+import DiscountCodesSection from './DiscountCodesSection';
 import UsersSection from './UsersSection';
 import { updateOrderStatus } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
@@ -29,6 +31,7 @@ import jiffyLogo from '../../assets/JiffyLogo.svg';
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
+import { pickStoreConfig } from '../utils/storeConfigState';
 
 interface ConfigHistoryEntry {
   id: string;
@@ -383,7 +386,7 @@ const OwnerDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'users' | 'connections'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'discounts' | 'images' | 'users' | 'connections'>('orders');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -414,11 +417,11 @@ const OwnerDashboard: React.FC = () => {
 
   // --- CONTEXTO GLOBAL DE LA TIENDA ---
   const storeConfig = useStoreConfig();
-  const [localConfig, setLocalConfig] = useState<StoreConfig>(storeConfig);
+  const [localConfig, setLocalConfig] = useState<StoreConfig>(() => pickStoreConfig(storeConfig));
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const hasSeededConfig = useRef(false);
-  const lastRemoteConfigRef = useRef<StoreConfig>(storeConfig);
+  const lastRemoteConfigRef = useRef<StoreConfig>(pickStoreConfig(storeConfig));
   const [remoteConfigChangedElsewhere, setRemoteConfigChangedElsewhere] = useState(false);
 
   const [historyEntries, setHistoryEntries] = useState<ConfigHistoryEntry[]>([]);
@@ -443,17 +446,21 @@ const OwnerDashboard: React.FC = () => {
   useEffect(() => {
     if (!storeConfig.configLoaded) return;
 
+    const remote = pickStoreConfig(storeConfig);
+
     if (!hasSeededConfig.current) {
-      setLocalConfig(storeConfig);
+      setLocalConfig(remote);
       hasSeededConfig.current = true;
-      lastRemoteConfigRef.current = storeConfig;
+      lastRemoteConfigRef.current = remote;
       return;
     }
 
     // Ya sembrado antes: si llega un cambio remoto (otra sesión guardó algo),
-    // no pisamos silenciosamente las ediciones locales — solo avisamos.
-    if (JSON.stringify(storeConfig) !== JSON.stringify(lastRemoteConfigRef.current)) {
-      lastRemoteConfigRef.current = storeConfig;
+    // no pisamos silenciosamente las ediciones locales — solo avisamos. Se
+    // comparan solo los datos: las banderas del contexto cambian solas y
+    // dispararían el aviso sin que nadie haya tocado nada.
+    if (JSON.stringify(remote) !== JSON.stringify(lastRemoteConfigRef.current)) {
+      lastRemoteConfigRef.current = remote;
       setRemoteConfigChangedElsewhere(true);
     }
   }, [storeConfig]);
@@ -512,8 +519,10 @@ const OwnerDashboard: React.FC = () => {
     }
     setIsSavingConfig(true);
     try {
-      await backupCurrentConfig(storeConfig);
-      await setDoc(doc(db, 'settings', 'store_config'), localConfig, { merge: true });
+      await backupCurrentConfig(pickStoreConfig(storeConfig));
+      // Sin merge: el documento ES el estado actual de la tienda. Con merge, una
+      // promoción borrada o una clave retirada sobrevivía dentro del documento.
+      await setDoc(doc(db, 'settings', 'store_config'), pickStoreConfig(localConfig));
       setRemoteConfigChangedElsewhere(false);
       if (showHistory) fetchConfigHistory();
       alert('¡Configuración guardada exitosamente! Los cambios ya están en vivo en toda la tienda.');
@@ -533,10 +542,11 @@ const OwnerDashboard: React.FC = () => {
     if (!window.confirm('¿Restaurar la configuración a esta versión anterior? Esto reemplazará los valores actuales de precios y promociones.')) return;
     setIsSavingConfig(true);
     try {
-      await backupCurrentConfig(storeConfig);
-      await setDoc(doc(db, 'settings', 'store_config'), entry.config, { merge: true });
-      setLocalConfig(entry.config);
-      lastRemoteConfigRef.current = entry.config;
+      await backupCurrentConfig(pickStoreConfig(storeConfig));
+      const restored = pickStoreConfig(entry.config);
+      await setDoc(doc(db, 'settings', 'store_config'), restored);
+      setLocalConfig(restored);
+      lastRemoteConfigRef.current = restored;
       setRemoteConfigChangedElsewhere(false);
       fetchConfigHistory();
       alert('Configuración restaurada exitosamente.');
@@ -657,8 +667,13 @@ const OwnerDashboard: React.FC = () => {
         // ── Dimensiones del lienzo (canvas) ──────────────────────────────────
         // Papel: lienzos fijos por tamaño con márgenes centrados
         // Tela:  sólo la portada, sin cambios
-        const spineCm  = isTela ? 0 : 2;
+        // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm, lomo 0.6 cm
+        const is20x20  = !isTela && coverSizeProp === '20x20';
+        const cmToPx   = (cm: number) => Math.round((cm / 2.54) * 300);
+        const panelWCm = is20x20 ? 19 : wCm;          // ancho real de portada/contraportada
+        const spineCm  = isTela ? 0 : (is20x20 ? 0.6 : 2);
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
+        const panelPxW = cmToPx(panelWCm);
 
         let canvasWCm: number;
         let canvasHCm: number;
@@ -676,11 +691,13 @@ const OwnerDashboard: React.FC = () => {
         const totalHCm     = canvasHCm;
         const totalPxWidth  = Math.round((totalWCm  / 2.54) * 300);
         const totalPxHeight = Math.round((totalHCm  / 2.54) * 300);
-        const spinePxWidth  = isTela ? 0 : Math.round((spineCm / 2.54) * 300);
-        const pxGap         = isTela ? 0 : Math.round((gapCm   / 2.54) * 300);
+        const spinePxWidth  = isTela ? 0 : cmToPx(spineCm);
+        const pxGap         = isTela ? 0 : cmToPx(gapCm);
+        // Texto del lomo: 25% del ancho del lomo, pero nunca menos de 11pt (0.3881 cm) para lomos finos
+        const spineFontPx   = Math.max(spinePxWidth * 0.25, cmToPx(0.3881));
 
         // Contenido total (horizontal): contraportada + gap + lomo + gap + portada
-        const contentPxW = isTela ? pxWidth : (pxWidth * 2) + spinePxWidth + (pxGap * 2);
+        const contentPxW = isTela ? pxWidth : (panelPxW * 2) + spinePxWidth + (pxGap * 2);
         const marginXPx  = isTela ? 0 : Math.round((totalPxWidth  - contentPxW) / 2);
         const marginYPx  = isTela ? 0 : Math.round((totalPxHeight - pxHeight)   / 2);
 
@@ -743,10 +760,10 @@ const OwnerDashboard: React.FC = () => {
                   {!isTela && (
                     <>
                       {/* Contraportada */}
-                      <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
-                          <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                          <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                      <div style={{ width: panelPxW, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${panelPxW * 0.01}px` }}>
+                          <img src={jiffyLogo} style={{ width: `${panelPxW * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: `${panelPxW * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
                         </div>
                       </div>
 
@@ -761,7 +778,7 @@ const OwnerDashboard: React.FC = () => {
                             transform: 'rotate(90deg) translateY(-50%)',
                             transformOrigin: 'top left',
                             whiteSpace: 'nowrap',
-                            fontSize: `${spinePxWidth * 0.25}px`,
+                            fontSize: `${spineFontPx}px`,
                             fontWeight: 'bold',
                             letterSpacing: '8px',
                             color: textColor,
@@ -777,7 +794,7 @@ const OwnerDashboard: React.FC = () => {
                   )}
 
                   {/* Portada */}
-                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                  <div style={{ width: panelPxW, height: pxHeight, position: 'relative' }}>
                     <CoverPreview
                       coverSize={coverSizeProp as any}
                       coverType={isTela ? 'Tela' : 'Papel'}
@@ -790,6 +807,7 @@ const OwnerDashboard: React.FC = () => {
                       typographyColor={textColor}
                       hideSpine={true}
                       forPdf={true}
+                      printAspectRatio={is20x20 ? `${panelWCm} / ${hCm}` : undefined}
                     />
                   </div>
                 </div>
@@ -802,7 +820,7 @@ const OwnerDashboard: React.FC = () => {
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
 
         // ── Cm-space layout for cut lines ─────────────────────────────────────
-        const contentWCm = isTela ? wCm : (wCm * 2) + spineCm + (gapCm * 2);
+        const contentWCm = isTela ? wCm : (panelWCm * 2) + spineCm + (gapCm * 2);
         const marginXCm  = isTela ? 0 : (totalWCm - contentWCm) / 2;
         const marginYCm  = isTela ? 0 : (totalHCm - hCm) / 2;
 
@@ -814,11 +832,12 @@ const OwnerDashboard: React.FC = () => {
         if (isTela) {
           pdf.rect(0, 0, wCm, hCm, 'S');
         } else {
-          pdf.rect(marginXCm,                                   marginYCm, wCm,     hCm, 'S'); // contraportada
-          pdf.rect(marginXCm + wCm,                             marginYCm, gapCm,   hCm, 'S'); // gap 1
-          pdf.rect(marginXCm + wCm + gapCm,                    marginYCm, spineCm, hCm, 'S'); // lomo
-          pdf.rect(marginXCm + wCm + gapCm + spineCm,          marginYCm, gapCm,   hCm, 'S'); // gap 2
-          pdf.rect(marginXCm + wCm + gapCm + spineCm + gapCm,  marginYCm, wCm,     hCm, 'S'); // portada
+          const w = panelWCm;
+          pdf.rect(marginXCm,                               marginYCm, w,       hCm, 'S'); // contraportada
+          pdf.rect(marginXCm + w,                           marginYCm, gapCm,   hCm, 'S'); // callejón 1
+          pdf.rect(marginXCm + w + gapCm,                   marginYCm, spineCm, hCm, 'S'); // lomo
+          pdf.rect(marginXCm + w + gapCm + spineCm,         marginYCm, gapCm,   hCm, 'S'); // callejón 2
+          pdf.rect(marginXCm + w + gapCm + spineCm + gapCm, marginYCm, w,       hCm, 'S'); // portada
         }
 
         onProgress(100);
@@ -989,11 +1008,6 @@ const OwnerDashboard: React.FC = () => {
           'Página Número': (page.pageIndex !== undefined ? page.pageIndex : i) + 1,
           'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
           'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
-        }));
-      } else if (order.items && Array.isArray(order.items)) {
-        detallesData = order.items.map((item, i) => ({
-          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
-          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
         }));
       }
       if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
@@ -1188,11 +1202,6 @@ const OwnerDashboard: React.FC = () => {
           'Layout (Filas/Cols)': page.layout || 'N/A', 'Cantidad de Fotos': Array.isArray(page.images) ? page.images.length : 0,
           'Textos Incluidos': page.texts && Object.keys(page.texts).length > 0 ? Object.values(page.texts).map((t: any) => `"${t.text}" (${t.fontFamily} ${t.fontSize}px)`).join(' | ') : 'Sin textos'
         }));
-      } else if (order.items && Array.isArray(order.items)) {
-        detallesData = order.items.map((item, i) => ({
-          'Taza Número': i + 1, 'Texto Impreso': item.text || 'Sin texto', 'Fuente': item.fontFamily || 'N/A',
-          'Tamaño Fuente': item.fontSize || 'N/A', 'Cantidad de Fotos': Array.isArray(item.photos) ? item.photos.length : 0
-        }));
       }
       if (detallesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detallesData), "Detalles del Diseño");
       const imagenesData: any[] = [];
@@ -1305,10 +1314,14 @@ const OwnerDashboard: React.FC = () => {
           </button>
         </header>
 
-        <div className="flex gap-2 mb-6 border-b border-gray-200 pb-px">
+        {/* flex-wrap: con la pestaña de imágenes ya son seis, y sin envolver se
+            estrujaban unas a otras en pantallas medianas. */}
+        <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200 pb-px">
           <button onClick={() => setActiveTab('orders')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'orders' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><ShoppingBag className="w-4 h-4" /> Pedidos Recibidos</button>
           <button onClick={() => setActiveTab('custom-albums')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'custom-albums' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Sparkles className="w-4 h-4" /> Álbumes Personalizados</button>
           <button onClick={() => setActiveTab('settings')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><SettingsIcon className="w-4 h-4" /> Ajustes de Tienda</button>
+          <button onClick={() => setActiveTab('discounts')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'discounts' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Ticket className="w-4 h-4" /> Códigos de Descuento</button>
+          <button onClick={() => setActiveTab('images')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'images' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Images className="w-4 h-4" /> Imágenes de la Tienda</button>
           <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Users className="w-4 h-4" /> Usuarios</button>
           <button onClick={() => setActiveTab('connections')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'connections' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Zap className="w-4 h-4" /> Conexiones</button>
         </div>
@@ -1574,6 +1587,16 @@ const OwnerDashboard: React.FC = () => {
                 No se pudo cargar la configuración ({storeConfig.configError}). Verifica tu conexión antes de intentar guardar.
               </div>
             )}
+            {storeConfig.configLoaded && !storeConfig.configExists && (
+              <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-medium">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  Todavía no hay ninguna configuración guardada: la tienda está usando los valores
+                  iniciales del sistema. En cuanto guardes, estos valores quedarán fijados y dejarán
+                  de depender del código.
+                </span>
+              </div>
+            )}
             {remoteConfigChangedElsewhere && (
               <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-medium">
                 <span>La configuración cambió en otra sesión. Si recargas la página verás los cambios más recientes (perderás tus ediciones no guardadas).</span>
@@ -1765,14 +1788,6 @@ const OwnerDashboard: React.FC = () => {
                     <label className="block text-xs font-bold text-gray-700 mb-1">Calendario Escritorio</label>
                     <input type="number" value={localConfig.prices.calendarDesk} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, calendarDesk: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Taza Personalizada</label>
-                    <input type="number" value={localConfig.prices.mug} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, mug: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Pack Fotos (Por foto)</label>
-                    <input type="number" value={localConfig.prices.photoPackBase} onChange={(e) => setLocalConfig({...localConfig, prices: {...localConfig.prices, photoPackBase: parseInt(e.target.value)}})} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" />
-                  </div>
                 </div>
 
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-4">Álbum Personalizado (precios mock)</h3>
@@ -1858,6 +1873,14 @@ const OwnerDashboard: React.FC = () => {
             </div>
           </div>
           </div>
+        )}
+
+        {activeTab === 'discounts' && (
+          <DiscountCodesSection adminEmail={currentUserEmail} />
+        )}
+
+        {activeTab === 'images' && (
+          <SystemImagesSection adminEmail={currentUserEmail} />
         )}
 
         {activeTab === 'users' && (

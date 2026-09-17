@@ -20,7 +20,7 @@ describe('getPageSlotCount', () => {
     expect(getPageSlotCount(1, null, SQUARE)).toBe(1);
     expect(getPageSlotCount(5, null, SQUARE)).toBe(9);
     expect(getPageSlotCount(5, null, HORIZONTAL)).toBe(6);
-    expect(getPageSlotCount(4, null, VERTICAL)).toBe(6);
+    expect(getPageSlotCount(5, null, VERTICAL)).toBe(6);
   });
 
   it('respeta la variante elegida aunque sobren marcos', () => {

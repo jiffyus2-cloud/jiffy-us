@@ -41,16 +41,17 @@ describe('getAllowedPhotosPerPage', () => {
     expect(getAllowedPhotosPerPage(SQUARE_30)).toEqual([1, 2, 3, 4, 9]);
   });
 
-  it('vertical no tiene layout de 4 fotos', () => {
-    expect(getAllowedPhotosPerPage(VERTICAL)).toEqual([1, 2, 3, 6]);
+  it('horizontal y vertical admiten los mismos conteos desde el pliego de 4 en vertical', () => {
+    expect(getAllowedPhotosPerPage(VERTICAL)).toEqual([1, 2, 3, 4, 6]);
     expect(getAllowedPhotosPerPage(HORIZONTAL)).toEqual([1, 2, 3, 4, 6]);
   });
 });
 
 describe('getClosestAllowed', () => {
-  it('sube 4 fotos a la página de 6 en vertical', () => {
-    expect(getClosestAllowed(4, VERTICAL)).toBe(6);
-    expect(getClosestAllowed(4, HORIZONTAL)).toBe(4);
+  it('sube 5 fotos a la página de 6', () => {
+    expect(getClosestAllowed(5, VERTICAL)).toBe(6);
+    expect(getClosestAllowed(5, HORIZONTAL)).toBe(6);
+    expect(getClosestAllowed(4, VERTICAL)).toBe(4);
   });
 
   it('tope al máximo del formato cuando no cabe', () => {
@@ -159,12 +160,26 @@ describe('getPageSlots', () => {
   });
 
   it('usa la cuadrícula de reserva para conteos que el pliego no define', () => {
-    // Una página vertical de 4 fotos solo puede venir de un pedido antiguo.
-    const legacy = getPageSlots(4, 'grid', VERTICAL);
-    expect(legacy).toHaveLength(4);
+    // Una página de 5 fotos solo puede venir del reparto "a ojo" anterior.
+    const legacy = getPageSlots(5, 'grid', VERTICAL);
+    expect(legacy).toHaveLength(5);
     expect(legacy[0].x).toBeCloseTo(4, 5);
-    expect(new Set(legacy.map(s => s.x)).size).toBe(2);
+    expect(new Set(legacy.map(s => s.x)).size).toBe(3);
     expect(new Set(legacy.map(s => s.y)).size).toBe(2);
+  });
+
+  it('la página vertical de 4 es el 2x2 del pliego de septiembre, no la reserva', () => {
+    const slots = getPageSlots(4, 'grid', VERTICAL);
+    expect(slots).toHaveLength(4);
+    expect(new Set(slots.map(s => s.x)).size).toBe(2);
+    expect(new Set(slots.map(s => s.y)).size).toBe(2);
+    // Márgenes de 7,1 % a los lados y 6,8 % arriba y abajo; slots de 0,745.
+    expect(slots[0].x).toBeCloseTo(7.07, 1);
+    expect(slots[0].y).toBeCloseTo(6.8, 1);
+    expect(near(slotRatio(slots[0], VERTICAL), 0.745)).toBe(true);
+    // Calle de ~5,6 % en los dos ejes.
+    expect(slots[1].x - (slots[0].x + slots[0].w)).toBeCloseTo(5.66, 1);
+    expect(slots[2].y - (slots[0].y + slots[0].h)).toBeCloseTo(5.63, 1);
   });
 });
 
@@ -192,7 +207,7 @@ describe('getPageVariants', () => {
   });
 
   it('está vacío para los conteos que el pliego no define', () => {
-    expect(getPageVariants(4, VERTICAL)).toEqual([]);
+    expect(getPageVariants(5, VERTICAL)).toEqual([]);
     expect(getPageVariants(7, SQUARE_20)).toEqual([]);
   });
 
@@ -226,6 +241,6 @@ describe('getSelectedVariantId', () => {
   });
 
   it('es nulo donde no hay nada que elegir', () => {
-    expect(getSelectedVariantId(4, 'grid', VERTICAL)).toBe(null);
+    expect(getSelectedVariantId(5, 'grid', VERTICAL)).toBe(null);
   });
 });
