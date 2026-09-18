@@ -20,6 +20,7 @@ import {
   countPersistedPhotos,
   assertNoLocalUrls,
   SCHEMA_VERSION,
+  isLegacyOrder,
 } from './orderService';
 
 describe('countAlbumPhotos', () => {
@@ -112,5 +113,22 @@ describe('sanitizeForFirestore', () => {
 describe('SCHEMA_VERSION', () => {
   it('marca los documentos escritos con photoCount', () => {
     expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('isLegacyOrder', () => {
+  it('un pedido sin createdSchemaVersion es del sistema anterior', () => {
+    expect(isLegacyOrder({ status: 'saved_draft', schemaVersion: 2 })).toBe(true);
+    expect(isLegacyOrder({})).toBe(true);
+    expect(isLegacyOrder(null)).toBe(true);
+  });
+
+  it('re-guardar un pedido viejo con código nuevo no borra la marca (schemaVersion sube, createdSchemaVersion no)', () => {
+    expect(isLegacyOrder({ schemaVersion: SCHEMA_VERSION })).toBe(true);
+  });
+
+  it('un pedido creado con v3 o posterior no es del sistema anterior', () => {
+    expect(isLegacyOrder({ createdSchemaVersion: 3 })).toBe(false);
+    expect(isLegacyOrder({ createdSchemaVersion: SCHEMA_VERSION })).toBe(false);
   });
 });

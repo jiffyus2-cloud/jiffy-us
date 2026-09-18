@@ -6,8 +6,20 @@ import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage
  * Versión del esquema del documento `orders/{id}`.
  * v2 añade `photoCount`, que permite detectar por query cualquier discrepancia entre
  * el número de fotos que el editor creía tener y las que realmente quedaron guardadas.
+ * v3 añade `createdSchemaVersion`: la versión con la que se CREÓ el pedido. Solo se
+ * escribe al crear, nunca al actualizar, así un borrador del sistema anterior conserva
+ * la marca aunque se vuelva a guardar con código nuevo (ver `isLegacyOrder`).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+/**
+ * Pedidos creados antes de v3 (2026-09-18): no llevan `createdSchemaVersion`. El panel
+ * los etiqueta como "sistema anterior" para poder separar, al investigar borradores
+ * duplicados o fallos, los que nacieron con el código viejo de los nuevos.
+ */
+export function isLegacyOrder(order: any): boolean {
+  return !(typeof order?.createdSchemaVersion === 'number' && order.createdSchemaVersion >= 3);
+}
 
 export const sanitizeForFirestore = (obj: any): any => {
   if (obj === undefined) return null;
@@ -455,6 +467,7 @@ export async function createDraftOrder(
       status,
       total: 0,
       createdAt: now,
+      createdSchemaVersion: SCHEMA_VERSION,
       ...designFields,
     };
     const finalPayload = sanitizeForFirestore(JSON.parse(JSON.stringify(createPayload)));
@@ -542,6 +555,14 @@ export async function getUserOrders(userId: string) {
 
   return orders;
 }
+
+/**
+ * Estados en los que el dueño de la tienda puede abrir el pedido de un cliente en
+ * el editor para asistirlo (modo asistencia). Son justo los que el panel agrupa
+ * como "Pendientes de Pago / Borradores": el diseño sigue siendo del cliente y
+ * todavía no entró en producción.
+ */
+export const ASSISTABLE_DRAFT_STATUSES: readonly string[] = ['draft', 'saved_draft', 'pending_payment'];
 
 export async function getUserSavedDrafts(userId: string) {
   const ordersRef = collection(db, 'orders');

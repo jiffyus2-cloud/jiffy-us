@@ -19,7 +19,7 @@ import { WhatsAppIcon } from './WhatsAppIcon';
  */
 
 /** Rutas donde el botón no aporta y además chocaría con el panel fijo del panel de administración. */
-const HIDDEN_PATHS = ['/owner-dashboard'];
+const HIDDEN_PATHS = ['/owner-dashboard', '/lab/1clic'];
 
 export function SupportFab() {
   const { t } = useLanguage();

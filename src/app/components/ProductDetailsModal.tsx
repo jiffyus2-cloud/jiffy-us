@@ -143,8 +143,10 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
     if (onConfirm) {
       onConfirm();
     } else {
+      // Desde el landing, "Crea el tuyo" siempre lleva a "Elige tu producto"
+      // (sin preseleccionar) para que el usuario confirme qué quiere crear.
       onClose();
-      navigate('/create', { state: { startProduct: productType } });
+      navigate('/create');
     }
   };
 

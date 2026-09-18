@@ -2,18 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc, query, orderBy, limit, addDoc } from 'firebase/firestore';
 // Importamos la lógica de Autenticación de Firebase
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { useNavigate } from 'react-router';
 import { db } from '../../lib/firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import SystemImagesSection from './SystemImagesSection';
 import DiscountCodesSection from './DiscountCodesSection';
 import UsersSection from './UsersSection';
-import { updateOrderStatus } from '../../services/orderService';
+import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
@@ -23,9 +24,9 @@ import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
-import { getEffectiveFontSize } from '../utils/textOverflowUtils';
 import { getCoverDimensions } from '../utils/cropMath';
-import { getClosestAllowed, getPageSlots } from '../utils/pageLayouts';
+import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
+import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
 
@@ -56,6 +57,13 @@ interface Order {
   pages?: any[];
   [key: string]: any;
 }
+
+/** Título de la carátula (nombre del álbum). Los calendarios guardan el nombre del producto. */
+const getAlbumTitle = (order: Order): string =>
+  String(order.coverData?.title || order.customization?.coverContent?.coverTitle || '').trim();
+
+const formatDateTime = (iso?: string): string =>
+  iso ? format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es }) : '—';
 
 const MONTHS_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -239,68 +247,24 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
 // ============================================================================
 // COMPONENTES AUXILIARES PARA RENDERIZAR LAS PÁGINAS INTERNAS EN EL PDF
 // ============================================================================
-const AlbumPagePrintView: React.FC<{pageObj: any, customization: any, pageIndex: number, order: any, pxWidth: number, preloadedMap?: Record<string, string>}> = ({pageObj, customization, pageIndex, order, pxWidth, preloadedMap}) => {
+// La página impresa se arma con los mismos marcos y el mismo contenido que el
+// editor y el visor del pedido (`AlbumPageSlots`); lo único propio de aquí es
+// que la foto se dibuja con `CanvasCropper`, porque html-to-image no captura
+// bien el `ImageCropper` de pantalla.
+const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order: any, preloadedMap?: Record<string, string>}> = ({customization, pageIndex, order, preloadedMap}) => {
   const size = customization?.size || '';
-  
-  const imagesArray = Array.isArray(pageObj) ? pageObj : (pageObj?.images || []);
-  const variantFromPage = !Array.isArray(pageObj) ? pageObj?.variant : undefined;
-  const layoutFromPage = !Array.isArray(pageObj) ? pageObj?.layout : undefined;
-  
-  const currentPhotosPerPage = variantFromPage || order.pageLayoutVariants?.[pageIndex] || getClosestAllowed(imagesArray.length, size);
-  const layout = layoutFromPage || order.pageLayouts?.[pageIndex];
-  const slots = Array.from({ length: currentPhotosPerPage }, (_, i) => imagesArray[i] || null);
-
-  const slotRects = getPageSlots(currentPhotosPerPage, layout, size);
+  const slots = getAlbumPageSlots(order, pageIndex, size);
 
   return (
     <div className="w-full h-full bg-white">
-    <div className="relative w-full h-full">
-      {slots.map((photo: string | null, photoIndex: number) => {
-        const textsFromPage = !Array.isArray(pageObj) ? pageObj?.texts : undefined;
-        const textBox = textsFromPage?.[photoIndex] || order.textBoxSlots?.[pageIndex]?.[photoIndex];
-        const crop = (!Array.isArray(pageObj) ? (pageObj as any)?.crops?.[photoIndex] : null) || order.photoCrops?.[`${pageIndex}-${photoIndex}`] || { x: 50, y: 50, zoom: 1 };
-
-        const rect = slotRects[photoIndex];
-        if (!rect) return null;
-        const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
-        const hasText = !!(textBox && String(textBox.text ?? '').trim());
-
-        // Un slot sin foto ni texto debe salir realmente en blanco en el PDF: no se
-        // pinta nada (ni fondo gris ni borde), para que quede el blanco de la página.
-        if (!resolvedSrc && !hasText) return null;
-
-        return (
-          <div
-            key={photoIndex}
-            className="absolute overflow-hidden rounded-lg bg-white flex items-center justify-center"
-            style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }}
-          >
-            {resolvedSrc ? (
-              <div className="w-full h-full relative bg-gray-100">
-                <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={resolvedSrc} crop={crop} />
-                </div>
-              </div>
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
-                <div style={{ 
-                  width: '90%', 
-                  fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
-                  fontFamily: textBox.fontFamily || 'Arial',
-                  color: textBox.color || '#000',
-                  textAlign: textBox.textAlign || 'center',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: '1.3'
-                }}>
-                  {textBox.text}
-                </div>
-              </div>
-            )}
+      <AlbumPageSlots
+        slots={slots}
+        renderPhoto={(photo, crop) => (
+          <div className="absolute inset-0 w-full h-full pointer-events-none">
+            <CanvasCropper src={preloadedMap?.[photo] || photo} crop={crop} />
           </div>
-        );
-      })}
-    </div>
+        )}
+      />
     </div>
   );
 };
@@ -422,6 +386,8 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
 // MAIN COMPONENT: OWNER DASHBOARD
 // ============================================================================
 const OwnerDashboard: React.FC = () => {
+  const navigate = useNavigate();
+
   // 1. Estados de Autenticación actualizados a Firebase Auth
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -439,6 +405,21 @@ const OwnerDashboard: React.FC = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Filtros propios de la tabla "Pendientes de Pago / Borradores". Son
+  // independientes del buscador general de la pestaña, que también afecta al Kanban.
+  const [draftSearch, setDraftSearch] = useState('');
+  const [draftClient, setDraftClient] = useState('all');
+  const [draftDateField, setDraftDateField] = useState<'createdAt' | 'updatedAt'>('createdAt');
+  const [draftDateFrom, setDraftDateFrom] = useState('');
+  const [draftDateTo, setDraftDateTo] = useState('');
+  const hasDraftFilters = !!(draftSearch || draftClient !== 'all' || draftDateFrom || draftDateTo);
+  const clearDraftFilters = () => {
+    setDraftSearch('');
+    setDraftClient('all');
+    setDraftDateFrom('');
+    setDraftDateTo('');
+  };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -623,6 +604,15 @@ const OwnerDashboard: React.FC = () => {
     await signOut(auth);
   };
 
+  /**
+   * Abre el borrador de un cliente en el editor (modo asistencia) para
+   * destrabarlo o corregir un diseño que quedó mal por un error. El editor lee
+   * `adminEditOrder` del state y guarda con el uid del cliente, no con el del admin.
+   */
+  const handleAssistDraft = (order: Order) => {
+    navigate('/create', { state: { adminEditOrder: order.id } });
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     if (!window.confirm('¿Estás seguro de que quieres eliminar este pedido? Esta acción no se puede deshacer.')) return;
     try {
@@ -711,8 +701,13 @@ const OwnerDashboard: React.FC = () => {
         // ── Dimensiones del lienzo (canvas) ──────────────────────────────────
         // Papel: lienzos fijos por tamaño con márgenes centrados
         // Tela:  sólo la portada, sin cambios
-        const spineCm  = isTela ? 0 : 2;
+        // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm, lomo 0.6 cm
+        const is20x20  = !isTela && coverSizeProp === '20x20';
+        const cmToPx   = (cm: number) => Math.round((cm / 2.54) * 300);
+        const panelWCm = is20x20 ? 19 : wCm;          // ancho real de portada/contraportada
+        const spineCm  = isTela ? 0 : (is20x20 ? 0.6 : 2);
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
+        const panelPxW = cmToPx(panelWCm);
 
         let canvasWCm: number;
         let canvasHCm: number;
@@ -730,11 +725,13 @@ const OwnerDashboard: React.FC = () => {
         const totalHCm     = canvasHCm;
         const totalPxWidth  = Math.round((totalWCm  / 2.54) * 300);
         const totalPxHeight = Math.round((totalHCm  / 2.54) * 300);
-        const spinePxWidth  = isTela ? 0 : Math.round((spineCm / 2.54) * 300);
-        const pxGap         = isTela ? 0 : Math.round((gapCm   / 2.54) * 300);
+        const spinePxWidth  = isTela ? 0 : cmToPx(spineCm);
+        const pxGap         = isTela ? 0 : cmToPx(gapCm);
+        // Texto del lomo: 25% del ancho del lomo, pero nunca menos de 11pt (0.3881 cm) para lomos finos
+        const spineFontPx   = Math.max(spinePxWidth * 0.25, cmToPx(0.3881));
 
         // Contenido total (horizontal): contraportada + gap + lomo + gap + portada
-        const contentPxW = isTela ? pxWidth : (pxWidth * 2) + spinePxWidth + (pxGap * 2);
+        const contentPxW = isTela ? pxWidth : (panelPxW * 2) + spinePxWidth + (pxGap * 2);
         const marginXPx  = isTela ? 0 : Math.round((totalPxWidth  - contentPxW) / 2);
         const marginYPx  = isTela ? 0 : Math.round((totalPxHeight - pxHeight)   / 2);
 
@@ -797,10 +794,10 @@ const OwnerDashboard: React.FC = () => {
                   {!isTela && (
                     <>
                       {/* Contraportada */}
-                      <div style={{ width: pxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${pxWidth * 0.01}px` }}>
-                          <img src={jiffyLogo} style={{ width: `${pxWidth * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                          <span style={{ fontSize: `${pxWidth * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                      <div style={{ width: panelPxW, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
+                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${panelPxW * 0.01}px` }}>
+                          <img src={jiffyLogo} style={{ width: `${panelPxW * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: `${panelPxW * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
                         </div>
                       </div>
 
@@ -815,7 +812,7 @@ const OwnerDashboard: React.FC = () => {
                             transform: 'rotate(90deg) translateY(-50%)',
                             transformOrigin: 'top left',
                             whiteSpace: 'nowrap',
-                            fontSize: `${spinePxWidth * 0.25}px`,
+                            fontSize: `${spineFontPx}px`,
                             fontWeight: 'bold',
                             letterSpacing: '8px',
                             color: textColor,
@@ -831,7 +828,7 @@ const OwnerDashboard: React.FC = () => {
                   )}
 
                   {/* Portada */}
-                  <div style={{ width: pxWidth, height: pxHeight, position: 'relative' }}>
+                  <div style={{ width: panelPxW, height: pxHeight, position: 'relative' }}>
                     <CoverPreview
                       coverSize={coverSizeProp as any}
                       coverType={isTela ? 'Tela' : 'Papel'}
@@ -844,6 +841,7 @@ const OwnerDashboard: React.FC = () => {
                       typographyColor={textColor}
                       hideSpine={true}
                       forPdf={true}
+                      printAspectRatio={is20x20 ? `${panelWCm} / ${hCm}` : undefined}
                     />
                   </div>
                 </div>
@@ -856,7 +854,7 @@ const OwnerDashboard: React.FC = () => {
         pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
 
         // ── Cm-space layout for cut lines ─────────────────────────────────────
-        const contentWCm = isTela ? wCm : (wCm * 2) + spineCm + (gapCm * 2);
+        const contentWCm = isTela ? wCm : (panelWCm * 2) + spineCm + (gapCm * 2);
         const marginXCm  = isTela ? 0 : (totalWCm - contentWCm) / 2;
         const marginYCm  = isTela ? 0 : (totalHCm - hCm) / 2;
 
@@ -868,11 +866,12 @@ const OwnerDashboard: React.FC = () => {
         if (isTela) {
           pdf.rect(0, 0, wCm, hCm, 'S');
         } else {
-          pdf.rect(marginXCm,                                   marginYCm, wCm,     hCm, 'S'); // contraportada
-          pdf.rect(marginXCm + wCm,                             marginYCm, gapCm,   hCm, 'S'); // gap 1
-          pdf.rect(marginXCm + wCm + gapCm,                    marginYCm, spineCm, hCm, 'S'); // lomo
-          pdf.rect(marginXCm + wCm + gapCm + spineCm,          marginYCm, gapCm,   hCm, 'S'); // gap 2
-          pdf.rect(marginXCm + wCm + gapCm + spineCm + gapCm,  marginYCm, wCm,     hCm, 'S'); // portada
+          const w = panelWCm;
+          pdf.rect(marginXCm,                               marginYCm, w,       hCm, 'S'); // contraportada
+          pdf.rect(marginXCm + w,                           marginYCm, gapCm,   hCm, 'S'); // callejón 1
+          pdf.rect(marginXCm + w + gapCm,                   marginYCm, spineCm, hCm, 'S'); // lomo
+          pdf.rect(marginXCm + w + gapCm + spineCm,         marginYCm, gapCm,   hCm, 'S'); // callejón 2
+          pdf.rect(marginXCm + w + gapCm + spineCm + gapCm, marginYCm, w,       hCm, 'S'); // portada
         }
 
         onProgress(100);
@@ -922,10 +921,10 @@ const OwnerDashboard: React.FC = () => {
           for (let i = 0; i < order.pages.length; i++) {
             if (i > 0) pdf.addPage();
             const currentPage = order.pages[i];
-            const pageImages = ((currentPage as any)?.images || []).filter(Boolean) as string[];
+            const pageImages = getPageImages(currentPage).filter(Boolean) as string[];
             const pageDataUrl = await renderAndCapture(
               (preloadedMap) => (
-                <AlbumPagePrintView key={i} pageObj={currentPage} customization={order.customization} pageIndex={i} order={order} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+                <AlbumPagePrintView key={i} customization={order.customization} pageIndex={i} order={order} preloadedMap={preloadedMap} />
               ),
               pageImages
             );
@@ -1376,7 +1375,49 @@ const OwnerDashboard: React.FC = () => {
             (order.shippingAddress?.email || '').toLowerCase().includes(searchLow) ||
             (order.shippingAddress?.name || '').toLowerCase().includes(searchLow);
 
-          const pendingOrders = orders.filter(o => (o.status === 'pending_payment' || o.status === 'draft' || o.status === 'saved_draft') && matchesSearch(o));
+          const allDrafts = orders.filter(o => ASSISTABLE_DRAFT_STATUSES.includes(o.status) && matchesSearch(o));
+
+          // Clave estable por cliente: correo si lo hay, si no el nombre.
+          const clientKey = (o: Order) =>
+            (o.shippingAddress?.email || o.customerEmail || o.shippingAddress?.name || o.customerName || '').toLowerCase();
+          const clientLabel = (o: Order) => {
+            const name = o.shippingAddress?.name || o.customerName;
+            const email = o.shippingAddress?.email || o.customerEmail;
+            return name && email ? `${name} (${email})` : name || email || 'Sin nombre';
+          };
+          const draftClients = Array.from(
+            allDrafts.reduce((acc, o) => {
+              const key = clientKey(o);
+              if (key && !acc.has(key)) acc.set(key, clientLabel(o));
+              return acc;
+            }, new Map<string, string>())
+          ).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+
+          // Los <input type="date"> dan 'YYYY-MM-DD'; se interpretan como día completo local.
+          const fromMs = draftDateFrom ? new Date(`${draftDateFrom}T00:00:00`).getTime() : null;
+          const toMs = draftDateTo ? new Date(`${draftDateTo}T23:59:59.999`).getTime() : null;
+          const draftSearchLow = draftSearch.trim().toLowerCase();
+
+          const pendingOrders = allDrafts.filter(o => {
+            if (draftSearchLow) {
+              const haystack = [
+                o.id, getAlbumTitle(o),
+                o.shippingAddress?.name, o.customerName,
+                o.shippingAddress?.email, o.customerEmail,
+              ].filter(Boolean).join(' ').toLowerCase();
+              if (!haystack.includes(draftSearchLow)) return false;
+            }
+            if (draftClient !== 'all' && clientKey(o) !== draftClient) return false;
+            if (fromMs !== null || toMs !== null) {
+              const raw = o[draftDateField];
+              if (!raw) return false; // sin "última edición" no puede caer en el rango
+              const ms = new Date(raw).getTime();
+              if (Number.isNaN(ms)) return false;
+              if (fromMs !== null && ms < fromMs) return false;
+              if (toMs !== null && ms > toMs) return false;
+            }
+            return true;
+          });
 
           const formatCOP = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
 
@@ -1437,6 +1478,11 @@ const OwnerDashboard: React.FC = () => {
                                 {/* Cliente */}
                                 <p className="text-sm font-semibold text-gray-900 truncate leading-none mb-0.5">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
                                 <p className="text-xs text-gray-400 truncate mb-2">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
+                                {/* Álbum + fechas */}
+                                {getAlbumTitle(order) && (
+                                  <p className="text-xs font-medium text-gray-700 truncate mb-1" title={getAlbumTitle(order)}>📖 {getAlbumTitle(order)}</p>
+                                )}
+                                <p className="text-[10px] text-gray-400 mb-2">Creado {formatDateTime(order.createdAt)} · Editado {formatDateTime(order.updatedAt)}</p>
                                 {/* Monto */}
                                 <p className="text-sm font-bold text-gray-800 mb-3">{formatCOP(order.total)}</p>
                                 {/* Acciones */}
@@ -1477,40 +1523,133 @@ const OwnerDashboard: React.FC = () => {
                   </div>
 
                   {/* Pedidos pendientes de pago (fuera del Kanban) */}
-                  {pendingOrders.length > 0 && (
+                  {allDrafts.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Pendientes de Pago / Borradores</h3>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                          Pendientes de Pago / Borradores
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs normal-case tracking-normal">
+                            {hasDraftFilters ? `${pendingOrders.length} de ${allDrafts.length}` : allDrafts.length}
+                          </span>
+                        </h3>
+                        {hasDraftFilters && (
+                          <button onClick={clearDraftFilters} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-black transition-colors">
+                            <X className="w-3.5 h-3.5" /> Limpiar filtros
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Buscador y filtros de borradores */}
+                      <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_auto_1fr_1fr] gap-2 items-center" data-testid="draft-filters">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Buscar borrador: álbum, ID, cliente o correo…"
+                            value={draftSearch}
+                            onChange={(e) => setDraftSearch(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          />
+                        </div>
+                        <select
+                          value={draftClient}
+                          onChange={(e) => setDraftClient(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          title="Filtrar por cliente"
+                        >
+                          <option value="all">Todos los clientes ({draftClients.length})</option>
+                          {draftClients.map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={draftDateField}
+                          onChange={(e) => setDraftDateField(e.target.value as 'createdAt' | 'updatedAt')}
+                          className="w-full px-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          title="Qué fecha se filtra"
+                        >
+                          <option value="createdAt">Fecha de creación</option>
+                          <option value="updatedAt">Última edición</option>
+                        </select>
+                        <label className="relative flex items-center">
+                          <CalendarDays className="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input
+                            type="date"
+                            value={draftDateFrom}
+                            max={draftDateTo || undefined}
+                            onChange={(e) => setDraftDateFrom(e.target.value)}
+                            className="w-full pl-9 pr-2 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                            title="Desde"
+                            aria-label="Desde"
+                          />
+                        </label>
+                        <label className="relative flex items-center">
+                          <CalendarDays className="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input
+                            type="date"
+                            value={draftDateTo}
+                            min={draftDateFrom || undefined}
+                            onChange={(e) => setDraftDateTo(e.target.value)}
+                            className="w-full pl-9 pr-2 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                            title="Hasta"
+                            aria-label="Hasta"
+                          />
+                        </label>
+                      </div>
+
                       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-100">
                           <thead>
                             <tr className="bg-gray-50/50">
-                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Pedido</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Álbum</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Estado</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Creado</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Última edición</th>
                               <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Monto</th>
                               <th className="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Acciones</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
+                            {pendingOrders.length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
+                                  Ningún borrador coincide con los filtros.
+                                  <button onClick={clearDraftFilters} className="ml-2 font-semibold text-gray-600 underline underline-offset-2 hover:text-black">Limpiar filtros</button>
+                                </td>
+                              </tr>
+                            )}
                             {pendingOrders.map(order => (
                               <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-4 py-3">
-                                  <span className="text-xs font-mono font-bold text-gray-700">#{order.id.slice(0, 8)}</span>
-                                  <p className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</p>
+                                <td className="px-4 py-3 max-w-[220px]">
+                                  <p className="text-sm font-semibold text-gray-900 truncate" title={getAlbumTitle(order) || undefined}>{getAlbumTitle(order) || <span className="text-gray-400 font-normal">Sin título</span>}</p>
+                                  <p className="text-xs font-mono text-gray-400">#{order.id.slice(0, 8)}</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
                                   <p className="text-xs text-gray-400">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
+                                    {isLegacyOrder(order) && (
+                                      <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-gray-100 text-gray-500 border border-gray-200" title="Creado antes del cambio de sistema (2026-09-18)">Sistema anterior</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="text-xs text-gray-600">{formatDateTime(order.createdAt)}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="text-xs text-gray-600">{formatDateTime(order.updatedAt)}</span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                                    <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
+                                    <button onClick={() => handleAssistDraft(order)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Abrir en el editor para asistir al cliente"><Pencil className="w-4 h-4" /></button>
                                     {downloadProgress.orderId === order.id ? (
                                       <div className="flex items-center gap-1 px-1">
                                         <div className="w-12 bg-gray-200 rounded-full h-1.5">
