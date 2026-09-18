@@ -9,7 +9,7 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import SystemImagesSection from './SystemImagesSection';
 import DiscountCodesSection from './DiscountCodesSection';
@@ -405,6 +405,21 @@ const OwnerDashboard: React.FC = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Filtros propios de la tabla "Pendientes de Pago / Borradores". Son
+  // independientes del buscador general de la pestaña, que también afecta al Kanban.
+  const [draftSearch, setDraftSearch] = useState('');
+  const [draftClient, setDraftClient] = useState('all');
+  const [draftDateField, setDraftDateField] = useState<'createdAt' | 'updatedAt'>('createdAt');
+  const [draftDateFrom, setDraftDateFrom] = useState('');
+  const [draftDateTo, setDraftDateTo] = useState('');
+  const hasDraftFilters = !!(draftSearch || draftClient !== 'all' || draftDateFrom || draftDateTo);
+  const clearDraftFilters = () => {
+    setDraftSearch('');
+    setDraftClient('all');
+    setDraftDateFrom('');
+    setDraftDateTo('');
+  };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1360,7 +1375,49 @@ const OwnerDashboard: React.FC = () => {
             (order.shippingAddress?.email || '').toLowerCase().includes(searchLow) ||
             (order.shippingAddress?.name || '').toLowerCase().includes(searchLow);
 
-          const pendingOrders = orders.filter(o => ASSISTABLE_DRAFT_STATUSES.includes(o.status) && matchesSearch(o));
+          const allDrafts = orders.filter(o => ASSISTABLE_DRAFT_STATUSES.includes(o.status) && matchesSearch(o));
+
+          // Clave estable por cliente: correo si lo hay, si no el nombre.
+          const clientKey = (o: Order) =>
+            (o.shippingAddress?.email || o.customerEmail || o.shippingAddress?.name || o.customerName || '').toLowerCase();
+          const clientLabel = (o: Order) => {
+            const name = o.shippingAddress?.name || o.customerName;
+            const email = o.shippingAddress?.email || o.customerEmail;
+            return name && email ? `${name} (${email})` : name || email || 'Sin nombre';
+          };
+          const draftClients = Array.from(
+            allDrafts.reduce((acc, o) => {
+              const key = clientKey(o);
+              if (key && !acc.has(key)) acc.set(key, clientLabel(o));
+              return acc;
+            }, new Map<string, string>())
+          ).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+
+          // Los <input type="date"> dan 'YYYY-MM-DD'; se interpretan como día completo local.
+          const fromMs = draftDateFrom ? new Date(`${draftDateFrom}T00:00:00`).getTime() : null;
+          const toMs = draftDateTo ? new Date(`${draftDateTo}T23:59:59.999`).getTime() : null;
+          const draftSearchLow = draftSearch.trim().toLowerCase();
+
+          const pendingOrders = allDrafts.filter(o => {
+            if (draftSearchLow) {
+              const haystack = [
+                o.id, getAlbumTitle(o),
+                o.shippingAddress?.name, o.customerName,
+                o.shippingAddress?.email, o.customerEmail,
+              ].filter(Boolean).join(' ').toLowerCase();
+              if (!haystack.includes(draftSearchLow)) return false;
+            }
+            if (draftClient !== 'all' && clientKey(o) !== draftClient) return false;
+            if (fromMs !== null || toMs !== null) {
+              const raw = o[draftDateField];
+              if (!raw) return false; // sin "última edición" no puede caer en el rango
+              const ms = new Date(raw).getTime();
+              if (Number.isNaN(ms)) return false;
+              if (fromMs !== null && ms < fromMs) return false;
+              if (toMs !== null && ms > toMs) return false;
+            }
+            return true;
+          });
 
           const formatCOP = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
 
@@ -1466,14 +1523,84 @@ const OwnerDashboard: React.FC = () => {
                   </div>
 
                   {/* Pedidos pendientes de pago (fuera del Kanban) */}
-                  {pendingOrders.length > 0 && (
+                  {allDrafts.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Pendientes de Pago / Borradores</h3>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                          Pendientes de Pago / Borradores
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs normal-case tracking-normal">
+                            {hasDraftFilters ? `${pendingOrders.length} de ${allDrafts.length}` : allDrafts.length}
+                          </span>
+                        </h3>
+                        {hasDraftFilters && (
+                          <button onClick={clearDraftFilters} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-black transition-colors">
+                            <X className="w-3.5 h-3.5" /> Limpiar filtros
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Buscador y filtros de borradores */}
+                      <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_auto_1fr_1fr] gap-2 items-center" data-testid="draft-filters">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Buscar borrador: álbum, ID, cliente o correo…"
+                            value={draftSearch}
+                            onChange={(e) => setDraftSearch(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          />
+                        </div>
+                        <select
+                          value={draftClient}
+                          onChange={(e) => setDraftClient(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          title="Filtrar por cliente"
+                        >
+                          <option value="all">Todos los clientes ({draftClients.length})</option>
+                          {draftClients.map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={draftDateField}
+                          onChange={(e) => setDraftDateField(e.target.value as 'createdAt' | 'updatedAt')}
+                          className="w-full px-3 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                          title="Qué fecha se filtra"
+                        >
+                          <option value="createdAt">Fecha de creación</option>
+                          <option value="updatedAt">Última edición</option>
+                        </select>
+                        <label className="relative flex items-center">
+                          <CalendarDays className="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input
+                            type="date"
+                            value={draftDateFrom}
+                            max={draftDateTo || undefined}
+                            onChange={(e) => setDraftDateFrom(e.target.value)}
+                            className="w-full pl-9 pr-2 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                            title="Desde"
+                            aria-label="Desde"
+                          />
+                        </label>
+                        <label className="relative flex items-center">
+                          <CalendarDays className="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input
+                            type="date"
+                            value={draftDateTo}
+                            min={draftDateFrom || undefined}
+                            onChange={(e) => setDraftDateTo(e.target.value)}
+                            className="w-full pl-9 pr-2 py-2 text-sm bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black transition-all"
+                            title="Hasta"
+                            aria-label="Hasta"
+                          />
+                        </label>
+                      </div>
+
                       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-100">
                           <thead>
                             <tr className="bg-gray-50/50">
-                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Pedido</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Álbum</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Estado</th>
@@ -1484,13 +1611,19 @@ const OwnerDashboard: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
+                            {pendingOrders.length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
+                                  Ningún borrador coincide con los filtros.
+                                  <button onClick={clearDraftFilters} className="ml-2 font-semibold text-gray-600 underline underline-offset-2 hover:text-black">Limpiar filtros</button>
+                                </td>
+                              </tr>
+                            )}
                             {pendingOrders.map(order => (
                               <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-4 py-3">
-                                  <span className="text-xs font-mono font-bold text-gray-700">#{order.id.slice(0, 8)}</span>
-                                </td>
-                                <td className="px-4 py-3 max-w-[180px]">
-                                  <p className="text-sm text-gray-800 truncate" title={getAlbumTitle(order) || undefined}>{getAlbumTitle(order) || <span className="text-gray-300">Sin título</span>}</p>
+                                <td className="px-4 py-3 max-w-[220px]">
+                                  <p className="text-sm font-semibold text-gray-900 truncate" title={getAlbumTitle(order) || undefined}>{getAlbumTitle(order) || <span className="text-gray-400 font-normal">Sin título</span>}</p>
+                                  <p className="text-xs font-mono text-gray-400">#{order.id.slice(0, 8)}</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
