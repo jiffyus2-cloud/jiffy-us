@@ -365,6 +365,15 @@ const translations = {
     'creator.changesSaved': 'Changes saved!',
     'creator.pagesLockedBanner': 'Page count is fixed for paid orders. You can change photos and content but cannot add or remove pages.',
 
+    // Creator - assist mode (store admin editing a customer's draft)
+    'creator.assistMode': 'Assist mode',
+    'creator.assistEditing': "You are editing draft #{id} for {customer}. Changes are saved to the customer's account.",
+    'creator.assistBack': 'Back to dashboard',
+    'creator.assistNotFound': 'This draft no longer exists.',
+    'creator.assistWrongStatus': 'This order is in "{status}" state and can no longer be edited as a draft.',
+    'creator.assistNoOwner': 'This draft has no customer attached and cannot be opened.',
+    'creator.assistLoadError': 'Could not open the draft. Make sure you are signed in as the store admin.',
+
     // Checkout
     'checkout.title': 'Checkout',
     'checkout.processing': 'Processing order...',
@@ -764,6 +773,15 @@ const translations = {
     'creator.saveChanges': 'Guardar Cambios',
     'creator.changesSaved': '¡Cambios guardados!',
     'creator.pagesLockedBanner': 'El número de páginas es fijo en órdenes pagadas. Puedes cambiar fotos y contenido pero no añadir ni eliminar páginas.',
+
+    // Creator - modo asistencia (el admin edita el borrador de un cliente)
+    'creator.assistMode': 'Modo asistencia',
+    'creator.assistEditing': 'Estás editando el borrador #{id} de {customer}. Los cambios se guardan en la cuenta del cliente.',
+    'creator.assistBack': 'Volver al panel',
+    'creator.assistNotFound': 'Este borrador ya no existe.',
+    'creator.assistWrongStatus': 'Este pedido está en estado "{status}" y ya no se puede editar como borrador.',
+    'creator.assistNoOwner': 'Este borrador no tiene cliente asociado y no se puede abrir.',
+    'creator.assistLoadError': 'No se pudo abrir el borrador. Asegúrate de haber iniciado sesión como administrador de la tienda.',
 
     // Checkout
     'checkout.title': 'Finalizar Compra',

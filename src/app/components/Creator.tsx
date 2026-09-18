@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Home, ShoppingBag, Settings, Image as ImageIcon, ShoppingCart, Loader2, Upload, BookMarked, Check, Sparkles, AlertTriangle, RefreshCw, LifeBuoy } from 'lucide-react';
 import ProductSelection, { ProductType } from './ProductSelection';
 import AlbumCustomization, { CustomizationOptions } from './AlbumCustomization';
 import PhotoOrganizer from './PhotoOrganizer';
@@ -12,7 +12,7 @@ import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { Album, Calendar, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_CUSTOM_ALBUM } from '../types/products';
-import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError } from '../../services/orderService';
+import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError, ASSISTABLE_DRAFT_STATUSES } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
 import type { PageVariantId } from '../utils/pageLayouts';
 
@@ -66,6 +66,25 @@ const clearDraftFromDB = (): Promise<void> => {
 
 type Step = 'product' | 'customization' | 'organize' | 'checkout' | 'custom-album-info';
 
+/**
+ * Modo asistencia: el dueño de la tienda abrió desde el panel el borrador de un
+ * cliente. Todo lo que se guarde va con el uid del CLIENTE (así `userId` del
+ * pedido y la carpeta de Storage siguen siendo suyos) y sin pisar su
+ * nombre/correo con los del administrador.
+ */
+interface AdminEditContext {
+  orderId: string;
+  userId: string;
+  status: string;
+  customerName?: string;
+  customerEmail?: string;
+}
+
+const detectProductType = (order: any): ProductType => {
+  const productTypeStr = String(order.productType || order.product?.type || order.product?.id || order.product?.name || '').toLowerCase();
+  return productTypeStr.includes('calendar') || productTypeStr.includes('calendario') ? 'calendar' : 'album';
+};
+
 export default function Creator() {
   const { t } = useLanguage();
   const { user, userData } = useAuth();
@@ -94,6 +113,10 @@ export default function Creator() {
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
   const [editingPaidOrderId, setEditingPaidOrderId] = useState<string | null>(null);
   const [isPageCountLocked, setIsPageCountLocked] = useState(false);
+  const [adminEdit, setAdminEdit] = useState<AdminEditContext | null>(null);
+  // Los guardados corren dentro de la cola y leen de aquí, no de la closure.
+  const adminEditRef = useRef<AdminEditContext | null>(null);
+  const [adminEditError, setAdminEditError] = useState<string | null>(null);
 
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const activeDraftIdRef = useRef<string | null>(null);
@@ -129,7 +152,7 @@ export default function Creator() {
   }, [currentStep, previewProduct]);
 
   useEffect(() => {
-    if (currentStep === 'customization' && user) {
+    if (currentStep === 'customization' && user && !adminEditRef.current) {
       const seen = localStorage.getItem('jiffy_draft_hint_seen');
       if (!seen) setShowDraftHint(true);
     }
@@ -141,6 +164,7 @@ export default function Creator() {
       if (selectedProduct) return;
       if (location.state?.fromCheckout) return;
       if (location.state?.editPaidOrder) return;
+      if (location.state?.adminEditOrder) return;
       try {
         const drafts = await getUserSavedDrafts(user.uid);
         if (drafts.length > 0) {
@@ -271,15 +295,18 @@ export default function Creator() {
         const { activeProduct, designData } = buildDesignData(opts?.overrides);
         if (!activeProduct) return activeDraftIdRef.current;
 
+        // En modo asistencia el pedido sigue siendo del cliente: su uid decide la
+        // carpeta de Storage y no se le sobrescribe el nombre/correo con los del admin.
+        const assist = adminEditRef.current;
         const result = await createDraftOrder(
-          user!.uid,
+          assist?.userId ?? user!.uid,
           designData,
           activeProduct,
           opts?.onProgress,
           activeDraftIdRef.current || resumingOrderId || undefined,
           designRef.current.selectedProduct || undefined,
           opts?.status ?? 'saved_draft',
-          currentUserInfo(),
+          assist ? undefined : currentUserInfo(),
           opts?.allowShrink ?? false
         );
 
@@ -392,6 +419,45 @@ export default function Creator() {
       if (!handled) {
         console.error('Error al guardar el diseño:', error);
         alert(t('error.processingImages'));
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /**
+   * Modo asistencia: "Confirmar organización" no debe arrastrar al admin al
+   * checkout del cliente. Guarda el borrador tal cual y vuelve al panel; el
+   * cliente lo retoma después desde su propia cuenta.
+   */
+  const handleAdminSaveAndReturn = async (finalData?: { photos?: string[][] | string[] }) => {
+    setIsSaving(true);
+    setUploadProgress(0);
+
+    const attempt = async (allowShrink: boolean) => {
+      await persistDraft({
+        status: 'saved_draft',
+        onProgress: (progress) => setUploadProgress(progress),
+        overrides: { photos: finalData?.photos },
+        allowShrink,
+      });
+      navigate('/owner-dashboard');
+    };
+
+    try {
+      await attempt(false);
+    } catch (error) {
+      const handled = handleSaveError(error, {
+        onConfirmShrink: () => {
+          attempt(true).catch(e => {
+            console.error('Error al guardar en modo asistencia (reintento):', e);
+            if (!handleSaveError(e)) alert(t('error.savingDraft'));
+          });
+        },
+      });
+      if (!handled) {
+        console.error('Error al guardar en modo asistencia:', error);
+        alert(t('error.savingDraft'));
       }
     } finally {
       setIsSaving(false);
@@ -538,6 +604,47 @@ export default function Creator() {
     const restoreState = async () => {
       const state = location.state as any;
 
+      if (state?.adminEditOrder && !selectedProduct) {
+        // Esperar a que Firebase resuelva la sesión: sin ella la lectura fallaría
+        // por permisos aunque el admin sí esté logueado.
+        if (!user) return;
+        try {
+          const order = await getOrder(state.adminEditOrder) as any;
+          if (!order) {
+            setAdminEditError(t('creator.assistNotFound'));
+            return;
+          }
+          if (!ASSISTABLE_DRAFT_STATUSES.includes(order.status)) {
+            setAdminEditError(t('creator.assistWrongStatus', { status: order.status }));
+            return;
+          }
+          if (!order.userId) {
+            setAdminEditError(t('creator.assistNoOwner'));
+            return;
+          }
+
+          const ctx: AdminEditContext = {
+            orderId: order.id,
+            userId: order.userId,
+            status: order.status,
+            customerName: order.shippingAddress?.name || order.customerName || undefined,
+            customerEmail: order.shippingAddress?.email || order.customerEmail || undefined,
+          };
+          // El ref va ANTES de restaurar: los efectos que disparan los setState de
+          // abajo (pista de borrador, autoguardado) ya tienen que verlo.
+          adminEditRef.current = ctx;
+          setAdminEdit(ctx);
+
+          const detectedType = detectProductType(order);
+          restoreDesignToState(buildDesignDataFromOrder(order, detectedType), order.product, detectedType);
+          updateActiveDraftId(order.id);
+        } catch (e) {
+          console.error('Error abriendo el borrador en modo asistencia', e);
+          setAdminEditError(t('creator.assistLoadError'));
+        }
+        return;
+      }
+
       if (state?.resumeSavedDraft && !selectedProduct) {
         try {
           const order = await getOrder(state.resumeSavedDraft) as any;
@@ -620,11 +727,15 @@ export default function Creator() {
     if (currentStep === 'product' || currentStep === 'checkout') return;
 
     try {
-      const currentDrafts = await getUserSavedDrafts(user.uid);
+      // El tope de 3 borradores solo aplica al crear uno nuevo; al actualizar (y en
+      // modo asistencia siempre se actualiza el del cliente) no hay que consultarlo.
       const isUpdatingExisting = activeDraftIdRef.current !== null;
-      if (!isUpdatingExisting && currentDrafts.length >= 3) {
-        alert(t('draft.limitReached'));
-        return;
+      if (!isUpdatingExisting) {
+        const currentDrafts = await getUserSavedDrafts(user.uid);
+        if (currentDrafts.length >= 3) {
+          alert(t('draft.limitReached'));
+          return;
+        }
       }
 
       setIsSavingDraft(true);
@@ -861,6 +972,10 @@ export default function Creator() {
 
   const handleCalendarPhotosComplete = (uploadedPhotos: string[]) => {
     setCalendarPhotos(uploadedPhotos);
+    if (adminEditRef.current) {
+      handleAdminSaveAndReturn({ photos: uploadedPhotos });
+      return;
+    }
     handleCheckoutRedirect({ photos: uploadedPhotos });
   };
 
@@ -870,6 +985,11 @@ export default function Creator() {
       setSelectedProduct(null);
       setSelectedCustomAlbum(null);
     } else if (currentStep === 'customization') {
+      if (adminEdit) {
+        // Elegir otro producto no tiene sentido sobre el borrador de un cliente.
+        navigate('/owner-dashboard');
+        return;
+      }
       setCurrentStep('product');
       setSelectedProduct(null);
       setSelectedAlbum(null);
@@ -977,7 +1097,7 @@ export default function Creator() {
           onPageLayoutsChange={setPageLayouts}
           pageLayoutVariants={pageLayoutVariants}
           onPageLayoutVariantsChange={setPageLayoutVariants}
-          onComplete={() => editingPaidOrderId ? handleSavePaidOrderChanges() : handleCheckoutRedirect()}
+          onComplete={() => adminEdit ? handleAdminSaveAndReturn() : editingPaidOrderId ? handleSavePaidOrderChanges() : handleCheckoutRedirect()}
           pagesLocked={isPageCountLocked}
           initialFileSignatures={fileSignatures.length > 0 ? fileSignatures : undefined}
           isSaving={isSaving}
@@ -1030,7 +1150,7 @@ export default function Creator() {
                 onClick={editingPaidOrderId ? handleSavePaidOrderChanges : handleSaveDraft}
                 disabled={isSavingDraft}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-lg transition-all disabled:opacity-50 ${
-                  editingPaidOrderId
+                  editingPaidOrderId || adminEdit
                     ? 'border-black bg-black text-white hover:bg-gray-800'
                     : showDraftHint
                     ? 'border-black bg-black text-white hover:text-white ring-4 ring-black/20 animate-pulse'
@@ -1048,8 +1168,8 @@ export default function Creator() {
                   {isSavingDraft
                     ? t('common.saving')
                     : draftSaveSuccess
-                    ? (editingPaidOrderId ? t('creator.changesSaved') : t('draft.saved'))
-                    : (editingPaidOrderId ? t('creator.saveChanges') : t('draft.saveDraft'))}
+                    ? (editingPaidOrderId || adminEdit ? t('creator.changesSaved') : t('draft.saved'))
+                    : (editingPaidOrderId || adminEdit ? t('creator.saveChanges') : t('draft.saveDraft'))}
                 </span>
               </button>
 
@@ -1078,6 +1198,46 @@ export default function Creator() {
           )}
         </div>
       </div>
+
+      {adminEdit && (
+        <div className="bg-amber-50 border-b border-amber-200" data-testid="assist-banner">
+          <div className="max-w-6xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-amber-900">
+            <LifeBuoy className="w-4 h-4 shrink-0" />
+            <span>
+              <strong>{t('creator.assistMode')}</strong>
+              {' — '}
+              {t('creator.assistEditing', {
+                id: adminEdit.orderId.slice(0, 8).toUpperCase(),
+                customer: adminEdit.customerName || adminEdit.customerEmail || adminEdit.userId,
+              })}
+            </span>
+            <button
+              onClick={() => navigate('/owner-dashboard')}
+              className="ml-auto font-semibold underline underline-offset-2 hover:text-amber-700"
+            >
+              {t('creator.assistBack')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {adminEditError && (
+        <div className="max-w-6xl mx-auto px-4 pt-6">
+          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold">{t('creator.assistMode')}</p>
+              <p className="text-sm mt-0.5">{adminEditError}</p>
+              <button
+                onClick={() => navigate('/owner-dashboard')}
+                className="mt-3 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors"
+              >
+                {t('creator.assistBack')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {currentStep !== 'product' && (
         <div className="bg-white border-b border-gray-200">
@@ -1260,7 +1420,8 @@ export default function Creator() {
               <button
                 onClick={() => {
                   setUploadFailure(null);
-                  if (editingPaidOrderId) handleSavePaidOrderChanges();
+                  if (adminEdit) handleAdminSaveAndReturn();
+                  else if (editingPaidOrderId) handleSavePaidOrderChanges();
                   else handleCheckoutRedirect();
                 }}
                 className="flex-1 flex items-center justify-center gap-2 bg-black text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-colors"

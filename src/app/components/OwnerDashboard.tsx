@@ -2,18 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc, query, orderBy, limit, addDoc } from 'firebase/firestore';
 // Importamos la lógica de Autenticación de Firebase
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { useNavigate } from 'react-router';
 import { db } from '../../lib/firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import SystemImagesSection from './SystemImagesSection';
 import DiscountCodesSection from './DiscountCodesSection';
 import UsersSection from './UsersSection';
-import { updateOrderStatus } from '../../services/orderService';
+import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
 
@@ -56,6 +57,13 @@ interface Order {
   pages?: any[];
   [key: string]: any;
 }
+
+/** Título de la carátula (nombre del álbum). Los calendarios guardan el nombre del producto. */
+const getAlbumTitle = (order: Order): string =>
+  String(order.coverData?.title || order.customization?.coverContent?.coverTitle || '').trim();
+
+const formatDateTime = (iso?: string): string =>
+  iso ? format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es }) : '—';
 
 const MONTHS_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -378,6 +386,8 @@ const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth:
 // MAIN COMPONENT: OWNER DASHBOARD
 // ============================================================================
 const OwnerDashboard: React.FC = () => {
+  const navigate = useNavigate();
+
   // 1. Estados de Autenticación actualizados a Firebase Auth
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -577,6 +587,15 @@ const OwnerDashboard: React.FC = () => {
   const handleLogout = async () => {
     const auth = getAuth();
     await signOut(auth);
+  };
+
+  /**
+   * Abre el borrador de un cliente en el editor (modo asistencia) para
+   * destrabarlo o corregir un diseño que quedó mal por un error. El editor lee
+   * `adminEditOrder` del state y guarda con el uid del cliente, no con el del admin.
+   */
+  const handleAssistDraft = (order: Order) => {
+    navigate('/create', { state: { adminEditOrder: order.id } });
   };
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -1341,7 +1360,7 @@ const OwnerDashboard: React.FC = () => {
             (order.shippingAddress?.email || '').toLowerCase().includes(searchLow) ||
             (order.shippingAddress?.name || '').toLowerCase().includes(searchLow);
 
-          const pendingOrders = orders.filter(o => (o.status === 'pending_payment' || o.status === 'draft' || o.status === 'saved_draft') && matchesSearch(o));
+          const pendingOrders = orders.filter(o => ASSISTABLE_DRAFT_STATUSES.includes(o.status) && matchesSearch(o));
 
           const formatCOP = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
 
@@ -1402,6 +1421,11 @@ const OwnerDashboard: React.FC = () => {
                                 {/* Cliente */}
                                 <p className="text-sm font-semibold text-gray-900 truncate leading-none mb-0.5">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
                                 <p className="text-xs text-gray-400 truncate mb-2">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
+                                {/* Álbum + fechas */}
+                                {getAlbumTitle(order) && (
+                                  <p className="text-xs font-medium text-gray-700 truncate mb-1" title={getAlbumTitle(order)}>📖 {getAlbumTitle(order)}</p>
+                                )}
+                                <p className="text-[10px] text-gray-400 mb-2">Creado {formatDateTime(order.createdAt)} · Editado {formatDateTime(order.updatedAt)}</p>
                                 {/* Monto */}
                                 <p className="text-sm font-bold text-gray-800 mb-3">{formatCOP(order.total)}</p>
                                 {/* Acciones */}
@@ -1450,8 +1474,11 @@ const OwnerDashboard: React.FC = () => {
                           <thead>
                             <tr className="bg-gray-50/50">
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Pedido</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Álbum</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Estado</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Creado</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Última edición</th>
                               <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Monto</th>
                               <th className="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Acciones</th>
                             </tr>
@@ -1461,21 +1488,35 @@ const OwnerDashboard: React.FC = () => {
                               <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
                                 <td className="px-4 py-3">
                                   <span className="text-xs font-mono font-bold text-gray-700">#{order.id.slice(0, 8)}</span>
-                                  <p className="text-[10px] text-gray-400">{format(new Date(order.createdAt), "d MMM yyyy", { locale: es })}</p>
+                                </td>
+                                <td className="px-4 py-3 max-w-[180px]">
+                                  <p className="text-sm text-gray-800 truncate" title={getAlbumTitle(order) || undefined}>{getAlbumTitle(order) || <span className="text-gray-300">Sin título</span>}</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
                                   <p className="text-xs text-gray-400">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
+                                    {isLegacyOrder(order) && (
+                                      <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-gray-100 text-gray-500 border border-gray-200" title="Creado antes del cambio de sistema (2026-09-18)">Sistema anterior</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="text-xs text-gray-600">{formatDateTime(order.createdAt)}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="text-xs text-gray-600">{formatDateTime(order.updatedAt)}</span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                                    <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
+                                    <button onClick={() => handleAssistDraft(order)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Abrir en el editor para asistir al cliente"><Pencil className="w-4 h-4" /></button>
                                     {downloadProgress.orderId === order.id ? (
                                       <div className="flex items-center gap-1 px-1">
                                         <div className="w-12 bg-gray-200 rounded-full h-1.5">
