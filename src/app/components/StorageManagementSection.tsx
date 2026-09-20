@@ -218,6 +218,7 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
     maxDraftsPerUser: Number(form.maxDraftsPerUser),
     draftRetentionDays: Number(form.draftRetentionDays),
     storageCapacityGb: Number(form.storageCapacityGb),
+    retentionAppliesFrom: policy.retentionAppliesFrom,
   };
   const formErrors = validateStoragePolicy(parsedForm);
   const formIsDirty =
@@ -236,6 +237,9 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
       // Sin merge: el documento ES la política vigente.
       await setDoc(doc(db, 'settings', STORAGE_POLICY_DOC_ID), {
         ...pickStoragePolicy(parsedForm),
+        // Se fija UNA sola vez. Los borradores creados antes de esta fecha nunca
+        // caducan: es la garantía de que activar la regla no borra nada existente.
+        retentionAppliesFrom: policy.retentionAppliesFrom ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         updatedBy: adminEmail ?? null,
       });
@@ -287,22 +291,25 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
   const [cleanupBusy, setCleanupBusy] = useState<'dry' | 'run' | null>(null);
   const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
   const [cleanupError, setCleanupError] = useState<string | null>(null);
+  // Las carpetas huérfanas son datos que ya existían: solo se borran si el dueño lo marca.
+  const [includeOrphans, setIncludeOrphans] = useState(false);
 
   const runCleanup = async (dryRun: boolean) => {
     if (!dryRun) {
       const expired = cleanupResult?.dryRun ? cleanupResult.expiredDrafts.count : stats?.expiredDrafts.count ?? 0;
-      const orphans = cleanupResult?.dryRun ? cleanupResult.orphans.count : stats?.breakdown.orphans.count ?? 0;
+      const orphans = includeOrphans ? (cleanupResult?.dryRun ? cleanupResult.orphans.count : stats?.breakdown.orphans.count ?? 0) : 0;
       const ok = window.confirm(
-        `Se borrarán de forma definitiva ${expired} borrador(es) sin editar desde hace más de ` +
-          `${policy.draftRetentionDays} días y ${orphans} carpeta(s) huérfana(s) de Storage. ` +
-          'Los clientes no podrán recuperarlos. ¿Continuar?'
+        `Se borrarán de forma definitiva ${expired} borrador(es) creados después de activar la caducidad y sin editar ` +
+          `desde hace más de ${policy.draftRetentionDays} días` +
+          (includeOrphans ? ` y ${orphans} carpeta(s) huérfana(s) de Storage` : '') +
+          '. Los clientes no podrán recuperarlos. ¿Continuar?'
       );
       if (!ok) return;
     }
     setCleanupBusy(dryRun ? 'dry' : 'run');
     setCleanupError(null);
     try {
-      const result = await runStorageCleanup({ dryRun });
+      const result = await runStorageCleanup({ dryRun, orphans: includeOrphans });
       setCleanupResult(result);
       if (!dryRun) await loadStats(true);
     } catch (error: any) {
@@ -379,7 +386,7 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
           <NumberField
             id="storage-retention-days"
             label="Días de retención sin editar"
-            description="Un borrador que lleve más de este tiempo sin ninguna edición se borra automáticamente junto con sus fotos. Cuenta desde la última vez que el cliente lo guardó."
+            description="Un borrador que lleve más de este tiempo sin ninguna edición se borra automáticamente junto con sus fotos. Cuenta desde la última vez que el cliente lo guardó. Solo aplica a borradores creados después de activar la regla; los que ya existían no se borran nunca solos."
             value={form.draftRetentionDays}
             onChange={v => setForm(f => ({ ...f, draftRetentionDays: v }))}
             unit="días"
@@ -388,6 +395,21 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
             error={formErrors.draftRetentionDays}
             current={policy.draftRetentionDays}
           />
+        </div>
+
+        <div className={`mt-6 flex items-start gap-2 px-4 py-3 rounded-xl text-sm border ${policy.retentionAppliesFrom ? 'bg-gray-50 border-gray-200 text-gray-700' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+          <Clock className="w-4 h-4 mt-0.5 shrink-0" />
+          {policy.retentionAppliesFrom ? (
+            <span>
+              Caducidad activa desde el <strong>{formatDate(policy.retentionAppliesFrom)}</strong>: solo vencen los borradores
+              creados a partir de esa fecha. Los anteriores se conservan siempre.
+            </span>
+          ) : (
+            <span>
+              La caducidad <strong>todavía no está activa</strong>. Se activará al guardar la política, y solo alcanzará a
+              los borradores creados a partir de ese momento: ninguno de los actuales se borrará solo.
+            </span>
+          )}
         </div>
 
         <div className="mt-6 pt-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
@@ -618,10 +640,23 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                     <h3 className="text-sm font-bold text-gray-900">Limpieza automática</h3>
                     <p className="mt-1 text-xs text-gray-500 leading-relaxed max-w-2xl">
                       Borra los borradores sin editar desde hace más de <strong>{stats.expiredDrafts.retentionDays} días</strong> (corte:
-                      {' '}{formatDate(stats.expiredDrafts.cutoff)}) y las carpetas de Storage que ya no tienen pedido. Ahora mismo aplicaría a
-                      {' '}<strong>{stats.expiredDrafts.count} borrador(es)</strong> ({formatBytes(stats.expiredDrafts.bytes)}) y
-                      {' '}<strong>{stats.breakdown.orphans.count} carpeta(s)</strong> ({formatBytes(stats.breakdown.orphans.bytes)}).
+                      {' '}{formatDate(stats.expiredDrafts.cutoff)})
+                      {stats.expiredDrafts.appliesFrom
+                        ? <> y creados después del {formatDate(stats.expiredDrafts.appliesFrom)}.</>
+                        : <>. <strong>La caducidad aún no está activa</strong> (guarda la política para activarla), así que no vence ninguno.</>}
+                      {' '}Ahora mismo aplicaría a <strong>{stats.expiredDrafts.count} borrador(es)</strong> ({formatBytes(stats.expiredDrafts.bytes)}).
+                      Hay además <strong>{stats.breakdown.orphans.count} carpeta(s) huérfana(s)</strong> ({formatBytes(stats.breakdown.orphans.bytes)}) sin pedido en Firestore,
+                      que solo se borran si marcas la casilla.
                     </p>
+                    <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeOrphans}
+                        onChange={e => setIncludeOrphans(e.target.checked)}
+                        className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                      />
+                      Incluir carpetas huérfanas en esta limpieza
+                    </label>
                     <p className="mt-1 text-xs text-gray-400">
                       Última limpieza: {stats.lastCleanup
                         ? `${formatDate(stats.lastCleanup.at)} (${stats.lastCleanup.trigger === 'scheduler' ? 'programada' : 'desde el panel'}) · ${stats.lastCleanup.expiredDrafts.count} borradores y ${stats.lastCleanup.orphans.count} carpetas, ${formatBytes(stats.lastCleanup.expiredDrafts.bytes + stats.lastCleanup.orphans.bytes)} liberados`
@@ -640,7 +675,7 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                   </button>
                   <button
                     onClick={() => runCleanup(false)}
-                    disabled={cleanupBusy !== null || (stats.expiredDrafts.count === 0 && stats.breakdown.orphans.count === 0)}
+                    disabled={cleanupBusy !== null || (stats.expiredDrafts.count === 0 && (!includeOrphans || stats.breakdown.orphans.count === 0))}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors disabled:opacity-50"
                   >
                     {cleanupBusy === 'run' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eraser className="w-4 h-4" />}

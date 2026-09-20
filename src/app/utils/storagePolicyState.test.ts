@@ -23,6 +23,7 @@ describe('mergeStoragePolicy', () => {
       maxDraftsPerUser: 2,
       draftRetentionDays: 30,
       storageCapacityGb: 50,
+      retentionAppliesFrom: null,
     });
   });
 
@@ -39,6 +40,14 @@ describe('mergeStoragePolicy', () => {
     expect(mergeStoragePolicy({ storageCapacityGb: 'mucho' }).storageCapacityGb).toBe(INITIAL_STORAGE_POLICY.storageCapacityGb);
   });
 
+  it('la fecha de activación de la caducidad solo se acepta si es una fecha válida', () => {
+    expect(mergeStoragePolicy({ retentionAppliesFrom: '2026-09-20T00:00:00.000Z' }).retentionAppliesFrom).toBe('2026-09-20T00:00:00.000Z');
+    expect(mergeStoragePolicy({ retentionAppliesFrom: 'ayer' }).retentionAppliesFrom).toBeNull();
+    expect(mergeStoragePolicy({ retentionAppliesFrom: 42 }).retentionAppliesFrom).toBeNull();
+    // Sin fecha guardada la caducidad no está activa: ningún borrador vence.
+    expect(mergeStoragePolicy({}).retentionAppliesFrom).toBeNull();
+  });
+
   it('acepta números guardados como texto y trunca los enteros', () => {
     expect(mergeStoragePolicy({ maxDraftsPerUser: '7' }).maxDraftsPerUser).toBe(7);
     expect(mergeStoragePolicy({ draftRetentionDays: 45.9 }).draftRetentionDays).toBe(45);
@@ -48,7 +57,7 @@ describe('mergeStoragePolicy', () => {
 describe('pickStoragePolicy', () => {
   it('descarta cualquier campo extra', () => {
     const picked = pickStoragePolicy({ ...INITIAL_STORAGE_POLICY, loaded: true } as any);
-    expect(Object.keys(picked).sort()).toEqual(['draftRetentionDays', 'maxDraftsPerUser', 'storageCapacityGb']);
+    expect(Object.keys(picked).sort()).toEqual(['draftRetentionDays', 'maxDraftsPerUser', 'retentionAppliesFrom', 'storageCapacityGb']);
   });
 });
 
@@ -58,7 +67,7 @@ describe('validateStoragePolicy', () => {
   });
 
   it('señala cada campo fuera de rango', () => {
-    const errors = validateStoragePolicy({ maxDraftsPerUser: 0, draftRetentionDays: 2.5, storageCapacityGb: 0 });
+    const errors = validateStoragePolicy({ maxDraftsPerUser: 0, draftRetentionDays: 2.5, storageCapacityGb: 0, retentionAppliesFrom: null });
     expect(Object.keys(errors).sort()).toEqual(['draftRetentionDays', 'maxDraftsPerUser', 'storageCapacityGb']);
   });
 });

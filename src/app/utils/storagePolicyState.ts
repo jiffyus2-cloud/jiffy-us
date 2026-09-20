@@ -23,6 +23,13 @@ export interface StoragePolicy {
    * (es pago por uso): el panel calcula "disponible" contra esta cifra.
    */
   storageCapacityGb: number;
+  /**
+   * Fecha (ISO) desde la que rige la caducidad. La fija el panel la primera vez
+   * que el dueño guarda la política. Solo vencen los borradores CREADOS después
+   * de esta fecha: los que ya existían no se tocan nunca, y sin fecha no vence
+   * ninguno. Copia idéntica de la regla en el backend.
+   */
+  retentionAppliesFrom: string | null;
 }
 
 export const STORAGE_POLICY_DOC_ID = 'storage_policy';
@@ -31,6 +38,7 @@ export const INITIAL_STORAGE_POLICY: StoragePolicy = {
   maxDraftsPerUser: 5,
   draftRetentionDays: 90,
   storageCapacityGb: 5,
+  retentionAppliesFrom: null,
 };
 
 export const STORAGE_POLICY_LIMITS = {
@@ -49,6 +57,10 @@ function positiveNumber(value: unknown, fallback: number): number {
   return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+function isoOrNull(value: unknown): string | null {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
 /**
  * Combina lo guardado con el inicial. Lo guardado manda siempre que sea un
  * valor válido; el inicial solo rellena lo que el documento no tiene (por
@@ -63,6 +75,7 @@ export function mergeStoragePolicy(
     maxDraftsPerUser: positiveInt(data.maxDraftsPerUser, initial.maxDraftsPerUser),
     draftRetentionDays: positiveInt(data.draftRetentionDays, initial.draftRetentionDays),
     storageCapacityGb: positiveNumber(data.storageCapacityGb, initial.storageCapacityGb),
+    retentionAppliesFrom: isoOrNull(data.retentionAppliesFrom),
   };
 }
 
@@ -72,6 +85,7 @@ export function pickStoragePolicy(value: StoragePolicy): StoragePolicy {
     maxDraftsPerUser: value.maxDraftsPerUser,
     draftRetentionDays: value.draftRetentionDays,
     storageCapacityGb: value.storageCapacityGb,
+    retentionAppliesFrom: value.retentionAppliesFrom ?? null,
   };
 }
 

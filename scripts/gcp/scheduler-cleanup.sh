@@ -59,7 +59,7 @@ common=(
   --schedule "$SCHEDULE" --time-zone "$TIME_ZONE"
   --uri "$backend_url/storage/cleanup" --http-method POST
   --headers "Content-Type=application/json,x-cleanup-token=$STORAGE_CLEANUP_TOKEN"
-  --message-body '{"dryRun":false,"expiredDrafts":true,"orphans":true}'
+  --message-body '{"dryRun":false,"expiredDrafts":true,"orphans":false}'
   --attempt-deadline 900s
 )
 

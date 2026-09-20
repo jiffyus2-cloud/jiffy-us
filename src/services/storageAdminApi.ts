@@ -46,6 +46,7 @@ export interface CleanupSummary {
   trigger: string;
   retentionDays: number;
   cutoff: string;
+  appliesFrom: string | null;
   expiredDrafts: { count: number; bytes: number };
   orphans: { count: number; bytes: number };
   errors: string[];
@@ -76,7 +77,7 @@ export interface StorageStats {
     inProgress: Usage & { count: number };
     other: Usage;
   };
-  expiredDrafts: { count: number; bytes: number; cutoff: string; retentionDays: number };
+  expiredDrafts: { count: number; bytes: number; cutoff: string; retentionDays: number; appliesFrom: string | null };
   topProjects: ProjectUsage[];
   topUsers: UserUsage[];
   orphans: ProjectUsage[];
@@ -136,7 +137,8 @@ export function runStorageCleanup(options: { dryRun: boolean; expiredDrafts?: bo
     body: {
       dryRun: options.dryRun,
       expiredDrafts: options.expiredDrafts ?? true,
-      orphans: options.orphans ?? true,
+      // Las huérfanas tocan datos que ya existían: solo si se pide expresamente.
+      orphans: options.orphans ?? false,
     },
   });
 }
