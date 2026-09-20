@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Header } from './navigation/Header';
 import { useAuth } from '../../hooks/useAuth';
+import { useStoragePolicy } from '../../hooks/useStoragePolicy';
 import { getUserOrders, getUserSavedDrafts, deleteSavedDraft } from '../../services/orderService';
 import {
   getSavedAddresses,
@@ -146,6 +147,7 @@ function getMostRecentDuplicateDraftIds(drafts: Order[]): Set<string> {
 const UserDashboard: React.FC = () => {
   const { user, userData, resetPassword, refreshUserData } = useAuth();
   const { t, language } = useLanguage();
+  const storagePolicy = useStoragePolicy();
   const navigate = useNavigate();
 
   // Projects tab state
@@ -466,11 +468,11 @@ const UserDashboard: React.FC = () => {
                     <div>
                       <h2 className="text-xl font-bold text-gray-900">{t('draft.sectionTitle')}</h2>
                       <p className="text-sm text-gray-500">
-                        {t('draft.sectionSubtitle').replace('{count}', String(savedDrafts.length)).replace('{max}', '3')}
+                        {t('draft.sectionSubtitle', { count: savedDrafts.length, max: storagePolicy.maxDraftsPerUser })}
                       </p>
                     </div>
                   </div>
-                  {savedDrafts.length >= 3 && (
+                  {savedDrafts.length >= storagePolicy.maxDraftsPerUser && (
                     <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
                       {t('draft.limitWarning')}
                     </span>
