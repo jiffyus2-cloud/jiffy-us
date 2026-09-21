@@ -4,10 +4,11 @@ import type { StoragePolicy } from '../app/utils/storagePolicyState';
 /**
  * Cliente del módulo `storage/*` del backend (gestión de almacenamiento).
  *
- * Todo lo que hay aquí es solo para el dueño: el backend comprueba el ID token
- * de Firebase y rechaza a cualquier otro correo. Recorrer el bucket y borrar en
- * nombre de otros usuarios no se puede hacer desde el navegador, por eso pasa
- * por el servidor.
+ * Casi todo es solo para el dueño (el backend comprueba el ID token y rechaza a
+ * cualquier otro correo); la excepción es `deleteOrderRemote`, que también usa
+ * el cliente para borrar sus borradores. Recorrer el bucket, mover fotos entre
+ * carpetas y borrar en nombre de otros no se puede hacer desde el navegador,
+ * por eso pasa por el servidor.
  */
 
 export interface ProjectUsage {
@@ -42,6 +43,25 @@ interface Usage {
   files: number;
 }
 
+/** Un archivo que, en vez de borrarse, se mudó al pedido que lo usa. */
+export interface MovedFile {
+  from: string;
+  to: string;
+  rewrittenOrders: string[];
+  bytes: number;
+}
+
+export interface DeleteOrderResult {
+  userId: string;
+  orderId: string;
+  dryRun: boolean;
+  deletedFiles: number;
+  deletedBytes: number;
+  moved: MovedFile[];
+  errors: string[];
+  documentDeleted: boolean;
+}
+
 export interface CleanupSummary {
   at: string;
   dryRun: boolean;
@@ -51,6 +71,8 @@ export interface CleanupSummary {
   appliesFrom: string | null;
   expiredDrafts: { count: number; bytes: number };
   orphans: { count: number; bytes: number };
+  /** Archivos que se mudaron al pedido que los usa en vez de borrarse. */
+  movedFiles: number;
   errors: string[];
 }
 
@@ -100,9 +122,9 @@ function backendUrl(): string {
   );
 }
 
-async function request<T>(path: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
+async function request<T>(path: string, init: { method?: 'GET' | 'POST' | 'DELETE'; body?: unknown } = {}): Promise<T> {
   const user = auth.currentUser;
-  if (!user) throw new StorageAdminError(401, 'Inicia sesión como dueño para ver el almacenamiento.');
+  if (!user) throw new StorageAdminError(401, 'Inicia sesión para continuar.');
 
   const idToken = await user.getIdToken();
   const response = await fetch(`${backendUrl()}${path}`, {
@@ -143,4 +165,14 @@ export function runStorageCleanup(options: { dryRun: boolean; expiredDrafts?: bo
       orphans: options.orphans ?? false,
     },
   });
+}
+
+/**
+ * Borra un pedido CON sus fotos. Es la única vía de borrado que no deja carpetas
+ * huérfanas en Storage: el backend muda a otra carpeta las fotos que use otro
+ * pedido vivo (y reescribe sus URLs) y borra el resto junto con el documento.
+ * Un cliente solo puede borrar sus borradores; el dueño, cualquier pedido.
+ */
+export function deleteOrderRemote(orderId: string): Promise<DeleteOrderResult> {
+  return request<DeleteOrderResult>(`/storage/orders/${encodeURIComponent(orderId)}`, { method: 'DELETE' });
 }

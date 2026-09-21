@@ -1,5 +1,6 @@
 import { db, storage } from '../lib/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { deleteOrderRemote, StorageAdminError } from './storageAdminApi';
+import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 /**
@@ -580,9 +581,23 @@ export async function getUserSavedDrafts(userId: string) {
   return drafts;
 }
 
+/**
+ * Borra un borrador con sus fotos, a través del backend.
+ *
+ * Antes solo se borraba el documento y las fotos se quedaban en Storage para
+ * siempre (de ahí las carpetas huérfanas). El backend borra la carpeta y, si
+ * alguna foto la usa otro proyecto del cliente (un borrador creado a partir de
+ * este), la muda a ese proyecto y le actualiza la URL.
+ */
 export async function deleteSavedDraft(draftId: string): Promise<void> {
-  const docRef = doc(db, 'orders', draftId);
-  await deleteDoc(docRef);
+  try {
+    await deleteOrderRemote(draftId);
+  } catch (error) {
+    // Si ya no existe, el objetivo está cumplido. Un 404 de ruta (backend viejo,
+    // 'Cannot DELETE …') NO cuenta: ahí el borrador sigue vivo y hay que avisar.
+    if (error instanceof StorageAdminError && error.status === 404 && /no existe/i.test(error.message)) return;
+    throw error;
+  }
 }
 
 export async function updateOrderStatus(orderId: string, status: string): Promise<void> {

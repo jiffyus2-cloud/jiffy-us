@@ -159,7 +159,7 @@ const ProjectsTable: React.FC<{ projects: ProjectUsage[]; emptyText: string; sho
                 <div className="text-xs text-gray-500">{project.productName || project.productType || '—'}</div>
                 {project.sharedWith?.length > 0 && (
                   <div className="text-[10px] font-semibold text-amber-700" title={project.sharedWith.join(', ')}>
-                    Fotos compartidas con {project.sharedWith.length} pedido(s): la carpeta no se borra
+                    Fotos compartidas con {project.sharedWith.length} pedido(s): al borrarse se mueven a ese pedido
                   </div>
                 )}
               </td>
@@ -703,6 +703,7 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                     {cleanupResult.expiredDrafts.count} borrador(es) ({formatBytes(cleanupResult.expiredDrafts.bytes)}) y
                     {' '}{cleanupResult.orphans.count} carpeta(s) huérfana(s) ({formatBytes(cleanupResult.orphans.bytes)})
                     {cleanupResult.dryRun ? ' se borrarían.' : ' borrados.'}
+                    {cleanupResult.movedFiles > 0 && ` ${cleanupResult.movedFiles} foto(s) se movieron al pedido que las usa.`}
                     {cleanupResult.errors.length > 0 && ` ${cleanupResult.errors.length} error(es): ${cleanupResult.errors.slice(0, 3).join('; ')}`}
                   </div>
                   {cleanupResult.expiredDrafts.items.length > 0 && (

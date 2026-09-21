@@ -17,6 +17,7 @@ import UsersSection from './UsersSection';
 import StorageManagementSection from './StorageManagementSection';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
+import { deleteOrderRemote } from '../../services/storageAdminApi';
 import * as XLSX from 'xlsx';
 
 // --- DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
@@ -615,10 +616,19 @@ const OwnerDashboard: React.FC = () => {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar este pedido? Esta acción no se puede deshacer.')) return;
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este pedido? Se borrarán también sus fotos de Storage (las que use otro pedido se conservan en ese pedido). Esta acción no se puede deshacer.')) return;
     try {
-      await deleteDoc(doc(db, 'orders', orderId));
+      // Pasa por el backend para que las fotos no queden huérfanas en Storage.
+      const result = await deleteOrderRemote(orderId);
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+      if (result.moved.length > 0 || result.errors.length > 0) {
+        alert(
+          `Pedido eliminado. ${result.deletedFiles} archivo(s) borrados` +
+            (result.moved.length > 0 ? `; ${result.moved.length} foto(s) se movieron al pedido que las usa` : '') +
+            (result.errors.length > 0 ? `. Avisos: ${result.errors.slice(0, 3).join('; ')}` : '') +
+            '.'
+        );
+      }
     } catch (error) {
       console.error("Error deleting order: ", error);
       alert('No se pudo eliminar el pedido. Por favor, inténtalo de nuevo.');
