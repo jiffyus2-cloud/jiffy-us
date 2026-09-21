@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // orderService importa ../lib/firebase (que inicializa la app real con las
 // variables VITE_*) y los SDK de Firestore/Storage. Aquí solo probamos los
@@ -21,6 +21,8 @@ import {
   assertNoLocalUrls,
   SCHEMA_VERSION,
   isLegacyOrder,
+  buildLoosePhotos,
+  type UploadContext,
 } from './orderService';
 
 describe('countAlbumPhotos', () => {
@@ -130,5 +132,59 @@ describe('isLegacyOrder', () => {
   it('un pedido creado con v3 o posterior no es del sistema anterior', () => {
     expect(isLegacyOrder({ createdSchemaVersion: 3 })).toBe(false);
     expect(isLegacyOrder({ createdSchemaVersion: SCHEMA_VERSION })).toBe(false);
+  });
+});
+
+describe('buildLoosePhotos (calendario)', () => {
+  const makeCtx = (): UploadContext => ({
+    folderPath: 'orders/u1/o1',
+    knownUrls: {},
+    newUrls: {},
+    failures: [],
+    tick: vi.fn(),
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const storage = await import('firebase/storage');
+    vi.mocked(storage.ref).mockImplementation((_s: any, path?: string) => ({ fullPath: path }) as any);
+    vi.mocked(storage.uploadBytes).mockImplementation(async (r: any) => ({ ref: r }) as any);
+    vi.mocked(storage.getDownloadURL).mockImplementation(async (r: any) => `https://storage/${r.fullPath}?token=t`);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ blob: async () => new Blob(['x']) })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('nunca reutiliza la ruta de Storage de un slot (sobrescribir invalidaba la URL anterior → "No se cargó")', async () => {
+    const storage = await import('firebase/storage');
+    const first = await buildLoosePhotos(['blob:http://x/a'], makeCtx());
+    const second = await buildLoosePhotos(['blob:http://x/b'], makeCtx());
+    const paths = vi.mocked(storage.ref).mock.calls.map(c => c[1]);
+    expect(paths).toHaveLength(2);
+    expect(paths[0]).not.toBe(paths[1]);
+    expect(paths.every(p => String(p).startsWith('orders/u1/o1/loose_photos/photo0'))).toBe(true);
+    expect(first[0]).not.toBe(second[0]);
+  });
+
+  it('conserva los huecos intermedios para que el índice siga siendo el mes', async () => {
+    const result = await buildLoosePhotos(
+      ['https://storage/x/photo0?token=1', '', 'blob:http://x/c', '', ''],
+      makeCtx()
+    );
+    expect(result).toHaveLength(3);
+    expect(result[0]).toBe('https://storage/x/photo0?token=1');
+    expect(result[1]).toBe('');
+    expect(result[2]).toMatch(/^https:\/\/storage\/orders\/u1\/o1\/loose_photos\/photo2_/);
+  });
+
+  it('no resube una URL remota ni una blob: ya conocida', async () => {
+    const storage = await import('firebase/storage');
+    const ctx = makeCtx();
+    ctx.knownUrls['blob:http://x/known'] = 'https://storage/x/known?token=k';
+    const result = await buildLoosePhotos(['https://storage/x/r?token=r', 'blob:http://x/known'], ctx);
+    expect(result).toEqual(['https://storage/x/r?token=r', 'https://storage/x/known?token=k']);
+    expect(storage.uploadBytes).not.toHaveBeenCalled();
   });
 });
