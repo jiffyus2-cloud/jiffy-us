@@ -23,6 +23,8 @@ export interface ProjectUsage {
   createdAt: string | null;
   lastEditedAt: string | null;
   lastFileAt: string | null;
+  /** Otros pedidos vivos que usan las fotos de esta carpeta: mientras haya alguno no se borra. */
+  sharedWith: string[];
 }
 
 export interface UserUsage {

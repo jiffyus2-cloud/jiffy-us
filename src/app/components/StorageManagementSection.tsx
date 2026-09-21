@@ -157,6 +157,11 @@ const ProjectsTable: React.FC<{ projects: ProjectUsage[]; emptyText: string; sho
               <td className="px-5 py-3">
                 <div className="font-mono text-xs text-gray-900">{project.orderId}</div>
                 <div className="text-xs text-gray-500">{project.productName || project.productType || '—'}</div>
+                {project.sharedWith?.length > 0 && (
+                  <div className="text-[10px] font-semibold text-amber-700" title={project.sharedWith.join(', ')}>
+                    Fotos compartidas con {project.sharedWith.length} pedido(s): la carpeta no se borra
+                  </div>
+                )}
               </td>
               <td className="px-5 py-3 hidden md:table-cell">
                 <div className="text-sm text-gray-900">{project.customerName || '—'}</div>
