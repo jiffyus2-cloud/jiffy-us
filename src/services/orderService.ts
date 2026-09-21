@@ -161,7 +161,7 @@ async function uploadImageWithRetry(path: string, imageData: string, attempts = 
   throw lastError;
 }
 
-interface UploadContext {
+export interface UploadContext {
   folderPath: string;
   /** blob:/data: → URL de Storage ya conocida de un guardado anterior de esta sesión. */
   knownUrls: Record<string, string>;
@@ -254,15 +254,31 @@ async function buildAlbumPages(designData: any, ctx: UploadContext): Promise<any
   return pages;
 }
 
-async function buildLoosePhotos(photos: any[], ctx: UploadContext): Promise<string[]> {
+/**
+ * Ruta ÚNICA por subida. Antes era `loose_photos/photo${i}` (fija por slot): al subir
+ * otra foto al mismo índice se sobrescribía el objeto en Storage y el token de
+ * descarga de la URL anterior dejaba de valer, así que fotos ya guardadas del
+ * calendario devolvían 403 y el editor mostraba "No se cargó".
+ */
+const loosePhotoPath = (folderPath: string, i: number) =>
+  `${folderPath}/loose_photos/photo${i}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+/**
+ * Fotos sueltas (calendario): una por slot/mes. Los huecos se conservan como `''`
+ * (solo se recortan los del final) para que el índice siga siendo el mes: si se
+ * compactaban, al reabrir el borrador las fotos se corrían de mes y los recortes,
+ * indexados por slot, quedaban aplicados a la foto equivocada.
+ */
+export async function buildLoosePhotos(photos: any[], ctx: UploadContext): Promise<string[]> {
   const finalPhotos: string[] = [];
   for (let i = 0; i < photos.length; i++) {
     const source = Array.isArray(photos[i]) ? photos[i][0] : photos[i];
     const url = await resolvePhotoUrl(
-      source, ctx, () => `${ctx.folderPath}/loose_photos/photo${i}`, i, 0
+      source, ctx, () => loosePhotoPath(ctx.folderPath, i), i, 0
     );
-    if (url) finalPhotos.push(url);
+    finalPhotos.push(url || '');
   }
+  while (finalPhotos.length > 0 && !finalPhotos[finalPhotos.length - 1]) finalPhotos.pop();
   return finalPhotos;
 }
 

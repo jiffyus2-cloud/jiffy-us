@@ -373,6 +373,10 @@ export default function CalendarOrganizer({
           <ImageCropper
             src={photo}
             position={crop || { x: 50, y: 50, zoom: 1 }}
+            onRetry={() => {
+              setTargetSlot(globalIdx);
+              specificFileInputRef.current?.click();
+            }}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
