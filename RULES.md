@@ -48,7 +48,11 @@ en la consola que no están en el repo, este comando los borra.
   pedido en producción, enviado o entregado ya no lo puede tocar el cliente.
 - `users`: cada quien su propio perfil; el dueño puede leerlos todos.
 - `settings`: lectura pública (la tienda necesita precios e imágenes sin sesión),
-  escritura solo del dueño.
+  escritura solo del dueño. Incluye `storage_policy` (tope de borradores, días
+  de retención y fecha de activación de la caducidad, que el editor lee sin
+  sesión de administración) y
+  `storage_status` (resumen de la última limpieza; lo escribe el backend con el
+  SDK de administrador, que se salta las reglas).
 - `discount_codes`: `get` público y `list` solo del dueño. Es deliberado — el
   checkout tiene que poder comprobar **un** código sin sesión de administración,
   pero nadie debe poder descargarse el catálogo entero de códigos.

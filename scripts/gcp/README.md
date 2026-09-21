@@ -12,6 +12,7 @@ Scripts para operar producción sin pasar por Cloud Shell. Todos son `bash`
 | `env-set.sh` | Cambia/quita variables de entorno de un servicio (`^##^` para valores con comas). |
 | `logs.sh` | Últimos logs de un servicio, opcionalmente filtrados por severidad. |
 | `firebase-rules.sh` | Diff de `firestore.rules`/`storage.rules` contra lo publicado; `--deploy` las publica. |
+| `scheduler-cleanup.sh` | Crea/actualiza el job de Cloud Scheduler que lanza la limpieza diaria de borradores vencidos (`POST /storage/cleanup` del backend; solo borradores creados tras activar la caducidad, nunca carpetas huérfanas). `--run` lo dispara ya; `--delete` lo quita. Necesita `STORAGE_CLEANUP_TOKEN` en el entorno. |
 
 Atajos en `package.json`: `npm run gcp:status`, `gcp:deploy:frontend`,
 `gcp:deploy:backend`, `gcp:logs`, `rules:check`, `rules:deploy`.

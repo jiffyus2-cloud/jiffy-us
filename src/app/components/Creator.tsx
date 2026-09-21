@@ -11,6 +11,7 @@ import DraftPromptModal from './DraftPromptModal';
 import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useStoragePolicy } from '../../hooks/useStoragePolicy';
 import { Album, Calendar, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_CUSTOM_ALBUM } from '../types/products';
 import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError, ASSISTABLE_DRAFT_STATUSES } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
@@ -88,6 +89,8 @@ const detectProductType = (order: any): ProductType => {
 export default function Creator() {
   const { t } = useLanguage();
   const { user, userData } = useAuth();
+  // Tope de borradores simultáneos: lo fija el dueño en settings/storage_policy.
+  const storagePolicy = useStoragePolicy();
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState<Step>('product');
@@ -727,13 +730,13 @@ export default function Creator() {
     if (currentStep === 'product' || currentStep === 'checkout') return;
 
     try {
-      // El tope de 3 borradores solo aplica al crear uno nuevo; al actualizar (y en
+      // El tope de borradores solo aplica al crear uno nuevo; al actualizar (y en
       // modo asistencia siempre se actualiza el del cliente) no hay que consultarlo.
       const isUpdatingExisting = activeDraftIdRef.current !== null;
       if (!isUpdatingExisting) {
         const currentDrafts = await getUserSavedDrafts(user.uid);
-        if (currentDrafts.length >= 3) {
-          alert(t('draft.limitReached'));
+        if (currentDrafts.length >= storagePolicy.maxDraftsPerUser) {
+          alert(t('draft.limitReached', { max: storagePolicy.maxDraftsPerUser }));
           return;
         }
       }
