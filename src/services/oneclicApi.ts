@@ -170,3 +170,71 @@ export function describeOneclicError(error: unknown): { title: string; detail: s
   }
   return { title: 'Error de red', detail: (error as Error)?.message || 'No se pudo contactar con el backend.', isExpected: false };
 }
+
+// ── Laboratorio de orden de álbumes (solo lectura) ───────────────────────────
+
+export interface OneclicAlbumSummary {
+  id: string;
+  productName: string | null;
+  productType: string | null;
+  customerName: string | null;
+  status: string | null;
+  createdAt: string | null;
+  size: string | null;
+  photoCount: number;
+  pageCount: number;
+  cover: string | null;
+}
+
+export interface OneclicPhotoMetadata {
+  index: number;
+  page: number;
+  slot: number;
+  url: string;
+  takenAt: string | null;
+  width: number | null;
+  height: number | null;
+  orientation: 'H' | 'V' | 'S' | null;
+  camera: string | null;
+  bytes: number | null;
+  note: string | null;
+}
+
+export interface OneclicAlbumOrderProposal {
+  album: OneclicAlbumSummary;
+  photos: OneclicPhotoMetadata[];
+  withDate: number;
+  context: { cameras: Record<string, string>; format: string; photos: string[]; omitted: number };
+  proposal: {
+    order: number[];
+    groups: { title: string; indices: number[] }[];
+    rationale: string;
+    repaired: boolean;
+    issues: string[];
+  };
+  agent: { id: string; name: string };
+  mode: 'default' | 'dry_run';
+  run_id: string | null;
+  cost_usd: number;
+  duration_ms: number | null;
+  dry_run: boolean;
+  deduplicated: boolean;
+  typed_valid: boolean | null;
+  timings_ms: { metadata: number; agent: number };
+}
+
+/** Álbumes con fotos, los más recientes primero. El backend solo lee. */
+export function listOneclicAlbums(): Promise<OneclicAlbumSummary[]> {
+  return request<OneclicAlbumSummary[]>('/oneclic/albums');
+}
+
+/**
+ * Extrae los metadatos de las fotos del álbum y pide un orden al agente.
+ * Devuelve una PROPUESTA: nada se guarda en el álbum.
+ */
+export function organizeOneclicAlbum(
+  albumId: string,
+  input: { agentId: string; mode?: 'default' | 'dry_run' },
+): Promise<OneclicAlbumOrderProposal> {
+  return request<OneclicAlbumOrderProposal>(`/oneclic/albums/${encodeURIComponent(albumId)}/organize`, { method: 'POST', body: input });
+}

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router';
-import { Bot, LogIn, ShieldAlert } from 'lucide-react';
+import { Bot, Images, LogIn, Plug, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import OneclicPanel from './OneclicPanel';
+import AlbumOrderingLab from './AlbumOrderingLab';
 
 /**
  * Página huérfana para probar y gestionar la conexión con 1clic.ai.
@@ -35,13 +36,21 @@ const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
         <Link to="/owner-dashboard" className="text-sm font-semibold text-gray-600 hover:text-black">Ir al dashboard</Link>
       </div>
     </header>
-    <main className="max-w-5xl mx-auto px-6 py-8">{children}</main>
+    <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
   </div>
 );
+
+type LabTab = 'connection' | 'albums';
+
+const TABS: { id: LabTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'connection', label: 'Conexión', icon: <Plug className="w-4 h-4" /> },
+  { id: 'albums', label: 'Ordenar álbumes (prueba)', icon: <Images className="w-4 h-4" /> },
+];
 
 const OneclicLabPage: React.FC = () => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const [tab, setTab] = useState<LabTab>('connection');
 
   if (isLoading) {
     return (
@@ -76,7 +85,19 @@ const OneclicLabPage: React.FC = () => {
 
   return (
     <Shell>
-      <OneclicPanel />
+      <nav className="flex gap-1 mb-6 border-b border-gray-200">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-t-xl transition-colors -mb-px ${tab === t.id ? 'bg-white border border-b-white border-gray-200 text-black' : 'text-gray-500 hover:text-black hover:bg-gray-200/60'}`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </nav>
+      {/* Las dos pestañas se montan solo cuando se ven: cada una carga lo suyo al montarse. */}
+      {tab === 'connection' ? <OneclicPanel /> : <AlbumOrderingLab />}
     </Shell>
   );
 };
