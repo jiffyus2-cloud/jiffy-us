@@ -44,6 +44,8 @@ export const AlbumPageTextBox: React.FC<{ textBox: any }> = ({ textBox }) => (
         fontFamily: textBox.fontFamily,
         color: textBox.color,
         textAlign: textBox.textAlign || 'center',
+        fontWeight: textBox.bold ? 'bold' : 'normal',
+        fontStyle: textBox.italic ? 'italic' : 'normal',
         wordBreak: 'break-word',
         whiteSpace: 'pre-wrap',
         lineHeight: '1.3',
