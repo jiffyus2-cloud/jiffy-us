@@ -46,11 +46,13 @@ import {
   MAX_SHRINK_CHARS,
   type TextOverflowMode,
 } from '../utils/textOverflowUtils';
+import { normalizeMarks, MARK_BOLD, MARK_ITALIC } from '../utils/textMarks';
+import { StyledTextEditor, StyledTextRuns, type StyledTextEditorHandle } from './StyledTextEditor';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic, Palette
+  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -258,15 +260,13 @@ const AlbumEditorPhotoSlot: React.FC<{
               fontFamily: textBox.fontFamily,
               color: textBox.color,
               textAlign: textBox.textAlign || 'center',
-              fontWeight: textBox.bold ? 'bold' : 'normal',
-              fontStyle: textBox.italic ? 'italic' : 'normal',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
               lineHeight: '1.3',
               ...(isEditing ? { touchAction: 'none', userSelect: 'none', cursor: 'grab' } : {})
             }}
           >
-            {textBox.text || t('organizer.addText') + '...'}
+            {textBox.text ? <StyledTextRuns text={textBox.text} marks={textBox.marks} /> : t('organizer.addText') + '...'}
           </div>
           {isEditing && (
             <div className="absolute z-20 pointer-events-none bottom-1 sm:top-1 sm:bottom-auto left-0 right-0 sm:left-auto sm:right-1 flex flex-wrap justify-center sm:justify-end items-center sm:items-start gap-1.5 sm:gap-1 px-1 sm:px-0">
@@ -334,6 +334,10 @@ export default function PhotoOrganizer({
   const [cropModalData, setCropModalData] = useState<{ pageIndex: number, photoIndex: number, aspectRatio: number } | null>(null);
   const [isPreparingAlbum, setIsPreparingAlbum] = useState(false);
   const [editingTextSlot, setEditingTextSlot] = useState<{ pageIndex: number, photoIndex: number } | null>(null);
+  // Editor de la caja de texto abierta: sus botones de negrilla/itálica actúan
+  // sobre la selección y se iluminan según el estilo que tenga.
+  const textEditorRef = useRef<StyledTextEditorHandle>(null);
+  const [activeTextMark, setActiveTextMark] = useState(0);
   
   const [layoutChangeModal, setLayoutChangeModal] = useState<{
     type: 'decrease' | 'increase';
@@ -1731,6 +1735,8 @@ export default function PhotoOrganizer({
           merged.text = merged.text.slice(0, maxChars);
         }
       }
+      // Los estilos por carácter siguen al texto: si se recortó, se recortan con él.
+      if (typeof merged.text === 'string') merged.marks = normalizeMarks(merged.text, merged.marks);
       newSlots[pageIndex][photoIndex] = merged;
       onTextBoxSlotsChange(newSlots);
     }
@@ -3993,21 +3999,20 @@ export default function PhotoOrganizer({
                   className="w-full border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center h-[200px]"
                   style={{ containerType: 'inline-size' }}
                 >
-                  <textarea
-                    value={currentEditingText.text}
-                    onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text: e.target.value })}
+                  <StyledTextEditor
+                    key={`${editingTextSlot.pageIndex}-${editingTextSlot.photoIndex}`}
+                    ref={textEditorRef}
+                    text={currentEditingText.text || ''}
+                    marks={currentEditingText.marks}
+                    onChange={(text, marks) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text, marks })}
+                    onActiveMarkChange={setActiveTextMark}
                     placeholder="Escribe tu texto aquí..."
                     maxLength={(currentEditingText.overflowMode || 'limit') === 'limit' ? getMaxCharsForFontSize(currentEditingText.fontSize) : MAX_SHRINK_CHARS}
-                    className="bg-transparent resize-none outline-none p-0 m-0 border-none"
                     style={{
-                      width: '90%',
-                      height: '90%',
                       fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, (currentEditingText.text || '').length, currentEditingText.overflowMode || 'limit') * 0.25}cqi`,
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
                       textAlign: currentEditingText.textAlign || 'center',
-                      fontWeight: currentEditingText.bold ? 'bold' : 'normal',
-                      fontStyle: currentEditingText.italic ? 'italic' : 'normal',
                       lineHeight: '1.3'
                     }}
                     autoFocus
@@ -4057,26 +4062,29 @@ export default function PhotoOrganizer({
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.textStyle')}</label>
                 <div className="flex gap-2">
                   {([
-                    { key: 'bold', Icon: Bold },
-                    { key: 'italic', Icon: Italic },
-                  ] as const).map(({ key, Icon }) => (
+                    { key: 'bold', bit: MARK_BOLD, Icon: Bold },
+                    { key: 'italic', bit: MARK_ITALIC, Icon: Italic },
+                  ] as const).map(({ key, bit, Icon }) => (
                     <button
                       key={key}
                       type="button"
-                      aria-pressed={!!currentEditingText[key]}
-                      onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { [key]: !currentEditingText[key] })}
+                      aria-pressed={!!(activeTextMark & bit)}
+                      // Sin robar el foco al editor: así la selección sigue viva.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => textEditorRef.current?.toggle(bit)}
                       title={t(`organizer.style.${key}`)}
-                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${currentEditingText[key] ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
+                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${activeTextMark & bit ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
                     >
                       <Icon className="w-4 h-4" />
                     </button>
                   ))}
                 </div>
+                <p className="text-[10px] text-gray-400 mt-1">{t('organizer.styleHint')}</p>
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color')}</label>
                 {(() => {
-                  const presets = ['#000000', '#4B5563', '#9CA3AF', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'];
+                  const presets = ['#000000', '#EF4444', '#3B82F6', '#10B981'];
                   const current = (currentEditingText.color || '#000000').toUpperCase();
                   const isCustom = !presets.includes(current);
                   return (
@@ -4085,19 +4093,19 @@ export default function PhotoOrganizer({
                         <button key={color} onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color })} className={`w-8 h-8 rounded-full border-2 transition-transform ${current === color ? 'scale-125 border-black' : 'border-transparent'}`} style={{ backgroundColor: color }} />
                       ))}
                       {/* Color personalizado: el selector nativo del sistema, tapado por
-                          un círculo. Arcoíris mientras no se use; el color elegido después. */}
+                          un círculo. Un "+" discreto mientras no se use; el color elegido después. */}
                       <label
                         title={t('organizer.customColor')}
-                        className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-transform ${isCustom ? 'scale-125 border-black' : 'border-transparent'}`}
-                        style={{ background: isCustom ? current : 'conic-gradient(#EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6, #EF4444)' }}
+                        className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center transition-transform ${isCustom ? 'scale-125 border-black' : 'border-dashed border-gray-300 text-gray-400 hover:border-gray-500 hover:text-gray-600'}`}
+                        style={isCustom ? { backgroundColor: current } : undefined}
                       >
-                        {!isCustom && <Palette className="w-4 h-4 text-white drop-shadow" />}
+                        {!isCustom && <Plus className="w-4 h-4" />}
                         <input
                           type="color"
                           aria-label={t('organizer.customColor')}
                           value={/^#[0-9A-F]{6}$/.test(current) ? current.toLowerCase() : '#000000'}
                           onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color: e.target.value.toUpperCase() })}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none border-0 p-0"
                         />
                       </label>
                     </div>

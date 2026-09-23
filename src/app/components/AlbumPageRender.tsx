@@ -17,6 +17,7 @@ import React from 'react';
 import { Layers } from 'lucide-react';
 import ImageCropper from './ImageCropper';
 import { getEffectiveFontSize } from '../utils/textOverflowUtils';
+import { StyledTextRuns } from './StyledTextEditor';
 import { cn } from './ui/utils';
 import { getAlbumFormat } from '../utils/pageLayouts';
 import type { AlbumPageSlot, PhotoCrop } from '../utils/albumPageData';
@@ -44,14 +45,12 @@ export const AlbumPageTextBox: React.FC<{ textBox: any }> = ({ textBox }) => (
         fontFamily: textBox.fontFamily,
         color: textBox.color,
         textAlign: textBox.textAlign || 'center',
-        fontWeight: textBox.bold ? 'bold' : 'normal',
-        fontStyle: textBox.italic ? 'italic' : 'normal',
         wordBreak: 'break-word',
         whiteSpace: 'pre-wrap',
         lineHeight: '1.3',
       }}
     >
-      {textBox.text}
+      <StyledTextRuns text={textBox.text || ''} marks={textBox.marks} />
     </div>
   </div>
 );
