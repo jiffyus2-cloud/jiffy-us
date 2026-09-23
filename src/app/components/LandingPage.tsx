@@ -7,6 +7,10 @@ import type { ProductType } from './ProductSelection';
 import { DESIGN } from '../../styles/design-system';
 import { Header } from './navigation/Header';
 import { useLanguage } from '../context/LanguageContext';
+import { RichBlock } from './ui/RichText';
+
+/** Preguntas frecuentes: faq.1 … faq.N en los textos de la tienda. */
+const FAQ_COUNT = 12;
 
 // --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
 import { useStoreConfig } from '../context/StoreConfigContext';
@@ -35,78 +39,13 @@ export default function LandingPage() {
   // 3 por fila en md con gap-5 (1.25rem): (100% - 2×1.25rem)/3
   const CARD_WIDTH = 'w-full md:w-[calc(33.333%_-_0.834rem)]';
 
-  // --- PREGUNTAS FRECUENTES (Desde tu documento) ---
-  const faqs = [
-    {
-      question: '1. ¿Cómo creo mi álbum Jiffy?',
-      answer: (
-        <div className="space-y-2">
-          <p>Crear tu álbum es muy fácil:</p>
-          <ul className="list-disc pl-5">
-            <li>Elige el tipo de álbum que más te guste.</li>
-            <li>Personaliza tu portada con título, colores y detalles.</li>
-            <li>Selecciona tus fotos desde el celular o computador.</li>
-            <li>Aprueba el diseño digital.</li>
-            <li>¡Recibe tu álbum en casa!</li>
-          </ul>
-        </div>
-      )
-    },
-    {
-      question: '2. ¿Qué tipos de álbumes ofrecen?',
-      answer: (
-        <div className="space-y-2">
-          <p>Contamos con 4 formatos:</p>
-          <ul className="list-disc pl-5">
-            <li>20x20 cm</li>
-            <li>30x30 cm</li>
-            <li>Vertical 21x28 cm</li>
-            <li>Horizontal 28x21 cm</li>
-          </ul>
-        </div>
-      )
-    },
-    {
-      question: '3. ¿Cuánto tiempo tarda la entrega?',
-      answer: 'El tiempo de producción es de 10 días hábiles después de que apruebes el diseño. El envío depende de tu ciudad, pero normalmente llega en 2 a 5 días hábiles adicionales.'
-    },
-    {
-      question: '4. ¿Hacen envíos a todo el país?',
-      answer: 'Sí. Enviamos a cualquier ciudad de Colombia mediante transportadoras confiables.'
-    },
-    {
-      question: '5. ¿Cómo se realiza el pago?',
-      answer: 'Puedes pagar por tarjeta de crédito o débito (link de pago).'
-    },
-    {
-      question: '6. ¿Puedo regalar un álbum Jiffy?',
-      answer: '¡Claro! 🎁 Tenemos bonos de regalo para que la persona que quieras pueda crear su álbum con sus propias fotos y estilo.'
-    },
-    {
-      question: '7. ¿Cuántas fotos puedo incluir?',
-      answer: 'Generalmente recomendamos entre 40 y 120 fotos para que el álbum quede bien organizado y visualmente equilibrado. Si tienes más, puedes agregar páginas hasta un total de 250 páginas por álbum.'
-    },
-    {
-      question: '8. ¿Puedo hacer cambios en el diseño?',
-      answer: 'Sí. Después de terminar tu álbum lo puedes revisar en vista previa y ahí podrás realizar ajustes en portada, orden de fotos o textos.'
-    },
-    {
-      question: '9. ¿Las fotos pierden calidad al imprimirse?',
-      answer: 'Trabajamos con impresión de alta resolución. Recomendamos subir las fotos en la mejor calidad posible (evita capturas de pantalla o fotos descargadas de WhatsApp, porque suelen perder nitidez).'
-    },
-    {
-      question: '10. ¿Qué otros productos ofrece Jiffy además de álbumes?',
-      answer: 'Además de álbumes, tenemos calendarios personalizados y el servicio de Álbum Personalizado, en el que una curadora diseña cada página por ti.'
-    },
-    {
-      question: '11. Política de calidad de imagen e impresión',
-      answer: 'En Jiffy cuidamos cada detalle para que tus recuerdos se vean lo mejor posible. Sin embargo, es importante tener en cuenta que los colores pueden variar ligeramente entre lo que ves en pantalla y el resultado impreso. Esto se debe a que las pantallas emiten luz, mientras que la impresión se realiza con tinta sobre papel, lo que puede generar pequeñas diferencias en tonos y brillo. Trabajamos con estándares de impresión profesional para lograr la mayor fidelidad posible en cada álbum.'
-    },
-    {
-      question: '12. ¿Qué formatos de archivos aceptan para las fotos?',
-      answer: 'Aceptamos formatos JPG, PNG y HEIC. Para obtener la mejor calidad, recomendamos imágenes con una resolución mayor a 300 dpi.'
-    }
-  ];
+  // --- PREGUNTAS FRECUENTES ---
+  // Texto editable desde "Textos de la Tienda" (faq.N.q / faq.N.a). En las
+  // respuestas, las líneas que empiezan por "- " salen como lista.
+  const faqs = Array.from({ length: FAQ_COUNT }, (_, i) => ({
+    question: t(`faq.${i + 1}.q`),
+    answer: t(`faq.${i + 1}.a`),
+  }));
 
   useEffect(() => {
     if (heroImages.length <= 1) return;
@@ -317,13 +256,13 @@ export default function LandingPage() {
             onClick={() => setIsFaqOpen(p => !p)}
             className="w-full flex items-center justify-between text-left mb-0"
           >
-            <h2 className={`${DESIGN.text.h2} mb-0`}>Preguntas Frecuentes</h2>
+            <h2 className={`${DESIGN.text.h2} mb-0`}>{t('landing.faq')}</h2>
             <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform duration-300 shrink-0 ${isFaqOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isFaqOpen && (
             <>
-              <p className={`${DESIGN.text.sectionSubtitle} mt-3`}>Resolvemos tus dudas principales para que disfrutes tu experiencia.</p>
+              <p className={`${DESIGN.text.sectionSubtitle} mt-3`}>{t('landing.faqSubtitle')}</p>
               <div className="divide-y divide-gray-200 mt-4">
                 {faqs.map((faq, index) => (
                   <div key={index}>
@@ -335,7 +274,7 @@ export default function LandingPage() {
                       <ChevronDown className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
                     </button>
                     {openFaq === index && (
-                      <div className="pb-4 text-sm text-gray-600">{faq.answer}</div>
+                      <RichBlock text={faq.answer} className="pb-4 text-sm text-gray-600 space-y-2" />
                     )}
                   </div>
                 ))}
@@ -383,7 +322,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      <ProductDetailsModal isOpen={selectedProduct !== null} onClose={() => setSelectedProduct(null)} productType={selectedProduct || 'album'} />
+      <ProductDetailsModal isOpen={selectedProduct !== null} onClose={() => setSelectedProduct(null)} productType={selectedProduct || 'album'} showCustomAlbumNote />
     </div>
   );
 }

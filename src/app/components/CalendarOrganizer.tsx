@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
+import { RichText } from './ui/RichText';
 import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -122,7 +123,7 @@ export default function CalendarOrganizer({
     const remainingSlots = requiredPhotos - currentCount;
 
     if (filesArray.length > remainingSlots) {
-      alert(`Solo puedes subir un máximo de ${requiredPhotos} fotos para este calendario.\n\nSe han seleccionado automáticamente las primeras ${remainingSlots} fotos permitidas para completar los espacios vacíos.`);
+      alert(t('calendarOrg.tooManyPhotos', { max: requiredPhotos, count: remainingSlots }));
       filesArray = filesArray.slice(0, remainingSlots);
     }
 
@@ -292,7 +293,7 @@ export default function CalendarOrganizer({
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Foto repetida</h3>
           <p className="text-sm text-gray-500 mb-4">
-            La foto <strong className="text-gray-800">"{duplicateModal.file.name}"</strong> ya fue añadida anteriormente al calendario.
+            <RichText text={t('calendarOrg.duplicateDesc', { name: duplicateModal.file.name })} />
           </p>
           <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6">
             <img
@@ -331,7 +332,7 @@ export default function CalendarOrganizer({
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
           <p className="text-sm text-gray-500 mb-6">
-            Esta imagen mide <strong>{width}x{height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
+            <RichText text={t('photos.lowResDesc', { size: `${width}x${height}px` })} />
           </p>
           <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
             <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
@@ -454,7 +455,7 @@ export default function CalendarOrganizer({
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
               <p className="text-xl font-bold">Verificando calidad de imágenes...</p>
-              <p className="text-sm text-gray-500">Asegurando la mejor resolución para tu impresión</p>
+              <p className="text-sm text-gray-500">{t('photos.checkingQualityDesc')}</p>
             </div>
           ) : isProcessingFiles ? (
              <div className="w-full py-16 flex flex-col items-center justify-center gap-4">

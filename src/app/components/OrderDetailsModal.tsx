@@ -12,6 +12,7 @@ import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRend
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
+import { useLanguage } from '../context/LanguageContext';
 
 // --- START: Refactored Interfaces and Helpers ---
 interface Order {
@@ -265,6 +266,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
 
 // --- Main Modal Component ---
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false, onGoToEdit }) => {
+  const { t } = useLanguage();
   useEffect(() => {
     if (!isOpen || !order) return;
     const allImageUrls: string[] = (order.pages || [])
@@ -412,7 +414,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
 
     return (
       <div className="text-center py-10 text-gray-500">
-        <p>No hay una vista previa disponible para este tipo de producto.</p>
+        <p>{t('orderView.noPreview')}</p>
         <p className="text-xs mt-2 opacity-50">Tipo detectado: {productString || 'Desconocido'}</p>
       </div>
     );

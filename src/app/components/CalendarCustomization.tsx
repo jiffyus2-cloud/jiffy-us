@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
+import { RichText } from './ui/RichText';
 import { ImageIcon, RectangleVertical } from 'lucide-react';
 
 export interface CalendarCustomizationOptions {
@@ -90,7 +91,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       <div className="space-y-10">
         {/* Tipo de Calendario */}
         <div>
-          <h3 className="text-2xl mb-4 font-bold">{t('calendar.type') || 'Tipo de Calendario'}</h3>
+          <h3 className="text-2xl mb-4 font-bold">Tipo de Calendario</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={() => setType('desk')}
@@ -130,7 +131,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
         {/* Imágenes por Mes (condicional) */}
         {type === 'wall' && (
           <div>
-            <h3 className="text-2xl mb-4 font-bold">{t('calendar.imagesPerMonth') || 'Imágenes por Mes'}</h3>
+            <h3 className="text-2xl mb-4 font-bold">Imágenes por Mes</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => setImagesPerMonth(1)}
@@ -169,7 +170,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
         <div>
           <h3 className="text-2xl mb-2 font-bold">Mes de inicio</h3>
           <p className="text-sm text-gray-500 mb-4">
-            Tu calendario irá desde <strong>{MONTH_NAMES[startMonth - 1]} {year}</strong> hasta <strong>{MONTH_NAMES[endMonthIndex]} {endYearActual}</strong>.
+            <RichText text={t('calendarSetup.range', { from: `${MONTH_NAMES[startMonth - 1]} ${year}`, to: `${MONTH_NAMES[endMonthIndex]} ${endYearActual}` })} />
           </p>
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
             {MONTH_NAMES.map((name, idx) => (

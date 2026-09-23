@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useLanguage } from '../context/LanguageContext'
+import { RichText } from './ui/RichText'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -20,6 +22,7 @@ function isInStandaloneMode() {
 }
 
 export default function InstallPrompt() {
+  const { t } = useLanguage()
   const [androidPrompt, setAndroidPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showIosHint, setShowIosHint] = useState(false)
   const [dismissed, setDismissed] = useState(false)
@@ -101,9 +104,7 @@ export default function InstallPrompt() {
           >×</button>
         </div>
         <div style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>
-          Toca <strong>Compartir</strong> (
-          <span style={{ fontSize: 16 }}>⬆</span>
-          ) y luego <strong>"Añadir a pantalla de inicio"</strong> para instalar Jiffy Photos como app.
+          <RichText text={t('install.iosSteps')} />
         </div>
       </div>
     )

@@ -46,7 +46,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>{t('product.album')}</h3>
             <p className="text-sm mb-4 text-gray-600">
-              Cada recuerdo es único y merece ser contado. Álbumes con páginas en papel opalina para tus momentos más importantes.
+              {t('product.albumCardDesc')}
             </p>
           </div>
         </button>
@@ -67,7 +67,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>Álbum Personalizado</h3>
             <p className="text-sm mb-4 text-gray-600">
-              Una curadora selecciona tus mejores fotos y diseña cada página por ti, de principio a fin.
+              {t('product.customAlbumCardDesc')}
             </p>
           </div>
         </button>
@@ -89,7 +89,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           <div className="p-6">
             <h3 className={DESIGN.text.h4}>{t('product.calendar')}</h3>
             <p className="text-sm mb-4 text-gray-600">
-              Tus días merecen la mejor sonrisa. Calendarios personalizados para recibir el día con la mejor actitud.
+              {t('product.calendarCardDesc')}
             </p>
           </div>
         </button>

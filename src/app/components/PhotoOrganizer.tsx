@@ -48,6 +48,7 @@ import {
 } from '../utils/textOverflowUtils';
 import { normalizeMarks, MARK_BOLD, MARK_ITALIC } from '../utils/textMarks';
 import { StyledTextEditor, StyledTextRuns, type StyledTextEditorHandle } from './StyledTextEditor';
+import { RichText } from './ui/RichText';
 import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
@@ -120,10 +121,10 @@ const JiffyLoader: React.FC<JiffyLoaderProps> = ({ t }) => {
 
       <div className="text-center animate-pulse px-6 py-3 bg-white rounded-lg border border-gray-200 shadow-sm mx-4">
         <p className="text-xl font-bold text-gray-900">
-          {t ? t('organizer.preparingAlbum') : 'Preparando tu álbum'}
+          {t ? t('organizer.preparingAlbum') : ''}
         </p>
         <p className="text-sm text-gray-500 mt-1">
-          {t ? t('organizer.preparingAlbumDesc') : 'Ordenando tus fotos y repartiéndolas en las páginas.'}
+          {t ? t('organizer.preparingAlbumDesc') : ''}
         </p>
       </div>
 
@@ -693,17 +694,15 @@ export default function PhotoOrganizer({
 
     switch (result.reason) {
       case 'too_few_photos':
-        return `Tienes ${photoCount} foto(s) para ${photoPages} páginas con foto. Cada página necesita al menos una: ` +
-               `quita páginas hasta ${result.maxPages} o añade ${photoPages - photoCount} foto(s) más.`;
+        return t('organizer.feasTooFewPhotos', { photos: photoCount, pages: photoPages, maxPages: result.maxPages ?? '', missing: photoPages - photoCount });
       case 'too_many_photos':
-        return `${photoCount} foto(s) no caben en ${photoPages} páginas: en este formato cada página admite como mucho ${big}. ` +
-               `Necesitas al menos ${result.minPages} páginas.`;
+        return t('organizer.feasTooManyPhotos', { photos: photoCount, pages: photoPages, perPage: big, minPages: result.minPages ?? '' });
       case 'photos_out_of_range':
         return photoCount < 40
-          ? `Necesitas mínimo 40 fotos para crear el álbum (llevas ${photoCount}).`
-          : `El máximo en este formato es ${maxPhotosFor(distributionVariant)} fotos (llevas ${photoCount}).`;
+          ? t('organizer.feasMinPhotos', { photos: photoCount })
+          : t('organizer.feasMaxPhotos', { max: maxPhotosFor(distributionVariant), photos: photoCount });
       case 'pages_out_of_range':
-        return `El álbum debe tener entre 40 y ${ALBUM_MAX_PAGES} páginas con foto.`;
+        return t('organizer.feasPagesRange', { max: ALBUM_MAX_PAGES });
       case 'unreachable_combination': {
         const near = nearestFeasiblePages(photoCount, photoPages, distributionVariant, {
           maxPages: ALBUM_MAX_PAGES, step: 2,
@@ -712,8 +711,7 @@ export default function PhotoOrganizer({
         const sugerencia = opciones.length > 0
           ? ` Prueba con ${opciones.join(' o ')} páginas.`
           : '';
-        return `${photoCount} foto(s) no se pueden repartir exactamente en ${photoPages} páginas ` +
-               `usando páginas de ${sizes.join(', ')} fotos.${sugerencia}`;
+        return t('organizer.feasUnreachable', { photos: photoCount, pages: photoPages, sizes: sizes.join(', ') }) + sugerencia;
       }
       default:
         return '';
@@ -1097,8 +1095,8 @@ export default function PhotoOrganizer({
       discardItems(items);
       setAlbumWarning(
         state.length >= ALBUM_MAX_PAGES - 1
-          ? `El álbum ya está en el máximo de ${ALBUM_MAX_PAGES} páginas: no hay sitio para páginas nuevas.`
-          : `${items.length} foto(s) no caben en las ${ALBUM_MAX_PAGES - state.length} páginas que quedan libres.`
+          ? t('organizer.appendAlbumFull', { max: ALBUM_MAX_PAGES })
+          : t('organizer.appendNoRoom', { photos: items.length, free: ALBUM_MAX_PAGES - state.length })
       );
       return;
     }
@@ -1119,8 +1117,7 @@ export default function PhotoOrganizer({
     if (!next) {
       // Regla 1: el botón ya va deshabilitado si no hay reparto exacto; segundo cinturón.
       setAlbumWarning(
-        `${items.length} foto(s) no se pueden repartir exactamente en ${pages} páginas nuevas ` +
-        `usando páginas de ${allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.`
+        t('organizer.appendUnreachable', { photos: items.length, pages, sizes: allowedPhotosPerPage.join(', ') })
       );
       return;
     }
@@ -1130,8 +1127,7 @@ export default function PhotoOrganizer({
     setNumPages(next.length);
     setAppendModal(null);
     setAlbumWarning(
-      `Añadimos ${items.length} foto(s) en ${pages} página(s) nueva(s) al final ` +
-      `(páginas ${firstNew + 1} a ${next.length}). Lo que ya tenías no cambió.`
+      t('organizer.appendDone', { photos: items.length, pages, from: firstNew + 1, to: next.length })
     );
     // Llevar al usuario a la primera página nueva: si el álbum es largo, queda
     // muy abajo y no vería que pasó nada.
@@ -1161,7 +1157,7 @@ export default function PhotoOrganizer({
     if (!page) return;
     const emptyCount = emptySlotIndexes(page, albumConfig).length;
     if (emptyCount === 0) {
-      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      setAlbumWarning(t('organizer.fillNoEmpty', { page: pageIndex + 1 }));
       return;
     }
 
@@ -1180,15 +1176,15 @@ export default function PhotoOrganizer({
     const result = fillEmptySlots(currentAlbumState(), pageIndex, items, albumConfig);
     if (result.leftover.length > 0) discardItems(result.leftover);
     if (result.filled === 0) {
-      setAlbumWarning(`La página ${pageIndex + 1} ya no tiene huecos vacíos.`);
+      setAlbumWarning(t('organizer.fillNoEmpty', { page: pageIndex + 1 }));
       return;
     }
     applyAlbumState(result.state);
 
     const leftOut = extra + result.leftover.length;
     setAlbumWarning(
-      `Colocamos ${result.filled} foto(s) en los huecos de la página ${pageIndex + 1}.` +
-      (leftOut > 0 ? ` ${leftOut} foto(s) se quedaron fuera porque la página solo tenía ${emptyCount} hueco(s).` : '')
+      t('organizer.fillDone', { photos: result.filled, page: pageIndex + 1 }) +
+      (leftOut > 0 ? ' ' + t('organizer.fillLeftOut', { photos: leftOut, slots: emptyCount }) : '')
     );
   };
 
@@ -1236,7 +1232,7 @@ export default function PhotoOrganizer({
         } else {
           if (pagePhotos.length >= maxAllowed) {
             URL.revokeObjectURL(newUrl);
-            alert(`Has alcanzado el límite máximo de ${maxAllowed} fotos para esta página en este formato.`);
+            alert(t('organizer.pageMaxPhotos', { max: maxAllowed }));
             return;
           }
           pagePhotos.push(newUrl);
@@ -1426,7 +1422,7 @@ export default function PhotoOrganizer({
     applyAlbumState(redistributed);
     setNumPages(totalPages);
     setRedistributeModal(null);
-    setAlbumWarning(`Álbum reorganizado${redistributeModal.reverse ? ' en orden inverso (Z → A)' : ''}: ${photoCount} foto(s) repartidas en ${totalPages} páginas.`);
+    setAlbumWarning(t(redistributeModal.reverse ? 'organizer.redistributedReverse' : 'organizer.redistributed', { photos: photoCount, pages: totalPages }));
   };
 
   const handleAddPage = (index: number) => {
@@ -1629,13 +1625,13 @@ export default function PhotoOrganizer({
     try {
       const result = albumMovePhotoToPage(currentAlbumState(), pageIndex, photoIndex, targetPage, albumConfig);
       if (!result.success) {
-        alert(`No hay espacio disponible en la página ${targetPage + 1}.`);
+        alert(t('organizer.sendNoRoom', { page: targetPage + 1 }));
         return;
       }
       applyAlbumState(result.state);
     } catch (err) {
       console.error('handleSendPhotoToPage failed:', err);
-      alert('No se pudo enviar la foto a esa página. Intenta de nuevo.');
+      alert(t('organizer.sendFailed'));
     } finally {
       setSendPhotoPicker(null);
     }
@@ -1767,19 +1763,18 @@ export default function PhotoOrganizer({
     for (const w of warnings) {
       if (w.code === 'max_pages_reached') {
         setAlbumWarning(
-          `No hay espacio para ${w.unplacedPhotos} foto(s): el álbum ya está en el máximo de ${albumConfig.maxPages} páginas. ` +
-          `No se movió ninguna foto.`
+          t('organizer.warnMaxPages', { photos: w.unplacedPhotos, max: albumConfig.maxPages })
         );
         return;
       }
       if (w.code === 'refused_photo_deletion') {
         setAlbumWarning(
-          `No borramos la(s) página(s) ${w.pages.map(p => p + 1).join(', ')} porque tienen contenido.`
+          t('organizer.warnRefusedDeletion', { pages: w.pages.map(p => p + 1).join(', ') })
         );
         return;
       }
       if (w.code === 'photos_moved' && w.count > 0) {
-        setAlbumWarning(`Movimos ${w.count} foto(s) a la página ${w.toPage + 1}.`);
+        setAlbumWarning(t('organizer.warnMoved', { photos: w.count, page: w.toPage + 1 }));
         return;
       }
       if (w.code === 'photos_deleted' && w.count > 0) {
@@ -1881,7 +1876,7 @@ export default function PhotoOrganizer({
         recoveredPairs.forEach(([oldUrl, newUrl]) => { if (prev[oldUrl]) moved[newUrl] = prev[oldUrl]; });
         return Object.keys(moved).length > 0 ? { ...prev, ...moved } : prev;
       });
-      setAlbumWarning(`Recuperamos ${recoveredPairs.length} foto(s) desde la copia guardada en este dispositivo.`);
+      setAlbumWarning(t('organizer.recovered', { photos: recoveredPairs.length }));
     }
     if (stillBroken.length > 0) {
       setBrokenPhotoUrls(prev => {
@@ -2100,7 +2095,7 @@ export default function PhotoOrganizer({
     if (strategy === 'delete-companion') {
       const companion = findCompanionPage(indicesToDelete);
       if (companion === null) {
-        setAlbumWarning('No encontramos una página compañera que se pueda eliminar.');
+        setAlbumWarning(t('organizer.noCompanionPage'));
         return;
       }
       indicesToDelete.push(companion);
@@ -2111,7 +2106,7 @@ export default function PhotoOrganizer({
     }
 
     if (photos.length - indicesToDelete.length < 40) {
-      setAlbumWarning('No se puede completar la acción porque el álbum quedaría con menos de 40 páginas.');
+      setAlbumWarning(t('organizer.wouldGoBelowMin'));
       return;
     }
 
@@ -2138,7 +2133,7 @@ export default function PhotoOrganizer({
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Foto repetida</h3>
           <p className="text-sm text-gray-500 mb-4">
-            La foto <strong className="text-gray-800">"{duplicateModal.file.name}"</strong> ya fue añadida anteriormente al álbum.
+            <RichText text={t('organizer.duplicateDesc', { name: duplicateModal.file.name })} />
           </p>
           <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6">
             <img
@@ -2177,7 +2172,7 @@ export default function PhotoOrganizer({
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
           <p className="text-sm text-gray-500 mb-6">
-            Esta imagen mide <strong>{width}x{height}px</strong> (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.
+            <RichText text={t('photos.lowResDesc', { size: `${width}x${height}px` })} />
           </p>
           <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
             <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
@@ -2279,7 +2274,7 @@ export default function PhotoOrganizer({
                 }`}
               >
                 <ImageIcon className="w-4 h-4 shrink-0 pointer-events-none" />
-                <span className="pointer-events-none">Arrastra una foto aquí para enviarla a otra página</span>
+                <span className="pointer-events-none">{t('organizer.sendDropZone')}</span>
               </div>
             </div>
 
@@ -2297,7 +2292,7 @@ export default function PhotoOrganizer({
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
                     <h4 className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Huecos vacíos</h4>
                     <p className="text-xs text-gray-600 mb-2.5">
-                      Esta página tiene <strong>{emptyCount} hueco(s)</strong> sin foto. Puedes elegir las {emptyCount} de una vez y se colocan en orden.
+                      <RichText text={t('organizer.emptySlotsDesc', { count: emptyCount })} />
                     </p>
                     <button
                       onClick={() => openFillEmptySlots(pageIndex)}
@@ -2477,7 +2472,7 @@ export default function PhotoOrganizer({
               </div>
 
               <p className="text-gray-600 text-sm text-center">
-                El carrete se cerrará solo cuando iOS termine y la app continuará automáticamente.
+                {t('organizer.pickerDesc')}
               </p>
 
               <label className="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
@@ -2488,7 +2483,7 @@ export default function PhotoOrganizer({
                   onChange={e => setPickerWarningAccepted(e.target.checked)}
                 />
                 <span className="text-sm font-medium text-gray-800">
-                  Entendido — esperaré sin cerrar la app hasta que el carrete se cierre solo.
+                  {t('organizer.pickerAccept')}
                 </span>
               </label>
               <div className="flex gap-3">
@@ -2549,12 +2544,12 @@ export default function PhotoOrganizer({
                 Muchos usuarios no lo notan, creen que la app está cargando y no eligen nada. */}
             <div className="w-full max-w-xs bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-3 text-center">
               <p className="text-base font-bold text-amber-900">
-                👆 Hay un menú en pantalla, selecciona la opción de dónde quieres seleccionar tus fotos
+                {t('organizer.transferMenuHint')}
               </p>
             </div>
 
             <p className="text-sm text-gray-400 text-center max-w-xs">
-              Cuando ya hayas elegido, por favor espera sin cerrar la app
+              {t('organizer.transferWait')}
             </p>
             <button
               onClick={() => {
@@ -2654,7 +2649,7 @@ export default function PhotoOrganizer({
                 Recuperamos {recoveredSelection} foto(s) que ya habías elegido
               </p>
               <p className="text-green-800 mt-0.5">
-                La app se reinició, pero tus fotos seguían guardadas en este dispositivo. Puedes seguir añadiendo más.
+                {t('organizer.recoveredDesc')}
               </p>
             </div>
             <button onClick={clearSelection} className="text-green-800 underline font-medium shrink-0">
@@ -2668,9 +2663,9 @@ export default function PhotoOrganizer({
             <div className="w-full py-16 flex flex-col items-center justify-center gap-4">
               <Loader2 className="w-16 h-16 text-gray-400 animate-spin" />
               <p className="text-xl font-bold">Verificando calidad de imágenes...</p>
-              <p className="text-sm text-gray-500">Asegurando la mejor resolución para tu impresión</p>
+              <p className="text-sm text-gray-500">{t('photos.checkingQualityDesc')}</p>
               <p className="text-xs md:text-sm text-amber-600 font-bold mt-2 bg-amber-50 px-3 py-1.5 rounded-full animate-pulse border border-amber-200">
-                ⚠️ Por favor, no cierres ni recargues esta pestaña
+                {t('organizer.dontCloseTab')}
               </p>
             </div>
           ) : (
@@ -2678,7 +2673,7 @@ export default function PhotoOrganizer({
               <button onClick={() => setShowPickerWarning(true)} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
                 <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center flex flex-col items-center gap-3 w-full">
-                  <p className="text-sm text-gray-500">Según la cantidad de fotos seleccionadas, el tiempo de carga puede variar</p>
+                  <p className="text-sm text-gray-500">{t('organizer.uploadTimeHint')}</p>
                   <span className="inline-flex items-center justify-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors w-full max-w-xs">
                     <Upload className="w-5 h-5 shrink-0" />
                     Toca aquí para seleccionar fotos
@@ -2846,7 +2841,7 @@ export default function PhotoOrganizer({
                     <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Con <strong>{uploadedPhotos.length} fotos</strong> y 1 foto por página como mínimo, tus fotos dan para <strong>{maxPhotoP} páginas</strong>. Si quieres más, añádelas en blanco aquí abajo.</span>
+                    <span><RichText text={t('organizer.photosGiveForPages', { photos: uploadedPhotos.length, pages: maxPhotoP })} /></span>
                   </div>
                 )}
 
@@ -2855,7 +2850,7 @@ export default function PhotoOrganizer({
                   <div>
                     <p className="font-medium">Páginas en blanco adicionales</p>
                     <p className="text-xs text-gray-500">
-                      Súmalas si quieres más de las {maxPhotoP} páginas que dan tus {uploadedPhotos.length} fotos (hasta {maxP} en total).
+                      {t('organizer.extraBlankDesc', { pages: maxPhotoP, photos: uploadedPhotos.length, max: maxP })}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -2902,8 +2897,7 @@ export default function PhotoOrganizer({
                     <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                       <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                       <p className="text-sm text-amber-700">
-                        Has elegido {currentPages} páginas y tienes {uploadedPhotos.length} fotos:{' '}
-                        <strong>{emptyPages} página(s) quedarán vacías</strong>. Podrás rellenarlas o eliminarlas en el editor.
+                        <RichText text={t('organizer.pagesWillBeEmpty', { pages: currentPages, photos: uploadedPhotos.length, empty: emptyPages })} />
                       </p>
                     </div>
                   )}
@@ -3014,15 +3008,15 @@ export default function PhotoOrganizer({
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Añadir {items.length} foto(s) al final</h3>
                   <p className="text-sm text-gray-500">
-                    Se crearán páginas nuevas después de la página {safePhotos.length}. Las que ya tienes no cambian.
+                    {t('organizer.appendDesc', { page: safePhotos.length })}
                   </p>
                 </div>
               </div>
 
               <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-5">
                 <ul className="text-[13px] text-green-800 space-y-1.5 list-disc pl-5">
-                  <li>Tus páginas actuales, con sus fotos, recortes, textos y diseños, <strong>quedan igual</strong>.</li>
-                  <li>Las fotos nuevas se reparten con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.</li>
+                  <li><RichText text={t('organizer.appendKeep')} /></li>
+                  <li><RichText text={t('organizer.appendRules')} /></li>
                 </ul>
               </div>
 
@@ -3073,19 +3067,18 @@ export default function PhotoOrganizer({
                 )}
 
                 <p className="text-xs text-gray-500 mt-3">
-                  El álbum pasará de <strong>{safePhotos.length}</strong> a <strong>{safePhotos.length + pages} páginas</strong>
-                  {' '}(las nuevas serán de la {firstNew} a la {safePhotos.length + pages}).
+                  <RichText text={t('organizer.appendResult', { from: safePhotos.length, to: safePhotos.length + pages, first: firstNew })} />
                 </p>
                 {safePhotos.length + pages > 40 && (
                   <p className="text-xs text-fuchsia-700 mt-1">
-                    Cada página por encima de las 40 base cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
+                    {t('organizer.appendExtraPrice', { price: `$${extraPagePrice.toLocaleString('es-CO')} COP` })}
                   </p>
                 )}
                 {!feasible && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                     <p className="text-xs text-amber-700">
-                      {items.length} foto(s) no se pueden repartir exactamente en {pages} páginas usando páginas de {allowedPhotosPerPage.join(', ')} fotos. Prueba con otro número.
+                      {t('organizer.appendUnreachable', { photos: items.length, pages, sizes: allowedPhotosPerPage.join(', ') })}
                     </p>
                   </div>
                 )}
@@ -3137,7 +3130,7 @@ export default function PhotoOrganizer({
               <AlertCircle className="w-4 h-4 text-red-500" />
             </div>
             <p className="text-sm text-gray-700 flex-1">
-              No pudimos procesar {skippedFiles.length} archivo(s): {skippedFiles.slice(0, 3).join(', ')}
+              {t('organizer.skippedFiles', { count: skippedFiles.length, files: skippedFiles.slice(0, 3).join(', ') })}
               {skippedFiles.length > 3 ? '…' : ''}
             </p>
             <button
@@ -3161,13 +3154,10 @@ export default function PhotoOrganizer({
               <h3 className="text-xl font-bold text-gray-900">El formato cambió</h3>
             </div>
             <p className="text-gray-600 text-sm mb-2">
-              En <strong>{sizeStr}</strong> caben como máximo{' '}
-              <strong>{allowedPhotosPerPage[allowedPhotosPerPage.length - 1]} fotos por página</strong>.
+              <RichText text={t('organizer.formatChangedMax', { size: sizeStr, max: allowedPhotosPerPage[allowedPhotosPerPage.length - 1] })} />
             </p>
             <p className="text-gray-600 text-sm mb-6">
-              Tienes <strong>{sizeMigrationModal.photosAtRisk} foto(s)</strong> en{' '}
-              {sizeMigrationModal.pagesAffected.length} página(s) que ya no caben. No se perderá ninguna:
-              las moveremos a las páginas siguientes.
+              <RichText text={t('organizer.formatChangedAtRisk', { photos: sizeMigrationModal.photosAtRisk, pages: sizeMigrationModal.pagesAffected.length })} />
             </p>
             <div className="space-y-3">
               <button
@@ -3180,7 +3170,7 @@ export default function PhotoOrganizer({
                   : ''}
               </button>
               <p className="text-[11px] text-gray-400 text-center leading-tight">
-                Si prefieres conservar el diseño actual, vuelve atrás y elige de nuevo un tamaño cuadrado.
+                {t('organizer.formatKeepHint')}
               </p>
             </div>
           </div>
@@ -3228,7 +3218,7 @@ export default function PhotoOrganizer({
             </div>
             
             <p className="text-gray-600 text-sm mb-6">
-              Tienes <strong>{emptyPagesModalData.indices.length} página(s) vacía(s)</strong> en tu diseño (Págs: {emptyPagesModalData.indices.map(i => i+1).join(', ')}). ¿Qué deseas hacer antes de enviar a imprimir?
+              <RichText text={t('organizer.emptyPagesDesc', { count: emptyPagesModalData.indices.length, pages: emptyPagesModalData.indices.map(i => i+1).join(', ') })} />
             </p>
 
             <div className="space-y-3">
@@ -3243,7 +3233,7 @@ export default function PhotoOrganizer({
               {/* Si al borrar cualquier cosa bajamos de 40, bloqueamos la eliminación */}
               {(!canDeleteEven && !canKeepOneBlank && !canDeleteCompanion) ? (
                 <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-medium border border-red-100">
-                  No puedes eliminar páginas porque el álbum debe mantener un mínimo de 40 páginas.
+                  {t('organizer.emptyPagesCantDelete')}
                 </div>
               ) : (
                 <>
@@ -3257,7 +3247,7 @@ export default function PhotoOrganizer({
                   ) : (
                     <div className="space-y-3 border-t border-gray-100 pt-3">
                       <p className="text-xs text-gray-500 font-bold uppercase">Opciones de Eliminación (Cantidad Impar)</p>
-                      <p className="text-[11px] text-gray-400 leading-tight">Los álbumes requieren páginas en pares. Elige cómo ajustar:</p>
+                      <p className="text-[11px] text-gray-400 leading-tight">{t('organizer.emptyPagesOddDesc')}</p>
                       
                       {canKeepOneBlank && (
                         <button 
@@ -3311,7 +3301,7 @@ export default function PhotoOrganizer({
                 <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {deletePageConfirm.pageIndex + 1}</p>
                 <p className="text-sm text-red-700">
                   {deletePageConfirm.photoCount > 0
-                    ? <>Contiene <span className="font-bold">{deletePageConfirm.photoCount} foto{deletePageConfirm.photoCount !== 1 ? 's' : ''}</span> que se perderán permanentemente.</>
+                    ? <RichText text={t('organizer.deletePageHasPhotos', { count: deletePageConfirm.photoCount })} />
                     : 'Página vacía — sin fotos.'}
                 </p>
               </div>
@@ -3320,9 +3310,9 @@ export default function PhotoOrganizer({
                 <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                   <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {deletePageConfirm.companionIndex + 1} (compañera)</p>
                   <p className="text-sm text-red-700">
-                    Los álbumes requieren páginas en pares, por lo que esta página también será eliminada.{' '}
+                    {t('organizer.companionAlsoDeleted')}{' '}
                     {deletePageConfirm.companionPhotoCount > 0
-                      ? <><span className="font-bold">{deletePageConfirm.companionPhotoCount} foto{deletePageConfirm.companionPhotoCount !== 1 ? 's' : ''}</span> se perderán permanentemente.</>
+                      ? <RichText text={t('organizer.companionPhotosLost', { count: deletePageConfirm.companionPhotoCount })} />
                       : 'No tiene fotos.'}
                   </p>
                 </div>
@@ -3440,7 +3430,7 @@ export default function PhotoOrganizer({
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Reorganizar el álbum</h3>
                   <p className="text-sm text-gray-500">
-                    Reparte otra vez tus {totalPhotos} fotos desde cero, como cuando se cargaron al principio.
+                    {t('organizer.redistributeDesc', { photos: totalPhotos })}
                   </p>
                 </div>
               </div>
@@ -3452,16 +3442,16 @@ export default function PhotoOrganizer({
                   Esto reinicia todo el orden actual
                 </p>
                 <ul className="text-[13px] text-red-700 space-y-1.5 list-disc pl-5">
-                  <li>El orden en que colocaste las fotos <strong>se pierde</strong>: se reparten de nuevo de la primera a la última página.</li>
+                  <li><RichText text={t('organizer.redistributeWarnOrder')} /></li>
                   <li>
                     {cropCount > 0 || textCount > 0 ? (
-                      <>Se borrarán <strong>{cropCount} recorte(s)</strong> y <strong>{textCount} caja(s) de texto</strong>.</>
+                      <RichText text={t('organizer.redistributeWarnCounts', { crops: cropCount, texts: textCount })} />
                     ) : (
-                      <>Se borrarán los recortes y las cajas de texto de todas las páginas.</>
+                      <>{t('organizer.redistributeWarnAll')}</>
                     )}
                   </li>
-                  <li>Los diseños de cada página y las páginas en blanco que hayas insertado vuelven al reparto automático.</li>
-                  <li><strong>No se puede deshacer.</strong> Ninguna foto se borra: las {totalPhotos} siguen en el álbum.</li>
+                  <li>{t('organizer.redistributeWarnLayouts')}</li>
+                  <li><RichText text={t('organizer.redistributeWarnUndo', { photos: totalPhotos })} /></li>
                 </ul>
               </div>
 
@@ -3518,7 +3508,7 @@ export default function PhotoOrganizer({
                 )}
 
                 <p className="text-xs text-gray-500 mt-3">
-                  Tus <strong>{totalPhotos} fotos</strong> se repartirán entre las <strong>{pages} páginas</strong> con las mismas reglas de la carga inicial: la primera sola, sin repetir tamaños seguidos y con las menos páginas de 3 posibles.
+                  <RichText text={t('organizer.redistributeRules', { photos: totalPhotos, pages })} />
                 </p>
                 {emptyPages > 0 && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -3561,7 +3551,7 @@ export default function PhotoOrganizer({
                   className="mt-0.5 w-5 h-5 shrink-0 accent-red-600 cursor-pointer"
                 />
                 <span className="text-sm text-gray-700">
-                  Entiendo que se reiniciará el orden de mis fotos y que se perderán los recortes, los textos y los diseños de página.
+                  {t('organizer.redistributeConfirm')}
                 </span>
               </label>
 
@@ -3601,7 +3591,7 @@ export default function PhotoOrganizer({
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 text-base">↕</div>
                 <div>
                   <p className="font-bold text-black mb-1">Reordenar páginas</p>
-                  <p>Mantén presionada una página <span className="font-semibold">1 segundo</span> hasta que vibre. La página queda seleccionada. Luego toca otra página y elige <span className="font-semibold">Intercambiar</span> (las dos páginas se cambian de lugar) o <span className="font-semibold">Insertar aquí</span> (la página se mueve a esa posición desplazando las demás).</p>
+                  <p><RichText text={t('organizer.helpReorderDesc')} /></p>
                 </div>
               </div>
 
@@ -3611,7 +3601,7 @@ export default function PhotoOrganizer({
                 </div>
                 <div>
                   <p className="font-bold text-black mb-1">Editar fotos de una página</p>
-                  <p>Toca el botón <span className="font-semibold">Ajustes</span> de cualquier página para abrir el panel de edición: añade, elimina o recorta fotos, cambia el diseño y el número de imágenes por página.</p>
+                  <p><RichText text={t('organizer.helpEditDesc')} /></p>
                 </div>
               </div>
 
@@ -3619,7 +3609,7 @@ export default function PhotoOrganizer({
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 text-base">⇄</div>
                 <div>
                   <p className="font-bold text-black mb-1">Mover fotos dentro de una página</p>
-                  <p>Dentro del panel de ajustes, <span className="font-semibold">toca y arrastra</span> cualquier foto para cambiar su posición con otra dentro de la misma página.</p>
+                  <p><RichText text={t('organizer.helpMoveDesc')} /></p>
                 </div>
               </div>
             </div>
@@ -3652,7 +3642,7 @@ export default function PhotoOrganizer({
             {layoutChangeModal.type === 'decrease' ? (
               <div className="space-y-4">
                 <p className="text-gray-600 text-sm">
-                  Al reducir el diseño, te quedan <span className="font-bold text-black">{layoutChangeModal.overflowCount} foto(s)</span> por fuera. ¿Qué deseas hacer con ellas?
+                  <RichText text={t('organizer.layoutDecreaseDesc', { count: layoutChangeModal.overflowCount })} />
                 </p>
                 <div className="space-y-3">
                   <button onClick={() => { applyRippleShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
@@ -3682,7 +3672,7 @@ export default function PhotoOrganizer({
             ) : (
               <div className="space-y-6">
                 <p className="text-gray-600 text-sm">
-                  El nuevo diseño quedó con espacios en blanco. ¿Quieres que organicemos las fotos automáticamente para llenarlos?
+                  {t('organizer.layoutIncreaseDesc')}
                 </p>
                 <div className="space-y-3">
                   <button onClick={() => { applyPullShift(layoutChangeModal.pageIndex, layoutChangeModal.newVariant); setLayoutChangeModal(null); }} className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-black font-medium transition-all text-sm">
@@ -3707,7 +3697,7 @@ export default function PhotoOrganizer({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{album.name} Editor</h2>
             <p className="text-sm text-gray-500">{safePhotos.length} {t('organizer.pages')} • {safePhotos.flat().length} {t('step.photos')}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Mantén presionada una página para reorganizarla</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{t('organizer.longPressHint')}</p>
           </div>
           <div className="flex items-center gap-2">
             {!pagesLocked && (
