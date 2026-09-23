@@ -876,13 +876,17 @@ export function distributePhotosAcrossPages(
  * página y el orden manual. No se pierde ninguna foto — esa es la invariante que
  * cubren los tests. Quien lo llame debe pedir confirmación explícita antes.
  *
+ * Con `reverse` las fotos entran al revés (Z → A): la última del álbum pasa a
+ * ser la primera. El reparto en páginas es el mismo; solo cambia la secuencia.
+ *
  * Devuelve null si esas fotos no caben exactamente en ese número de páginas; en
  * ese caso el álbum se queda como estaba.
  */
 export function redistributeAlbum(
   state: AlbumState,
   totalPages: number,
-  config: AlbumConfig
+  config: AlbumConfig,
+  opts: { reverse?: boolean } = {}
 ): AlbumState | null {
   const items: DistributableItem[] = [];
   for (const page of state) {
@@ -892,6 +896,7 @@ export function redistributeAlbum(
       }
     });
   }
+  if (opts.reverse) items.reverse();
   return distributePhotosAcrossPages(items, totalPages, config);
 }
 

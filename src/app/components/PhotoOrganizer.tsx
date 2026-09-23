@@ -50,7 +50,7 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle
+  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic, Palette
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -258,6 +258,8 @@ const AlbumEditorPhotoSlot: React.FC<{
               fontFamily: textBox.fontFamily,
               color: textBox.color,
               textAlign: textBox.textAlign || 'center',
+              fontWeight: textBox.bold ? 'bold' : 'normal',
+              fontStyle: textBox.italic ? 'italic' : 'normal',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
               lineHeight: '1.3',
@@ -434,7 +436,8 @@ export default function PhotoOrganizer({
   const [showHelpModal, setShowHelpModal] = useState(false);
   // Modal de "reorganizar el album entero". `confirmed` es la casilla de
   // seguridad: sin marcarla no se puede lanzar una operacion destructiva.
-  const [redistributeModal, setRedistributeModal] = useState<{ pages: number; confirmed: boolean } | null>(null);
+  // `reverse` reparte las fotos al revés (Z → A) en vez del orden actual.
+  const [redistributeModal, setRedistributeModal] = useState<{ pages: number; confirmed: boolean; reverse: boolean } | null>(null);
   // ── Cargas masivas desde el editor ──────────────────────────────────────────
   // "Añadir fotos": el lote ya procesado (URLs creadas, duplicados resueltos)
   // espera en este modal a que el usuario elija cuántas páginas nuevas ocupa.
@@ -1388,7 +1391,7 @@ export default function PhotoOrganizer({
     if (pagesLocked) return;
     let start = Math.min(Math.max(safePhotos.length, 40), ALBUM_MAX_PAGES);
     if (start % 2 !== 0) start = Math.min(start + 1, ALBUM_MAX_PAGES);
-    setRedistributeModal({ pages: start, confirmed: false });
+    setRedistributeModal({ pages: start, confirmed: false, reverse: false });
   };
 
   const executeRedistribute = () => {
@@ -1400,7 +1403,7 @@ export default function PhotoOrganizer({
 
     // Regla 1 antes de tocar nada: si esas fotos no caben exactamente en esas
     // páginas, el álbum se queda como está y se explica por qué.
-    const redistributed = redistributeAlbum(currentAlbumState(), totalPages, albumConfig);
+    const redistributed = redistributeAlbum(currentAlbumState(), totalPages, albumConfig, { reverse: redistributeModal.reverse });
     if (!redistributed) {
       // Aquí no hay páginas en blanco reservadas: se reparte sobre el álbum entero.
       const result = checkFeasibility(photoCount, totalPages, distributionVariant, { maxPages: ALBUM_MAX_PAGES });
@@ -1419,7 +1422,7 @@ export default function PhotoOrganizer({
     applyAlbumState(redistributed);
     setNumPages(totalPages);
     setRedistributeModal(null);
-    setAlbumWarning(`Álbum reorganizado: ${photoCount} foto(s) repartidas en ${totalPages} páginas.`);
+    setAlbumWarning(`Álbum reorganizado${redistributeModal.reverse ? ' en orden inverso (Z → A)' : ''}: ${photoCount} foto(s) repartidas en ${totalPages} páginas.`);
   };
 
   const handleAddPage = (index: number) => {
@@ -3521,6 +3524,28 @@ export default function PhotoOrganizer({
                 )}
               </div>
 
+              {/* ORDEN: el actual (A → Z) o invertido (Z → A) */}
+              <div className="mb-5">
+                <label className="font-medium block mb-2">Orden de las fotos</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { reverse: false, title: 'A → Z', hint: 'De la primera a la última' },
+                    { reverse: true, title: 'Z → A', hint: 'Invertido: la última primero' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.title}
+                      type="button"
+                      aria-pressed={redistributeModal.reverse === opt.reverse}
+                      onClick={() => setRedistributeModal(m => (m ? { ...m, reverse: opt.reverse } : m))}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-left transition-all ${redistributeModal.reverse === opt.reverse ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700 hover:border-gray-400'}`}
+                    >
+                      <span className="block text-sm font-bold">{opt.title}</span>
+                      <span className={`block text-[11px] ${redistributeModal.reverse === opt.reverse ? 'text-white/70' : 'text-gray-500'}`}>{opt.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* CONFIRMACIÓN EXPLÍCITA */}
               <label className="flex items-start gap-3 mb-5 cursor-pointer select-none">
                 <input
@@ -3981,6 +4006,8 @@ export default function PhotoOrganizer({
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
                       textAlign: currentEditingText.textAlign || 'center',
+                      fontWeight: currentEditingText.bold ? 'bold' : 'normal',
+                      fontStyle: currentEditingText.italic ? 'italic' : 'normal',
                       lineHeight: '1.3'
                     }}
                     autoFocus
@@ -4027,12 +4054,55 @@ export default function PhotoOrganizer({
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color')}</label>
+                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.textStyle')}</label>
                 <div className="flex gap-2">
-                  {['#000000', '#4B5563', '#9CA3AF', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'].map(color => (
-                    <button key={color} onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color })} className={`w-8 h-8 rounded-full border-2 transition-transform ${currentEditingText.color === color ? 'scale-125 border-black' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                  {([
+                    { key: 'bold', Icon: Bold },
+                    { key: 'italic', Icon: Italic },
+                  ] as const).map(({ key, Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={!!currentEditingText[key]}
+                      onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { [key]: !currentEditingText[key] })}
+                      title={t(`organizer.style.${key}`)}
+                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${currentEditingText[key] ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
                   ))}
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color')}</label>
+                {(() => {
+                  const presets = ['#000000', '#4B5563', '#9CA3AF', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'];
+                  const current = (currentEditingText.color || '#000000').toUpperCase();
+                  const isCustom = !presets.includes(current);
+                  return (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {presets.map(color => (
+                        <button key={color} onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color })} className={`w-8 h-8 rounded-full border-2 transition-transform ${current === color ? 'scale-125 border-black' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                      ))}
+                      {/* Color personalizado: el selector nativo del sistema, tapado por
+                          un círculo. Arcoíris mientras no se use; el color elegido después. */}
+                      <label
+                        title={t('organizer.customColor')}
+                        className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-transform ${isCustom ? 'scale-125 border-black' : 'border-transparent'}`}
+                        style={{ background: isCustom ? current : 'conic-gradient(#EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6, #EF4444)' }}
+                      >
+                        {!isCustom && <Palette className="w-4 h-4 text-white drop-shadow" />}
+                        <input
+                          type="color"
+                          aria-label={t('organizer.customColor')}
+                          value={/^#[0-9A-F]{6}$/.test(current) ? current.toLowerCase() : '#000000'}
+                          onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color: e.target.value.toUpperCase() })}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  );
+                })()}
               </div>
               <button onClick={() => setEditingTextSlot(null)} className="w-full py-4 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-bold text-lg shadow-lg shadow-black/10">{t('organizer.saveChanges')}</button>
             </div>

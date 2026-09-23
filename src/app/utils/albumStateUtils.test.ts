@@ -694,6 +694,17 @@ describe('redistributeAlbum', () => {
     const first = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
     expect(redistributeAlbum(first, 40, SQUARE)).toEqual(first);
   });
+
+  it('con reverse reparte las fotos en orden inverso (Z → A) sin perder ninguna', () => {
+    const first = distributePhotosAcrossPages(items(97), 40, SQUARE)!;
+    const reversed = redistributeAlbum(first, 40, SQUARE, { reverse: true })!;
+    const flat = (st: AlbumState) => st.flatMap(p => p.photos);
+    const sigs = (st: AlbumState) => st.flatMap(p => p.signatures);
+    expect(flat(reversed)).toEqual([...flat(first)].reverse());
+    expect(sigs(reversed)).toEqual([...sigs(first)].reverse());
+    // Invertir dos veces devuelve el álbum original.
+    expect(redistributeAlbum(reversed, 40, SQUARE, { reverse: true })).toEqual(first);
+  });
 });
 
 describe('replacePhotoUrl', () => {
