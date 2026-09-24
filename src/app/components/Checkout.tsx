@@ -13,6 +13,7 @@ import justWhiteImg from '../../assets/justwhite.png';
 // --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
+import { RichText } from './ui/RichText';
 
 export default function Checkout() {
   const { state } = useLocation();
@@ -510,14 +511,14 @@ export default function Checkout() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-gray-800">{loc === 'Arboleda' ? 'Arboleda' : 'Ciudad Jardín'}, Cali</p>
-                        <p className="text-xs text-gray-500">Te contactaremos por correo o teléfono para coordinar la entrega</p>
+                        <p className="text-xs text-gray-500">{t('checkout.pickupPointDesc')}</p>
                       </div>
                     </button>
                   ))}
                   <div className="mt-3 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
                     <MapPin className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                     <p className="text-xs text-blue-800 leading-snug">
-                      <span className="font-semibold">¿Cómo funciona?</span> Una vez confirmado tu pedido, te contactaremos al correo o teléfono que nos dejaste para coordinar el punto y horario de entrega.
+                      <RichText text={t('checkout.pickupHowItWorks')} />
                     </p>
                   </div>
                 </div>
@@ -767,7 +768,7 @@ export default function Checkout() {
             <div className="mt-4 flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
               <Truck className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-xs text-amber-800 leading-snug">
-                <span className="font-semibold">Tiempo de entrega de los álbumes:</span> 12 días hábiles a partir de la confirmación de la compra.
+                <RichText text={t('checkout.deliveryTime')} />
               </p>
             </div>
 

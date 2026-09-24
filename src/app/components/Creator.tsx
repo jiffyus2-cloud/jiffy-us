@@ -342,21 +342,17 @@ export default function Creator() {
       // no tiene sentido ofrecer un "continuar" que volvería a fallar.
       if (e.after === 0) {
         setAutoSaveBanner({
-          text: `No guardamos: el diseño se quedaría sin ninguna de tus ${e.before} fotos. ` +
-                `Recarga la página y vuelve a abrir el borrador; el guardado anterior sigue intacto.`,
+          text: t('creator.photoLossZero', { count: e.before }),
           tone: 'error',
         });
         return true;
       }
       if (opts?.onConfirmShrink) {
-        const ok = window.confirm(
-          `Tu diseño pasaría de ${e.before} a ${e.after} fotos guardadas.\n\n` +
-          `Si no borraste fotos a propósito, cancela y avísanos.\n\n¿Continuar de todos modos?`
-        );
+        const ok = window.confirm(t('creator.photoLossConfirm', { before: e.before, after: e.after }));
         if (ok) opts.onConfirmShrink();
       } else {
         setAutoSaveBanner({
-          text: 'No guardamos automáticamente: el diseño tenía menos fotos de lo esperado.',
+          text: t('creator.photoLossAutoSave'),
           tone: 'error',
         });
       }
@@ -879,7 +875,7 @@ export default function Creator() {
       const userInfo = { name: userData?.name || user.displayName || undefined, email: user.email || undefined };
       const orderId = await createCustomAlbumOrder(user.uid, size, userInfo);
       const code = orderId.slice(0, 8).toUpperCase();
-      const message = `Hola, quiero hacer un Álbum Personalizado. Mi solicitud fue registrada con el código ${code}.`;
+      const message = t('dashboard.customAlbumWhatsApp', { code });
       window.open(buildWhatsAppUrl(message), '_blank', 'noopener,noreferrer');
       navigate('/dashboard');
     } catch (e) {
@@ -917,7 +913,7 @@ export default function Creator() {
       console.error('Auto-save silencioso falló:', e);
       if (!handleSaveError(e)) {
         setAutoSaveBanner({
-          text: 'No pudimos guardar automáticamente. Usa "Guardar borrador".',
+          text: t('creator.autoSaveFailed'),
           tone: 'error',
         });
       }
@@ -1414,8 +1410,7 @@ export default function Creator() {
                   No pudimos subir {uploadFailure.count} foto{uploadFailure.count === 1 ? '' : 's'}
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Tus fotos siguen aquí, no se perdió nada y tu diseño no cambió.
-                  Revisa tu conexión e inténtalo otra vez.
+                  {t('creator.uploadFailedDesc')}
                 </p>
               </div>
             </div>

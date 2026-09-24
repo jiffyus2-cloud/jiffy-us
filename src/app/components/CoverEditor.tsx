@@ -4,6 +4,7 @@ import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
+import { RichText } from './ui/RichText';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 
@@ -225,7 +226,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     <div className="w-full space-y-2">
       {hasTextOverflow && (
         <p className="text-[10px] font-bold text-red-500 text-center">
-          Ajusta los textos marcados en rojo para poder guardar.
+          {t('cover.fixRedTexts')}
         </p>
       )}
       <button
@@ -260,7 +261,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
             <p className="text-sm text-gray-500 mb-6">
-              Esta imagen mide <strong>{coverImageLowResInfo.width}x{coverImageLowResInfo.height}px</strong> (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.
+              <RichText text={t('cover.lowResDesc', { size: `${coverImageLowResInfo.width}x${coverImageLowResInfo.height}px` })} />
             </p>
             <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
               <img src={coverImage} className="w-full h-full object-contain" alt="Low res preview" />

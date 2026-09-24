@@ -577,7 +577,7 @@ const UserDashboard: React.FC = () => {
                     if (isCustomAlbum) {
                       const orderCode = order.id.slice(0, 8).toUpperCase();
                       const handleContactWhatsApp = () => {
-                        const message = `Hola, quiero hacer un Álbum Personalizado. Mi solicitud fue registrada con el código ${orderCode}.`;
+                        const message = t('dashboard.customAlbumWhatsApp', { code: orderCode });
                         window.open(buildWhatsAppUrl(message), '_blank', 'noopener,noreferrer');
                       };
                       return (
@@ -607,7 +607,7 @@ const UserDashboard: React.FC = () => {
 
                           <CardContent className="p-5 pt-0 space-y-4">
                             <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                              Un curador se pondrá en contacto contigo por WhatsApp para continuar con tu solicitud.
+                              {t('dashboard.customAlbumPending')}
                             </p>
                           </CardContent>
 

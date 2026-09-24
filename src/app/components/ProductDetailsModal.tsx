@@ -1,4 +1,4 @@
-import { X, BookImage, Calendar, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, BookImage, Calendar, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ProductType } from './ProductSelection';
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -14,6 +14,12 @@ interface ProductDetailsModalProps {
   onClose: () => void;
   productType: ProductType;
   onConfirm?: () => void;
+  /**
+   * Nota sobre el Álbum Personalizado bajo los estilos del álbum. Solo desde el
+   * landing: en "Elige tu producto" ya tiene su propia tarjeta y este modal
+   * lleva al álbum normal, así que ahí confundiría.
+   */
+  showCustomAlbumNote?: boolean;
 }
 
 const MONTHS_ES = [
@@ -22,7 +28,7 @@ const MONTHS_ES = [
 ];
 
 // --- MINI COMPONENTE PARA EL CARRUSEL DE ESTILOS ---
-const StyleCarouselCard = ({ style }: { style: any }) => {
+const StyleCarouselCard = ({ style, noImagesLabel }: { style: any; noImagesLabel: string }) => {
   const images = style.images || (style.image ? [style.image] : []);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -62,7 +68,7 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
         ) : (
           <div className="text-gray-400 flex flex-col items-center">
             <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-            <span className="text-xs font-medium">Sin imágenes</span>
+            <span className="text-xs font-medium">{noImagesLabel}</span>
           </div>
         )}
 
@@ -100,7 +106,7 @@ const StyleCarouselCard = ({ style }: { style: any }) => {
   );
 };
 
-export default function ProductDetailsModal({ isOpen, onClose, productType, onConfirm }: ProductDetailsModalProps) {
+export default function ProductDetailsModal({ isOpen, onClose, productType, onConfirm, showCustomAlbumNote }: ProductDetailsModalProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
@@ -218,10 +224,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
         
         return {
           title: t('product.album'),
-          description: 'Dale vida a tus recuerdos en un álbum hecho con amor, cuidado y materiales de la mejor calidad.',
           styles: [
-            { name: 'Carátula Pasta Dura con foto', description: 'Portada de pasta dura personalizada con tu foto favorita. Páginas interiores en papel opalina.', images: allPapelImages },
-            { name: 'Carátula Pasta Dura en Tela (solo texto)', description: 'Acabado premium con textura de lino. Páginas interiores en papel opalina.', images: allTelaImages }
+            { name: 'Carátula Pasta Dura con foto', images: allPapelImages },
+            { name: 'Carátula Pasta Dura en Tela (solo texto)', images: allTelaImages }
           ],
           specifications: [
             { label: 'Tipos de carátula', value: 'Pasta Dura en Tela o Papel' },
@@ -230,13 +235,12 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
             { label: 'Tipo de papel', value: 'Opalina Mate' }
           ],
           galleryTitle: 'Clientes Felices',
-          gallerySubtitle: 'Historias reales, recuerdos que hoy se pueden volver a sentir',
+          gallerySubtitle: t('details.album.gallerySubtitle'),
           gallery: randomClientImages.length > 0 ? randomClientImages : fallbackGallery
         };
       case 'calendar':
         return {
           title: t('product.calendar'),
-          description: t('product.calendarDesc'),
           styles: [],
           specifications: [
             { label: 'Formato', value: '12 meses con tus fotos' },
@@ -254,7 +258,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ]
         };
       default:
-        return { title: '', description: '', styles: [], specifications: [], galleryTitle: undefined, gallerySubtitle: undefined, gallery: [] };
+        return { title: '', styles: [], specifications: [], galleryTitle: undefined, gallerySubtitle: undefined, gallery: [] };
     }
   };
 
@@ -291,9 +295,22 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
               <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 {productData.styles.map((style, index) => (
-                  <StyleCarouselCard key={index} style={style} />
+                  <StyleCarouselCard key={index} style={style} noImagesLabel="Sin imágenes" />
                 ))}
               </div>
+
+              {/* Álbum Personalizado: el mismo álbum, diseñado por una curadora */}
+              {productType === 'album' && showCustomAlbumNote && (
+                <div className="mt-4 md:mt-6 flex items-start gap-3 md:gap-4 bg-gray-50 border border-gray-100 rounded-2xl p-4 md:p-5">
+                  <div className="w-9 h-9 md:w-10 md:h-10 shrink-0 rounded-full bg-black text-white flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base md:text-lg font-bold leading-tight">{t('details.customAlbumTitle')}</h4>
+                    <p className="text-sm text-gray-600 mt-1">{t('details.customAlbumDesc')}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -159,7 +159,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
       <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 space-y-4">
         <div className="border-b border-gray-100 pb-3 mb-3">
           <h2 className="text-xl font-bold text-gray-900">Configuración Básica del Álbum</h2>
-          <p className="text-sm text-gray-500">Ajusta los materiales y dimensiones antes de diseñar la portada.</p>
+          <p className="text-sm text-gray-500">{t('albumSetup.basicDesc')}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -241,7 +241,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
         <div className="text-center mb-3">
           <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
           <p className="text-sm text-gray-500 mt-1">
-            Elige el diseño que más te guste y luego haz clic en la portada para añadir tus textos y fotos.
+            {t('albumSetup.coverDesc')}
           </p>
         </div>
 

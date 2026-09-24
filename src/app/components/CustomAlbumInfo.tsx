@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MessageCircle, Images, Palette, Eye, Truck, Loader2, ArrowLeft } from 'lucide-react';
 import { DESIGN } from '../../styles/design-system';
 import { useStoreConfig } from '../context/StoreConfigContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export type CustomAlbumSize = 'customAlbum20x20' | 'customAlbum30x30' | 'customAlbumRect';
 
@@ -11,32 +12,13 @@ interface CustomAlbumInfoProps {
   isSubmitting?: boolean;
 }
 
+// La descripción de cada paso es editable en "Textos de la Tienda" (customAlbum.stepN.desc).
 const PROCESS_STEPS = [
-  {
-    icon: MessageCircle,
-    title: 'Contacta a una curadora',
-    desc: 'Al confirmar, te redirigimos a WhatsApp para hablar directamente con una de nuestras curadoras.',
-  },
-  {
-    icon: Images,
-    title: 'Comparte tus fotos',
-    desc: 'Le envías todas las fotos que quieras incluir en tu álbum.',
-  },
-  {
-    icon: Palette,
-    title: 'Selección y diseño',
-    desc: 'La curadora escoge las mejores fotos y crea la disposición de cada página por ti.',
-  },
-  {
-    icon: Eye,
-    title: 'Revisión del borrador',
-    desc: 'Te mostramos el diseño final antes de imprimir, para que apruebes cualquier ajuste.',
-  },
-  {
-    icon: Truck,
-    title: 'Impresión y envío',
-    desc: 'Una vez aprobado, enviamos tu álbum a producción y lo despachamos a tu dirección.',
-  },
+  { icon: MessageCircle, title: 'Contacta a una curadora' },
+  { icon: Images, title: 'Comparte tus fotos' },
+  { icon: Palette, title: 'Selección y diseño' },
+  { icon: Eye, title: 'Revisión del borrador' },
+  { icon: Truck, title: 'Impresión y envío' },
 ];
 
 const SIZE_OPTIONS: { key: CustomAlbumSize; label: string }[] = [
@@ -47,6 +29,7 @@ const SIZE_OPTIONS: { key: CustomAlbumSize; label: string }[] = [
 
 export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: CustomAlbumInfoProps) {
   const { prices } = useStoreConfig();
+  const { t } = useLanguage();
   const [selectedSize, setSelectedSize] = useState<CustomAlbumSize>('customAlbum20x20');
 
   return (
@@ -56,13 +39,13 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-black mb-8 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Volver
+        {t('step.back')}
       </button>
 
       <div className="text-center mb-12">
         <h2 className="text-4xl mb-4 font-medium">Álbum Personalizado</h2>
         <p className={DESIGN.text.body}>
-          Un curador te acompaña de principio a fin: tú solo compartes tus fotos, nosotros hacemos el resto.
+          {t('customAlbum.intro')}
         </p>
       </div>
 
@@ -76,7 +59,7 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
               </div>
               <div>
                 <h3 className="font-medium mb-1">{i + 1}. {step.title}</h3>
-                <p className="text-sm text-gray-600">{step.desc}</p>
+                <p className="text-sm text-gray-600">{t(`customAlbum.step${i + 1}.desc`)}</p>
               </div>
             </div>
           );
@@ -86,7 +69,7 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
       <div className="border border-gray-200 rounded-lg p-6 mb-8">
         <h3 className={DESIGN.text.h4}>Elige un tamaño de referencia</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Precios estimados — la curadora confirmará el valor final según la cantidad de fotos y páginas de tu álbum.
+          {t('customAlbum.sizeDesc')}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {SIZE_OPTIONS.map((opt) => (
