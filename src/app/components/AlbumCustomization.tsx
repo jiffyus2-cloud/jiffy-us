@@ -4,6 +4,7 @@ import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import CoverEditor from './CoverEditor';
 import CoverPreview from './CoverPreview';
+import AlbumPriceSummary from './AlbumPriceSummary';
 import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 
 // Importación de la imagen blanca local
@@ -235,6 +236,8 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
             )}
           </div>
         </div>
+
+        <AlbumPriceSummary size={size} coverType={coverType} />
       </div>
 
       <div className="mb-6">

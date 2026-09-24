@@ -76,6 +76,7 @@ import {
 import { Album } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreConfig } from '../context/StoreConfigContext';
+import { getAlbumPrice } from '../utils/albumPricing';
 import type { CustomizationOptions } from './AlbumCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
@@ -312,11 +313,8 @@ export default function PhotoOrganizer({
   const safePhotos = photos || [];
   const sizeStr = customization?.size || 'Cuadrado 20x20 cm';
 
-  const extraPagePrice = sizeStr.includes('30x30')
-    ? storeConfig.prices.albumExtra30x30
-    : sizeStr.includes('21x28') || sizeStr.includes('28x21')
-    ? storeConfig.prices.albumExtraRect
-    : storeConfig.prices.albumExtra20x20;
+  // La página extra cuesta lo mismo en tela y en papel; solo depende del tamaño.
+  const extraPagePrice = getAlbumPrice(storeConfig.prices, sizeStr, false).extraPage;
   
   const [step, setStep] = useState<Step>(safePhotos.length > 0 ? 'editor' : 'upload');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);

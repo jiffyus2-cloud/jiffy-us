@@ -13,6 +13,7 @@ import justWhiteImg from '../../assets/justwhite.png';
 // --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
+import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
 import { RichText } from './ui/RichText';
 
 export default function Checkout() {
@@ -156,28 +157,12 @@ export default function Checkout() {
   let totalPageCount = 0;
 
   if (isAlbum && orderData) {
-    const size = orderData.customization?.size || '';
     totalPageCount = orderData.pages?.length || orderData.photos?.length || 0;
-    const basePages = 40;
-
-    if (size.includes('20x20') || size.includes('2x2')) {
-      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
-      albumExtraPagePrice = config.prices.albumExtra20x20;
-    } else if (size.includes('30x30')) {
-      albumBasePrice = isTela ? config.prices.albumTela30x30 : config.prices.album30x30;
-      albumExtraPagePrice = config.prices.albumExtra30x30;
-    } else if (size.includes('28x21') || size.includes('21x28')) {
-      albumBasePrice = isTela ? config.prices.albumTelaRect : config.prices.albumRect;
-      albumExtraPagePrice = config.prices.albumExtraRect;
-    } else {
-      albumBasePrice = isTela ? config.prices.albumTela20x20 : config.prices.album20x20;
-      albumExtraPagePrice = config.prices.albumExtra20x20;
-    }
-
-    if (totalPageCount > basePages) {
-      extraPagesCount = totalPageCount - basePages;
-      extraPagesCost = extraPagesCount * albumExtraPagePrice;
-    }
+    // Mismo cálculo que el resumen de precio al configurar el álbum.
+    const price = getAlbumPrice(config.prices, orderData.customization?.size, isTela);
+    albumBasePrice = price.base;
+    albumExtraPagePrice = price.extraPage;
+    ({ count: extraPagesCount, cost: extraPagesCost } = getExtraPagesCost(price, totalPageCount));
   }
 
   // --- CÁLCULO DINÁMICO DE PRECIOS ---
