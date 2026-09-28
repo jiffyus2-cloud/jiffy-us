@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Camera, ChevronDown, ChevronUp, Clock, DollarSign, Eye, Image as ImageIcon, Images, Loader2,
+  AlertTriangle, Camera, ChevronDown, ChevronUp, Clock, DollarSign, Eye, Image as ImageIcon, Images, Info, Loader2,
   RefreshCw, Sparkles,
 } from 'lucide-react';
 import {
@@ -14,6 +14,7 @@ import {
   listOneclicAlbums,
   organizeOneclicAlbum,
 } from '../../../services/oneclicApi';
+import { OrderSection, buildOrderSections } from './albumOrderSections';
 
 /**
  * Laboratorio: orden de las fotos de un álbum propuesto por un agente de 1clic.
@@ -27,11 +28,31 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Fecha de un pedido: instante real, se pinta en la hora de aquí.
+ */
 function formatDate(iso: string | null, withTime = false): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   return new Intl.DateTimeFormat('es-CO', withTime ? { dateStyle: 'short', timeStyle: 'short' } : { dateStyle: 'medium' }).format(d);
+}
+
+/**
+ * Fecha de CAPTURA: el EXIF la guarda como hora de pared del sitio donde se
+ * hizo la foto, sin zona horaria, y así se la mandamos al agente. Si se
+ * pintara en la hora local del navegador, la misma foto se vería a las 10:01
+ * aquí y a las 15:01 en el título que escribió el agente. Se pinta en UTC,
+ * que es exactamente lo que marcaba la cámara.
+ */
+function formatCapture(iso: string | null, withTime = true): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-CO', {
+    ...(withTime ? { dateStyle: 'short', timeStyle: 'short', hour12: false } : { dateStyle: 'medium' }),
+    timeZone: 'UTC',
+  }).format(d);
 }
 
 function formatUsd(value: number): string {
@@ -44,6 +65,25 @@ function formatMs(value: number | null): string {
 }
 
 const ORIENTATION_LABEL: Record<string, string> = { H: 'horizontal', V: 'vertical', S: 'cuadrada' };
+
+/**
+ * Rango de capturas de una sección: "2 sept, 15:01 → 15:42" si es el mismo
+ * día, con fecha en los dos extremos si no. En UTC, por lo mismo que
+ * `formatCapture`: así cuadra con el título que escribió el agente.
+ */
+function formatRange(from: string | null, to: string | null): string | null {
+  if (!from) return null;
+  const a = new Date(from);
+  const b = to ? new Date(to) : a;
+  if (Number.isNaN(a.getTime())) return null;
+  const time = new Intl.DateTimeFormat('es-CO', { timeStyle: 'short', timeZone: 'UTC', hour12: false });
+  const day = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const sameDay = day.format(a) === day.format(b);
+  if (sameDay) {
+    return a.getTime() === b.getTime() ? `${day.format(a)}, ${time.format(a)}` : `${day.format(a)}, ${time.format(a)} → ${time.format(b)}`;
+  }
+  return `${day.format(a)}, ${time.format(a)} → ${day.format(b)}, ${time.format(b)}`;
+}
 
 const ErrorBox: React.FC<{ error: unknown }> = ({ error }) => {
   const info = describeOneclicError(error);
@@ -131,7 +171,7 @@ const PhotoTile: React.FC<{ photo: OneclicPhotoMetadata; position: number; group
   const moved = showOriginal && photo.index !== position - 1;
   const title = [
     `Posición actual: ${photo.index + 1} (página ${photo.page + 1}, hueco ${photo.slot + 1})`,
-    photo.takenAt ? `Captura: ${formatDate(photo.takenAt, true)}` : (photo.note ?? 'sin fecha'),
+    photo.takenAt ? `Captura: ${formatCapture(photo.takenAt)}` : (photo.note ?? 'sin fecha'),
     photo.width && photo.height ? `${photo.width}×${photo.height}${photo.orientation ? ` (${ORIENTATION_LABEL[photo.orientation]})` : ''}` : null,
     photo.camera,
   ].filter(Boolean).join('\n');
@@ -144,7 +184,7 @@ const PhotoTile: React.FC<{ photo: OneclicPhotoMetadata; position: number; group
         {moved && <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md bg-white/85 text-gray-700 text-[10px] font-semibold">era {photo.index + 1}</span>}
         {groupColor && <span className={`absolute inset-x-0 bottom-0 h-1 ${groupColor}`} />}
         <figcaption className="absolute inset-x-0 bottom-1 px-1 text-[9px] leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,.9)] truncate">
-          {photo.takenAt ? formatDate(photo.takenAt, true) : '—'}{photo.orientation ? ` · ${photo.orientation}` : ''}
+          {photo.takenAt ? formatCapture(photo.takenAt) : '—'}{photo.orientation ? ` · ${photo.orientation}` : ''}
         </figcaption>
       </figure>
     );
@@ -157,7 +197,7 @@ const PhotoTile: React.FC<{ photo: OneclicPhotoMetadata; position: number; group
         {moved && <span className="px-1 py-0.5 rounded-md bg-purple-100 text-purple-800 font-semibold">era {photo.index + 1}</span>}
       </div>
       <div className="text-gray-700">
-        <p className="font-semibold truncate">{photo.takenAt ? formatDate(photo.takenAt, true) : <span className="text-gray-400">sin fecha</span>}</p>
+        <p className="font-semibold truncate">{photo.takenAt ? formatCapture(photo.takenAt) : <span className="text-gray-400">sin fecha</span>}</p>
         <p className="text-gray-500 truncate">
           {photo.orientation ? ORIENTATION_LABEL[photo.orientation] : '—'}{photo.camera ? ` · ${photo.camera}` : ''}
         </p>
@@ -169,16 +209,47 @@ const PhotoTile: React.FC<{ photo: OneclicPhotoMetadata; position: number; group
 
 const GROUP_COLORS = ['bg-purple-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500'];
 
+/**
+ * Una sección del álbum tal y como la propone el agente: su título, cuándo
+ * transcurre y las fotos que la componen, en el orden propuesto. La numeración
+ * de las fichas es la posición GLOBAL dentro del álbum, no dentro de la
+ * sección: así se ve de un vistazo dónde cae cada bloque.
+ */
+const SectionBlock: React.FC<{ section: OrderSection; n: number; total: number; showImages: boolean }> = ({ section, n, total, showImages }) => {
+  const color = section.groupIndex != null ? GROUP_COLORS[section.groupIndex % GROUP_COLORS.length] : 'bg-gray-300';
+  const range = formatRange(section.from, section.to);
+  return (
+    <section className="rounded-xl border border-gray-200 overflow-hidden">
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 self-center ${color}`} />
+        <h5 className="text-sm font-bold text-gray-900">
+          <span className="text-gray-400 font-mono mr-1.5">{n}/{total}</span>{section.title}
+        </h5>
+        <span className="text-xs text-gray-500">
+          {section.items.length} foto{section.items.length === 1 ? '' : 's'}
+          {' · '}posiciones {section.firstPosition}–{section.lastPosition}
+          {section.moved > 0 && ` · ${section.moved} cambian de sitio`}
+        </span>
+        {range && <span className="text-xs text-gray-400 ml-auto">{range}</span>}
+      </header>
+      <div className="p-2 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
+        {section.items.map(({ photo, position }) => (
+          <PhotoTile key={photo.index} photo={photo} position={position} showOriginal showImages={showImages} groupColor={color} />
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const ProposalView: React.FC<{ result: OneclicAlbumOrderProposal }> = ({ result }) => {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showImages, setShowImages] = useState(false);
+  const [showFlat, setShowFlat] = useState(false);
   const totalMb = result.photos.reduce((n, p) => n + (p.bytes ?? 0), 0) / 1e6;
-  const byIndex = useMemo(() => new Map(result.photos.map(p => [p.index, p])), [result.photos]);
-  const groupOf = useMemo(() => {
-    const map = new Map<number, number>();
-    result.proposal.groups.forEach((g, gi) => g.indices.forEach(i => { if (!map.has(i)) map.set(i, gi); }));
-    return map;
-  }, [result.proposal.groups]);
+  const { sections, disagreements } = useMemo(
+    () => buildOrderSections(result.proposal.order, result.proposal.groups, result.photos),
+    [result.proposal.order, result.proposal.groups, result.photos],
+  );
   const moved = result.proposal.order.filter((idx, pos) => idx !== pos).length;
 
   return (
@@ -226,37 +297,48 @@ const ProposalView: React.FC<{ result: OneclicAlbumOrderProposal }> = ({ result 
         </div>
       )}
 
-      {result.proposal.groups.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {result.proposal.groups.map((g, gi) => (
-            <span key={gi} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-gray-200 text-xs text-gray-700">
-              <span className={`w-2 h-2 rounded-full ${GROUP_COLORS[gi % GROUP_COLORS.length]}`} />
-              {g.title || `Grupo ${gi + 1}`} <span className="text-gray-400">({g.indices.length})</span>
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Orden propuesto */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <h4 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-            <Sparkles className="w-4 h-4" /> Orden propuesto
-            <span className="text-[10px] normal-case font-medium text-gray-400">(número = nueva posición; «era N» = posición actual)</span>
+            <Sparkles className="w-4 h-4" /> Orden propuesto por secciones
+            <span className="text-[10px] normal-case font-medium text-gray-400">(número = nueva posición en el álbum; «era N» = posición actual)</span>
           </h4>
           <label className="flex items-center gap-2 text-xs text-gray-600" title="No hay miniaturas: se descargan los originales">
             <input type="checkbox" checked={showImages} onChange={e => setShowImages(e.target.checked)} />
             <ImageIcon className="w-3.5 h-3.5" /> Mostrar fotos{totalMb > 0 ? ` (${totalMb.toFixed(0)} MB, son los originales)` : ' (son los originales, pesan)'}
           </label>
         </div>
-        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
-          {result.proposal.order.map((idx, pos) => {
-            const photo = byIndex.get(idx);
-            if (!photo) return null;
-            const gi = groupOf.get(idx);
-            return <PhotoTile key={idx} photo={photo} position={pos + 1} showOriginal showImages={showImages} groupColor={gi != null ? GROUP_COLORS[gi % GROUP_COLORS.length] : undefined} />;
-          })}
-        </div>
+        {disagreements > 0 && (
+          <div className="flex gap-3 p-3 mb-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-900">
+            <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+            <div>
+              <p>
+                El agente devolvió además una lista plana que no encaja con sus propias secciones:
+                {' '}<span className="font-semibold">{disagreements} de {result.photos.length} fotos</span> irían en otro sitio.
+                Esta vista sigue las secciones —que sí coinciden con las fechas de captura reales— y dentro de cada una ordena por hora de captura.
+              </p>
+              <button onClick={() => setShowFlat(v => !v)} className="mt-1 font-semibold underline">
+                {showFlat ? 'Ocultar' : 'Ver'} la lista plana del agente
+              </button>
+              {showFlat && (
+                <p className="mt-1 font-mono break-all text-[10px] leading-relaxed">
+                  {result.proposal.order.map(i => i + 1).join(' · ')}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {sections.length === 0 ? (
+          <p className="text-sm text-gray-400">El agente no propuso ninguna foto.</p>
+        ) : (
+          <div className="space-y-5">
+            {sections.map((section, si) => (
+              <SectionBlock key={section.groupIndex ?? 'none'} section={section} n={si + 1} total={sections.length} showImages={showImages} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Orden actual, plegado */}
@@ -285,7 +367,7 @@ const ProposalView: React.FC<{ result: OneclicAlbumOrderProposal }> = ({ result 
                 <tr key={p.index} className="border-t border-gray-100">
                   <td className="pr-3 py-1 font-mono">{p.index + 1}</td>
                   <td className="pr-3">{p.page + 1}/{p.slot + 1}</td>
-                  <td className="pr-3">{p.takenAt ? formatDate(p.takenAt, true) : '—'}</td>
+                  <td className="pr-3">{p.takenAt ? formatCapture(p.takenAt) : '—'}</td>
                   <td className="pr-3">{p.width && p.height ? `${p.width}×${p.height}` : '—'}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ''}</td>
                   <td className="pr-3">{p.orientation ? ORIENTATION_LABEL[p.orientation] : '—'}</td>
                   <td className="pr-3">{p.camera ?? '—'}</td>
