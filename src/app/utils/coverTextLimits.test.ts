@@ -24,7 +24,7 @@ describe('getCoverTextLimits — matriz de límites', () => {
   // puede escribir.
   const MATRIX: Record<string, Array<[number | null, number | null]>> = {
     // familia: [ [título L1, subtítulo L1], [L2], [L3], [L4], [L5] ]
-    'Tela':             [[32, 46], [40, 32], [16, 26]],
+    'Tela':             [[23, 32], [22, 32], [22, 22]],
     'Papel/28x21':      [[25, null], [17, 17], [19, 16], [32, 37]],
     'Papel/21x28':      [[39, 61], [22, 22], [22, 18], [48, 48], [null, null]],
     'Papel/20x20':      [[24, 29], [20, 20], [20, 17], [43, 43], [null, null]],
@@ -176,7 +176,7 @@ describe('getSampleSubtitle — el placeholder del preview nunca desborda', () =
   });
 
   it('elige el más largo que entra, no siempre el más corto', () => {
-    // Tela L1 admite 46 → debe salir la frase completa; vertical L3 admite 16.
+    // Tela L1 admite 32 → debe salir la frase completa; vertical L3 admite 16.
     expect(getSampleSubtitle(getCoverTextLimits('20x20', 'Tela', 1).subtitle))
       .toBe('Nuestros mejores momentos juntos');
     const tight = getCoverTextLimits('28x21', 'Papel', 3).subtitle!;

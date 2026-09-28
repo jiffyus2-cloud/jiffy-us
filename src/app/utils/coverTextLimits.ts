@@ -1,7 +1,8 @@
 /**
  * Límite de caracteres por campo de portada, para que título / subtítulo / lomo
- * SIEMPRE rendericen en una sola línea — tanto en el preview como en el PDF de
- * impresión a 300 DPI (ambos usan el mismo `CoverPreview`).
+ * SIEMPRE rendericen en una sola línea (salvo los campos con `lines`, hoy sólo
+ * el título de Tela L3) — tanto en el preview como en el PDF de impresión a
+ * 300 DPI (ambos usan el mismo `CoverPreview`).
  *
  * La clave que convierte esto en una tabla y no en veinte números mágicos:
  * todos los tamaños de fuente de la portada están en `cqw` contra un ancestro
@@ -44,6 +45,11 @@ interface FieldGeometry {
   weight: 'regular' | 'bold';
   /** tracking-* de Tailwind en em. Es ancho real y se suma por carácter. */
   trackingEm: number;
+  /**
+   * Líneas permitidas (por defecto 1). Con más de una, el ajuste por palabras
+   * desperdicia el final de cada línea: se descuenta con WRAP_FILL.
+   */
+  lines?: number;
 }
 
 type LayoutGeometry = { title: FieldGeometry | null; subtitle: FieldGeometry | null };
@@ -90,28 +96,34 @@ const FIT = 0.77;
  */
 const SPINE_FIT = 0.9;
 
+/** Fracción aprovechable de cada línea cuando el texto ajusta por palabras. */
+const WRAP_FILL = 0.85;
+
 const advanceEm = (g: FieldGeometry) => AVG_CHAR_EM + WEIGHT_DELTA_EM[g.weight] + g.trackingEm;
 
+const lineCapacity = (g: FieldGeometry) => ((g.lines ?? 1) > 1 ? (g.lines ?? 1) * WRAP_FILL : 1);
+
 const charsFor = (g: FieldGeometry | null): number | null =>
-  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * FIT) / (advanceEm(g) * g.fontCqw)));
+  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * FIT * lineCapacity(g)) / (advanceEm(g) * g.fontCqw)));
 
 const GEOMETRY: Record<Family, Record<number, LayoutGeometry>> = {
   // ── TELA — 3 layouts, idénticos en los 4 tamaños (geometría cqw pura)
   tela: {
-    // L1 CoverPreview.tsx:102-113 — h2/p `absolute w-full text-center`
+    // L1 CoverPreview.tsx — título y subtítulo en cajas left/right 10% → 80
     1: {
-      title:    { usableWidthPct: 100,   fontCqw: 4,    weight: 'bold',    trackingEm: TRACK.none },
-      subtitle: { usableWidthPct: 100,   fontCqw: 2.4,  weight: 'regular', trackingEm: TRACK.widest },
-    },
-    // L2 :116-127 — el subtítulo es abspos `right:20%` sin left → cabe en 80cqw
-    2: {
-      title:    { usableWidthPct: 100,   fontCqw: 3.2,  weight: 'bold',    trackingEm: TRACK.none },
+      title:    { usableWidthPct:  80,   fontCqw: 4.4,  weight: 'bold',    trackingEm: TRACK.none },
       subtitle: { usableWidthPct:  80,   fontCqw: 3.2,  weight: 'regular', trackingEm: TRACK.none },
     },
-    // L3 :130-141 — wrapper `p-[10cqw]` → 100 − 2×10
+    // L2 — título en caja 10%/10% → 80; subtítulo (negrita) en caja 13%/13% → 74
+    2: {
+      title:    { usableWidthPct:  80,   fontCqw: 4.6,  weight: 'bold',    trackingEm: TRACK.none },
+      subtitle: { usableWidthPct:  74,   fontCqw: 3,    weight: 'bold',    trackingEm: TRACK.none },
+    },
+    // L3 — título en bloque `width: 66%` que ajusta hasta 2 líneas (el único
+    //   campo de portada que admite más de una); subtítulo left/right 7.4% → 85.2
     3: {
-      title:    { usableWidthPct:  80,   fontCqw: 6.4,  weight: 'bold',    trackingEm: TRACK.none },
-      subtitle: { usableWidthPct:  80,   fontCqw: 4,    weight: 'regular', trackingEm: TRACK.none },
+      title:    { usableWidthPct:  66,   fontCqw: 6.6,  weight: 'bold',    trackingEm: TRACK.none, lines: 2 },
+      subtitle: { usableWidthPct:  85.2, fontCqw: 5,    weight: 'regular', trackingEm: TRACK.none },
     },
   },
 
@@ -271,7 +283,7 @@ function familyFor(size: CoverSize, type: CoverType): Family {
  * Tabla resultante (título / subtítulo):
  *
  *   Familia            L1        L2        L3        L4        L5        Lomo
- *   Tela (4 tamaños)   32 / 46   40 / 32   16 / 26   —         —         n/a
+ *   Tela (4 tamaños)   23 / 32   22 / 32   22 / 22   —         —         n/a
  *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         62
  *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 46
  *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 44

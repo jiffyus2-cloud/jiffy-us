@@ -113,7 +113,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
 
   const renderPreviewContent = () => {
     // ========================================================================
-    // LAYOUTS EXCLUSIVOS PARA PORTADA DE TELA (sin cambios)
+    // LAYOUTS EXCLUSIVOS PARA PORTADA DE TELA
     // ========================================================================
     if (coverType === 'Tela') {
       const containerStyle = { width: '100%', aspectRatio, containerType: 'inline-size' as const };
@@ -131,48 +131,55 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         </div>
       ) : null;
 
+      // Geometría medida sobre las maquetas del taller (portada = mitad derecha
+      // del pliego): x en % del ancho, y en % del alto, fuentes en cqw.
       switch (selectedLayout) {
+        // L1: título centrado a media altura, subtítulo centrado abajo (~81%)
         case 1:
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
               {fabricLayer}
               <div className="absolute inset-0 z-10 pointer-events-none">
-                <div className="absolute w-full text-center" style={{ top: '30%', transform: 'translateY(-50%)' }}>
-                  <h2 data-cover-title className="text-[4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
+                <div className="absolute text-center" style={{ top: '49.5%', left: '10%', right: '10%', transform: 'translateY(-50%)' }}>
+                  <h2 data-cover-title className="text-[4.4cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
-                <div className="absolute w-full text-center" style={{ top: '60%', transform: 'translateY(-50%)' }}>
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[2.4cqw] font-medium tracking-widest" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+                <div className="absolute text-center" style={{ top: '81%', left: '10%', right: '10%', transform: 'translateY(-50%)' }}>
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3.2cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
           );
+        // L2: título centrado en el tercio superior (~31%), subtítulo en negrita
+        //     alineado a la derecha abajo (~85.5%, margen derecho 13%)
         case 2:
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
               {fabricLayer}
               <div className="absolute inset-0 z-10 pointer-events-none">
-                <div className="absolute w-full text-center" style={{ top: '30%', transform: 'translateY(-50%)' }}>
-                  <h2 data-cover-title className="text-[3.2cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
+                <div className="absolute text-center" style={{ top: '30.8%', left: '10%', right: '10%', transform: 'translateY(-50%)' }}>
+                  <h2 data-cover-title className="text-[4.6cqw] font-bold leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
-                <div className="absolute" style={{ bottom: '20%', right: '20%' }}>
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3.2cqw] font-medium leading-none text-right" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+                <div className="absolute text-right" style={{ top: '85.5%', left: '13%', right: '13%', transform: 'translateY(-50%)' }}>
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3cqw] font-bold leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
           );
+        // L3: subtítulo (p.ej. el año) arriba a la izquierda; título abajo a la
+        //     derecha en un bloque centrado de hasta 2 líneas
         case 3:
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={containerStyle}>
               {commonOverlay}
               {fabricLayer}
-              <div className="absolute inset-0 z-10 flex flex-col justify-between p-[10cqw] pointer-events-none">
-                <div className="w-full text-left">
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[4cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+              <div className="absolute inset-0 z-10 pointer-events-none">
+                <div className="absolute text-left" style={{ top: '8.2%', left: '7.4%', right: '7.4%' }}>
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[5cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
-                <div className="w-full flex justify-end items-end">
-                  <h2 data-cover-title className="text-[6.4cqw] font-bold leading-none text-right" style={{ color: typographyColor }}>{coverTitle}</h2>
+                <div className="absolute text-center" style={{ bottom: '6.5%', right: '11%', width: '66%' }}>
+                  <h2 data-cover-title className="text-[6.6cqw] font-bold leading-[1.3]" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
               </div>
             </div>
