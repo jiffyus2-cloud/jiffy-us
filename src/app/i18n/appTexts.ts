@@ -133,6 +133,15 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'organizer.transferMenuHint': '👆 Hay un menú en pantalla, selecciona la opción de dónde quieres seleccionar tus fotos',
   'organizer.transferWait': 'Cuando ya hayas elegido, por favor espera sin cerrar la app',
 
+  // ── Editor del álbum: fotos en la nube (ayuda según el dispositivo) ──────
+  'organizer.cloudHint.ios': '¿Tus fotos están en **iCloud**? Elige **Fototeca**: ahí aparecen también las guardadas en iCloud. Para iCloud Drive u otras nubes, elige **Elegir archivo**.',
+  'organizer.cloudHint.samsung': '¿Tus fotos están en la nube? En el menú que se abre puedes elegir **Galería**, **Google Fotos** u **OneDrive** (donde la Galería de Samsung guarda su copia en la nube).',
+  'organizer.cloudHint.android': '¿Tus fotos están en la nube? En el menú que se abre puedes elegir **Google Fotos**, **Drive** u otra app de nube que tengas instalada.',
+  'organizer.cloudHint.mac': '¿Tus fotos están en **iCloud**? En la ventana que se abre, busca **Fotos** en la barra lateral (Multimedia) o tu carpeta de **iCloud Drive**.',
+  'organizer.cloudHint.desktop': '¿Tus fotos están en **iCloud**, **OneDrive** o Google Drive? Si tienes su app instalada, aparecen como una carpeta en la ventana que se abre; si no, descárgalas primero a tu computador.',
+  'organizer.googlePhotosWaiting': 'Elige tus fotos en la ventana de **Google Fotos** y toca **Listo**. Luego vuelve aquí: la importación empieza sola.',
+  'organizer.googlePhotosFailed': 'No se pudieron traer {failed} de las fotos elegidas en Google Fotos. Las demás se importaron bien; puedes intentar de nuevo con las que faltan.',
+
   // ── Editor del álbum: subida y número de páginas ──────────────────────────
   'organizer.recoveredDesc': 'La app se reinició, pero tus fotos seguían guardadas en este dispositivo. Puedes seguir añadiendo más.',
   'organizer.dontCloseTab': '⚠️ Por favor, no cierres ni recargues esta pestaña',

@@ -1,5 +1,19 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import { convertFileIfHeic } from '../utils/imageUtils';
+import { currentCloudPlatform } from '../utils/deviceCloud';
+import {
+  isGooglePhotosEnabled,
+  preloadGoogleIdentity,
+  currentGoogleToken,
+  requestGoogleToken,
+  createPickerSession,
+  pickerUrl,
+  waitForSelection,
+  downloadPickedPhotos,
+  deletePickerSession,
+  GooglePhotosError,
+  type PickerSession,
+} from '../utils/googlePhotosPicker';
 import {
   savePendingPhotos,
   loadPendingPhotos,
@@ -53,7 +67,7 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic
+  AlertCircle, Loader2, Cloud, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -391,6 +405,21 @@ export default function PhotoOrganizer({
   const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
   const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
   const [isTransferringFiles, setIsTransferringFiles] = useState(false);
+  // Importación desde Google Fotos (null = no hay ninguna en curso).
+  const [googlePhotos, setGooglePhotos] = useState<
+    | { phase: 'auth' }
+    | { phase: 'picking'; url: string; opened: boolean }
+    | { phase: 'downloading'; done: number; total: number }
+    | null
+  >(null);
+  const [googlePhotosError, setGooglePhotosError] = useState<string | null>(null);
+  const googleAbortRef = useRef<AbortController | null>(null);
+  const googleWindowRef = useRef<Window | null>(null);
+  const cloudPlatform = useState(currentCloudPlatform)[0];
+  useEffect(() => {
+    preloadGoogleIdentity();
+    return () => googleAbortRef.current?.abort();
+  }, []);
 
   // Debug mode: activar con 5 taps en el área inferior de la pantalla de subida,
   // o con ?debug=1 en la URL. Se guarda en localStorage para sobrevivir recargas y PWA.
@@ -799,7 +828,11 @@ export default function PhotoOrganizer({
     if (!files || files.length === 0) return;
     const filesArray = Array.from(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    ingestInitialFiles(filesArray);
+  };
 
+  // Carga inicial: la usan el selector de archivos y la importación de Google Fotos.
+  const ingestInitialFiles = (filesArray: File[]) => {
     // Mostrar progreso SIEMPRE, para todo tipo de archivo.
     // Esto previene el congelamiento al procesar las fotos en lotes de 5
     // en lugar de crear todos los ObjectURLs y renderizar todas las imágenes a la vez.
@@ -868,6 +901,77 @@ export default function PhotoOrganizer({
         console.groupEnd();
       }
     })();
+  };
+
+  // ── IMPORTAR DESDE GOOGLE FOTOS ─────────────────────────────────────────────
+  // El cliente elige en la ventana de Google Fotos; al terminar, las fotos se
+  // descargan aquí y entran por ingestInitialFiles como si vinieran del carrete.
+  const startGooglePhotosImport = async () => {
+    if (googlePhotos) return;
+    setGooglePhotosError(null);
+    const ctrl = new AbortController();
+    googleAbortRef.current = ctrl;
+
+    let token = currentGoogleToken();
+    // Con permiso ya dado, la ventana se abre YA (dentro del clic) para que el
+    // navegador no la bloquee; se le pone la URL cuando exista la sesión.
+    const win = token ? window.open('', '_blank') : null;
+    let session: PickerSession | null = null;
+    try {
+      if (!token) {
+        setGooglePhotos({ phase: 'auth' });
+        token = await requestGoogleToken();
+      }
+      if (ctrl.signal.aborted) throw new GooglePhotosError('cancelled', 'Cancelado');
+      session = await createPickerSession(token);
+      const url = pickerUrl(session);
+      if (win && !win.closed) win.location.href = url;
+      googleWindowRef.current = win;
+      setGooglePhotos({ phase: 'picking', url, opened: !!win });
+
+      await waitForSelection(token, session, ctrl.signal);
+      try { googleWindowRef.current?.close(); } catch { /* ya cerrada */ }
+
+      setGooglePhotos({ phase: 'downloading', done: 0, total: 0 });
+      const { files, failed } = await downloadPickedPhotos(
+        token,
+        session.id,
+        (done, total) => setGooglePhotos({ phase: 'downloading', done, total }),
+        ctrl.signal,
+      );
+      setGooglePhotos(null);
+      if (failed > 0) setGooglePhotosError(t('organizer.googlePhotosFailed', { failed }));
+      if (files.length > 0) ingestInitialFiles(files);
+    } catch (err) {
+      try { if (win && !session) win.close(); } catch { /* ya cerrada */ }
+      setGooglePhotos(null);
+      const code = err instanceof GooglePhotosError ? err.code : 'api';
+      console.warn('[GoogleFotos]', err);
+      if (code !== 'cancelled') {
+        setGooglePhotosError(
+          code === 'auth' ? 'Google no dio permiso para ver tus fotos. Inténtalo de nuevo y acepta el acceso.'
+          : code === 'timeout' ? 'Pasó demasiado tiempo sin elegir fotos en Google Fotos. Inténtalo de nuevo.'
+          : code === 'network' ? 'No hubo conexión con Google Fotos. Revisa tu internet e inténtalo de nuevo.'
+          : 'Google Fotos no respondió como esperábamos. Inténtalo de nuevo en un momento.'
+        );
+      }
+    } finally {
+      if (token && session) deletePickerSession(token, session.id);
+      googleWindowRef.current = null;
+      if (googleAbortRef.current === ctrl) googleAbortRef.current = null;
+    }
+  };
+
+  const cancelGooglePhotosImport = () => {
+    googleAbortRef.current?.abort();
+    try { googleWindowRef.current?.close(); } catch { /* ya cerrada */ }
+    setGooglePhotos(null);
+  };
+
+  const reopenGooglePhotos = (url: string) => {
+    const w = window.open(url, '_blank');
+    if (w) googleWindowRef.current = w;
+    setGooglePhotos(prev => (prev?.phase === 'picking' ? { ...prev, opened: !!w } : prev));
   };
 
 
@@ -2561,6 +2665,59 @@ export default function PhotoOrganizer({
           </div>
         )}
 
+        {/* IMPORTACIÓN DESDE GOOGLE FOTOS: permiso → elegir → descargar */}
+        {googlePhotos && (
+          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
+            <Loader2 className="w-16 h-16 text-black animate-spin" />
+            {googlePhotos.phase === 'auth' && (
+              <div className="text-center">
+                <p className="text-2xl font-bold">Conectando con Google Fotos</p>
+                <p className="text-gray-500 mt-2">Acepta el permiso en la ventana de Google</p>
+              </div>
+            )}
+            {googlePhotos.phase === 'picking' && (
+              <>
+                <div className="text-center max-w-sm">
+                  <p className="text-2xl font-bold">Esperando tus fotos</p>
+                  <p className="text-gray-600 mt-2">
+                    <RichText text={t('organizer.googlePhotosWaiting')} />
+                  </p>
+                </div>
+                <button
+                  onClick={() => reopenGooglePhotos(googlePhotos.url)}
+                  className="inline-flex items-center gap-2 bg-black text-white font-semibold px-6 py-3 rounded-full hover:bg-gray-800"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                  {googlePhotos.opened ? 'Volver a abrir Google Fotos' : 'Abrir Google Fotos'}
+                </button>
+              </>
+            )}
+            {googlePhotos.phase === 'downloading' && (
+              <>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">Trayendo tus fotos de Google Fotos</p>
+                  <p className="text-gray-500 mt-2">
+                    {googlePhotos.total > 0 ? `Foto ${googlePhotos.done} de ${googlePhotos.total}` : 'Preparando…'}
+                  </p>
+                </div>
+                <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-black h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${googlePhotos.total > 0 ? (googlePhotos.done / googlePhotos.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-400 text-center max-w-xs">Por favor espera sin cerrar la app</p>
+              </>
+            )}
+            <button
+              onClick={cancelGooglePhotosImport}
+              className="mt-2 px-6 py-2 border border-gray-300 rounded-xl text-gray-500 text-sm"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
         {/* PANTALLA DE PROGRESO AL PROCESAR LAS FOTOS EN LOTES */}
         {conversionProgress && (
           <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
@@ -2678,6 +2835,41 @@ export default function PhotoOrganizer({
                   </span>
                 </div>
               </button>
+
+              {/* Ayuda: dónde está la nube de fotos en ESTE dispositivo */}
+              <div className="mt-4 flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-sky-900">
+                <Cloud className="w-5 h-5 shrink-0 mt-0.5 text-sky-700" />
+                <p>
+                  <RichText text={t(
+                    cloudPlatform === 'ios' ? 'organizer.cloudHint.ios'
+                    : cloudPlatform === 'samsung' ? 'organizer.cloudHint.samsung'
+                    : cloudPlatform === 'android' ? 'organizer.cloudHint.android'
+                    : cloudPlatform === 'mac' ? 'organizer.cloudHint.mac'
+                    : 'organizer.cloudHint.desktop'
+                  )} />
+                </p>
+              </div>
+
+              {isGooglePhotosEnabled() && (
+                <button
+                  onClick={startGooglePhotosImport}
+                  disabled={!!googlePhotos || !!conversionProgress}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white text-gray-800 font-semibold px-6 py-3 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <ImageIcon className="w-5 h-5 shrink-0" />
+                  Importar desde Google Fotos
+                </button>
+              )}
+
+              {googlePhotosError && (
+                <div className="mt-4 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <p className="flex-1">{googlePhotosError}</p>
+                  <button onClick={() => setGooglePhotosError(null)} className="shrink-0 text-red-700" aria-label="Cerrar">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
