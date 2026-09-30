@@ -346,7 +346,14 @@ export default function PhotoOrganizer({
   } | null>(null);
   const [selectedTargetPage, setSelectedTargetPage] = useState<number>(0);
 
-  const [deletePageConfirm, setDeletePageConfirm] = useState<{ pageIndex: number; photoCount: number; companionIndex: number | null; companionPhotoCount: number } | null>(null);
+  const [deletePageConfirm, setDeletePageConfirm] = useState<{
+    pageIndex: number;
+    photoCount: number;
+    // Páginas vecinas que pueden eliminarse para mantener el número par
+    // (anterior y/o siguiente; en los extremos solo hay una). Vacío si no hace falta compañera.
+    companionOptions: { index: number; photoCount: number }[];
+    selectedCompanion: number | null;
+  } | null>(null);
 
   // Confirmación de borrado de un slot (foto o caja de texto). Mismo patrón que
   // deletePageConfirm: el handler abre el modal, el execute* hace la mutación.
@@ -1443,21 +1450,24 @@ export default function PhotoOrganizer({
       alert(t('organizer.minPagesReached') || 'Minimum of 40 pages required.');
       return;
     }
-    const photoCount = (photos[index] || []).filter(p => p && p.trim() !== '').length;
+    const countPhotos = (i: number) => (photos[i] || []).filter(p => p && p.trim() !== '').length;
+    const photoCount = countPhotos(index);
     const willDeleteCompanion = photos.length > 41;
-    const companionIndex = willDeleteCompanion ? index + 1 : null;
-    const companionPhotoCount = companionIndex !== null
-      ? (photos[companionIndex] || []).filter(p => p && p.trim() !== '').length
-      : 0;
-    setDeletePageConfirm({ pageIndex: index, photoCount, companionIndex, companionPhotoCount });
+    const companionOptions = willDeleteCompanion
+      ? [index - 1, index + 1]
+          .filter(i => i >= 0 && i < photos.length)
+          .map(i => ({ index: i, photoCount: countPhotos(i) }))
+      : [];
+    // Con una sola opción (páginas de los extremos) queda elegida; con dos, decide el usuario.
+    const selectedCompanion = companionOptions.length === 1 ? companionOptions[0].index : null;
+    setDeletePageConfirm({ pageIndex: index, photoCount, companionOptions, selectedCompanion });
   };
 
-  const executeDeletePage = (index: number) => {
-    // El usuario ya confirmó viendo el número de fotos de la página y de su compañera,
-    // de ahí allowPhotoDeletion. El reindexado de crops/textos/layouts lo hace
+  const executeDeletePage = (index: number, companionIndex: number | null) => {
+    // El usuario ya confirmó viendo el número de fotos de la página y de la compañera
+    // que eligió, de ahí allowPhotoDeletion. El reindexado de crops/textos/layouts lo hace
     // deletePages de forma atómica (antes eran ~40 líneas manuales aquí).
-    const deleteCount = photos.length > 41 ? 2 : 1;
-    const indices = deleteCount === 2 ? [index, index + 1] : [index];
+    const indices = companionIndex !== null ? [index, companionIndex] : [index];
     const result = albumDeletePages(currentAlbumState(), indices, { allowPhotoDeletion: true });
 
     applyAlbumState(result.state);
@@ -3304,15 +3314,54 @@ export default function PhotoOrganizer({
                 </p>
               </div>
 
-              {deletePageConfirm.companionIndex !== null && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                  <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {deletePageConfirm.companionIndex + 1} (compañera)</p>
-                  <p className="text-sm text-red-700">
-                    {t('organizer.companionAlsoDeleted')}{' '}
-                    {deletePageConfirm.companionPhotoCount > 0
-                      ? <RichText text={t('organizer.companionPhotosLost', { count: deletePageConfirm.companionPhotoCount })} />
-                      : 'No tiene fotos.'}
-                  </p>
+              {deletePageConfirm.companionOptions.length === 1 && (() => {
+                const opt = deletePageConfirm.companionOptions[0];
+                return (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Página {opt.index + 1} (compañera)</p>
+                    <p className="text-sm text-red-700">
+                      {t('organizer.companionAlsoDeleted')}{' '}
+                      {opt.photoCount > 0
+                        ? <RichText text={t('organizer.companionPhotosLost', { count: opt.photoCount })} />
+                        : 'No tiene fotos.'}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {deletePageConfirm.companionOptions.length > 1 && (
+                <div role="radiogroup" aria-label="Página compañera a eliminar" className="space-y-2">
+                  <p className="text-sm text-gray-600">{t('organizer.chooseCompanion')}</p>
+                  {deletePageConfirm.companionOptions.map(opt => {
+                    const selected = deletePageConfirm.selectedCompanion === opt.index;
+                    const isPrev = opt.index < deletePageConfirm.pageIndex;
+                    return (
+                      <button
+                        key={opt.index}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setDeletePageConfirm(prev => prev && { ...prev, selectedCompanion: opt.index })}
+                        className={`w-full text-left rounded-xl px-4 py-3 border-2 transition-all flex items-start gap-3 ${
+                          selected ? 'bg-red-50 border-red-400' : 'bg-white border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-red-600' : 'border-gray-300'}`}>
+                          {selected && <span className="w-2 h-2 rounded-full bg-red-600" />}
+                        </span>
+                        <span>
+                          <span className={`block text-xs font-bold uppercase tracking-widest mb-1 ${selected ? 'text-red-500' : 'text-gray-500'}`}>
+                            Página {opt.index + 1} ({isPrev ? 'anterior' : 'siguiente'})
+                          </span>
+                          <span className={`block text-sm ${selected ? 'text-red-700' : 'text-gray-600'}`}>
+                            {opt.photoCount > 0
+                              ? <RichText text={t('organizer.companionPhotosLost', { count: opt.photoCount })} />
+                              : 'No tiene fotos.'}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -3325,8 +3374,9 @@ export default function PhotoOrganizer({
                 Cancelar
               </button>
               <button
-                onClick={() => executeDeletePage(deletePageConfirm.pageIndex)}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all"
+                onClick={() => executeDeletePage(deletePageConfirm.pageIndex, deletePageConfirm.selectedCompanion)}
+                disabled={deletePageConfirm.companionOptions.length > 0 && deletePageConfirm.selectedCompanion === null}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Eliminar página
               </button>

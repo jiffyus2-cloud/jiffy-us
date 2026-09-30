@@ -156,6 +156,7 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'organizer.emptyPagesOddDesc': 'Los álbumes requieren páginas en pares. Elige cómo ajustar:',
   'organizer.deletePageHasPhotos': 'Contiene **{count} foto(s)** que se perderán permanentemente.',
   'organizer.companionAlsoDeleted': 'Los álbumes requieren páginas en pares, por lo que esta página también será eliminada.',
+  'organizer.chooseCompanion': 'Los álbumes requieren páginas en pares. Elige qué otra página eliminar junto con esta:',
   'organizer.companionPhotosLost': '**{count} foto(s)** se perderán permanentemente.',
 
   // ── Editor del álbum: reorganizar, ayuda y cuadrícula ─────────────────────
