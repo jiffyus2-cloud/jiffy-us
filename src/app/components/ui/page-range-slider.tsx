@@ -7,6 +7,8 @@ interface PageRangeSliderProps {
   value: number;
   onChange: (value: number) => void;
   className?: string;
+  /** Valor a señalar en la pista (p. ej. la cantidad recomendada). */
+  markerValue?: number;
 }
 
 /**
@@ -18,7 +20,7 @@ interface PageRangeSliderProps {
  * sobre el ancho COMPLETO de la pista y el valor se ajusta al paso más cercano,
  * de modo que soltar en cualquier punto lleva a la posición más próxima.
  */
-export function PageRangeSlider({ min, max, step, value, onChange, className = '' }: PageRangeSliderProps) {
+export function PageRangeSlider({ min, max, step, value, onChange, className = '', markerValue }: PageRangeSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   // Posición libre del pulgar mientras se arrastra; al soltar vuelve a null y
   // el pulgar transiciona hasta la posición exacta del valor seleccionado.
@@ -124,6 +126,15 @@ export function PageRangeSlider({ min, max, step, value, onChange, className = '
             style={{ left: `${(i / stepCount) * 100}%` }}
           />
         ))}
+        {/* Marca del valor recomendado: queda debajo del pulgar cuando coinciden */}
+        {markerValue !== undefined && max > min && markerValue >= min && markerValue <= max && (
+          <span
+            data-testid="slider-marker"
+            title={`Recomendado: ${markerValue} páginas`}
+            className="absolute top-1/2 w-4 h-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-black bg-white pointer-events-none"
+            style={{ left: `${((markerValue - min) / (max - min)) * 100}%` }}
+          />
+        )}
         {/* Pulgar */}
         <div
           className={`absolute top-1/2 w-7 h-7 -translate-x-1/2 -translate-y-1/2 bg-black border-2 border-white rounded-full shadow-md pointer-events-none ${

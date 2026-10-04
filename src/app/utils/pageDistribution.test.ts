@@ -13,6 +13,8 @@ import {
   arrangeSizes,
   buildDistributionPlan,
   planIsConsistent,
+  recommendPageCount,
+  nonCorePagesOf,
 } from './pageDistribution';
 import { ALLOWED_PHOTOS_PER_PAGE } from './pageLayouts';
 
@@ -383,3 +385,58 @@ function existsWithoutThrees(photos: number, pages: number, variant: Distributio
   }
   return reachable.has(photos);
 }
+
+describe('recommendPageCount', () => {
+  it('recomienda un número par, factible y dentro del rango', () => {
+    for (const variant of VARIANTS) {
+      for (const photos of [40, 41, 45, 60, 99, 100, 150, 233, 300, 600, 1000]) {
+        const rec = recommendPageCount(photos, variant)!;
+        expect(rec, `${variant} N=${photos}`).not.toBeNull();
+        expect(rec.pages % 2).toBe(0);
+        expect(rec.pages).toBeGreaterThanOrEqual(MIN_PAGES);
+        expect(rec.pages).toBeLessThanOrEqual(Math.min(MAX_PAGES, photos));
+        expect(checkFeasibility(photos, rec.pages, variant).feasible).toBe(true);
+        // El plan que se enseña es el mismo que se aplicará al crear el álbum.
+        expect(rec.plan).toEqual(buildDistributionPlan(photos, rec.pages, variant));
+      }
+    }
+  });
+
+  it('con fotos de sobra usa solo páginas de 1, 2 y 4, sin repeticiones y equilibradas', () => {
+    for (const variant of VARIANTS) {
+      for (const photos of [100, 150, 300, 500]) {
+        const rec = recommendPageCount(photos, variant)!;
+        expect(nonCorePagesOf(rec.plan.counts), `${variant} N=${photos}`).toBe(0);
+        expect(rec.plan.repeatedPairs).toBe(0);
+        // El cuadrado llega al equilibrio exacto; en A y C el plan mete a veces
+        // páginas de 6 para bajar el pico, y la recomendación esquiva esas
+        // cantidades a costa de algo de equilibrio.
+        expect(rec.imbalance).toBeLessThanOrEqual(variant === 'B' ? 2 : rec.pages / 5);
+        // 1, 2 y 4 a partes iguales ≈ 3N/7 páginas.
+        expect(Math.abs(rec.pages - (3 * photos) / 7)).toBeLessThanOrEqual(rec.pages / 8);
+      }
+    }
+  });
+
+  it('ninguna otra cantidad de páginas es mejor en páginas fuera de 1/2/4 ni en repeticiones', () => {
+    for (const variant of VARIANTS) {
+      for (const photos of [45, 80, 137, 260]) {
+        const rec = recommendPageCount(photos, variant)!;
+        for (let g = MIN_PAGES; g <= Math.min(MAX_PAGES, photos); g += 2) {
+          const plan = buildDistributionPlan(photos, g, variant);
+          if (!plan) continue;
+          const nc = nonCorePagesOf(plan.counts);
+          expect(nc).toBeGreaterThanOrEqual(nonCorePagesOf(rec.plan.counts));
+          if (nc === nonCorePagesOf(rec.plan.counts)) {
+            expect(plan.repeatedPairs).toBeGreaterThanOrEqual(rec.plan.repeatedPairs);
+          }
+        }
+      }
+    }
+  });
+
+  it('respeta el suelo de páginas pedido', () => {
+    const rec = recommendPageCount(1000, 'B', { minPages: 120 })!;
+    expect(rec.pages).toBeGreaterThanOrEqual(120);
+  });
+});
