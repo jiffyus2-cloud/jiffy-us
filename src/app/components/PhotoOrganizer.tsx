@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import {
   savePendingPhotos,
@@ -70,6 +70,9 @@ import {
   checkFeasibility,
   nearestFeasiblePages,
   maxPhotosFor,
+  buildDistributionPlan,
+  recommendPageCount,
+  nonCorePagesOf,
   VARIANT_SIZES,
   type FeasibilityResult,
 } from '../utils/pageDistribution';
@@ -82,6 +85,7 @@ import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { Switch } from './ui/switch';
 import { PageRangeSlider } from './ui/page-range-slider';
+import { RecommendationCard, PlanComposition, PagePriceSummary } from './PagePlanPanels';
 
 // --- NUEVA IMAGEN DE JIFFY ---
 import { useSystemImage } from '../context/SystemImagesContext';
@@ -324,9 +328,6 @@ export default function PhotoOrganizer({
   // recuperadas de una copia antigua de IndexedDB; esas caen a orden por nombre.
   const [pendingFilesData, setPendingFilesData] = useState<{id: string, url: string, order?: number, metadata: any}[]>([]);
   const [numPages, setNumPages] = useState<number | string>(40);
-  // Cuántas de esas páginas son en blanco pedidas a propósito (siempre par).
-  // Permiten superar el máximo que justifican las fotos, hasta ALBUM_MAX_PAGES.
-  const [blankPages, setBlankPages] = useState(0);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
   
   const [advancedSettingsModal, setAdvancedSettingsModal] = useState<number | null>(null);
@@ -627,17 +628,12 @@ export default function PhotoOrganizer({
   // Se redondea a par HACIA ABAJO: con 45 fotos el tope es 44, no 46 — 46
   // páginas con 45 fotos dejaría una sin foto, que la regla 1 rechaza. Antes
   // se redondeaba hacia arriba y el propio tope de la barra era infactible.
-  // Lo que pase de aquí solo entra como páginas en blanco a propósito.
+  // (Antes se podía pasar de aquí sumando páginas en blanco desde este paso; se
+  // quitó porque confundía. Las páginas en blanco se añaden ya en el editor.)
   const getMaxPhotoPages = (photoCount: number) => {
     const baseMax = Math.max(40, photoCount);
     return Math.min(ALBUM_MAX_PAGES, baseMax - (baseMax % 2));
   };
-
-  // Tope duro del álbum. Se puede superar el máximo anterior sumando páginas en
-  // blanco a propósito (control aparte en el paso 'pages'): quedan sin fotos y
-  // se avisan antes de imprimir (handleComplete). Es el mismo límite que aplica
-  // handleAddPage en el editor.
-  const getMaxPages = (_photoCount: number) => ALBUM_MAX_PAGES;
 
   // ── Factibilidad del reparto (regla 1 de pageDistribution) ──────────────────
   // Qué variante de reparto toca según el formato: A horizontal, B cuadrado,
@@ -664,28 +660,11 @@ export default function PhotoOrganizer({
     return Math.min(g, ALBUM_MAX_PAGES);
   };
 
-  /**
-   * Páginas en blanco efectivas para un total dado: siempre un número par y sin
-   * dejar por debajo del mínimo las que llevan fotos.
-   */
-  const evenBlankPages = (total: number, photoCount: number) => {
-    const capped = Math.min(blankPages, Math.max(0, total - getMinPhotoPages(photoCount)));
-    return capped - (capped % 2);
-  };
-
-  /**
-   * ¿Se pueden repartir `photoCount` fotos en las páginas que llevan foto?
-   * Las páginas en blanco pedidas a propósito no cuentan: van vacías al final.
-   */
-  const feasibilityFor = (photoCount: number, total: number) => {
-    const blanks = evenBlankPages(total, photoCount);
-    const photoPages = total - blanks;
-    return {
-      blanks,
-      photoPages,
-      result: checkFeasibility(photoCount, photoPages, distributionVariant, { maxPages: ALBUM_MAX_PAGES }),
-    };
-  };
+  /** ¿Se pueden repartir `photoCount` fotos en exactamente `total` páginas? */
+  const feasibilityFor = (photoCount: number, total: number) => ({
+    photoPages: total,
+    result: checkFeasibility(photoCount, total, distributionVariant, { maxPages: ALBUM_MAX_PAGES }),
+  });
 
   /**
    * El aviso que ve el usuario cuando su combinación no tiene reparto exacto.
@@ -725,10 +704,10 @@ export default function PhotoOrganizer({
 
   // Al cambiar cuántas fotos hay, el número de páginas se reencaja en el rango
   // que esas fotos permiten: el suelo sube con muchas fotos (1000 cuadradas no
-  // caben en 40 páginas) y el techo total sigue siendo 250.
+  // caben en 40 páginas) y el techo es una foto por página.
   useEffect(() => {
     if (uploadedPhotos.length > 0) {
-      const maxP = getMaxPages(uploadedPhotos.length);
+      const maxP = getMaxPhotoPages(uploadedPhotos.length);
       const minP = getMinPhotoPages(uploadedPhotos.length);
       if (typeof numPages === 'number') {
         let newNum = numPages;
@@ -740,6 +719,28 @@ export default function PhotoOrganizer({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedPhotos.length]);
+
+  // Cantidad de páginas recomendada para las fotos subidas (paso 'pages'). Solo
+  // depende de cuántas fotos hay y del formato, así que se calcula una vez por
+  // combinación y no en cada movimiento de la barra.
+  const pageRecommendation = useMemo(
+    () => uploadedPhotos.length >= 40
+      ? recommendPageCount(uploadedPhotos.length, distributionVariant, { maxPages: ALBUM_MAX_PAGES })
+      : null,
+    [uploadedPhotos.length, distributionVariant]
+  );
+
+  // Plan de reparto de la cantidad elegida, para enseñar cómo quedará el álbum.
+  // Memoizado por número de páginas: al arrastrar la barra se repiten mucho.
+  const planForPages = useMemo(() => {
+    const cache = new Map<number, ReturnType<typeof buildDistributionPlan>>();
+    return (pages: number) => {
+      if (!cache.has(pages)) {
+        cache.set(pages, buildDistributionPlan(uploadedPhotos.length, pages, distributionVariant, { maxPages: ALBUM_MAX_PAGES }));
+      }
+      return cache.get(pages)!;
+    };
+  }, [uploadedPhotos.length, distributionVariant]);
 
   // Al abrir el selector de página destino, centra el scroll en la página de origen
   // para que el usuario no tenga que buscarla manualmente si está lejos del inicio.
@@ -1306,6 +1307,17 @@ export default function PhotoOrganizer({
   };
 
   /**
+   * Pasa al paso "¿Cuántas páginas?" con la cantidad recomendada ya elegida.
+   * Se recalcula cada vez que se entra: si el usuario vuelve atrás y cambia las
+   * fotos, la recomendación anterior ya no vale.
+   */
+  const goToPagesStep = () => {
+    setNumPages(pageRecommendation?.pages ?? getMinPhotoPages(uploadedPhotos.length));
+    setSetupError(null);
+    setStep('pages');
+  };
+
+  /**
    * Ordena la selección y pasa al editor.
    *
    * El orden lo decidía 1clic.ai: se le mandaban los metadatos de cada archivo y
@@ -1351,32 +1363,23 @@ export default function PhotoOrganizer({
    * botón ya está deshabilitado en ese caso; esto es el segundo cinturón.
    */
   const handleFinalizeSetup = (sortedPhotos: string[]): boolean => {
-    const maxP = getMaxPages(sortedPhotos.length);
+    const maxP = getMaxPhotoPages(sortedPhotos.length);
     let safeVal = typeof numPages === 'number' ? numPages : 40;
 
     safeVal = Math.min(Math.max(safeVal, getMinPhotoPages(sortedPhotos.length)), maxP);
     if (safeVal % 2 !== 0) safeVal = Math.min(safeVal + 1, maxP);
-
-    // Las páginas en blanco pedidas a propósito no entran en el reparto: no
-    // llevan fotos, así que no son de las que el plan tiene que dimensionar.
-    const blanks = evenBlankPages(safeVal, sortedPhotos.length);
-    const photoPages = safeVal - blanks;
 
     // El reparto vive en albumStateUtils para que "reorganizar" desde el editor
     // (executeRedistribute) produzca exactamente el mismo resultado que esta
     // primera carga, en vez de tener dos algoritmos que se van separando.
     const distributed = distributePhotosAcrossPages(
       sortedPhotos.map(url => ({ photo: url, signature: pendingFileKeysRef.current.get(url) ?? '' })),
-      photoPages,
+      safeVal,
       albumConfig
     );
     if (!distributed) return false;
 
-    const withBlanks = blanks > 0
-      ? albumInsertBlankPages(distributed, distributed.length - 1, blanks)
-      : distributed;
-
-    const { photos: newPhotos, fileSignatures: newSigs } = fromAlbumStateToProps(withBlanks);
+    const { photos: newPhotos, fileSignatures: newSigs } = fromAlbumStateToProps(distributed);
 
     setNumPages(safeVal);
     setFileSignatures(newSigs);
@@ -2700,7 +2703,7 @@ export default function PhotoOrganizer({
                 <button onClick={clearSelection} className="text-red-500 hover:text-red-700 font-medium">{t('organizer.clearAll')}</button>
               </div>
             )}
-            <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={() => setStep('pages')} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+            <button disabled={uploadedPhotos.length < 40 || isValidating || !!conversionProgress} onClick={goToPagesStep} className={`w-full py-4 rounded-lg text-lg font-medium transition-all shadow-md ${uploadedPhotos.length >= 40 && !isValidating && !conversionProgress ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
               {uploadedPhotos.length < 40 ? `${t('organizer.minPhotosWarning', { count: uploadedPhotos.length })}` : t('organizer.continueToPages')}
             </button>
           </div>
@@ -2723,27 +2726,20 @@ export default function PhotoOrganizer({
   }
 
   if (step === 'pages') {
-    const maxP = getMaxPages(uploadedPhotos.length);
     // Rango de la barra: lo que dan de sí las fotos subidas por ambos lados.
     // Suelo: las páginas mínimas en que caben (40, o más si hay muchas fotos).
-    // Techo: una foto por página. Para pasar del techo hay que sumar páginas en
-    // blanco a propósito (control de más abajo); el total nunca pasa de maxP.
+    // Techo: una foto por página.
     const minPhotoP = getMinPhotoPages(uploadedPhotos.length);
     const maxPhotoP = getMaxPhotoPages(uploadedPhotos.length);
-    // El número de páginas siempre es par y está entre minPhotoP y maxP.
+    // El número de páginas siempre es par y está entre minPhotoP y maxPhotoP.
     const clampPages = (v: number) => {
-      let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxP);
-      if (val % 2 !== 0) val = Math.min(val + 1, maxP);
+      let val = Math.min(Math.max(Number.isFinite(v) ? v : minPhotoP, minPhotoP), maxPhotoP);
+      if (val % 2 !== 0) val = Math.min(val + 1, maxPhotoP);
       return val;
     };
     const currentPages = typeof numPages === 'number' ? numPages : minPhotoP;
-    // Las páginas en blanco no pueden dejar la barra por debajo del mínimo, y
-    // tanto ellas como la barra son siempre pares (el total puede ser impar
-    // mientras se teclea en el campo; el onBlur lo redondea).
-    const toEven = (v: number) => v - (v % 2);
-    const safeBlank = toEven(Math.min(blankPages, Math.max(0, currentPages - minPhotoP)));
-    const sliderPages = toEven(Math.min(Math.max(currentPages - safeBlank, minPhotoP), maxPhotoP));
-    const emptyPages = Math.max(0, currentPages - uploadedPhotos.length);
+    // Mientras se teclea el total puede ser impar o salirse; la barra no.
+    const sliderPages = clampPages(currentPages);
 
     // REGLA 1: la combinación fotos ↔ páginas o tiene reparto exacto o no lo
     // tiene. Se comprueba en cada render para que el aviso siga al usuario
@@ -2756,187 +2752,174 @@ export default function PhotoOrganizer({
       ? setupError
       : feasibilityMessage(uploadedPhotos.length, feasibility.photoPages, feasibility.result);
 
-    // Añade o quita 2 páginas: primero se mueve la parte que cubren las fotos y,
-    // cuando esa parte llega a su tope, se tocan las páginas en blanco.
     const stepPages = (delta: 2 | -2) => {
       const next = currentPages + delta;
-      if (next < minPhotoP || next > maxP) return;
-      const canUsePhotoPages = delta > 0 ? sliderPages + delta <= maxPhotoP : sliderPages + delta >= minPhotoP;
-      if (!canUsePhotoPages) setBlankPages(safeBlank + delta);
-      else if (safeBlank !== blankPages) setBlankPages(safeBlank);
+      if (next < minPhotoP || next > maxPhotoP) return;
       setNumPages(next);
     };
 
-    const stepBlankPages = (delta: 2 | -2) => {
-      const nextBlank = safeBlank + delta;
-      const next = currentPages + delta;
-      if (nextBlank < 0 || next > maxP || next < minPhotoP) return;
-      setBlankPages(nextBlank);
-      setNumPages(next);
+    // Recomendación del sistema y reparto de lo que hay elegido ahora mismo.
+    const rec = pageRecommendation;
+    const recIsSelected = rec !== null && currentPages === rec.pages;
+    const applyRecommendation = () => {
+      if (rec) setNumPages(rec.pages);
     };
+    const currentPlan = canBuild ? planForPages(currentPages) : null;
+    const recDescription = rec && nonCorePagesOf(rec.plan.counts) === 0 && rec.plan.repeatedPairs === 0
+      ? t('organizer.recommendDesc')
+      : t('organizer.recommendDescFallback');
+
+    const roundStepBtn = 'w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed';
 
     return (
-      <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+      <div className="w-full max-w-3xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
-        
+
         {!isPreparingAlbum && (
           <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
         )}
-        <div className="bg-white border-2 border-gray-300 rounded-lg p-12 space-y-8">
-          {isPreparingAlbum ? (
+        {isPreparingAlbum ? (
+          <div className="bg-white border-2 border-gray-200 rounded-xl p-12">
             <JiffyLoader t={t} />
-          ) : (
-            <>
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-xl font-medium">{t('organizer.numPages')}</label>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {rec && (
+              <RecommendationCard
+                photos={uploadedPhotos.length}
+                pages={rec.pages}
+                counts={rec.plan.counts}
+                description={recDescription}
+                selected={recIsSelected}
+                onApply={applyRecommendation}
+              />
+            )}
+
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-5 sm:p-8 space-y-7">
+              {/* ── Cantidad elegida ─────────────────────────────────────── */}
+              <section className="space-y-4">
+                <div className="flex flex-wrap justify-between items-center gap-4">
+                  <label htmlFor="num-pages-input" className="text-xl font-medium">{t('organizer.numPages')}</label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       aria-label="Quitar 2 páginas"
                       disabled={currentPages <= minPhotoP}
                       onClick={() => stepPages(-2)}
-                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                      className={roundStepBtn}
                     >
                       −
                     </button>
                     <input
+                      id="num-pages-input"
                       type="number"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       min={minPhotoP}
-                      max={maxP}
+                      max={maxPhotoP}
                       step={2}
                       value={numPages}
                       onChange={(e) => setNumPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                       onBlur={() => {
-                        // Lo que exceda del máximo que dan las fotos pasa a
-                        // contar como páginas en blanco pedidas a propósito.
                         const val = clampPages(currentPages);
                         setNumPages(val);
-                        setBlankPages(Math.min(Math.max(safeBlank, val - maxPhotoP), Math.max(0, val - minPhotoP)));
                       }}
-                      className="w-24 text-2xl font-bold border-2 border-gray-300 rounded px-2 focus:border-black outline-none text-center"
+                      className="w-24 text-2xl font-bold border-2 border-gray-300 rounded-lg px-2 py-1 focus:border-black outline-none text-center"
                     />
                     <button
                       type="button"
                       aria-label="Añadir 2 páginas"
-                      disabled={currentPages >= maxP}
+                      disabled={currentPages >= maxPhotoP}
                       onClick={() => stepPages(2)}
-                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
+                      className={roundStepBtn}
                     >
                       +
                     </button>
                   </div>
                 </div>
+
                 {maxPhotoP > minPhotoP ? (
-                  <>
-                    <div className="flex justify-between text-xs text-gray-400 font-medium mb-1 px-0.5">
-                      <span>Mín. {minPhotoP}</span>
-                      <span>Máx. {maxPhotoP}</span>
-                    </div>
+                  <div>
                     <PageRangeSlider
                       min={minPhotoP}
                       max={maxPhotoP}
                       step={2}
                       value={sliderPages}
-                      onChange={(value) => setNumPages(value + safeBlank)}
+                      onChange={(value) => setNumPages(value)}
+                      markerValue={rec?.pages}
                     />
-                  </>
+                    <div className="relative flex justify-between items-center text-xs text-gray-400 font-medium mt-1 px-0.5">
+                      <span>Mín. {minPhotoP}</span>
+                      {/* Bajo la marca de la barra (misma geometría: px-3.5 de la pista).
+                          Cerca de los extremos o en pantallas estrechas se taparía con
+                          Mín./Máx., así que ahí basta la marca de la barra. */}
+                      {rec && (() => {
+                        const ratio = (rec.pages - minPhotoP) / (maxPhotoP - minPhotoP);
+                        if (ratio < 0.15 || ratio > 0.85) return null;
+                        return (
+                          <span
+                            className="hidden sm:block absolute top-0 -translate-x-1/2 whitespace-nowrap text-gray-600"
+                            style={{ left: `calc(0.875rem + (100% - 1.75rem) * ${ratio})` }}
+                          >
+                            Recomendado
+                          </span>
+                        );
+                      })()}
+                      <span>Máx. {maxPhotoP}</span>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
-                    <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span><RichText text={t('organizer.photosGiveForPages', { photos: uploadedPhotos.length, pages: maxPhotoP })} /></span>
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    <RichText text={t('organizer.photosGiveForPages', { photos: uploadedPhotos.length, pages: maxPhotoP })} />
+                  </p>
                 )}
+              </section>
 
-                {/* Páginas en blanco: la única forma de pasar del máximo que dan las fotos */}
-                <div className="mt-4 flex items-center justify-between gap-4 border-2 border-gray-200 rounded-lg px-4 py-3">
-                  <div>
-                    <p className="font-medium">Páginas en blanco adicionales</p>
-                    <p className="text-xs text-gray-500">
-                      {t('organizer.extraBlankDesc', { pages: maxPhotoP, photos: uploadedPhotos.length, max: maxP })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      aria-label="Quitar 2 páginas en blanco"
-                      disabled={safeBlank <= 0}
-                      onClick={() => stepBlankPages(-2)}
-                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
-                    >
-                      −
-                    </button>
-                    <span className="w-10 text-center text-xl font-bold" aria-live="polite">{safeBlank}</span>
-                    <button
-                      type="button"
-                      aria-label="Añadir 2 páginas en blanco"
-                      disabled={currentPages >= maxP}
-                      onClick={() => stepBlankPages(2)}
-                      className="w-11 h-11 shrink-0 rounded-full border-2 border-gray-300 text-2xl font-bold leading-none flex items-center justify-center hover:border-black transition-colors disabled:opacity-30 disabled:hover:border-gray-300 disabled:cursor-not-allowed"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
+              {/* ── Cómo quedará el reparto ─────────────────────────────── */}
+              {currentPlan && (
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Así se repartirán tus {uploadedPhotos.length} fotos
+                  </h3>
+                  <PlanComposition counts={currentPlan.counts} />
+                </section>
+              )}
 
-                <div className="mt-4 flex flex-col gap-2">
-                  {/* REGLA 1: la combinación no tiene reparto exacto. No se
-                      redondea ni se aproxima por el usuario: se le dice qué
-                      falla y con qué números sí funciona. */}
-                  {blockingMessage && (
-                    <div
-                      role="alert"
-                      data-testid="feasibility-error"
-                      className="flex items-start gap-2 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3"
-                    >
-                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                      <p className="text-sm text-red-700">
-                        <strong className="block mb-0.5">Esta combinación no se puede repartir</strong>
-                        {blockingMessage}
-                      </p>
-                    </div>
-                  )}
-                  {canBuild && emptyPages > 0 && (
-                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                      <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                      <p className="text-sm text-amber-700">
-                        <RichText text={t('organizer.pagesWillBeEmpty', { pages: currentPages, photos: uploadedPhotos.length, empty: emptyPages })} />
-                      </p>
-                    </div>
-                  )}
-                  <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
-                    <p className="text-sm text-purple-700">
-                      Tu álbum incluye 40 páginas base.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-fuchsia-400 mt-0.5 shrink-0" />
-                    <p className="text-sm text-fuchsia-700">
-                      Cada página adicional cuesta ${extraPagePrice.toLocaleString('es-CO')} COP.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>
-                <button
-                  onClick={orderAndDistribute}
-                  disabled={!canBuild}
-                  title={blockingMessage ?? undefined}
-                  className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-black"
+              {/* REGLA 1: la combinación no tiene reparto exacto. No se
+                  redondea ni se aproxima por el usuario: se le dice qué
+                  falla y con qué números sí funciona. */}
+              {blockingMessage && (
+                <div
+                  role="alert"
+                  data-testid="feasibility-error"
+                  className="flex items-start gap-2 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3"
                 >
-                  {t('organizer.createAlbum')}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                  <p className="text-sm text-red-700">
+                    <strong className="block mb-0.5">Esta combinación no se puede repartir</strong>
+                    {blockingMessage}
+                  </p>
+                </div>
+              )}
+
+              {/* ── Precio: incluidas y adicionales (información fija, no un aviso) ── */}
+              <PagePriceSummary totalPages={currentPages} extraPagePrice={extraPagePrice} />
+            </div>
+
+            <div className="flex gap-4">
+              <button onClick={() => setStep('upload')} className="flex-1 py-4 border-2 border-gray-300 rounded-lg hover:border-black transition-all text-lg">{t('step.back')}</button>
+              <button
+                onClick={orderAndDistribute}
+                disabled={!canBuild}
+                title={blockingMessage ?? undefined}
+                className="flex-[2] py-4 bg-black text-white rounded-lg hover:bg-gray-800 transition-all text-lg px-12 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-black"
+              >
+                {t('organizer.createAlbum')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

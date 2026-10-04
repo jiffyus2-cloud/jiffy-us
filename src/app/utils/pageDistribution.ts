@@ -461,6 +461,95 @@ export function buildDistributionPlan(
   };
 }
 
+// ── Recomendación de número de páginas ───────────────────────────────────────
+
+/**
+ * Los tamaños de página que el álbum debería usar "de base": 1, 2 y 4 fotos.
+ * Las páginas de 3 y las del tamaño mayor (6 o 9) siguen siendo válidas, pero
+ * la recomendación intenta no necesitarlas.
+ */
+export const CORE_SIZES = [1, 2, 4] as const;
+
+export interface PageRecommendation {
+  /** Páginas con foto recomendadas (par, factible). */
+  pages: number;
+  plan: DistributionPlan;
+  /** Páginas que no son de 1, 2 ni 4 fotos. */
+  nonCorePages: number;
+  /** Diferencia entre el tamaño base más usado y el menos usado. */
+  imbalance: number;
+}
+
+/** Páginas de un plan que no son de 1, 2 ni 4 fotos. */
+export function nonCorePagesOf(counts: SizeCounts): number {
+  let n = 0;
+  for (const [size, count] of counts) {
+    if (!(CORE_SIZES as readonly number[]).includes(size)) n += count;
+  }
+  return n;
+}
+
+/**
+ * Lo desigual que es el uso de los tamaños base. Solo cuentan los que el
+ * formato admite; los tres pliegos de hoy admiten 1, 2 y 4.
+ */
+function coreImbalanceOf(counts: SizeCounts, variant: DistributionVariant): number {
+  const used = CORE_SIZES.filter(s => VARIANT_SIZES[variant].includes(s)).map(s => counts.get(s) ?? 0);
+  return Math.max(...used) - Math.min(...used);
+}
+
+/**
+ * ¿`a` es mejor recomendación que `b`? Orden de prioridades:
+ *   1. menos páginas que no sean de 1, 2 o 4 fotos
+ *   2. menos páginas iguales seguidas (regla 2b)
+ *   3. 1, 2 y 4 usados lo más a partes iguales posible (variedad)
+ *   4. a igualdad, menos páginas (más barato)
+ */
+function isBetterRecommendation(a: PageRecommendation, b: PageRecommendation): boolean {
+  if (a.nonCorePages !== b.nonCorePages) return a.nonCorePages < b.nonCorePages;
+  if (a.plan.repeatedPairs !== b.plan.repeatedPairs) return a.plan.repeatedPairs < b.plan.repeatedPairs;
+  if (a.imbalance !== b.imbalance) return a.imbalance < b.imbalance;
+  return a.pages < b.pages;
+}
+
+/**
+ * Cuántas páginas recomendar para `photos` fotos.
+ *
+ * No inventa un reparto propio: prueba cada número par de páginas factible y
+ * evalúa el plan EXACTO que `buildDistributionPlan` produciría (el mismo que
+ * se aplica al crear el álbum), quedándose con el que mejor cumple
+ * `isBetterRecommendation`. Así la recomendación respeta las reglas 1–3 por
+ * construcción y lo que el usuario ve es lo que obtiene.
+ *
+ * Con 1, 2 y 4 a partes iguales salen 7 fotos cada 3 páginas, así que el
+ * óptimo suele quedar cerca de 3N/7 páginas.
+ *
+ * Devuelve null si ningún número de páginas admite esas fotos.
+ */
+export function recommendPageCount(
+  photos: number,
+  variant: DistributionVariant,
+  opts: FeasibilityOptions & { step?: number } = {}
+): PageRecommendation | null {
+  const lowPages = opts.minPages ?? MIN_PAGES;
+  const highPages = Math.min(opts.maxPages ?? MAX_PAGES, photos);
+  const step = opts.step ?? 2;
+
+  let best: PageRecommendation | null = null;
+  for (let pages = lowPages; pages <= highPages; pages += step) {
+    const plan = buildDistributionPlan(photos, pages, variant, opts);
+    if (!plan) continue;
+    const candidate: PageRecommendation = {
+      pages,
+      plan,
+      nonCorePages: nonCorePagesOf(plan.counts),
+      imbalance: coreImbalanceOf(plan.counts, variant),
+    };
+    if (!best || isBetterRecommendation(candidate, best)) best = candidate;
+  }
+  return best;
+}
+
 /** Comprobación de invariantes, para los tests y para asserts defensivos. */
 export function planIsConsistent(plan: DistributionPlan, photos: number, pages: number): boolean {
   return (
