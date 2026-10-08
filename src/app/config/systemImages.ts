@@ -153,6 +153,13 @@ export interface SystemImageSlot {
   defaultUrl: string;
   /** Qué tamaño necesita y dónde debe quedar el contenido. */
   spec: ImageSpec;
+  /**
+   * Slot del que hereda la imagen mientras nadie suba una propia. Sirve para
+   * separar dos huecos que compartían foto sin que la tienda cambie de aspecto
+   * el día que se separan: si la administración ya había cambiado la del slot
+   * padre, este la sigue mostrando hasta tener la suya.
+   */
+  inheritsFrom?: string;
 }
 
 export interface SystemImageGallery {
@@ -297,6 +304,16 @@ export const SYSTEM_IMAGE_SLOTS = [
     spec: SQUARE_CARD_SPEC,
   },
   {
+    id: 'creator.product.customAlbum',
+    group: 'Creador',
+    label: 'Álbum Personalizado',
+    hint: 'Tarjeta de «Álbum Personalizado» en «Elige Tu Producto». Mientras no subas una, usa la del álbum de fotos.',
+    aspect: '1 / 1',
+    defaultUrl: creatorAlbum,
+    spec: SQUARE_CARD_SPEC,
+    inheritsFrom: 'creator.product.album',
+  },
+  {
     id: 'creator.product.calendar',
     group: 'Creador',
     label: 'Calendario de fotos',
@@ -317,6 +334,24 @@ export const SYSTEM_IMAGE_SLOTS = [
 ] as const satisfies readonly SystemImageSlot[];
 
 export type SystemImageSlotId = (typeof SYSTEM_IMAGE_SLOTS)[number]['id'];
+
+const SLOTS_BY_ID: Record<string, SystemImageSlot> = Object.fromEntries(
+  SYSTEM_IMAGE_SLOTS.map(slot => [slot.id, slot])
+);
+
+/**
+ * URL que pinta un slot: la que subió la administración; si no hay, la del slot
+ * del que hereda (`inheritsFrom`); y si tampoco, la inicial del bundle.
+ */
+export function resolveSlotImage(images: Record<string, string>, slotId: string): string {
+  const slot = SLOTS_BY_ID[slotId];
+  if (!slot) return '';
+  return (
+    resolveImageRef(images[slotId]) ||
+    (slot.inheritsFrom ? resolveSlotImage(images, slot.inheritsFrom) : '') ||
+    slot.defaultUrl
+  );
+}
 
 export const SYSTEM_IMAGE_GALLERIES = [
   {

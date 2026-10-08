@@ -3,10 +3,10 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import {
   SYSTEM_IMAGES_DOC,
-  SYSTEM_IMAGE_SLOTS,
   SYSTEM_IMAGE_GALLERIES,
   DEFAULT_CAROUSEL_SLIDES,
   resolveImageRef,
+  resolveSlotImage,
   type SystemImageSlotId,
   type SystemImageGalleryId,
   type CarouselSlide,
@@ -84,18 +84,14 @@ export const SystemImagesProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
 export const useSystemImages = () => useContext(SystemImagesContext);
 
-const SLOT_DEFAULTS: Record<string, string> = Object.fromEntries(
-  SYSTEM_IMAGE_SLOTS.map(slot => [slot.id, slot.defaultUrl])
-);
-
 const GALLERY_DEFAULTS: Record<string, readonly string[]> = Object.fromEntries(
   SYSTEM_IMAGE_GALLERIES.map(gallery => [gallery.id, gallery.defaultRefs])
 );
 
-/** URL de un slot: la que haya puesto la administración o, si no ha tocado nada, la inicial. */
+/** URL de un slot: la que haya puesto la administración o, si no ha tocado nada, la heredada o la inicial. */
 export function useSystemImage(slotId: SystemImageSlotId): string {
   const { images } = useSystemImages();
-  return resolveImageRef(images[slotId]) || SLOT_DEFAULTS[slotId];
+  return resolveSlotImage(images, slotId);
 }
 
 /** Referencias en crudo de una galería (lo que se guarda), para el panel de administración. */
