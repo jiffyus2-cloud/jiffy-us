@@ -183,7 +183,7 @@ export default function LandingPage() {
                 <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
-                  <h3 className="text-xl font-medium mb-1">Álbumes de fotos</h3>
+                  <h3 className="text-xl font-medium mb-1">{t('landing.cardAlbum')}</h3>
                   <button onClick={() => setSelectedProduct('album')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
@@ -197,7 +197,7 @@ export default function LandingPage() {
                 <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
-                  <h3 className="text-lg font-medium mb-1">Calendarios</h3>
+                  <h3 className="text-lg font-medium mb-1">{t('landing.cardCalendar')}</h3>
                   <button onClick={() => setSelectedProduct('calendar')} className="px-4 py-1.5 rounded-md bg-white text-black text-sm hover:bg-gray-100 transition-colors">
                     {t('landing.more')}
                   </button>
