@@ -159,7 +159,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
 
       <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 space-y-4">
         <div className="border-b border-gray-100 pb-3 mb-3">
-          <h2 className="text-xl font-bold text-gray-900">Configuración Básica del Álbum</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('albumSetup.basicTitle')}</h2>
           <p className="text-sm text-gray-500">{t('albumSetup.basicDesc')}</p>
         </div>
 
@@ -242,7 +242,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
 
       <div className="mb-6">
         <div className="text-center mb-3">
-          <h3 className="text-2xl font-bold text-gray-900">Personaliza tu Portada</h3>
+          <h3 className="text-2xl font-bold text-gray-900">{t('albumSetup.coverTitle')}</h3>
           <p className="text-sm text-gray-500 mt-1">
             {t('albumSetup.coverDesc')}
           </p>
@@ -251,7 +251,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
         <div className="mb-4">
           <div className="flex items-center justify-center gap-2 mb-3 text-gray-400">
             <Layout className="w-4 h-4" />
-            <h3 className="text-xs font-bold uppercase tracking-widest">Diseños Disponibles</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest">{t('albumSetup.layoutsTitle')}</h3>
           </div>
           <div className="flex flex-wrap justify-center gap-2 md:gap-3">
             {Array.from({ length: numLayouts }, (_, i) => i + 1).map((layout) => (
@@ -296,7 +296,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
             <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2">
               <Settings className="w-5 h-5 text-primary" />
               <span className="font-bold text-sm">
-                {!isCoverEdited ? 'Haz clic para añadir foto y texto' : 'Modificar portada'}
+                {!isCoverEdited ? t('albumSetup.coverAdd') : t('albumSetup.coverEdit')}
               </span>
             </div>
           </div>
@@ -315,9 +315,9 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
         >
           {(!isCoverEdited || coverTextOverflows) && <AlertCircle className="w-5 h-5" />}
           {!isCoverEdited
-            ? 'Diseña tu portada para continuar'
+            ? t('albumSetup.designFirst')
             : coverTextOverflows
-            ? 'Tus textos no caben en este diseño — edita la portada'
+            ? t('albumSetup.textOverflow')
             : t('album.continue') || 'Continuar al organizador de fotos'}
         </button>
       </div>

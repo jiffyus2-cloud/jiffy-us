@@ -3,7 +3,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { AlertCircle, Check, FileText, Loader2, RotateCcw, Save, Search, X } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import { EDITABLE_TEXTS, GROUP_ORDER } from '../i18n/editableTexts';
+import { EDITABLE_TEXTS, GROUP_ORDER, type TextKind } from '../i18n/editableTexts';
 import {
   SYSTEM_TEXTS_DOC,
   mapToEntries,
@@ -12,8 +12,9 @@ import {
 } from '../utils/systemTexts';
 
 /**
- * Panel para cambiar los textos grandes de la tienda —descripciones, avisos,
- * mensajes de error, preguntas frecuentes…— sin tocar el código.
+ * Panel para cambiar los textos de la tienda —títulos de sección, botones,
+ * descripciones, avisos, mensajes de error, preguntas frecuentes…— sin tocar
+ * el código.
  *
  * Los cambios se acumulan aquí y se guardan todos juntos en
  * `settings/system_texts`; la app escucha ese documento en vivo, así que se ven
@@ -38,7 +39,7 @@ function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) 
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight + 2}px`;
   }, [props.value]);
-  return <textarea ref={ref} rows={2} {...props} />;
+  return <textarea ref={ref} rows={props.rows ?? 2} {...props} />;
 }
 
 export default function SystemTextsSection({ adminEmail }: SystemTextsSectionProps) {
@@ -49,6 +50,7 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState<string>('');
+  const [kind, setKind] = useState<TextKind | ''>('');
   const [onlyChanged, setOnlyChanged] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -90,6 +92,7 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
     const q = query.trim().toLowerCase();
     return EDITABLE_TEXTS.filter(t => {
       if (group && t.group !== group) return false;
+      if (kind && t.kind !== kind) return false;
       const current = currentOf(t.key, t.defaultValue);
       if (onlyChanged && !(t.key in saved) && !(t.key in drafts)) return false;
       if (!q) return true;
@@ -100,7 +103,7 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, group, onlyChanged, drafts, saved]);
+  }, [query, group, kind, onlyChanged, drafts, saved]);
 
   const setDraft = (key: string, value: string) => setDrafts(prev => ({ ...prev, [key]: value }));
 
@@ -146,8 +149,8 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
         <div>
           <h2 className="text-xl font-bold">Textos de la tienda</h2>
           <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-            Cambia los textos informativos de la tienda —descripciones, avisos, mensajes de error y
-            preguntas frecuentes— sin tocar el código. Los cambios se guardan todos juntos y se ven al
+            Cambia los textos de la tienda —títulos de sección, botones, descripciones, avisos,
+            mensajes de error y preguntas frecuentes— sin tocar el código. Los cambios se guardan todos juntos y se ven al
             instante. Siempre puedes volver al texto original.
           </p>
           <ul className="text-xs text-gray-500 mt-2 space-y-0.5 list-disc pl-4">
@@ -201,6 +204,15 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
           <option value="">Todas las secciones</option>
           {groups.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
+        <select
+          value={kind}
+          onChange={e => setKind(e.target.value as TextKind | '')}
+          className="py-2.5 px-3 border-2 border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-black"
+        >
+          <option value="">Todos los tipos</option>
+          <option value="short">Títulos y botones</option>
+          <option value="long">Textos largos</option>
+        </select>
         <label className="flex items-center gap-2 text-sm text-gray-700 px-1 cursor-pointer select-none">
           <input type="checkbox" checked={onlyChanged} onChange={e => setOnlyChanged(e.target.checked)} className="w-4 h-4 accent-black" />
           Solo modificados ({changedCount})
@@ -219,7 +231,7 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
           .map(g => (
             <section key={g} className="space-y-3">
               <h3 className="text-sm font-bold uppercase tracking-wide text-gray-400">{g}</h3>
-              {visible.filter(t => t.group === g).map(({ key, defaultValue }) => {
+              {visible.filter(t => t.group === g).map(({ key, defaultValue, kind: textKind }) => {
                 const value = currentOf(key, defaultValue);
                 const isSavedChange = key in saved;
                 const isPending = pending.some(p => p.key === key);
@@ -254,6 +266,7 @@ export default function SystemTextsSection({ adminEmail }: SystemTextsSectionPro
                       )}
                     </div>
                     <AutoTextarea
+                      rows={textKind === 'short' ? 1 : 2}
                       value={value}
                       onChange={e => setDraft(key, e.target.value)}
                       className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-black resize-none overflow-hidden bg-white"

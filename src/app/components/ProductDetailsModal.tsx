@@ -225,16 +225,16 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
         return {
           title: t('product.album'),
           styles: [
-            { name: 'Carátula Pasta Dura con foto', images: allPapelImages },
-            { name: 'Carátula Pasta Dura en Tela (solo texto)', images: allTelaImages }
+            { name: t('details.album.style1'), images: allPapelImages },
+            { name: t('details.album.style2'), images: allTelaImages }
           ],
           specifications: [
-            { label: 'Tipos de carátula', value: 'Pasta Dura en Tela o Papel' },
-            { label: 'Tamaños', value: 'sizes-album' },
-            { label: 'Cantidad de páginas', value: 'Mínimo 40, máximo 250 (incrementos de 2)' },
-            { label: 'Tipo de papel', value: 'Opalina Mate' }
+            { label: t('details.album.coverTypesLabel'), value: t('details.album.coverTypesValue') },
+            { label: t('details.album.sizesLabel'), value: 'sizes-album' },
+            { label: t('details.album.pagesLabel'), value: t('details.album.pagesValue') },
+            { label: t('details.album.paperLabel'), value: t('details.album.paperValue') }
           ],
-          galleryTitle: 'Clientes Felices',
+          galleryTitle: t('details.album.galleryTitle'),
           gallerySubtitle: t('details.album.gallerySubtitle'),
           gallery: randomClientImages.length > 0 ? randomClientImages : fallbackGallery
         };
@@ -243,10 +243,10 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           title: t('product.calendar'),
           styles: [],
           specifications: [
-            { label: 'Formato', value: '12 meses con tus fotos' },
-            { label: 'Tipo', value: 'Escritorio o Pared (30x44 cm)' },
-            { label: 'Diseño', value: '1 o 4 fotos por mes' },
-            { label: 'Papel', value: 'Opalina premium' }
+            { label: t('details.calendar.formatLabel'), value: t('details.calendar.formatValue') },
+            { label: t('details.calendar.typeLabel'), value: t('details.calendar.typeValue') },
+            { label: t('details.calendar.designLabel'), value: t('details.calendar.designValue') },
+            { label: t('details.calendar.paperLabel'), value: t('details.calendar.paperValue') }
           ],
           galleryTitle: undefined,
           gallerySubtitle: undefined,

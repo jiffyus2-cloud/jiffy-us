@@ -1,9 +1,10 @@
 // ============================================================================
 // App Texts
 // ============================================================================
-// Textos informativos que antes estaban escritos a mano dentro de cada
-// componente (descripciones, avisos, alertas…). Viven aquí para que salgan en
-// el panel "Textos de la Tienda" y se puedan cambiar sin tocar código.
+// Textos que antes estaban escritos a mano dentro de cada componente
+// (descripciones, avisos, alertas, y títulos y botones de la tienda). Viven
+// aquí para que salgan en el panel "Textos de la Tienda" y se puedan cambiar
+// sin tocar código.
 //
 // Solo en español: la app no ofrece hoy otro idioma y `t()` usa el español
 // cuando una clave no existe en inglés.
@@ -13,6 +14,56 @@
 // ============================================================================
 
 export const APP_TEXTS_ES: Record<string, string> = {
+
+  // ── Títulos y botones de la tienda ──────────────────────────────────────
+  'landing.cardAlbum': 'Álbumes de fotos',
+  'landing.cardCalendar': 'Calendarios',
+  'product.customAlbum': 'Álbum Personalizado',
+  'details.album.style1': 'Carátula Pasta Dura con foto',
+  'details.album.style2': 'Carátula Pasta Dura en Tela (solo texto)',
+  'details.album.coverTypesLabel': 'Tipos de carátula',
+  'details.album.coverTypesValue': 'Pasta Dura en Tela o Papel',
+  'details.album.sizesLabel': 'Tamaños',
+  'details.album.pagesLabel': 'Cantidad de páginas',
+  'details.album.pagesValue': 'Mínimo 40, máximo 250 (incrementos de 2)',
+  'details.album.paperLabel': 'Tipo de papel',
+  'details.album.paperValue': 'Opalina Mate',
+  'details.album.galleryTitle': 'Clientes Felices',
+  'details.calendar.formatLabel': 'Formato',
+  'details.calendar.formatValue': '12 meses con tus fotos',
+  'details.calendar.typeLabel': 'Tipo',
+  'details.calendar.typeValue': 'Escritorio o Pared (30x44 cm)',
+  'details.calendar.designLabel': 'Diseño',
+  'details.calendar.designValue': '1 o 4 fotos por mes',
+  'details.calendar.paperLabel': 'Papel',
+  'details.calendar.paperValue': 'Opalina premium',
+  'customAlbum.title': 'Álbum Personalizado',
+  'customAlbum.step1.title': 'Contacta a una curadora',
+  'customAlbum.step2.title': 'Comparte tus fotos',
+  'customAlbum.step3.title': 'Selección y diseño',
+  'customAlbum.step4.title': 'Revisión del borrador',
+  'customAlbum.step5.title': 'Impresión y envío',
+  'customAlbum.sizeTitle': 'Elige un tamaño de referencia',
+  'customAlbum.submit': 'Quiero mi Álbum Personalizado',
+  'customAlbum.submitting': 'Creando tu solicitud...',
+  'albumSetup.basicTitle': 'Configuración Básica del Álbum',
+  'albumSetup.coverTitle': 'Personaliza tu Portada',
+  'albumSetup.layoutsTitle': 'Diseños Disponibles',
+  'albumSetup.coverAdd': 'Haz clic para añadir foto y texto',
+  'albumSetup.coverEdit': 'Modificar portada',
+  'albumSetup.designFirst': 'Diseña tu portada para continuar',
+  'albumSetup.textOverflow': 'Tus textos no caben en este diseño — edita la portada',
+  'calendarSetup.typeTitle': 'Tipo de Calendario',
+  'calendarSetup.desk': 'De Escritorio',
+  'calendarSetup.deskDesc': 'Formato vertical compacto',
+  'calendarSetup.wall': 'De Pared',
+  'calendarSetup.wallDesc': 'Formato grande (30x44 cm)',
+  'calendarSetup.perMonthTitle': 'Imágenes por Mes',
+  'calendarSetup.onePhoto': '1 Foto',
+  'calendarSetup.onePhotoDesc': 'Una imagen grande por mes',
+  'calendarSetup.fourPhotos': '4 Fotos',
+  'calendarSetup.fourPhotosDesc': 'Un collage de 4 imágenes',
+  'calendarSetup.startMonthTitle': 'Mes de inicio',
 
   // ── Preguntas frecuentes (landing) ──────────────────────────────────────
   'faq.1.q': '1. ¿Cómo creo mi álbum Jiffy?',

@@ -12,13 +12,13 @@ interface CustomAlbumInfoProps {
   isSubmitting?: boolean;
 }
 
-// La descripción de cada paso es editable en "Textos de la Tienda" (customAlbum.stepN.desc).
-const PROCESS_STEPS = [
-  { icon: MessageCircle, title: 'Contacta a una curadora' },
-  { icon: Images, title: 'Comparte tus fotos' },
-  { icon: Palette, title: 'Selección y diseño' },
-  { icon: Eye, title: 'Revisión del borrador' },
-  { icon: Truck, title: 'Impresión y envío' },
+// El título y la descripción de cada paso son editables en "Textos de la Tienda" (customAlbum.stepN.title / .desc).
+const PROCESS_STEP_ICONS = [
+  MessageCircle,
+  Images,
+  Palette,
+  Eye,
+  Truck,
 ];
 
 const SIZE_OPTIONS: { key: CustomAlbumSize; label: string }[] = [
@@ -43,22 +43,21 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
       </button>
 
       <div className="text-center mb-12">
-        <h2 className="text-4xl mb-4 font-medium">Álbum Personalizado</h2>
+        <h2 className="text-4xl mb-4 font-medium">{t('customAlbum.title')}</h2>
         <p className={DESIGN.text.body}>
           {t('customAlbum.intro')}
         </p>
       </div>
 
       <div className="space-y-6 mb-12">
-        {PROCESS_STEPS.map((step, i) => {
-          const Icon = step.icon;
+        {PROCESS_STEP_ICONS.map((Icon, i) => {
           return (
             <div key={i} className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-black text-white shrink-0">
                 <Icon className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-medium mb-1">{i + 1}. {step.title}</h3>
+                <h3 className="font-medium mb-1">{i + 1}. {t(`customAlbum.step${i + 1}.title`)}</h3>
                 <p className="text-sm text-gray-600">{t(`customAlbum.step${i + 1}.desc`)}</p>
               </div>
             </div>
@@ -67,7 +66,7 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
       </div>
 
       <div className="border border-gray-200 rounded-lg p-6 mb-8">
-        <h3 className={DESIGN.text.h4}>Elige un tamaño de referencia</h3>
+        <h3 className={DESIGN.text.h4}>{t('customAlbum.sizeTitle')}</h3>
         <p className="text-sm text-gray-500 mb-4">
           {t('customAlbum.sizeDesc')}
         </p>
@@ -98,10 +97,10 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
           {isSubmitting ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Creando tu solicitud...
+              {t('customAlbum.submitting')}
             </>
           ) : (
-            'Quiero mi Álbum Personalizado'
+            t('customAlbum.submit')
           )}
         </button>
       </div>
