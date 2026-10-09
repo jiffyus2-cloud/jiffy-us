@@ -9,6 +9,7 @@ import {
   INITIAL_REF_PREFIX,
   resolveImageRef,
   isUploadedRef,
+  resolveSlotImage,
 } from './systemImages';
 
 /**
@@ -106,5 +107,40 @@ describe('resolveImageRef', () => {
     expect(resolveImageRef('')).toBe('');
     expect(resolveImageRef(null)).toBe('');
     expect(resolveImageRef(undefined)).toBe('');
+  });
+});
+
+/**
+ * Un slot con `inheritsFrom` nace de separar dos huecos que compartían foto
+ * (p. ej. la tarjeta del Álbum Personalizado usaba la del álbum normal): hasta
+ * que la administración suba la suya, tiene que verse igual que antes.
+ */
+describe('resolveSlotImage', () => {
+  const uploaded = 'https://firebasestorage.googleapis.com/v0/b/x/o/system_images%2Fa.jpg?alt=media';
+  const own = 'https://firebasestorage.googleapis.com/v0/b/x/o/system_images%2Fb.jpg?alt=media';
+
+  it('cada inheritsFrom apunta a un slot existente y distinto', () => {
+    const ids = SYSTEM_IMAGE_SLOTS.map(slot => slot.id as string);
+    for (const slot of SYSTEM_IMAGE_SLOTS as readonly { id: string; inheritsFrom?: string }[]) {
+      if (!slot.inheritsFrom) continue;
+      expect(ids).toContain(slot.inheritsFrom);
+      expect(slot.inheritsFrom).not.toBe(slot.id);
+    }
+  });
+
+  it('sin cambios, el Álbum Personalizado usa la imagen inicial del álbum', () => {
+    expect(resolveSlotImage({}, 'creator.product.customAlbum')).toBe(
+      resolveSlotImage({}, 'creator.product.album')
+    );
+  });
+
+  it('hereda la imagen que la administración subió para el álbum', () => {
+    expect(resolveSlotImage({ 'creator.product.album': uploaded }, 'creator.product.customAlbum')).toBe(uploaded);
+  });
+
+  it('su propia imagen manda sobre la heredada, y no toca la del álbum', () => {
+    const images = { 'creator.product.album': uploaded, 'creator.product.customAlbum': own };
+    expect(resolveSlotImage(images, 'creator.product.customAlbum')).toBe(own);
+    expect(resolveSlotImage(images, 'creator.product.album')).toBe(uploaded);
   });
 });

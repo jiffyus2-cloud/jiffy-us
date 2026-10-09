@@ -14,6 +14,7 @@ import {
   CAROUSEL_ASPECT,
   CAROUSEL_SPEC,
   resolveImageRef,
+  resolveSlotImage,
   isUploadedRef,
   type CarouselSlide,
   type ImageSpec,
@@ -667,7 +668,7 @@ export default function SystemImagesSection({ adminEmail }: SystemImagesSectionP
                     <div key={slot.id} className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
                       <div className="bg-gray-50 relative overflow-hidden" style={{ aspectRatio: slot.aspect }}>
                         <img
-                          src={resolveImageRef(images[slot.id]) || slot.defaultUrl}
+                          src={resolveSlotImage(images, slot.id)}
                           alt={slot.label}
                           className="absolute inset-0 w-full h-full object-cover"
                         />

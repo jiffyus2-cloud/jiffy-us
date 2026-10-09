@@ -13,6 +13,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
 
   // Sustituibles desde el panel de administración; por defecto, los assets originales.
   const albumImage = useSystemImage('creator.product.album');
+  const customAlbumImage = useSystemImage('creator.product.customAlbum');
   const calendarImage = useSystemImage('creator.product.calendar');
 
   // Ancho equivalente a las columnas de la grilla previa (gap-8 = 2rem):
@@ -58,7 +59,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         >
           <div className="w-full aspect-square overflow-hidden">
             <img
-              src={albumImage}
+              src={customAlbumImage}
               alt="Custom Album"
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
             />
