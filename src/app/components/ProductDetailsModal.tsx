@@ -7,7 +7,8 @@ import { getColombianHolidays, isHoliday } from '../utils/holidays';
 
 // Las carpetas de muestras viven en el catálogo de imágenes del sistema, para que
 // se puedan añadir, quitar y reordenar desde el panel de administración.
-import { useSystemGallery } from '../context/SystemImagesContext';
+import { useSystemGallery, useSystemImages } from '../context/SystemImagesContext';
+import StoreImage from './ui/StoreImage';
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -28,9 +29,15 @@ const MONTHS_ES = [
 ];
 
 // --- MINI COMPONENTE PARA EL CARRUSEL DE ESTILOS ---
-const StyleCarouselCard = ({ style, noImagesLabel }: { style: any; noImagesLabel: string }) => {
+const StyleCarouselCard = ({ style, noImagesLabel, loading }: { style: any; noImagesLabel: string; loading: boolean }) => {
   const images = style.images || (style.image ? [style.image] : []);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Se descargan todas de entrada para que, al rotar, no vuelva el logo de espera.
+  useEffect(() => {
+    images.forEach((url: string) => { new Image().src = url; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images.join('|')]);
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,9 +66,9 @@ const StyleCarouselCard = ({ style, noImagesLabel }: { style: any; noImagesLabel
   return (
     <div className="group border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
       <div className="relative aspect-square overflow-hidden bg-gray-50 flex items-center justify-center">
-        {images.length > 0 ? (
-          <img
-            src={images[currentIndex]}
+        {loading || images.length > 0 ? (
+          <StoreImage
+            src={images[currentIndex] ?? ''}
             alt={style.name}
             className="w-full h-full object-cover transition-transform duration-500"
           />
@@ -114,6 +121,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const allClientImages = useSystemGallery('samples.clientes');
   const allPapelImages = useSystemGallery('samples.papel');
   const allTelaImages = useSystemGallery('samples.tela');
+  // Hasta que Firestore dice qué imágenes tocan, las galerías llegan vacías:
+  // se pintan huecos con el logo de espera en vez de «Sin imágenes».
+  const { loaded: imagesLoaded } = useSystemImages();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSpecsOpen, setIsSpecsOpen] = useState(false);
   const [sizePreviewImage, setSizePreviewImage] = useState<string | null>(null);
@@ -236,7 +246,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
           ],
           galleryTitle: 'Clientes Felices',
           gallerySubtitle: t('details.album.gallerySubtitle'),
-          gallery: randomClientImages.length > 0 ? randomClientImages : fallbackGallery
+          gallery: !imagesLoaded
+            ? Array<string>(6).fill('')
+            : randomClientImages.length > 0 ? randomClientImages : fallbackGallery
         };
       case 'calendar':
         return {
@@ -295,7 +307,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
               <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{t('details.availableStyles')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                 {productData.styles.map((style, index) => (
-                  <StyleCarouselCard key={index} style={style} noImagesLabel="Sin imágenes" />
+                  <StyleCarouselCard key={index} style={style} noImagesLabel="Sin imágenes" loading={!imagesLoaded} />
                 ))}
               </div>
 
@@ -376,9 +388,9 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
                 <div
                   key={index}
                   className="aspect-square rounded-xl md:rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
-                  onClick={() => setSelectedImage(image)}
+                  onClick={() => image && setSelectedImage(image)}
                 >
-                  <img
+                  <StoreImage
                     src={image}
                     alt={`Example ${index + 1}`}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"

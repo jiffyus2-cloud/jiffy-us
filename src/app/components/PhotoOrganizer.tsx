@@ -89,6 +89,7 @@ import { RecommendationCard, PlanComposition, PagePriceSummary } from './PagePla
 
 // --- NUEVA IMAGEN DE JIFFY ---
 import { useSystemImage } from '../context/SystemImagesContext';
+import StoreImage from './ui/StoreImage';
 import iosAnimVideo from '../../assets/Anim_IOS.mp4';
 
 // ============================================================================
@@ -2682,7 +2683,7 @@ export default function PhotoOrganizer({
           ) : (
             <>
               <button onClick={() => setShowPickerWarning(true)} className="w-full aspect-[3/4] px-6 border-2 border-dashed border-black rounded-lg hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-3 group animate-pulse-border">
-                <img src={jiffy2Img} alt="Jiffy Upload" className="w-28 h-28 object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
+                <StoreImage src={jiffy2Img} alt="Jiffy Upload" wrapperClassName="relative w-28 h-28" logoClassName="w-2/3" className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity" />
                 <div className="text-center flex flex-col items-center gap-3 w-full">
                   <p className="text-sm text-gray-500">{t('organizer.uploadTimeHint')}</p>
                   <span className="inline-flex items-center justify-center gap-2 bg-black text-white text-base font-semibold px-6 py-3 rounded-full shadow-lg group-hover:bg-gray-800 transition-colors w-full max-w-xs">
