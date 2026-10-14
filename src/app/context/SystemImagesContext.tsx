@@ -88,10 +88,18 @@ const GALLERY_DEFAULTS: Record<string, readonly string[]> = Object.fromEntries(
   SYSTEM_IMAGE_GALLERIES.map(gallery => [gallery.id, gallery.defaultRefs])
 );
 
-/** URL de un slot: la que haya puesto la administración o, si no ha tocado nada, la heredada o la inicial. */
+/**
+ * URL de un slot: la que haya puesto la administración o, si no ha tocado nada,
+ * la heredada o la inicial.
+ *
+ * Mientras no ha respondido Firestore devuelve '' en vez de la inicial: si no,
+ * la tienda enseña un instante la imagen original (de peor calidad) antes de
+ * cambiarla por la subida. Quien pinta usa <StoreImage>, que con '' muestra el
+ * logo de espera.
+ */
 export function useSystemImage(slotId: SystemImageSlotId): string {
-  const { images } = useSystemImages();
-  return resolveSlotImage(images, slotId);
+  const { images, loaded } = useSystemImages();
+  return loaded ? resolveSlotImage(images, slotId) : '';
 }
 
 /** Referencias en crudo de una galería (lo que se guarda), para el panel de administración. */
@@ -109,10 +117,15 @@ export function useSystemGalleryRefs(galleryId: SystemImageGalleryId): string[] 
  * decisión válida (la administración las quitó todas), así que solo se cae a las
  * iniciales cuando NO hay ninguna lista guardada. Se descartan las referencias
  * que ya no resuelven, para no dejar huecos rotos en la tienda.
+ *
+ * Igual que `useSystemImage`: vacía mientras no ha respondido Firestore, para no
+ * enseñar las iniciales de paso (mira `loaded` para distinguirlo de una galería
+ * que de verdad está vacía).
  */
 export function useSystemGallery(galleryId: SystemImageGalleryId): string[] {
+  const { loaded } = useSystemImages();
   const refs = useSystemGalleryRefs(galleryId);
-  return useMemo(() => refs.map(resolveImageRef).filter(Boolean), [refs]);
+  return useMemo(() => (loaded ? refs.map(resolveImageRef).filter(Boolean) : []), [refs, loaded]);
 }
 
 /** Diapositivas en crudo (con referencias sin resolver), para el panel de administración. */
@@ -125,14 +138,19 @@ export function useCarouselSlideRefs(): CarouselSlide[] {
  * Diapositivas del carrusel con la imagen ya resuelta. Igual que las galerías:
  * una lista vacía guardada se respeta, y las diapositivas cuya imagen ya no
  * existe se descartan en vez de pintarse en blanco.
+ *
+ * Vacío mientras no ha respondido Firestore, por la misma razón que las galerías.
  */
 export function useCarouselSlides(): Array<CarouselSlide & { url: string }> {
+  const { loaded } = useSystemImages();
   const slides = useCarouselSlideRefs();
   return useMemo(
     () =>
-      slides
-        .map(slide => ({ ...slide, url: resolveImageRef(slide.ref) }))
-        .filter(slide => slide.url !== ''),
-    [slides]
+      loaded
+        ? slides
+            .map(slide => ({ ...slide, url: resolveImageRef(slide.ref) }))
+            .filter(slide => slide.url !== '')
+        : [],
+    [slides, loaded]
   );
 }

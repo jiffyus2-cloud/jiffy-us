@@ -1,4 +1,5 @@
 import { useSystemImage } from '../context/SystemImagesContext';
+import StoreImage from './ui/StoreImage';
 import { DESIGN } from '../../styles/design-system';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -37,9 +38,9 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         >
           {/* Album Image */}
           <div className="w-full aspect-square overflow-hidden">
-            <img 
-              src={albumImage} 
-              alt="Photo Albums" 
+            <StoreImage
+              src={albumImage}
+              alt="Photo Albums"
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
             />
           </div>
@@ -58,7 +59,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           <div className="w-full aspect-square overflow-hidden">
-            <img
+            <StoreImage
               src={customAlbumImage}
               alt="Custom Album"
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
@@ -80,7 +81,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
         >
           {/* Calendar Image */}
           <div className="w-full aspect-square overflow-hidden">
-            <img
+            <StoreImage
               src={calendarImage}
               alt="Photo Calendars"
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"

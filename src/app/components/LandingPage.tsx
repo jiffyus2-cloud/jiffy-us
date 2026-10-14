@@ -16,7 +16,8 @@ const FAQ_COUNT = 12;
 import { useStoreConfig } from '../context/StoreConfigContext';
 
 // --- IMÁGENES DEL SISTEMA (sustituibles desde el panel de administración) ---
-import { useSystemImage, useCarouselSlides } from '../context/SystemImagesContext';
+import { useSystemImage, useCarouselSlides, useSystemImages } from '../context/SystemImagesContext';
+import StoreImage from './ui/StoreImage';
 
 export default function LandingPage() {
   const { t } = useLanguage();
@@ -31,6 +32,10 @@ export default function LandingPage() {
   const calendarImage = useSystemImage('landing.product.calendar');
   // Diapositivas (imagen + textos) tal y como las haya dejado la administración.
   const heroImages = useCarouselSlides();
+  const { loaded: imagesLoaded } = useSystemImages();
+  // URL de la diapositiva que ya se ve: los textos esperan a su imagen para no
+  // salir sobre el fondo de espera.
+  const [heroReadyUrl, setHeroReadyUrl] = useState('');
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();
@@ -54,6 +59,12 @@ export default function LandingPage() {
     }, 10000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
+
+  // Se descargan todas las diapositivas de entrada: así, al pasar a la
+  // siguiente, ya está en caché y no vuelve a salir el logo de espera.
+  useEffect(() => {
+    heroImages.forEach(slide => { new Image().src = slide.url; });
+  }, [heroImages]);
 
   // Si la administración borra diapositivas, el índice puede quedar apuntando
   // fuera de la lista: se recorta al pintar en vez de reventar con undefined.
@@ -89,8 +100,8 @@ export default function LandingPage() {
     <div className="w-full">
       <Header />
       
-      {/* Hero Carousel Section */}
-      {activeSlide && (
+      {/* Hero Carousel Section — mientras cargan las imágenes, solo el logo de espera */}
+      {(activeSlide || !imagesLoaded) && (
       <section className="relative h-[60vh] w-full overflow-hidden">
         <motion.div
           key={currentSlide}
@@ -100,14 +111,17 @@ export default function LandingPage() {
           transition={{ duration: 0.6 }}
           className="absolute inset-0"
         >
-          <img
-            src={activeSlide.url}
+          <StoreImage
+            src={activeSlide?.url ?? ''}
             alt="Hero"
             className="w-full h-full object-cover"
+            logoClassName="w-1/4 max-w-[220px]"
+            onReady={setHeroReadyUrl}
           />
         </motion.div>
 
         {/* Hero Content */}
+        {activeSlide && heroReadyUrl === activeSlide.url && (
         <div className="absolute inset-0 flex items-end z-20">
           <div className="w-full px-8 md:px-16 py-10 bg-gradient-to-t from-black/60 to-transparent">
             <motion.h1
@@ -139,6 +153,7 @@ export default function LandingPage() {
             </motion.button>
           </div>
         </div>
+        )}
 
       </section>
       )}
@@ -180,7 +195,7 @@ export default function LandingPage() {
             {/* Photo Album */}
             <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('album')}>
               <div className="relative h-72">
-                <img src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
+                <StoreImage src={albumImage} alt="Photo Albums" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <h3 className="text-xl font-medium mb-1">{t('landing.cardAlbum')}</h3>
@@ -194,7 +209,7 @@ export default function LandingPage() {
             {/* Calendar */}
             <div className={`${CARD_WIDTH} ${DESIGN.card.base} ${DESIGN.card.interactive}`} onClick={() => setSelectedProduct('calendar')}>
               <div className="relative h-72">
-                <img src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
+                <StoreImage src={calendarImage} alt="Photo Calendars" className="w-full h-full object-cover" />
                 <div className={DESIGN.card.overlay} />
                 <div className={DESIGN.card.content}>
                   <h3 className="text-lg font-medium mb-1">{t('landing.cardCalendar')}</h3>

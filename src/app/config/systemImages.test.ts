@@ -34,17 +34,20 @@ describe('catálogo de imágenes del sistema', () => {
     }
   });
 
-  it('cada slot trae una imagen inicial resoluble', () => {
+  it('la imagen inicial de cada slot es una URL del bundle o vacía (sin original)', () => {
     for (const slot of SYSTEM_IMAGE_SLOTS) {
       expect(typeof slot.defaultUrl).toBe('string');
-      expect(slot.defaultUrl.length).toBeGreaterThan(0);
+      expect(slot.defaultUrl.startsWith(INITIAL_REF_PREFIX)).toBe(false);
     }
+    // Las que siguen en uso en la tienda no se pueden perder por accidente.
+    const withOriginal = SYSTEM_IMAGE_SLOTS.filter(slot => slot.defaultUrl !== '').map(slot => slot.id);
+    expect(withOriginal).toEqual(['landing.product.album', 'organizer.upload.mascot']);
   });
 
   it('las galerías arrancan con referencias del bundle, no con URLs con hash', () => {
+    // La de clientes conserva sus originales; Papel y Tela ya no tienen.
+    expect(SYSTEM_IMAGE_GALLERIES.find(g => g.id === 'samples.clientes')!.defaultRefs.length).toBeGreaterThan(0);
     for (const gallery of SYSTEM_IMAGE_GALLERIES) {
-      // Si una carpeta llegara vacía, esa muestra saldría en blanco en la tienda.
-      expect(gallery.defaultRefs.length).toBeGreaterThan(0);
       for (const ref of gallery.defaultRefs) {
         expect(ref.startsWith(INITIAL_REF_PREFIX)).toBe(true);
         expect(resolveImageRef(ref)).not.toBe('');
@@ -67,18 +70,8 @@ describe('catálogo de imágenes del sistema', () => {
 });
 
 describe('carrusel inicial', () => {
-  it('no repite ids de diapositiva', () => {
-    const ids = DEFAULT_CAROUSEL_SLIDES.map(slide => slide.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('cada diapositiva trae imagen resoluble y sus tres textos', () => {
-    for (const slide of DEFAULT_CAROUSEL_SLIDES) {
-      expect(resolveImageRef(slide.ref)).not.toBe('');
-      expect(slide.title.trim()).not.toBe('');
-      expect(slide.description.trim()).not.toBe('');
-      expect(slide.cta.trim()).not.toBe('');
-    }
+  it('está vacío: las diapositivas viven en Firestore', () => {
+    expect(DEFAULT_CAROUSEL_SLIDES).toEqual([]);
   });
 });
 
@@ -95,7 +88,7 @@ describe('resolveImageRef', () => {
   });
 
   it('resuelve una referencia inicial contra el bundle actual', () => {
-    const ref = DEFAULT_CAROUSEL_SLIDES[0].ref;
+    const ref = SYSTEM_IMAGE_GALLERIES.find(g => g.id === 'samples.clientes')!.defaultRefs[0];
     expect(ref.startsWith(INITIAL_REF_PREFIX)).toBe(true);
     expect(isUploadedRef(ref)).toBe(false);
     expect(resolveImageRef(ref)).not.toBe('');
@@ -128,10 +121,8 @@ describe('resolveSlotImage', () => {
     }
   });
 
-  it('sin cambios, el Álbum Personalizado usa la imagen inicial del álbum', () => {
-    expect(resolveSlotImage({}, 'creator.product.customAlbum')).toBe(
-      resolveSlotImage({}, 'creator.product.album')
-    );
+  it('sin nada subido y sin original, queda vacío (la tienda pinta el logo de espera)', () => {
+    expect(resolveSlotImage({}, 'creator.product.customAlbum')).toBe('');
   });
 
   it('hereda la imagen que la administración subió para el álbum', () => {

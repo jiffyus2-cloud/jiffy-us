@@ -21,6 +21,7 @@ import {
   type SafeZoneDiagram,
 } from '../config/systemImages';
 import { useSystemImages, useCarouselSlideRefs } from '../context/SystemImagesContext';
+import StoreImage from './ui/StoreImage';
 
 /**
  * Panel para cambiar las imágenes de la tienda sin tocar código ni volver a
@@ -667,10 +668,11 @@ export default function SystemImagesSection({ adminEmail }: SystemImagesSectionP
                   return (
                     <div key={slot.id} className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
                       <div className="bg-gray-50 relative overflow-hidden" style={{ aspectRatio: slot.aspect }}>
-                        <img
+                        <StoreImage
                           src={resolveSlotImage(images, slot.id)}
                           alt={slot.label}
-                          className="absolute inset-0 w-full h-full object-cover"
+                          wrapperClassName="absolute inset-0"
+                          className="w-full h-full object-cover"
                         />
                         {isBusy && (
                           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
