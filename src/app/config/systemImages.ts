@@ -20,27 +20,22 @@
  *   tarde a la captura y devolver páginas en gris; ese camino se queda con el
  *   asset local.
  * - `Anim_IOS.mp4`: es un vídeo, no una foto.
+ *
+ * SIN ORIGINAL: las imágenes iniciales que la administración ya había
+ * reemplazado se borraron del código (carrusel, tarjetas de calendario y del
+ * álbum en el creador, muestras de Papel y Tela). Esos huecos tienen
+ * `defaultUrl: ''` / `defaultRefs: []`: sin Firestore la app tampoco sirve, así
+ * que no merecía la pena cargar con ellas en el bundle.
  */
 
 // Portada
-import heroSlide1 from '../../assets/Carousel/c4.jpg';
-import heroSlide2 from '../../assets/Carousel/C100164.jpg';
-import heroSlide3 from '../../assets/Carousel/c8.jpg';
-import heroSlide4 from '../../assets/Carousel/C100153.jpg';
 import landingAlbum from '../../assets/IMG_8973.jpg';
-import landingCalendar from '../../assets/Calendario.jpg';
-
-// Creador (elige tu producto)
-import creatorAlbum from '../../assets/Album2.jpeg';
-import creatorCalendar from '../../assets/ec28dc812bed68927d47becc060a8091e563d836.png';
 
 // Organizador de fotos
 import organizerMascot from '../../assets/Jiffy2.png';
 
-// Galerías de muestra del modal de detalle de producto (carpetas completas)
+// Galería de clientes del modal de detalle de producto (carpeta completa)
 const clientesGlob = import.meta.glob('../../assets/Clientes/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
-const papelGlob = import.meta.glob('../../assets/Papel/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
-const telaGlob = import.meta.glob('../../assets/Tela/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', { eager: true });
 
 /** Prefijo de las referencias a imágenes del bundle. */
 export const INITIAL_REF_PREFIX = 'initial:';
@@ -68,8 +63,6 @@ function registerFolder(glob: Record<string, unknown>, folder: string): string[]
 }
 
 const DEFAULT_CLIENTES_REFS = registerFolder(clientesGlob, 'Clientes');
-const DEFAULT_PAPEL_REFS = registerFolder(papelGlob, 'Papel');
-const DEFAULT_TELA_REFS = registerFolder(telaGlob, 'Tela');
 
 /**
  * Traduce una referencia guardada a una URL pintable: las de Storage se
@@ -149,7 +142,7 @@ export interface SystemImageSlot {
   hint: string;
   /** Proporción con la que se pinta la vista previa (CSS `aspect-ratio`). */
   aspect: string;
-  /** Imagen con la que arranca la tienda mientras nadie suba otra. */
+  /** Imagen con la que arranca la tienda mientras nadie suba otra ('' si ya no hay original). */
   defaultUrl: string;
   /** Qué tamaño necesita y dónde debe quedar el contenido. */
   spec: ImageSpec;
@@ -190,37 +183,11 @@ export interface CarouselSlide {
   cta: string;
 }
 
-/** Carrusel con el que arranca la tienda mientras la administración no lo cambie. */
-export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
-  {
-    id: 'slide-1',
-    ref: registerInitial('Carousel/c4.jpg', heroSlide1),
-    title: 'Esos momentos que no quieres olvidar',
-    description: 'Cada photobook es un pedacito de tu historia',
-    cta: 'Vamos a Diseñar',
-  },
-  {
-    id: 'slide-2',
-    ref: registerInitial('Carousel/C100164.jpg', heroSlide2),
-    title: 'Tus momentos en las mejores manos',
-    description: 'Porque tus recuerdos merecen lo mejor',
-    cta: 'Vamos a Diseñar',
-  },
-  {
-    id: 'slide-3',
-    ref: registerInitial('Carousel/c8.jpg', heroSlide3),
-    title: 'Lo que más amas, siempre cerca de ti',
-    description: 'Que cada día te recuerde lo que realmente importa',
-    cta: 'Vamos a Diseñar',
-  },
-  {
-    id: 'slide-4',
-    ref: registerInitial('Carousel/C100153.jpg', heroSlide4),
-    title: 'Recuerdos que vuelves a sentir cada vez que los miras',
-    description: 'Llena tus días de momentos que amas',
-    cta: 'Vamos a Diseñar',
-  },
-];
+/**
+ * Carrusel inicial: vacío. Las diapositivas originales se borraron porque la
+ * administración ya las había reemplazado todas (viven en Firestore).
+ */
+export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [];
 
 /** Proporción con la que se previsualiza una diapositiva en el panel. */
 export const CAROUSEL_ASPECT = '16 / 9';
@@ -291,7 +258,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     label: 'Calendarios',
     hint: 'Tarjeta de calendarios en «Nuestros Productos».',
     aspect: '4 / 3',
-    defaultUrl: landingCalendar,
+    defaultUrl: '',
     spec: LANDING_CARD_SPEC,
   },
   {
@@ -300,7 +267,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     label: 'Álbum de fotos',
     hint: 'Tarjeta de álbum en la pantalla «Elige Tu Producto».',
     aspect: '1 / 1',
-    defaultUrl: creatorAlbum,
+    defaultUrl: '',
     spec: SQUARE_CARD_SPEC,
   },
   {
@@ -309,7 +276,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     label: 'Álbum Personalizado',
     hint: 'Tarjeta de «Álbum Personalizado» en «Elige Tu Producto». Mientras no subas una, usa la del álbum de fotos.',
     aspect: '1 / 1',
-    defaultUrl: creatorAlbum,
+    defaultUrl: '',
     spec: SQUARE_CARD_SPEC,
     inheritsFrom: 'creator.product.album',
   },
@@ -319,7 +286,7 @@ export const SYSTEM_IMAGE_SLOTS = [
     label: 'Calendario de fotos',
     hint: 'Tarjeta de calendario en la pantalla «Elige Tu Producto».',
     aspect: '1 / 1',
-    defaultUrl: creatorCalendar,
+    defaultUrl: '',
     spec: SQUARE_CARD_SPEC,
   },
   {
@@ -369,7 +336,7 @@ export const SYSTEM_IMAGE_GALLERIES = [
     label: 'Carátula en pasta dura con foto',
     hint: 'Muestras del estilo en papel, en el detalle del álbum.',
     aspect: '1 / 1',
-    defaultRefs: DEFAULT_PAPEL_REFS,
+    defaultRefs: [],
     spec: GALLERY_SPEC,
   },
   {
@@ -378,7 +345,7 @@ export const SYSTEM_IMAGE_GALLERIES = [
     label: 'Carátula en tela',
     hint: 'Muestras del estilo en tela, en el detalle del álbum.',
     aspect: '1 / 1',
-    defaultRefs: DEFAULT_TELA_REFS,
+    defaultRefs: [],
     spec: GALLERY_SPEC,
   },
 ] as const satisfies readonly SystemImageGallery[];
