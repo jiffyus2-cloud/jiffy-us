@@ -91,7 +91,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       <div className="space-y-10">
         {/* Tipo de Calendario */}
         <div>
-          <h3 className="text-2xl mb-4 font-bold">Tipo de Calendario</h3>
+          <h3 className="text-2xl mb-4 font-bold">{t('calendarSetup.typeTitle')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={() => setType('desk')}
@@ -105,8 +105,8 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
                 <RectangleVertical className="w-6 h-6" />
               </div>
               <div>
-                <div className="text-lg font-bold">De Escritorio</div>
-                <p className={`text-sm ${type === 'desk' ? 'text-gray-300' : 'text-gray-500'}`}>Formato vertical compacto</p>
+                <div className="text-lg font-bold">{t('calendarSetup.desk')}</div>
+                <p className={`text-sm ${type === 'desk' ? 'text-gray-300' : 'text-gray-500'}`}>{t('calendarSetup.deskDesc')}</p>
               </div>
             </button>
             <button
@@ -121,8 +121,8 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
                 <RectangleVertical className="w-6 h-6" />
               </div>
               <div>
-                <div className="text-lg font-bold">De Pared</div>
-                <p className={`text-sm ${type === 'wall' ? 'text-gray-300' : 'text-gray-500'}`}>Formato grande (30x44 cm)</p>
+                <div className="text-lg font-bold">{t('calendarSetup.wall')}</div>
+                <p className={`text-sm ${type === 'wall' ? 'text-gray-300' : 'text-gray-500'}`}>{t('calendarSetup.wallDesc')}</p>
               </div>
             </button>
           </div>
@@ -131,21 +131,21 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
         {/* Imágenes por Mes (condicional) */}
         {type === 'wall' && (
           <div>
-            <h3 className="text-2xl mb-4 font-bold">Imágenes por Mes</h3>
+            <h3 className="text-2xl mb-4 font-bold">{t('calendarSetup.perMonthTitle')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => setImagesPerMonth(1)}
                 className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 1 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
               >
-                <div className="text-xl font-bold">1 Foto</div>
-                <div className={`text-sm ${imagesPerMonth === 1 ? 'text-gray-300' : 'text-gray-500'}`}>Una imagen grande por mes</div>
+                <div className="text-xl font-bold">{t('calendarSetup.onePhoto')}</div>
+                <div className={`text-sm ${imagesPerMonth === 1 ? 'text-gray-300' : 'text-gray-500'}`}>{t('calendarSetup.onePhotoDesc')}</div>
               </button>
               <button
                 onClick={() => setImagesPerMonth(4)}
                 className={`py-6 rounded-lg border-4 transition-all ${ imagesPerMonth === 4 ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
               >
-                <div className="text-xl font-bold">4 Fotos</div>
-                <div className={`text-sm ${imagesPerMonth === 4 ? 'text-gray-300' : 'text-gray-500'}`}>Un collage de 4 imágenes</div>
+                <div className="text-xl font-bold">{t('calendarSetup.fourPhotos')}</div>
+                <div className={`text-sm ${imagesPerMonth === 4 ? 'text-gray-300' : 'text-gray-500'}`}>{t('calendarSetup.fourPhotosDesc')}</div>
               </button>
             </div>
           </div>
@@ -168,7 +168,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
 
         {/* Mes de Inicio */}
         <div>
-          <h3 className="text-2xl mb-2 font-bold">Mes de inicio</h3>
+          <h3 className="text-2xl mb-2 font-bold">{t('calendarSetup.startMonthTitle')}</h3>
           <p className="text-sm text-gray-500 mb-4">
             <RichText text={t('calendarSetup.range', { from: `${MONTH_NAMES[startMonth - 1]} ${year}`, to: `${MONTH_NAMES[endMonthIndex]} ${endYearActual}` })} />
           </p>

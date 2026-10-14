@@ -66,7 +66,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           </div>
 
           <div className="p-6">
-            <h3 className={DESIGN.text.h4}>Álbum Personalizado</h3>
+            <h3 className={DESIGN.text.h4}>{t('product.customAlbum')}</h3>
             <p className="text-sm mb-4 text-gray-600">
               {t('product.customAlbumCardDesc')}
             </p>
