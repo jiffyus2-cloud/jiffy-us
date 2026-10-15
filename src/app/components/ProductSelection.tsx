@@ -37,7 +37,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Album Image */}
-          <div className="w-full aspect-square overflow-hidden">
+          <div className="relative w-full aspect-square overflow-hidden">
             <StoreImage
               src={albumImage}
               alt="Photo Albums"
@@ -58,7 +58,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           onClick={() => onSelectProduct('custom-album')}
           className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
-          <div className="w-full aspect-square overflow-hidden">
+          <div className="relative w-full aspect-square overflow-hidden">
             <StoreImage
               src={customAlbumImage}
               alt="Custom Album"
@@ -80,7 +80,7 @@ export default function ProductSelection({ onSelectProduct }: ProductSelectionPr
           className={`${CARD_WIDTH} ${DESIGN.card.border} ${DESIGN.card.unselected} hover:border-black transition-all group`}
         >
           {/* Calendar Image */}
-          <div className="w-full aspect-square overflow-hidden">
+          <div className="relative w-full aspect-square overflow-hidden">
             <StoreImage
               src={calendarImage}
               alt="Photo Calendars"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { ChevronDown, ShoppingBag, Tag, Truck, Gift, Star } from 'lucide-react';
@@ -11,6 +11,9 @@ import { RichBlock } from './ui/RichText';
 
 /** Preguntas frecuentes: faq.1 … faq.N en los textos de la tienda. */
 const FAQ_COUNT = 12;
+
+/** Duración del fundido entre diapositivas del carrusel. */
+const HERO_FADE_MS = 1000;
 
 // --- IMPORTAMOS EL CONTEXTO DINÁMICO ---
 import { useStoreConfig } from '../context/StoreConfigContext';
@@ -33,9 +36,15 @@ export default function LandingPage() {
   // Diapositivas (imagen + textos) tal y como las haya dejado la administración.
   const heroImages = useCarouselSlides();
   const { loaded: imagesLoaded } = useSystemImages();
-  // URL de la diapositiva que ya se ve: los textos esperan a su imagen para no
-  // salir sobre el fondo de espera.
-  const [heroReadyUrl, setHeroReadyUrl] = useState('');
+  // Diapositivas cuya imagen ya terminó de cargar: los textos esperan a su
+  // imagen, y el carrusel no avanza a una que aún no se puede ver.
+  const [readyHeroUrls, setReadyHeroUrls] = useState<Set<string>>(() => new Set());
+  const markHeroReady = useCallback((url: string) => {
+    setReadyHeroUrls(prev => (prev.has(url) ? prev : new Set(prev).add(url)));
+  }, []);
+  // Diapositiva que se está yendo: se queda opaca DEBAJO mientras la nueva
+  // aparece encima, para que entre una y otra nunca se vea el fondo.
+  const [leavingSlide, setLeavingSlide] = useState<number | null>(null);
 
   // Traemos SOLO las promociones de Firebase (eliminamos discounts para evitar el error)
   const { promotions, configLoaded } = useStoreConfig();
@@ -52,25 +61,34 @@ export default function LandingPage() {
     answer: t(`faq.${i + 1}.a`),
   }));
 
-  useEffect(() => {
-    if (heroImages.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % heroImages.length);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [heroImages.length]);
-
-  // Se descargan todas las diapositivas de entrada: así, al pasar a la
-  // siguiente, ya está en caché y no vuelve a salir el logo de espera.
-  useEffect(() => {
-    heroImages.forEach(slide => { new Image().src = slide.url; });
-  }, [heroImages]);
-
   // Si la administración borra diapositivas, el índice puede quedar apuntando
   // fuera de la lista: se recorta al pintar en vez de reventar con undefined.
-  const activeSlide = heroImages.length > 0
-    ? heroImages[Math.min(currentSlide, heroImages.length - 1)]
-    : null;
+  const activeIndex = Math.min(currentSlide, Math.max(heroImages.length - 1, 0));
+  const activeSlide = heroImages.length > 0 ? heroImages[activeIndex] : null;
+
+  // El temporizador lee lo último sin reiniciarse cada vez que carga una imagen.
+  const heroStateRef = useRef({ heroImages, readyHeroUrls, activeIndex });
+  heroStateRef.current = { heroImages, readyHeroUrls, activeIndex };
+
+  useEffect(() => {
+    if (heroImages.length <= 1) return;
+    let clearLeaving: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(() => {
+      const { heroImages: slides, readyHeroUrls: ready, activeIndex: current } = heroStateRef.current;
+      const next = (current + 1) % slides.length;
+      // Si la siguiente aún no ha cargado, se espera en la actual en vez de
+      // fundirse hacia un hueco en blanco.
+      if (!ready.has(slides[next].url)) return;
+      setLeavingSlide(current);
+      setCurrentSlide(next);
+      clearTimeout(clearLeaving);
+      clearLeaving = setTimeout(() => setLeavingSlide(null), HERO_FADE_MS);
+    }, 10000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(clearLeaving);
+    };
+  }, [heroImages.length]);
 
   // Diccionario Dinámico de Íconos
   const getIconComponent = (iconName: string) => {
@@ -103,25 +121,37 @@ export default function LandingPage() {
       {/* Hero Carousel Section — mientras cargan las imágenes, solo el logo de espera */}
       {(activeSlide || !imagesLoaded) && (
       <section className="relative h-[60vh] w-full overflow-hidden">
-        <motion.div
-          key={currentSlide}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
-          className="absolute inset-0"
-        >
-          <StoreImage
-            src={activeSlide?.url ?? ''}
-            alt="Hero"
-            className="w-full h-full object-cover"
-            logoClassName="w-1/4 max-w-[220px]"
-            onReady={setHeroReadyUrl}
-          />
-        </motion.div>
+        {/* Todas las diapositivas montadas y apiladas: así se descargan desde el
+            principio y el cambio es un fundido de la nueva sobre la anterior,
+            que sigue opaca debajo hasta que la nueva termina de aparecer. */}
+        {heroImages.length === 0 ? (
+          <StoreImage src="" alt="" logoClassName="w-1/4 max-w-[220px]" />
+        ) : (
+          heroImages.map((slide, i) => (
+            <div
+              key={slide.id}
+              className={`absolute inset-0 ${
+                i === activeIndex
+                  ? 'z-[2] opacity-100 transition-opacity ease-in-out'
+                  : i === leavingSlide
+                  ? 'z-[1] opacity-100'
+                  : 'z-0 opacity-0'
+              }`}
+              style={i === activeIndex ? { transitionDuration: `${HERO_FADE_MS}ms` } : undefined}
+            >
+              <StoreImage
+                src={slide.url}
+                alt="Hero"
+                className="w-full h-full object-cover"
+                logoClassName="w-1/4 max-w-[220px]"
+                onReady={markHeroReady}
+              />
+            </div>
+          ))
+        )}
 
         {/* Hero Content */}
-        {activeSlide && heroReadyUrl === activeSlide.url && (
+        {activeSlide && readyHeroUrls.has(activeSlide.url) && (
         <div className="absolute inset-0 flex items-end z-20">
           <div className="w-full px-8 md:px-16 py-10 bg-gradient-to-t from-black/60 to-transparent">
             <motion.h1
