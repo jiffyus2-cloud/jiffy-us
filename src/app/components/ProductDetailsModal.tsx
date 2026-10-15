@@ -387,7 +387,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
               {productData.gallery.map((image, index) => (
                 <div
                   key={index}
-                  className="aspect-square rounded-xl md:rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
+                  className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 cursor-pointer group"
                   onClick={() => image && setSelectedImage(image)}
                 >
                   <StoreImage

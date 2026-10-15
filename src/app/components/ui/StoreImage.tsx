@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import jiffyLogo from '../../../assets/JiffyLogo.svg';
+// `?inline` mete el logo en el bundle como data URL: sale en el primer
+// fotograma, sin petición de red que pueda tardar o fallar.
+import jiffyLogo from '../../../assets/JiffyLogo.svg?inline';
 
 /**
  * Imagen de la tienda (carrusel, tarjetas, galerías…) con espera de marca.
@@ -9,9 +11,13 @@ import jiffyLogo from '../../../assets/JiffyLogo.svg';
  * los que antes se veía otra cosa: mientras Firestore no ha dicho qué imagen
  * toca (`src` vacío) y mientras se descarga la que subió la administración.
  *
- * El logo va encima de la imagen, no al revés: así la imagen conserva sus
- * propias clases (y transiciones, como el zoom al pasar el ratón) sin que haya
- * que tocarle la opacidad.
+ * La imagen real va oculta (`visibility: hidden`) mientras no ha cargado: así
+ * el navegador no enseña su icono de imagen en carga o rota (en Safari, un
+ * cuadro azul con «?»). Si falla, se queda el logo.
+ *
+ * El contenedor es quien ocupa el hueco; por defecto `absolute inset-0`, así
+ * que el padre tiene que estar posicionado (`relative`). Es más fiable que
+ * `h-full`, que en Safari no siempre resuelve dentro de un `aspect-ratio`.
  */
 interface StoreImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   /** URL a pintar; '' mientras aún no se sabe cuál es. */
@@ -27,10 +33,11 @@ interface StoreImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>
 export default function StoreImage({
   src,
   alt,
-  wrapperClassName = 'relative w-full h-full',
+  wrapperClassName = 'absolute inset-0',
   logoClassName = 'w-1/3 max-w-[160px]',
   onLoad,
   onReady,
+  style,
   ...imgProps
 }: StoreImageProps) {
   const imgRef = useRef<HTMLImageElement>(null);
@@ -61,6 +68,7 @@ export default function StoreImage({
             setLoadedSrc(src);
             onLoad?.(e);
           }}
+          style={{ ...style, visibility: ready ? 'visible' : 'hidden' }}
           {...imgProps}
         />
       )}
