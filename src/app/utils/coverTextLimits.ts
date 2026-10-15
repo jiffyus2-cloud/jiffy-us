@@ -249,13 +249,13 @@ const ALBUM_HEIGHT_CM: Record<CoverSize, number> = {
  * estrecha:
  *  - preview  CoverPreview.tsx:513-532 — lomo de 1cm, fuente 38.81cqw de ese
  *    ancho (= 0.3881cm = 11pt), tracking-widest, texto desde 1.5cm del tope.
- *  - PDF      OwnerDashboard.tsx:822-837 — dibuja su PROPIO lomo: spineCm = 2,
- *    fuente = spinePxWidth × 0.25 (≈ 0.4996cm), letterSpacing '8px' (= 0.0677cm
+ *  - PDF      OwnerDashboard.tsx:822-837 — dibuja su PROPIO lomo: spineCm = 1,
+ *    fuente = max(spinePxWidth × 0.25, 11pt) = 0.3881cm, letterSpacing '8px' (= 0.0677cm
  *    a 300 DPI) y el texto arranca al 10% del alto.
  * En los 4 tamaños manda el PDF.
  */
 const PREVIEW_SPINE = { fontCm: 0.3881, topOffsetCm: 1.5, extraTrackingCm: 0.3881 * 0.1 };
-const PDF_SPINE = { fontCm: 0.4996, topOffsetFrac: 0.1, extraTrackingCm: (8 / 300) * 2.54 };
+const PDF_SPINE = { fontCm: 0.3881, topOffsetFrac: 0.1, extraTrackingCm: (8 / 300) * 2.54 };
 
 function spineLimit(size: CoverSize): number {
   const h = ALBUM_HEIGHT_CM[size];
@@ -284,10 +284,10 @@ function familyFor(size: CoverSize, type: CoverType): Family {
  *
  *   Familia            L1        L2        L3        L4        L5        Lomo
  *   Tela (4 tamaños)   23 / 32   22 / 32   22 / 22   —         —         n/a
- *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         62
- *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 46
- *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 44
- *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 66
+ *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         76
+ *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 57
+ *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 54
+ *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 81
  *
  * En cada familia el título y el subtítulo de un mismo layout coinciden salvo
  * que cambie el tamaño de fuente o el tracking: en Century Gothic la negrita
