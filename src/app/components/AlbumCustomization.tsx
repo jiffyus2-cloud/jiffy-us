@@ -137,8 +137,13 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
   // El subtítulo de muestra sale del límite REAL del layout: la frase fija
   // de 32 caracteres se desbordaba en los layouts estrechos (ver getSampleSubtitle).
   const SAMPLE_SUBTITLE = getSampleSubtitle(savedLimits.subtitle);
-  const displaySubtitle = coverContent.coverSubtitle || (subtitleFieldVisible ? SAMPLE_SUBTITLE : '');
-  const subtitleIsPlaceholder = subtitleFieldVisible && !coverContent.coverSubtitle;
+  // El subtítulo es opcional: la muestra sólo orienta mientras la portada
+  // está sin diseñar. Una vez guardada sin subtítulo, se muestra tal cual se
+  // imprimirá (sin texto), sobre todo en Tela, donde el dorado atenuado sobre
+  // la textura parecía un texto real.
+  const showSampleSubtitle = subtitleFieldVisible && !isCoverEdited && !coverContent.coverSubtitle;
+  const displaySubtitle = coverContent.coverSubtitle || (showSampleSubtitle ? SAMPLE_SUBTITLE : '');
+  const subtitleIsPlaceholder = showSampleSubtitle;
 
   const coverTextOverflows =
     (savedLimits.title !== null && coverContent.coverTitle.trim().length > savedLimits.title) ||

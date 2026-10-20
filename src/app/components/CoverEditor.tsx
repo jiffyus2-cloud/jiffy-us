@@ -416,7 +416,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                 {textLimits.subtitle !== null && (
                   <div className="space-y-1 md:space-y-1.5">
                     <div className="flex items-baseline justify-between ml-1 mr-1">
-                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Subtítulo / Descripción</label>
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400">Subtítulo / Descripción <span className="normal-case tracking-normal font-medium">(opcional)</span></label>
                       <CharCount used={coverSubtitle.length} max={textLimits.subtitle} />
                     </div>
                     <input
@@ -429,6 +429,11 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       placeholder={SAMPLE_SUBTITLE}
                     />
                     {subtitleOverLimit && <OverflowMsg used={coverSubtitle.length} max={textLimits.subtitle} />}
+                    {!coverSubtitle && (
+                      <p className="text-[10px] font-medium text-gray-400 ml-1">
+                        El texto atenuado es solo un ejemplo: si lo dejas vacío, la portada se imprime sin subtítulo.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
