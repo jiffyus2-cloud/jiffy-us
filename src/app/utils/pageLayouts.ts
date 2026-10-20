@@ -78,17 +78,17 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   square: {
     1: [
       // Margen del 5 % (1 cm en 20x20, 1,5 cm en 30x30).
-      { id: 'margin', label: 'Con margen', slots: [{ x: 5.03, y: 5.03, w: 89.93, h: 89.93 }] },
-      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'margin', label: 'Con borde', slots: [{ x: 5.03, y: 5.03, w: 89.93, h: 89.93 }] },
+      { id: 'bleed', label: 'Sin bordes', slots: FULL_BLEED },
       { id: 'portrait', label: 'Vertical', slots: [{ x: 15.02, y: 0, w: 69.97, h: 100 }] },
       { id: 'landscape', label: 'Horizontal', slots: [{ x: 0, y: 15.02, w: 100, h: 69.97 }] },
     ],
     2: [
-      { id: 'row', label: 'Verticales', slots: [
+      { id: 'row', label: 'Lado a lado', slots: [
         { x: 3.78, y: 17.34, w: 45.7, h: 65.32 },
         { x: 50.51, y: 17.34, w: 45.7, h: 65.32 },
       ] },
-      { id: 'column', label: 'Horizontales', slots: [
+      { id: 'column', label: 'Arriba y abajo', slots: [
         { x: 17.34, y: 3.78, w: 65.32, h: 45.7 },
         { x: 17.34, y: 50.51, w: 65.32, h: 45.7 },
       ] },
@@ -124,17 +124,17 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   },
   horizontal: {
     1: [
-      { id: 'margin', label: 'Con margen', slots: [{ x: 5.53, y: 7.09, w: 88.94, h: 85.83 }] },
-      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'margin', label: 'Con borde', slots: [{ x: 5.53, y: 7.09, w: 88.94, h: 85.83 }] },
+      { id: 'bleed', label: 'Sin bordes', slots: FULL_BLEED },
       { id: 'panorama', label: 'Panorámica', slots: [{ x: 0, y: 17.23, w: 100, h: 65.54 }] },
       { id: 'portrait', label: 'Vertical', slots: [{ x: 24.85, y: 0, w: 50.3, h: 100 }] },
     ],
     2: [
-      { id: 'row', label: 'Verticales', slots: [
+      { id: 'row', label: 'Lado a lado', slots: [
         { x: 4.54, y: 5.8, w: 44.5, h: 88.41 },
         { x: 50.96, y: 5.8, w: 44.5, h: 88.41 },
       ] },
-      { id: 'column', label: 'Panorámicas', slots: [
+      { id: 'column', label: 'Arriba y abajo', slots: [
         { x: 17.15, y: 4.87, w: 65.71, h: 43.06 },
         { x: 17.15, y: 52.07, w: 65.71, h: 43.06 },
       ] },
@@ -168,13 +168,13 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   },
   vertical: {
     1: [
-      { id: 'margin', label: 'Con margen', slots: [{ x: 7.2, y: 5.33, w: 85.61, h: 89.34 }] },
-      { id: 'bleed', label: 'A sangre', slots: FULL_BLEED },
+      { id: 'margin', label: 'Con borde', slots: [{ x: 7.2, y: 5.33, w: 85.61, h: 89.34 }] },
+      { id: 'bleed', label: 'Sin bordes', slots: FULL_BLEED },
       { id: 'landscape', label: 'Horizontal', slots: [{ x: 0, y: 17.85, w: 100, h: 64.3 }] },
     ],
     2: [
       // El pliego vertical solo trae las apiladas.
-      { id: 'row', label: 'Apiladas', slots: [
+      { id: 'row', label: 'Arriba y abajo', slots: [
         { x: 14.52, y: 9.16, w: 70.96, h: 39.17 },
         { x: 14.52, y: 51.67, w: 70.96, h: 39.17 },
       ] },

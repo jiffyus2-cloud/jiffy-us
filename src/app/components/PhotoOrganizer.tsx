@@ -2336,7 +2336,7 @@ export default function PhotoOrganizer({
                       qué se diferencian «Vertical» y «Panorámica». */}
                   {currentVariants.length > 1 && (
                     <div className="pt-2 border-t border-gray-50">
-                      <label className="block text-xs font-medium text-gray-700 mb-1.5">Variante del layout</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">Estilo de la página</label>
                       <div className="flex flex-wrap gap-1.5 sm:gap-2">
                         {currentVariants.map(variant => {
                           const isCurrent = variant.id === currentVariantId;
