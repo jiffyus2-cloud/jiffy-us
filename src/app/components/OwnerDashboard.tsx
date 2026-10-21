@@ -703,11 +703,12 @@ const OwnerDashboard: React.FC = () => {
         // ── Dimensiones del lienzo (canvas) ──────────────────────────────────
         // Papel: lienzos fijos por tamaño con márgenes centrados
         // Tela:  sólo la portada, sin cambios
-        // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm, lomo 0.6 cm
+        // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm
+        // Lomo: 1 cm en todos los tamaños de Papel (Tela no lleva lomo)
         const is20x20  = !isTela && coverSizeProp === '20x20';
         const cmToPx   = (cm: number) => Math.round((cm / 2.54) * 300);
         const panelWCm = is20x20 ? 19 : wCm;          // ancho real de portada/contraportada
-        const spineCm  = isTela ? 0 : (is20x20 ? 0.6 : 2);
+        const spineCm  = isTela ? 0 : 1;
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
         const panelPxW = cmToPx(panelWCm);
 
