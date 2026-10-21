@@ -293,15 +293,19 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
   const [cleanupError, setCleanupError] = useState<string | null>(null);
   // Las carpetas huérfanas son datos que ya existían: solo se borran si el dueño lo marca.
   const [includeOrphans, setIncludeOrphans] = useState(false);
+  // Igual con las fotos sueltas de pedidos vivos (fotos que el cliente quitó o cambió).
+  const [includeLoose, setIncludeLoose] = useState(false);
 
   const runCleanup = async (dryRun: boolean) => {
     if (!dryRun) {
       const expired = cleanupResult?.dryRun ? cleanupResult.expiredDrafts.count : stats?.expiredDrafts.count ?? 0;
       const orphans = includeOrphans ? (cleanupResult?.dryRun ? cleanupResult.orphans.count : stats?.breakdown.orphans.count ?? 0) : 0;
+      const loose = includeLoose ? (cleanupResult?.dryRun && cleanupResult.looseFiles ? cleanupResult.looseFiles.count : stats?.looseFiles?.files ?? 0) : 0;
       const ok = window.confirm(
         `Se borrarán de forma definitiva ${expired} borrador(es) creados después de activar la caducidad y sin editar ` +
           `desde hace más de ${policy.draftRetentionDays} días` +
-          (includeOrphans ? ` y ${orphans} carpeta(s) huérfana(s) de Storage` : '') +
+          (includeOrphans ? `, ${orphans} carpeta(s) huérfana(s) de Storage` : '') +
+          (includeLoose ? ` y ${loose} foto(s) suelta(s) que ningún pedido usa` : '') +
           '. Los clientes no podrán recuperarlos. ¿Continuar?'
       );
       if (!ok) return;
@@ -309,7 +313,7 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
     setCleanupBusy(dryRun ? 'dry' : 'run');
     setCleanupError(null);
     try {
-      const result = await runStorageCleanup({ dryRun, orphans: includeOrphans });
+      const result = await runStorageCleanup({ dryRun, orphans: includeOrphans, looseFiles: includeLoose });
       setCleanupResult(result);
       if (!dryRun) await loadStats(true);
     } catch (error: any) {
@@ -657,9 +661,29 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                       />
                       Incluir carpetas huérfanas en esta limpieza
                     </label>
+                    {stats.looseFiles && (
+                      <>
+                        <p className="mt-3 text-xs text-gray-500 leading-relaxed max-w-2xl">
+                          Dentro de los pedidos que siguen existiendo hay <strong>{stats.looseFiles.files} foto(s) suelta(s)</strong> ({formatBytes(stats.looseFiles.bytes)}):
+                          fotos que el cliente quitó o cambió y que ya no usa ningún pedido. Solo cuentan las que llevan más de {stats.looseFiles.graceDays} días sin tocarse.
+                          {stats.looseFiles.skipped.length > 0 && (
+                            <> {stats.looseFiles.skipped.length} carpeta(s) se dejan sin tocar porque no se reconoce ninguna de sus fotos.</>
+                          )}
+                        </p>
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={includeLoose}
+                            onChange={e => setIncludeLoose(e.target.checked)}
+                            className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                          />
+                          Incluir fotos sueltas en esta limpieza
+                        </label>
+                      </>
+                    )}
                     <p className="mt-1 text-xs text-gray-400">
                       Última limpieza: {stats.lastCleanup
-                        ? `${formatDate(stats.lastCleanup.at)} (${stats.lastCleanup.trigger === 'scheduler' ? 'programada' : 'desde el panel'}) · ${stats.lastCleanup.expiredDrafts.count} borradores y ${stats.lastCleanup.orphans.count} carpetas, ${formatBytes(stats.lastCleanup.expiredDrafts.bytes + stats.lastCleanup.orphans.bytes)} liberados`
+                        ? `${formatDate(stats.lastCleanup.at)} (${stats.lastCleanup.trigger === 'scheduler' ? 'programada' : 'desde el panel'}) · ${stats.lastCleanup.expiredDrafts.count} borradores, ${stats.lastCleanup.orphans.count} carpetas y ${stats.lastCleanup.looseFiles?.count ?? 0} fotos sueltas, ${formatBytes(stats.lastCleanup.expiredDrafts.bytes + stats.lastCleanup.orphans.bytes + (stats.lastCleanup.looseFiles?.bytes ?? 0))} liberados`
                         : 'nunca'}.
                     </p>
                   </div>
@@ -675,7 +699,12 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                   </button>
                   <button
                     onClick={() => runCleanup(false)}
-                    disabled={cleanupBusy !== null || (stats.expiredDrafts.count === 0 && (!includeOrphans || stats.breakdown.orphans.count === 0))}
+                    disabled={
+                      cleanupBusy !== null ||
+                      (stats.expiredDrafts.count === 0 &&
+                        (!includeOrphans || stats.breakdown.orphans.count === 0) &&
+                        (!includeLoose || !stats.looseFiles?.files))
+                    }
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors disabled:opacity-50"
                   >
                     {cleanupBusy === 'run' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eraser className="w-4 h-4" />}
@@ -695,8 +724,9 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                 <div className="mt-4 space-y-3">
                   <div className={`px-4 py-3 rounded-xl text-sm font-medium border ${cleanupResult.dryRun ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
                     {cleanupResult.dryRun ? 'Simulación: ' : 'Limpieza ejecutada: '}
-                    {cleanupResult.expiredDrafts.count} borrador(es) ({formatBytes(cleanupResult.expiredDrafts.bytes)}) y
-                    {' '}{cleanupResult.orphans.count} carpeta(s) huérfana(s) ({formatBytes(cleanupResult.orphans.bytes)})
+                    {cleanupResult.expiredDrafts.count} borrador(es) ({formatBytes(cleanupResult.expiredDrafts.bytes)}),
+                    {' '}{cleanupResult.orphans.count} carpeta(s) huérfana(s) ({formatBytes(cleanupResult.orphans.bytes)}) y
+                    {' '}{cleanupResult.looseFiles?.count ?? 0} foto(s) suelta(s) ({formatBytes(cleanupResult.looseFiles?.bytes ?? 0)})
                     {cleanupResult.dryRun ? ' se borrarían.' : ' borrados.'}
                     {cleanupResult.errors.length > 0 && ` ${cleanupResult.errors.length} error(es): ${cleanupResult.errors.slice(0, 3).join('; ')}`}
                   </div>
@@ -714,6 +744,38 @@ const StorageManagementSection: React.FC<Props> = ({ adminEmail }) => {
                         Carpetas huérfanas {cleanupResult.dryRun ? 'que se borrarían' : 'borradas'}
                       </div>
                       <ProjectsTable projects={cleanupResult.orphans.items} emptyText="" showStatus={false} />
+                    </div>
+                  )}
+                  {cleanupResult.looseFiles && cleanupResult.looseFiles.items.length > 0 && (
+                    <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
+                      <div className="px-5 py-2 bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        Fotos sueltas {cleanupResult.dryRun ? 'que se borrarían' : 'borradas'}, por pedido
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-100">
+                          <thead>
+                            <tr className="bg-gray-50/70">
+                              <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Pedido</th>
+                              <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Estado</th>
+                              <th className="px-5 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Fotos</th>
+                              <th className="px-5 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Tamaño</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {cleanupResult.looseFiles.items.map(item => (
+                              <tr key={`${item.userId}/${item.orderId}`} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-5 py-3">
+                                  <div className="text-sm text-gray-900">{item.customerName || item.customerEmail || '—'}</div>
+                                  <div className="text-xs text-gray-500 font-mono">{item.orderId}</div>
+                                </td>
+                                <td className="px-5 py-3 text-sm text-gray-700 hidden sm:table-cell">{statusLabel(item.status)}</td>
+                                <td className="px-5 py-3 text-right text-sm text-gray-700 tabular-nums">{item.files}</td>
+                                <td className="px-5 py-3 text-right text-sm font-bold text-gray-900 tabular-nums">{formatBytes(item.bytes)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
