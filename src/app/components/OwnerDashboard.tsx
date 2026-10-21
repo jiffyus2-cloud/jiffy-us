@@ -9,13 +9,14 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays, HardDrive } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays, HardDrive, Mail } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import SystemImagesSection from './SystemImagesSection';
 import SystemTextsSection from './SystemTextsSection';
 import DiscountCodesSection from './DiscountCodesSection';
 import UsersSection from './UsersSection';
 import StorageManagementSection from './StorageManagementSection';
+import EmailCampaignsSection from './EmailCampaignsSection';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import * as XLSX from 'xlsx';
@@ -398,7 +399,7 @@ const OwnerDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'discounts' | 'images' | 'texts' | 'users' | 'connections' | 'storage'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'discounts' | 'images' | 'texts' | 'users' | 'connections' | 'storage' | 'emails'>('orders');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -1361,6 +1362,7 @@ const OwnerDashboard: React.FC = () => {
           <button onClick={() => setActiveTab('images')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'images' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Images className="w-4 h-4" /> Imágenes de la Tienda</button>
           <button onClick={() => setActiveTab('texts')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'texts' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><FileText className="w-4 h-4" /> Textos de la Tienda</button>
           <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Users className="w-4 h-4" /> Usuarios</button>
+          <button onClick={() => setActiveTab('emails')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'emails' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Mail className="w-4 h-4" /> Correos</button>
           <button onClick={() => setActiveTab('connections')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'connections' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><Zap className="w-4 h-4" /> Conexiones</button>
           <button onClick={() => setActiveTab('storage')} className={`px-6 py-3 font-bold text-sm rounded-t-xl transition-all flex items-center gap-2 ${activeTab === 'storage' ? 'bg-white border-t border-l border-r border-gray-200 text-black translate-y-px' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}><HardDrive className="w-4 h-4" /> Gestión de Almacenamiento</button>
         </div>
@@ -2068,6 +2070,10 @@ const OwnerDashboard: React.FC = () => {
 
         {activeTab === 'users' && (
           <UsersSection />
+        )}
+
+        {activeTab === 'emails' && (
+          <EmailCampaignsSection adminEmail={currentUserEmail ?? undefined} />
         )}
 
         {activeTab === 'storage' && (
