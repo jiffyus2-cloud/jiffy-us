@@ -7,8 +7,10 @@ import {
   Users, Plus, Search, Loader2, Trash2, Edit2, Eye, X,
   Mail, User, Calendar, MapPin, CreditCard, ShoppingBag,
   ChevronDown, ChevronRight, AlertCircle, Check, RefreshCw,
-  Package, Clock, CheckCircle2, Truck, Home
+  Package, Clock, CheckCircle2, Truck, Home, Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { PhoneInput, COUNTRY_CODES } from './ui/PhoneInput';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -81,6 +83,36 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   saved_draft:    { label: 'Borrador',         color: 'bg-yellow-100 text-yellow-800', icon: <Clock className="w-3 h-3" /> },
   pending_payment:{ label: 'Pend. Pago',      color: 'bg-orange-100 text-orange-800', icon: <Clock className="w-3 h-3" /> },
 };
+
+// Teléfono de contacto: el del perfil y, si no lo dio al registrarse, el de su
+// dirección de envío más reciente (muchos solo lo escriben en el checkout).
+function contactPhone(u: UserRecord): string {
+  if (u.phone?.trim()) return u.phone.trim();
+  const withPhone = (u.savedAddresses ?? []).filter(a => a.phone?.trim());
+  withPhone.sort((a, b) => (b.savedAt > a.savedAt ? 1 : -1));
+  return withPhone[0]?.phone?.trim() ?? '';
+}
+
+function exportContacts(list: UserRecord[]) {
+  const rows = list.map(u => {
+    const registered = formatDate(u.createdAt);
+    return {
+      'Nombre': u.name || '',
+      'Correo': u.email || '',
+      'Teléfono': contactPhone(u),
+      'Registrado': registered === '—' ? '' : registered,
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 28 }, { wch: 34 }, { wch: 18 }, { wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Contactos');
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  saveAs(
+    new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `contactos_usuarios_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+  );
+}
 
 // ─── Create User via Firebase Auth REST API ───────────────────────────────────
 
@@ -572,6 +604,15 @@ const UsersSection: React.FC = () => {
             title="Actualizar"
           >
             <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => exportContacts(filtered)}
+            disabled={loading || filtered.length === 0}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+            title={search ? 'Descarga solo los usuarios de la búsqueda actual' : 'Descarga nombre, correo y teléfono de todos los usuarios'}
+          >
+            <Download className="w-4 h-4" />
+            {search ? `Descargar contactos (${filtered.length})` : 'Descargar contactos'}
           </button>
           <button
             onClick={() => setEditUser(null)}
