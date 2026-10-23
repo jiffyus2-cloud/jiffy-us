@@ -49,12 +49,40 @@ export interface CleanupSummary {
   appliesFrom: string | null;
   expiredDrafts: { count: number; bytes: number };
   orphans: { count: number; bytes: number };
+  /** `count` = archivos. Falta en resúmenes de antes de existir la opción. */
+  looseFiles?: { count: number; bytes: number };
   errors: string[];
+}
+
+/**
+ * Fotos sueltas de un pedido vivo: archivos de su carpeta que ya no nombra
+ * ningún pedido (el cliente las quitó o cambió en el editor).
+ */
+export interface LooseFolder {
+  orderId: string;
+  userId: string;
+  status: string | null;
+  customerName: string | null;
+  customerEmail: string | null;
+  files: number;
+  bytes: number;
+  paths?: string[];
+}
+
+/** Carpeta viva que el backend no toca porque no reconoce ninguna de sus fotos. */
+export interface SkippedFolder {
+  orderId: string;
+  userId: string;
+  files: number;
+  bytes: number;
+  reason: string;
 }
 
 export interface CleanupResult extends CleanupSummary {
   expiredDrafts: { count: number; bytes: number; items: ProjectUsage[] };
   orphans: { count: number; bytes: number; items: ProjectUsage[] };
+  /** Falta si el backend desplegado es anterior a esta opción. */
+  looseFiles?: { count: number; bytes: number; items: LooseFolder[]; skipped: SkippedFolder[] };
 }
 
 export interface StorageStats {
@@ -81,6 +109,8 @@ export interface StorageStats {
   topProjects: ProjectUsage[];
   topUsers: UserUsage[];
   orphans: ProjectUsage[];
+  /** Sus bytes ya cuentan en borradores/pedidos: es un "de los cuales". Falta con un backend anterior. */
+  looseFiles?: { files: number; bytes: number; graceDays: number; items: LooseFolder[]; skipped: SkippedFolder[] };
   lastCleanup: CleanupSummary | null;
 }
 
@@ -131,14 +161,20 @@ export function getStorageStats(refresh = false): Promise<StorageStats> {
   return request<StorageStats>(`/storage/stats${refresh ? '?refresh=1' : ''}`);
 }
 
-export function runStorageCleanup(options: { dryRun: boolean; expiredDrafts?: boolean; orphans?: boolean }): Promise<CleanupResult> {
+export function runStorageCleanup(options: {
+  dryRun: boolean;
+  expiredDrafts?: boolean;
+  orphans?: boolean;
+  looseFiles?: boolean;
+}): Promise<CleanupResult> {
   return request<CleanupResult>('/storage/cleanup', {
     method: 'POST',
     body: {
       dryRun: options.dryRun,
       expiredDrafts: options.expiredDrafts ?? true,
-      // Las huérfanas tocan datos que ya existían: solo si se pide expresamente.
+      // Las huérfanas y las fotos sueltas tocan datos que ya existían: solo si se pide expresamente.
       orphans: options.orphans ?? false,
+      looseFiles: options.looseFiles ?? false,
     },
   });
 }
