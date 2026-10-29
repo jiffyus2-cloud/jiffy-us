@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import ImageCropper from './ImageCropper';
+import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
 
 // Lienzo simulado para la portada de Tela: hilos de urdimbre + trama, fibras
 // irregulares (feTurbulence) y un vignette suave. Solo previsualización en
@@ -32,6 +33,7 @@ interface CoverPreviewProps {
   coverSubtitle?: string;
   coverYear?: string;
   spineText?: string;
+  pageCount?: number; // define el grosor del lomo; sin él se asumen las 40 páginas base
   selectedLayout: number;
   coverCrop?: { x: number; y: number; zoom: number };
   typographyColor?: string;
@@ -53,6 +55,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   coverSubtitle = '',
   coverYear = '',
   spineText = '',
+  pageCount,
   selectedLayout,
   coverCrop = { x: 50, y: 50, zoom: 1 },
   typographyColor = '#000000',
@@ -76,16 +79,17 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   const floatingBoxShadow = hideSpine ? 'shadow-none' : 'shadow-2xl';
   const showSpine = !hideSpine && coverType !== 'Tela';
 
-  // Lomo físico: 1cm en todos los tamaños
-  // Fuente: 11pt = 0.3881cm → 0.3881/1×100 = 38.81cqw (igual para todos)
-  const spineTextCqw = 38.81;
-  // Posición top del lomo: 1.5cm / alto_álbum_cm × 100
-  // 20x20→7.5% | 30x30→5% | horizontal(21cm alto)→7.14% | vertical(28cm alto)→5.36%
-  const spineTopPct = coverSize === '30x30' ? '5%' : coverSize === '20x20' ? '7.5%' : isHorizontal ? '7.14%' : '5.36%';
-  // Anchos CSS: 1/(1+ancho_cm)×97% [gap=3%]
-  // 20x20→4.62% | 30x30→3.13% | horizontal(28cm)→3.34% | vertical(21cm)→4.41%
-  const spineWidthPct = coverSize === '30x30' ? '3.13%' : coverSize === '20x20' ? '4.62%' : isHorizontal ? '3.34%' : '4.41%';
-  const coverWidthPct = coverSize === '30x30' ? '93.87%' : coverSize === '20x20' ? '92.38%' : isHorizontal ? '93.66%' : '92.59%';
+  // Lomo físico: grosor según el número de páginas (albumSpine.ts)
+  const spineCm = getSpineWidthCm(pageCount);
+  const albumWidthCm = coverSize === '30x30' ? 30 : coverSize === '20x20' ? 20 : isHorizontal ? 28 : 21;
+  const albumHeightCm = coverSize === '30x30' ? 30 : coverSize === '20x20' ? 20 : isHorizontal ? 21 : 28;
+  // Fuente fija de 11pt, expresada en cqw del ancho del lomo
+  const spineTextCqw = (SPINE_FONT_CM / spineCm) * 100;
+  // El texto arranca a 1cm del tope: 1cm / alto_álbum_cm × 100
+  const spineTopPct = `${(SPINE_TEXT_TOP_CM / albumHeightCm) * 100}%`;
+  // Lomo y portada se reparten el 97% del ancho en proporción a sus cm [gap=3%]
+  const spineWidthPct = `${(spineCm / (spineCm + albumWidthCm)) * 97}%`;
+  const coverWidthPct = `${(albumWidthCm / (spineCm + albumWidthCm)) * 97}%`;
 
   const renderImageSlot = () => {
     if (coverImage) {
@@ -560,7 +564,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   return (
     <div className="flex w-full items-stretch justify-center h-full" style={{ fontFamily: "Avenir, 'Century Gothic', 'Gill Sans', sans-serif" }}>
 
-      {/* Lomo (Spine) con texto alineado a la parte superior — Oculto en TELA */}
+      {/* Lomo (Spine): texto centrado en su ancho y a 1cm del tope — Oculto en TELA */}
       {showSpine && (
         <div
           data-spine
@@ -574,6 +578,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               style={{
                 color: typographyColor,
                 fontSize: `${spineTextCqw}cqw`,
+                lineHeight: 1, // la línea mide lo mismo que la fuente → queda centrada en el ancho del lomo
                 transform: 'rotate(90deg) translateY(-50%)',
                 transformOrigin: 'top left'
               }}

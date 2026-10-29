@@ -84,6 +84,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
           coverSubtitle={order.coverData?.subtitle || ''}
           coverYear={order.coverData?.year || ''}
           spineText={order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || ''}
+          pageCount={order.pages?.length}
           selectedLayout={order.coverData?.layout || 1}
           coverCrop={order.coverData?.crop}
           typographyColor={order.customization?.coverContent?.typographyColor || order.customization?.typographyColor || '#000000'}

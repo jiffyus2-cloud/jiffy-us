@@ -106,12 +106,12 @@ describe('getCoverTextLimits — lomo', () => {
   });
 
   it('toma la rama del PDF, que es la restrictiva', () => {
-    // Si cambia la geometría del lomo en OwnerDashboard.tsx:822-837, este test
-    // es el disparador: estos números salen del renderer del PDF, no del preview.
-    expect(spine('20x20')).toBe(54);
-    expect(spine('21x28')).toBe(57);
-    expect(spine('28x21')).toBe(76);
-    expect(spine('30x30')).toBe(81);
+    // Si cambia la geometría del lomo en OwnerDashboard.tsx (generateCoverPDF),
+    // este test es el disparador: estos números salen del renderer del PDF, no del preview.
+    expect(spine('20x20')).toBe(57);
+    expect(spine('21x28')).toBe(60);
+    expect(spine('28x21')).toBe(81);
+    expect(spine('30x30')).toBe(87);
   });
 
   it('no depende del layout', () => {
