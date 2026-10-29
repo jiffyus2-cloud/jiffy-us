@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Image as ImageIcon, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -9,6 +10,7 @@ import ImageCropper from './ImageCropper';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
+import { getPageAspectRatio } from '../utils/pageLayouts';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -57,8 +59,81 @@ const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21'
   return '20x20';
 };
 
+// Cuánto hay que mantener oprimida una página para verla en grande, y cuánto se
+// puede mover el dedo antes de que cuente como scroll en vez de como pulsación.
+const LONG_PRESS_MS = 400;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+
+/**
+ * Mantener oprimida una página la muestra ampliada mientras dure la pulsación;
+ * al soltar se cierra. Pensado sobre todo para el móvil, donde en la cuadrícula
+ * del visor cada página queda demasiado pequeña para revisarla.
+ */
+const useLongPressPeek = () => {
+  const [peekIndex, setPeekIndex] = useState<number | null>(null);
+  const pressRef = useRef<{ timer: number; x: number; y: number } | null>(null);
+
+  const cancelPress = () => {
+    if (pressRef.current) {
+      window.clearTimeout(pressRef.current.timer);
+      pressRef.current = null;
+    }
+  };
+
+  useEffect(() => cancelPress, []);
+
+  useEffect(() => {
+    if (peekIndex === null) return;
+    const close = () => setPeekIndex(null);
+    // Con la página abierta, bloquear el scroll evita que el navegador cancele
+    // la pulsación (pointercancel) y nos quedemos sin el pointerup que la cierra.
+    const blockScroll = (e: TouchEvent) => e.preventDefault();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('pointerup', close);
+    window.addEventListener('touchend', close);
+    window.addEventListener('touchmove', blockScroll, { passive: false });
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerup', close);
+      window.removeEventListener('touchend', close);
+      window.removeEventListener('touchmove', blockScroll);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [peekIndex]);
+
+  const bind = (index: number) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      cancelPress();
+      pressRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        timer: window.setTimeout(() => {
+          pressRef.current = null;
+          setPeekIndex(index);
+        }, LONG_PRESS_MS),
+      };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const press = pressRef.current;
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > LONG_PRESS_MOVE_TOLERANCE_PX) cancelPress();
+    },
+    onPointerUp: cancelPress,
+    onPointerLeave: cancelPress,
+    onPointerCancel: cancelPress,
+    // Sin esto el móvil abre su menú de "guardar imagen" o selecciona texto.
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    onDragStart: (e: React.DragEvent) => e.preventDefault(),
+    className: 'select-none cursor-zoom-in [-webkit-touch-callout:none]',
+  });
+
+  return { peekIndex, closePeek: () => setPeekIndex(null), bind };
+};
+
 const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
   const size = order.customization?.size || '';
+  const { peekIndex, closePeek, bind } = useLongPressPeek();
+  const pageAspect = getPageAspectRatio(size);
 
   const coverImageFixed = (() => {
     const img = order.coverData?.image;
@@ -73,6 +148,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         <Layers className="w-5 h-5 text-primary" />
         <h4>Diseño del Álbum</h4>
       </div>
+      <p className="-mt-4 text-xs text-gray-400 text-center">Mantén oprimida una página para verla en grande</p>
 
       <div className="max-w-md mx-auto">
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Portada</p>
@@ -102,7 +178,7 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         {order.pages?.map((_pageObj, pageIndex) => (
           <div key={pageIndex} className="space-y-4">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Página {pageIndex + 1}</p>
-            <AlbumPageFrame size={size}>
+            <AlbumPageFrame size={size} {...bind(pageIndex)}>
               <AlbumPageSlots slots={getAlbumPageSlots(order, pageIndex, size)} />
             </AlbumPageFrame>
           </div>
@@ -121,6 +197,24 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
         </div>
 
       </div>
+
+      {/* En un portal: el modal anima con transform y eso rompería el `fixed`. */}
+      {peekIndex !== null && createPortal(
+        <div
+          className="fixed inset-0 z-[120] flex flex-col items-center justify-center gap-3 p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150 select-none"
+          onClick={closePeek}
+        >
+          <p className="text-xs font-bold text-white/80 uppercase tracking-widest">Página {peekIndex + 1}</p>
+          <AlbumPageFrame
+            size={size}
+            className="shadow-2xl border-0 animate-in zoom-in-90 duration-150"
+            style={{ width: `min(94vw, calc(82vh * ${pageAspect}))` }}
+          >
+            <AlbumPageSlots slots={getAlbumPageSlots(order, peekIndex, size)} />
+          </AlbumPageFrame>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 };
