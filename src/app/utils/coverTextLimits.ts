@@ -18,6 +18,8 @@
  * número de línea al lado. Si ese archivo cambia, esta tabla debe cambiar.
  */
 
+import { SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from './albumSpine';
+
 export type CoverSize = '20x20' | '30x30' | '21x28' | '28x21';
 export type CoverType = 'Tela' | 'Papel';
 
@@ -247,15 +249,16 @@ const ALBUM_HEIGHT_CM: Record<CoverSize, number> = {
 /**
  * El lomo tiene DOS implementaciones distintas y hay que respetar la más
  * estrecha:
- *  - preview  CoverPreview.tsx:513-532 — lomo de 1cm, fuente 38.81cqw de ese
- *    ancho (= 0.3881cm = 11pt), tracking-widest, texto desde 1.5cm del tope.
- *  - PDF      OwnerDashboard.tsx:822-837 — dibuja su PROPIO lomo: spineCm = 1,
- *    fuente = max(spinePxWidth × 0.25, 11pt) = 0.3881cm, letterSpacing '8px' (= 0.0677cm
- *    a 300 DPI) y el texto arranca al 10% del alto.
+ *  - preview  CoverPreview.tsx (data-spine) — fuente 11pt (= 0.3881cm),
+ *    tracking-widest.
+ *  - PDF      OwnerDashboard.tsx (generateCoverPDF) — dibuja su PROPIO lomo:
+ *    fuente 11pt, letterSpacing '8px' (= 0.0677cm a 300 DPI).
+ * En los dos el texto arranca a 1cm del tope y la fuente no depende del grosor
+ * del lomo (albumSpine.ts), así que el límite sólo depende del alto del álbum.
  * En los 4 tamaños manda el PDF.
  */
-const PREVIEW_SPINE = { fontCm: 0.3881, topOffsetCm: 1.5, extraTrackingCm: 0.3881 * 0.1 };
-const PDF_SPINE = { fontCm: 0.3881, topOffsetFrac: 0.1, extraTrackingCm: (8 / 300) * 2.54 };
+const PREVIEW_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: SPINE_FONT_CM * 0.1 };
+const PDF_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: (8 / 300) * 2.54 };
 
 function spineLimit(size: CoverSize): number {
   const h = ALBUM_HEIGHT_CM[size];
@@ -265,7 +268,7 @@ function spineLimit(size: CoverSize): number {
   const previewMax = Math.floor(((h - PREVIEW_SPINE.topOffsetCm) * SPINE_FIT) / previewAdv);
 
   const pdfAdv = boldEm * PDF_SPINE.fontCm + PDF_SPINE.extraTrackingCm;
-  const pdfMax = Math.floor((h * (1 - PDF_SPINE.topOffsetFrac) * SPINE_FIT) / pdfAdv);
+  const pdfMax = Math.floor(((h - PDF_SPINE.topOffsetCm) * SPINE_FIT) / pdfAdv);
 
   return Math.max(1, Math.min(previewMax, pdfMax));
 }
@@ -284,10 +287,10 @@ function familyFor(size: CoverSize, type: CoverType): Family {
  *
  *   Familia            L1        L2        L3        L4        L5        Lomo
  *   Tela (4 tamaños)   23 / 32   22 / 32   22 / 22   —         —         n/a
- *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         76
- *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 57
- *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 54
- *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 81
+ *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         81
+ *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 60
+ *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 57
+ *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 87
  *
  * En cada familia el título y el subtítulo de un mismo layout coinciden salvo
  * que cambie el tamaño de fuente o el tracking: en Century Gothic la negrita

@@ -28,6 +28,7 @@ import CoverPreview from './CoverPreview';
 import { getColombianHolidays, isHoliday } from '../utils/holidays';
 import { getCoverDimensions } from '../utils/cropMath';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
+import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
 import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg'; 
@@ -704,11 +705,11 @@ const OwnerDashboard: React.FC = () => {
         // Papel: lienzos fijos por tamaño con márgenes centrados
         // Tela:  sólo la portada, sin cambios
         // 20x20 (guías del taller): portada y contraportada de 19×20, callejón 1 cm
-        // Lomo: 1 cm en todos los tamaños de Papel (Tela no lleva lomo)
+        // Lomo: grosor según el número de páginas (albumSpine.ts; Tela no lleva lomo)
         const is20x20  = !isTela && coverSizeProp === '20x20';
         const cmToPx   = (cm: number) => Math.round((cm / 2.54) * 300);
         const panelWCm = is20x20 ? 19 : wCm;          // ancho real de portada/contraportada
-        const spineCm  = isTela ? 0 : 1;
+        const spineCm  = isTela ? 0 : getSpineWidthCm(order.pages?.length);
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
         const panelPxW = cmToPx(panelWCm);
 
@@ -730,8 +731,9 @@ const OwnerDashboard: React.FC = () => {
         const totalPxHeight = Math.round((totalHCm  / 2.54) * 300);
         const spinePxWidth  = isTela ? 0 : cmToPx(spineCm);
         const pxGap         = isTela ? 0 : cmToPx(gapCm);
-        // Texto del lomo: 25% del ancho del lomo, pero nunca menos de 11pt (0.3881 cm) para lomos finos
-        const spineFontPx   = Math.max(spinePxWidth * 0.25, cmToPx(0.3881));
+        // Texto del lomo: 11pt en todos los grosores, arrancando a 1 cm del tope
+        const spineFontPx   = cmToPx(SPINE_FONT_CM);
+        const spineTopPx    = cmToPx(SPINE_TEXT_TOP_CM);
 
         // Contenido total (horizontal): contraportada + gap + lomo + gap + portada
         const contentPxW = isTela ? pxWidth : (panelPxW * 2) + spinePxWidth + (pxGap * 2);
@@ -807,15 +809,16 @@ const OwnerDashboard: React.FC = () => {
                       {/* Gap 1 cm: contraportada → lomo */}
                       <div style={{ width: pxGap, height: pxHeight, backgroundColor: '#FFFFFF' }} />
 
-                      {/* Lomo */}
+                      {/* Lomo: texto centrado en su ancho (left 50% + translateY(-50%) antes de rotar) */}
                       <div style={{ width: spinePxWidth, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                        <div style={{ position: 'absolute', top: '10%', left: '50%' }}>
+                        <div style={{ position: 'absolute', top: spineTopPx, left: '50%' }}>
                           <span style={{
                             display: 'block',
                             transform: 'rotate(90deg) translateY(-50%)',
                             transformOrigin: 'top left',
                             whiteSpace: 'nowrap',
                             fontSize: `${spineFontPx}px`,
+                            lineHeight: 1,
                             fontWeight: 'bold',
                             letterSpacing: '8px',
                             color: textColor,
