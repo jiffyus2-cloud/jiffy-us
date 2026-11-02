@@ -12,6 +12,7 @@ import CropModal from './CropModal';
 import { convertFileIfHeic } from '../utils/imageUtils';
 import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
+import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -59,6 +60,9 @@ export default function CalendarOrganizer({
     onCancel: () => void;
   } | null>(null);
 
+  // Fotos elegidas de más: el cliente decide cuáles caben (ver CalendarPhotoChooser)
+  const [photoChoice, setPhotoChoice] = useState<{ files: File[]; max: number } | null>(null);
+
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +76,8 @@ export default function CalendarOrganizer({
   const requiredPhotos = imagesPerMonth * 12;
 
   const pageAspect = getPhotoAspect(calendarType, imagesPerMonth);
+  const uploadedCount = photos.filter(p => p && p.trim() !== '').length;
+  const remainingSlots = Math.max(0, requiredPhotos - uploadedCount);
   const holidays = useCalendarHolidays(customization.holidayCountry, year, startMonth);
   const totalPrice = customization.type === 'wall' ? 80000 : 60000;
 
@@ -97,21 +103,20 @@ export default function CalendarOrganizer({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    let filesArray = Array.from(files);
+    const filesArray = Array.from(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (remainingSlots <= 0) return;
 
-    const currentCount = photos.filter(p => p && p.trim() !== '').length;
-    const remainingSlots = requiredPhotos - currentCount;
-
+    // Más fotos de las que caben: que el cliente elija cuáles, no solo las primeras.
     if (filesArray.length > remainingSlots) {
-      alert(t('calendarOrg.tooManyPhotos', { max: requiredPhotos, count: remainingSlots }));
-      filesArray = filesArray.slice(0, remainingSlots);
-    }
-
-    if (filesArray.length === 0) {
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setPhotoChoice({ files: filesArray, max: remainingSlots });
       return;
     }
+    await uploadChosenFiles(filesArray);
+  };
 
+  const uploadChosenFiles = async (filesArray: File[]) => {
+    if (filesArray.length === 0) return;
     setIsValidating(true);
     const convertedFiles = await Promise.all(filesArray.map(convertFileIfHeic));
     const results = await Promise.all(convertedFiles.map(checkImageDimensions));
@@ -123,8 +128,6 @@ export default function CalendarOrganizer({
 
     setIsValidating(false);
     processBatchUpload(results.map(r => r.file));
-
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSpecificUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,7 +264,6 @@ export default function CalendarOrganizer({
     });
   };
 
-  const uploadedCount = photos.filter(p => p && p.trim() !== '').length;
 
   const renderDuplicateModal = () => {
     if (!duplicateModal) return null;
@@ -431,6 +433,14 @@ export default function CalendarOrganizer({
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
+        {photoChoice && (
+          <CalendarPhotoChooser
+            files={photoChoice.files}
+            max={photoChoice.max}
+            onCancel={() => setPhotoChoice(null)}
+            onConfirm={(chosen) => { setPhotoChoice(null); uploadChosenFiles(chosen); }}
+          />
+        )}
 
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-black text-white rounded-lg mb-4">
@@ -458,12 +468,22 @@ export default function CalendarOrganizer({
           ) : (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4"
+              disabled={remainingSlots === 0}
+              className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:bg-white"
             >
               <ImageIcon className="w-16 h-16 text-gray-400" />
               <div className="text-center">
-                <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
-                <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
+                {remainingSlots === 0 ? (
+                  <p className="text-xl mb-2">{t('calendarOrg.full')}</p>
+                ) : (
+                  <>
+                    <p className="text-xl mb-2">{t('organizer.clickToSelect')}</p>
+                    <p className="text-sm text-gray-500">{t('organizer.selectMultiple')}</p>
+                    <p className="text-sm text-gray-700 mt-1">
+                      <RichText text={t('calendarOrg.pickLimit', { count: remainingSlots })} />
+                    </p>
+                  </>
+                )}
               </div>
             </button>
           )}

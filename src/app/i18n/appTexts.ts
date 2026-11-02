@@ -142,7 +142,12 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'photos.checkingQualityDesc': 'Asegurando la mejor resolución para tu impresión',
 
   // ── Organizador del calendario ────────────────────────────────────────────
-  'calendarOrg.tooManyPhotos': 'Solo puedes subir un máximo de {max} fotos para este calendario.\n\nSe han seleccionado automáticamente las primeras {count} fotos permitidas para completar los espacios vacíos.',
+  'calendarOrg.pickLimit': 'Puedes elegir hasta **{count} fotos** (las que caben en tu calendario).',
+  'calendarOrg.full': 'Ya elegiste todas las fotos que caben en tu calendario.',
+  'calendarOrg.chooseTitle': 'Elige tus {max} fotos',
+  'calendarOrg.chooseDesc': 'Seleccionaste **{selected} fotos**, pero en tu calendario caben **{max}**. Toca las que quieres usar.',
+  'calendarOrg.chooseConfirm': 'Usar {count} fotos',
+  'calendarOrg.chooseCancel': 'Cancelar',
   'calendarOrg.duplicateDesc': 'La foto **"{name}"** ya fue añadida anteriormente al calendario.',
 
   // ── Creador (guardado y avisos) ───────────────────────────────────────────
