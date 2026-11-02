@@ -151,6 +151,7 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'calendarOrg.chooseRemaining': 'Descarta {count} más',
   'calendarOrg.chooseReady': '¡Listo! Caben todas',
   'calendarOrg.chooseDiscardLast': 'Descartar las últimas {count}',
+  'calendarOrg.longPressHint': 'Mantén presionado un mes para cambiar sus fotos de lugar',
   'calendarOrg.duplicateDesc': 'La foto **"{name}"** ya fue añadida anteriormente al calendario.',
 
   // ── Creador (guardado y avisos) ───────────────────────────────────────────
