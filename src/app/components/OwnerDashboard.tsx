@@ -25,7 +25,7 @@ import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
-import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, type CalendarPageSpec } from './calendar/CalendarTemplate';
 import { getCoverDimensions } from '../utils/cropMath';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
 import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
@@ -68,11 +68,6 @@ const getAlbumTitle = (order: Order): string =>
 const formatDateTime = (iso?: string): string =>
   iso ? format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es }) : '—';
 
-const MONTHS_ES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
 // ============================================================================
 // FUNCIONES HELPERS DE DIMENSIONES Y LAYOUT
 // ============================================================================
@@ -90,7 +85,11 @@ const getDimensions = (order: Order) => {
   let hCm = 20;
   let coverSizeProp = '20x20';
 
-  if (isVert) {
+  if (isCalendar) {
+    // Tamaño de las plantillas 2027: escritorio 12,5 x 17,5 cm, pared 30 x 22 cm.
+    ({ wCm, hCm } = CALENDAR_SPECS[normalizeCalendarType(order.customization?.type)]);
+    coverSizeProp = `${wCm}x${hCm}`;
+  } else if (isVert) {
     wCm = 21; hCm = 28; coverSizeProp = '28x21'; 
   } else if (isHoriz) {
     wCm = 28; hCm = 21; coverSizeProp = '21x28'; 
@@ -272,118 +271,40 @@ const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order
   );
 };
 
-const getPhotosForMonth = (order: any, monthIndex: number): string[] => {
-  let photosForMonth: string[] = [];
-  const pageData = order.pages?.[monthIndex];
-  if (pageData && Array.isArray(pageData.images)) {
-    photosForMonth = pageData.images;
-  } else if (pageData && pageData.image) {
-    photosForMonth = [pageData.image];
-  }
-
-  const photoData = order.photos?.[monthIndex];
-  if (photosForMonth.length === 0 && photoData) {
-    if (Array.isArray(photoData)) photosForMonth = photoData as string[];
-    else if (typeof photoData === 'string') photosForMonth = [photoData as string];
-  }
-  return photosForMonth;
-};
-
-const CalendarPagePrintView: React.FC<{ order: any, monthIndex: number, pxWidth: number, preloadedMap?: Record<string, string> }> = ({ order, monthIndex, pxWidth, preloadedMap }) => {
-  const year = order.customization?.year || new Date().getFullYear();
-  const orientation = order.customization?.orientation || 'vertical';
-  const type = order.customization?.type || 'desk';
-  const imagesPerMonth = order.customization?.imagesPerMonth || 1;
-  const holidays = getColombianHolidays(year);
-  const month = MONTHS_ES[monthIndex];
-
-  const generateCalendarGrid = (y: number, m: number) => {
-    const date = new Date(y, m, 1);
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const firstDayOfWeek = date.getDay();
-    const days = [];
-    for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
-    for (let day = 1; day <= daysInMonth; day++) days.push(day);
-    return days;
-  };
-
-  const baseSize = pxWidth / 100;
-  const titleSize = orientation === 'horizontal' ? baseSize * 2.5 : baseSize * 3.5;
-  const headerSize = orientation === 'horizontal' ? baseSize * 1.3 : baseSize * 1.8;
-  const daySize = orientation === 'horizontal' ? baseSize * 1.5 : baseSize * 2;
-  const padding = baseSize * 3;
-  const gap = baseSize * 0.5;
-
-  const photosForMonth = getPhotosForMonth(order, monthIndex);
-
+// Página de calendario para el PDF: la plantilla compartida con las fotos
+// dibujadas por `CanvasCropper` (la hoja de foto de pared va girada 180°).
+const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, preloadedMap?: Record<string, string> }> = ({ order, page, preloadedMap }) => {
+  const c = order.customization || {};
+  const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: orientation === 'horizontal' ? 'row' : 'column', backgroundColor: 'white', boxSizing: 'border-box' }}>
-      <div style={{ position: 'relative', backgroundColor: '#f9fafb', borderRight: orientation === 'horizontal' ? '2px solid #f3f4f6' : 'none', borderBottom: orientation === 'horizontal' ? 'none' : '2px solid #f3f4f6', width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
-        {(() => {
-          if (photosForMonth.length > 0 && photosForMonth[0]) {
-            if (type === 'wall' && imagesPerMonth === 4) {
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: `${gap}px`, width: '100%', height: '100%', padding: `${gap}px`, boxSizing: 'border-box' }}>
-                  {Array.from({ length: 4 }).map((_, photoIdx) => {
-                    const photo = photosForMonth[photoIdx];
-                    const resolvedSrc = photo ? (preloadedMap?.[photo] || photo) : null;
-                    const crop = order.photoCrops?.[`${monthIndex}-${photoIdx}`];
-                    return (
-                      <div key={photoIdx} style={{ position: 'relative', backgroundColor: '#e5e7eb', borderRadius: `${baseSize*0.5}px`, overflow: 'hidden' }}>
-                        {resolvedSrc && (
-                          <div className="absolute inset-0 w-full h-full pointer-events-none">
-                            <CanvasCropper src={resolvedSrc} crop={crop} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            } else {
-              const photo = photosForMonth[0];
-              const resolvedSrc = preloadedMap?.[photo] || photo;
-              const crop = order.photoCrops?.[monthIndex] || order.photoCrops?.[`${monthIndex}-0`];
-              return (
-                <div className="absolute inset-0 w-full h-full pointer-events-none">
-                  <CanvasCropper src={resolvedSrc} crop={crop} />
-                </div>
-              );
-            }
-          }
-          return <div style={{ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }} />;
-        })()}
-      </div>
-      
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: 'rgba(249, 250, 251, 0.5)', padding: `${padding}px`, width: orientation === 'horizontal' ? '50%' : '100%', height: orientation === 'horizontal' ? '100%' : '50%', boxSizing: 'border-box' }}>
-        <div style={{ textAlign: 'center', marginBottom: `${padding * 0.8}px` }}>
-          <span style={{ fontSize: `${titleSize}px`, fontWeight: 'bold', color: '#111827', fontFamily: 'sans-serif' }}>{month} {year}</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: `${gap}px`, flex: 1, minHeight: 0 }}>
-          {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-            <div key={i} style={{ textAlign: 'center', fontSize: `${headerSize}px`, fontWeight: 'bold', color: '#9ca3af', fontFamily: 'sans-serif' }}>{day}</div>
-          ))}
-          {generateCalendarGrid(year, monthIndex).map((day, i) => {
-            if (!day) return <div key={i} style={{ height: '100%', minHeight: `${baseSize * 4}px` }} />;
-            const date = new Date(year, monthIndex, day);
-            const holiday = isHoliday(date, holidays);
-            return (
-              <div key={i} style={{ 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                fontSize: `${daySize}px`, borderRadius: `${baseSize * 0.5}px`, height: '100%', minHeight: `${baseSize * 4}px`, fontFamily: 'sans-serif',
-                ...(holiday 
-                   ? { backgroundColor: '#fef2f2', color: '#dc2626', fontWeight: 'bold', border: `${baseSize*0.1}px solid #fee2e2` } 
-                   : { backgroundColor: 'white', border: `${baseSize*0.1}px solid #f3f4f6`, color: '#374151' })
-              }}>
-                {day}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
+    <CalendarTemplatePage
+      type={normalizeCalendarType(c.type)}
+      page={page}
+      year={c.year || new Date().getFullYear()}
+      startMonth={c.startMonth || 1}
+      imagesPerMonth={imagesPerMonth}
+      logoSrc={jiffyLogo}
+      rotateWallPhoto
+      renderPhoto={(position, slot) => {
+        const { src, crop } = getCalendarSlotPhoto(order, position, slot, imagesPerMonth);
+        if (!src) return null;
+        return (
+          <div className="absolute inset-0 w-full h-full pointer-events-none">
+            <CanvasCropper src={preloadedMap?.[src] || src} crop={crop} />
+          </div>
+        );
+      }}
+    />
   );
 };
+
+/** URLs de las fotos que aparecen en una página de calendario (para pre-cargarlas). */
+const getCalendarPageImages = (order: any, page: CalendarPageSpec): string[] => {
+  if (page.kind !== 'month' && page.kind !== 'photo') return [];
+  const imagesPerMonth = order.customization?.imagesPerMonth === 4 ? 4 : 1;
+  return Array.from({ length: imagesPerMonth }, (_, slot) => getCalendarSlotPhoto(order, page.position, slot, imagesPerMonth).src).filter(Boolean);
+};
+
 
 // ============================================================================
 // MAIN COMPONENT: OWNER DASHBOARD
@@ -954,10 +875,14 @@ const OwnerDashboard: React.FC = () => {
     return new Promise(async (resolve, reject) => {
       try {
         const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
-        const totalItems = 12;
+        const pages = getCalendarPrintPages(normalizeCalendarType(order.customization?.type));
+        const totalItems = pages.length;
         let itemsProcessed = 0;
 
         const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
+        // Las plantillas usan fuentes web: se cargan y se incrustan una sola vez para todas las páginas.
+        await loadCalendarFonts();
+        const fontEmbedCSS = (await getCalendarFontEmbedCSS()) || undefined;
 
         const container = document.createElement('div');
         container.style.position = 'fixed';
@@ -979,17 +904,17 @@ const OwnerDashboard: React.FC = () => {
           await waitForRenderReady(container);
 
           const node = container.firstChild as HTMLElement;
-          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1, fontEmbedCSS });
         };
 
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < pages.length; i++) {
           if (i > 0) pdf.addPage();
-          const monthImages = getPhotosForMonth(order, i).filter(Boolean);
+          const page = pages[i];
           const pageDataUrl = await renderAndCapture(
             (preloadedMap) => (
-              <CalendarPagePrintView key={i} order={order} monthIndex={i} pxWidth={pxWidth} preloadedMap={preloadedMap} />
+              <CalendarPrintPage key={i} order={order} page={page} preloadedMap={preloadedMap} />
             ),
-            monthImages
+            getCalendarPageImages(order, page)
           );
           pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
           itemsProcessed++;

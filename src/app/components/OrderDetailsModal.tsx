@@ -3,10 +3,9 @@ import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Lay
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
-import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { CalendarMonthSheet, getCalendarMonths, getCalendarSlotPhoto, normalizeCalendarType } from './calendar/CalendarTemplate';
 import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 
@@ -41,11 +40,6 @@ interface OrderDetailsModalProps {
   hideAddressInfo?: boolean;
   onGoToEdit?: () => void;
 }
-
-const MONTHS_ES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
 
 // --- Album Viewer ---
 const mapSizeToCoverSize = (size: string): '20x20' | '30x30' | '21x28' | '28x21' => {
@@ -126,138 +120,44 @@ const AlbumViewer: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
-  const year = order.customization?.year || new Date().getFullYear();
-  const orientation = order.customization?.orientation || 'vertical';
-  const type = order.customization?.type || 'desk';
-  const imagesPerMonth = order.customization?.imagesPerMonth || 1;
-  const holidays = getColombianHolidays(year);
-
-  const generateCalendarGrid = (year: number, monthIndex: number) => {
-    const date = new Date(year, monthIndex, 1);
-    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const firstDayOfWeek = date.getDay();
-    const days = [];
-    for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
-    for (let day = 1; day <= daysInMonth; day++) days.push(day);
-    return days;
-  };
+  const c = order.customization || {};
+  const type = normalizeCalendarType(c.type);
+  const year = c.year || new Date().getFullYear();
+  const startMonth = c.startMonth || 1;
+  const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
+  const months = getCalendarMonths(startMonth, year);
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
         <CalendarIcon className="w-5 h-5 text-primary" />
-        <h4>Meses del Calendario ({year})</h4>
+        <h4>Meses del Calendario ({months[0].name} {months[0].year} – {months[11].name} {months[11].year})</h4>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {MONTHS_ES.map((month, index) => (
-          <div key={index} className="space-y-4">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month} {year}</p>
-            
-            <div
-              className="bg-white rounded-[3%] shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md"
-              style={{
-                aspectRatio: orientation === 'horizontal' ? '28/21' : '21/28'
-              }}
-            >
-              <div className={`flex h-full ${orientation === 'horizontal' ? 'flex-row' : 'flex-col'}`}>
-                {/* Photo Section */}
-                <div className={`bg-gray-50 relative ${orientation === 'horizontal' ? 'w-1/2 border-r border-gray-100' : 'h-1/2 border-b border-gray-100'}`}>
-                  {(() => {
-                    let photosForMonth: string[] = [];
-                    
-                    const pageData = order.pages?.[index];
-                    if (pageData && Array.isArray(pageData.images)) {
-                      photosForMonth = pageData.images;
-                    } else if (pageData && pageData.image) {
-                      photosForMonth = [pageData.image];
-                    }
-                    
-                    const photoData = order.photos?.[index];
-                    if (photosForMonth.length === 0 && photoData) {
-                      if (Array.isArray(photoData)) {
-                        photosForMonth = photoData as string[];
-                      } else if (typeof photoData === 'string') {
-                        photosForMonth = [photoData as string];
-                      }
-                    }
-
-                    if (photosForMonth.length > 0 && photosForMonth[0]) {
-                      if (type === 'wall' && imagesPerMonth === 4) {
-                        return (
-                          <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full p-1">
-                            {Array.from({ length: 4 }).map((_, photoIdx) => {
-                              const photo = photosForMonth[photoIdx];
-                              const crop = order.photoCrops?.[`${index}-${photoIdx}`];
-                              return (
-                                <div key={photoIdx} className="relative bg-gray-200 rounded-sm overflow-hidden">
-                                  {photo ? (
-                                    <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto ${photoIdx + 1} para ${month}`} />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                      <ImageIcon className="w-8 h-8 opacity-20" />
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      } else {
-                        const photo = photosForMonth[0];
-                        const crop = order.photoCrops?.[index] || order.photoCrops?.[`${index}-0`];
-                        return (
-                          <div className="w-full h-full absolute inset-0">
-                             <ImageCropper src={photo} position={crop || {x: 50, y: 50, zoom: 1}} alt={`Foto para ${month}`} />
-                          </div>
-                        );
-                      }
-                    }
-                    
+      <div className={`grid grid-cols-1 gap-8 ${type === 'desk' ? 'sm:grid-cols-2 md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {months.map((month, position) => (
+          <div key={position} className="space-y-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{month.name} {month.year}</p>
+            <div className="bg-white shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md">
+              <CalendarMonthSheet
+                type={type}
+                position={position}
+                year={year}
+                startMonth={startMonth}
+                imagesPerMonth={imagesPerMonth}
+                renderPhoto={(pos, slot) => {
+                  const { src, crop } = getCalendarSlotPhoto(order, pos, slot, imagesPerMonth);
+                  if (!src) {
                     return (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-gray-300 bg-gray-50">
-                        <ImageIcon className="w-12 h-12" />
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-gray-300">
+                        <ImageIcon className="w-8 h-8" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sin Imagen</span>
                       </div>
                     );
-                  })()}
-                </div>
-                
-                {/* Calendar Grid Section */}
-                <div className={`p-4 sm:p-6 flex flex-col justify-center bg-gray-50/50 ${orientation === 'horizontal' ? 'w-1/2' : 'flex-1'}`}>
-                  <div className="text-center mb-2">
-                    <span className="text-lg font-bold text-gray-900">{month} {year}</span>
-                  </div>
-                  <TooltipProvider>
-                    <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
-                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-                        <div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>
-                      ))}
-                      {generateCalendarGrid(year, index).map((day, i) => {
-                        if (!day) return <div key={i} className="h-full min-h-[24px] sm:min-h-[30px]" />;
-                        const date = new Date(year, index, day);
-                        const holiday = isHoliday(date, holidays);
-                        const content = (
-                          <div
-                            className={`h-full min-h-[24px] sm:min-h-[30px] flex items-center justify-center text-[10px] sm:text-xs rounded ${
-                              holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100' : 'bg-white border border-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {day}
-                          </div>
-                        );
-                        return holiday ? (
-                          <Tooltip key={i}>
-                            <TooltipTrigger asChild className="h-full w-full">{content}</TooltipTrigger>
-                            <TooltipContent><p>{holiday.name}</p></TooltipContent>
-                          </Tooltip>
-                        ) : <div key={i} className="h-full w-full">{content}</div>;
-                      })}
-                    </div>
-                  </TooltipProvider>
-                </div>
-              </div>
+                  }
+                  return <ImageCropper src={src} position={crop || { x: 50, y: 50, zoom: 1 }} alt={`Foto para ${month.name}`} />;
+                }}
+              />
             </div>
-
           </div>
         ))}
       </div>

@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
-import { ImageIcon, RectangleVertical } from 'lucide-react';
+import { ImageIcon, RectangleHorizontal, RectangleVertical } from 'lucide-react';
+import { CalendarMonthSheet } from './calendar/CalendarTemplate';
+
+/** Desde septiembre lo normal es comprar el calendario del año siguiente. */
+const defaultCalendarYear = () => {
+  const now = new Date();
+  return now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear();
+};
 
 export interface CalendarCustomizationOptions {
   paperType: string;
@@ -20,7 +27,7 @@ interface CalendarCustomizationProps {
 export default function CalendarCustomization({ calendar, onCustomizationComplete }: CalendarCustomizationProps) {
   const { t } = useLanguage();
   const [paperType] = useState('Opalina'); // Fixed option
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(defaultCalendarYear);
   const [startMonth, setStartMonth] = useState(1); // 1 = Enero
   const [type, setType] = useState<'desk' | 'wall'>('desk');
   const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
@@ -57,35 +64,22 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       <div className="mb-12">
         <h3 className="text-xl font-medium mb-4 text-center text-gray-400">{t('calendar.preview') || 'Vista Previa'}</h3>
         <div className="w-full max-w-[600px] mx-auto relative bg-gray-50 rounded-lg p-8 flex items-center justify-center border-2 border-gray-100 shadow-sm">
-          <div className={`bg-white shadow-2xl rounded-sm overflow-hidden flex flex-col transition-all duration-500 ${
-            type === 'desk' ? 'aspect-[21/28] w-[300px]' : 'aspect-[30/44] w-[300px]'
-          }`}>
-             <div className={`bg-gray-100 flex items-center justify-center transition-all duration-500 border-b border-gray-200 ${
-                type === 'desk' ? 'h-[70%]' : 'h-1/2'
-             }`}>
-                {type === 'wall' && imagesPerMonth === 4 ? (
-                  <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full p-1">
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                    <div className="bg-gray-200 rounded-sm flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>
-                  </div>
-                ) : (
-                  <ImageIcon className="w-16 h-16 text-gray-300" />
-                )}
-             </div>
-             <div className={`p-4 flex flex-col justify-center items-center gap-1 flex-1 h-full w-full`}>
-                <div className="text-lg font-bold leading-tight text-center">{MONTH_NAMES[startMonth - 1]} {year}</div>
-                <div className="text-[9px] uppercase tracking-widest text-gray-400">hasta {MONTH_NAMES[endMonthIndex]} {endYearActual}</div>
-                {/* Mock grid */}
-                <div className="flex-1 grid grid-cols-7 gap-1 w-full mt-2 min-h-0">
-                   {Array.from({ length: 35 }).map((_, i) => (
-                      <div key={i} className="bg-gray-50 rounded-[1px] min-h-[10px]" />
-                   ))}
+          <div className={`bg-white shadow-2xl overflow-hidden transition-all duration-500 ${type === 'desk' ? 'w-[260px]' : 'w-[340px]'}`}>
+            <CalendarMonthSheet
+              type={type}
+              position={0}
+              year={year}
+              startMonth={startMonth}
+              imagesPerMonth={type === 'wall' ? imagesPerMonth : 1}
+              renderPhoto={() => (
+                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                  <ImageIcon className="w-8 h-8 text-gray-300" />
                 </div>
-             </div>
+              )}
+            />
           </div>
         </div>
+        <p className="text-center text-xs text-gray-400 mt-3">hasta {MONTH_NAMES[endMonthIndex]} {endYearActual}</p>
       </div>
 
       <div className="space-y-10">
@@ -118,7 +112,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
               }`}
             >
               <div className={`p-2 rounded-lg ${type === 'wall' ? 'bg-white/20' : 'bg-gray-100'}`}>
-                <RectangleVertical className="w-6 h-6" />
+                <RectangleHorizontal className="w-6 h-6" />
               </div>
               <div>
                 <div className="text-lg font-bold">{t('calendarSetup.wall')}</div>

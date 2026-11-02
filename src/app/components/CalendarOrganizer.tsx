@@ -10,7 +10,8 @@ import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { convertFileIfHeic } from '../utils/imageUtils';
-import { getColombianHolidays, isHoliday } from '../utils/holidays';
+import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType } from './calendar/CalendarTemplate';
+import jiffyLogo from '../../assets/JiffyLogo.svg';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -24,29 +25,6 @@ interface CalendarOrganizerProps {
 }
 
 type Step = 'upload' | 'editor';
-
-const MONTHS_ES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
-/** Genera los 12 meses del calendario a partir del mes de inicio (1-12) y año */
-const getCalendarMonths = (startMonth: number, startYear: number) =>
-  Array.from({ length: 12 }, (_, i) => {
-    const monthIndex = (startMonth - 1 + i) % 12;
-    const year = startYear + Math.floor((startMonth - 1 + i) / 12);
-    return { monthIndex, year, name: MONTHS_ES[monthIndex] };
-  });
-
-const generateCalendarGrid = (year: number, monthIndex: number) => {
-  const date = new Date(year, monthIndex, 1);
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const firstDayOfWeek = date.getDay();
-  const days = [];
-  for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
-  for (let day = 1; day <= daysInMonth; day++) days.push(day);
-  return days;
-};
 
 export default function CalendarOrganizer({ 
   calendar, 
@@ -89,10 +67,11 @@ export default function CalendarOrganizer({
   const year = customization.year || new Date().getFullYear();
   const startMonth = customization.startMonth || 1;
   const calendarMonths = getCalendarMonths(startMonth, year);
-  const holidays = getColombianHolidays(year);
-  const requiredPhotos = customization.imagesPerMonth === 4 ? 48 : 12;
+  const calendarType = normalizeCalendarType(customization.type);
+  const imagesPerMonth = calendarType === 'wall' && customization.imagesPerMonth === 4 ? 4 : 1;
+  const requiredPhotos = imagesPerMonth * 12;
 
-  const pageAspect = customization.type === 'desk' ? 21/14 : 30/22;
+  const pageAspect = getPhotoAspect(calendarType, imagesPerMonth);
   const totalPrice = customization.type === 'wall' ? 80000 : 60000;
 
   // ==========================================================================
@@ -369,7 +348,7 @@ export default function CalendarOrganizer({
     const isPhotoLowRes = photo && photo.trim() !== '' && lowResInfo[photo];
 
     return (
-      <div key={globalIdx} className="relative bg-gray-200 rounded-sm overflow-hidden w-full h-full group">
+      <div key={globalIdx} className="relative bg-gray-200 overflow-hidden w-full h-full group">
         {photo && photo.trim() !== '' ? (
           <ImageCropper
             src={photo}
@@ -433,6 +412,18 @@ export default function CalendarOrganizer({
       </div>
     );
   };
+
+  const renderSheetCard = (label: string, key: string | number, sheet: React.ReactNode) => (
+    <div key={key} className="space-y-3">
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <CalendarIcon className="w-4 h-4 text-gray-400" />
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{label}</p>
+      </div>
+      <div className="bg-white shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow">
+        {sheet}
+      </div>
+    </div>
+  );
 
   if (step === 'upload') {
     return (
@@ -536,49 +527,26 @@ export default function CalendarOrganizer({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-        {calendarMonths.map(({ name, monthIndex, year: monthYear }, position) => {
-          const requiredForThisMonth = customization.imagesPerMonth === 4 ? 4 : 1;
-          const startIndex = position * requiredForThisMonth;
-          const slots = Array.from({ length: requiredForThisMonth }, (_, i) => startIndex + i);
-          const monthHolidays = getColombianHolidays(monthYear);
+      {/* Cada tarjeta es la página real de la plantilla 2027 (la misma que se imprime) */}
+      <div className={`grid grid-cols-1 gap-10 ${calendarType === 'desk' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {renderSheetCard('Portada', 'cover', (
+          <CalendarTemplatePage type={calendarType} page={{ kind: 'cover' }} year={year} startMonth={startMonth} logoSrc={jiffyLogo} />
+        ))}
 
-          return (
-            <div key={position} className="space-y-3">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <CalendarIcon className="w-4 h-4 text-gray-400" />
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">{name} {monthYear}</p>
-              </div>
+        {calendarMonths.map(({ name, year: monthYear }, position) => renderSheetCard(`${name} ${monthYear}`, position, (
+          <CalendarMonthSheet
+            type={calendarType}
+            position={position}
+            year={year}
+            startMonth={startMonth}
+            imagesPerMonth={imagesPerMonth}
+            renderPhoto={(pos, slot) => renderSlot(pos * imagesPerMonth + slot)}
+          />
+        )))}
 
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mx-auto w-full max-w-sm hover:shadow-xl transition-shadow" style={{ aspectRatio: customization.type === 'desk' ? '21/28' : '30/44' }}>
-                <div className="flex flex-col h-full">
-                  <div className="h-1/2 w-full border-b border-gray-100 bg-gray-50 relative p-1.5">
-                    {requiredForThisMonth === 4 ? (
-                      <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full">{slots.map(globalIdx => renderSlot(globalIdx))}</div>
-                    ) : renderSlot(slots[0])}
-                  </div>
-
-                  <div className="h-1/2 w-full p-4 flex flex-col justify-center bg-white relative">
-                    <div className="text-center mb-3"><span className="text-base sm:text-lg font-bold text-gray-900">{name} {monthYear}</span></div>
-                    <div className="flex-1 grid grid-cols-7 gap-1 min-h-0">
-                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (<div key={i} className="text-center text-[10px] font-bold text-gray-400">{day}</div>))}
-                      {generateCalendarGrid(monthYear, monthIndex).map((day, i) => {
-                        if (!day) return <div key={i} className="h-full min-h-[20px]" />;
-                        const date = new Date(monthYear, monthIndex, day);
-                        const holiday = isHoliday(date, monthHolidays);
-                        return (
-                          <div key={i} title={holiday ? holiday.name : undefined} className={`h-full min-h-[20px] flex items-center justify-center text-[10px] rounded cursor-default transition-colors ${holiday ? 'bg-red-50 text-red-600 font-bold border border-red-100 hover:bg-red-100' : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'}`}>
-                            {day}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {calendarType === 'desk' && renderSheetCard('Última hoja', 'notes', (
+          <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} />
+        ))}
       </div>
 
       {cropModalData !== null && (
