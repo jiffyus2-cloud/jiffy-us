@@ -52,3 +52,22 @@ export function moveCalendarMonth(
   blocks.splice(to, 0, moved);
   return fromMonths(blocks);
 }
+
+/**
+ * Intercambia dos fotos sueltas por su índice plano (mismo mes o meses
+ * distintos), con su recorte y firma. En el calendario de 4 fotos no se puede
+ * "agregar" a otro mes porque el diseño es fijo: siempre es un intercambio.
+ */
+export function swapCalendarPhotos(state: CalendarPhotoState, i: number, j: number): CalendarPhotoState {
+  if (i === j) return state;
+  const len = Math.max(state.photos.length, i + 1, j + 1);
+  const photos = Array.from({ length: len }, (_, k) => state.photos[k] ?? '');
+  const signatures = Array.from({ length: len }, (_, k) => state.signatures[k] ?? '');
+  [photos[i], photos[j]] = [photos[j], photos[i]];
+  [signatures[i], signatures[j]] = [signatures[j], signatures[i]];
+  const crops = { ...state.crops };
+  const ci = state.crops[i], cj = state.crops[j];
+  if (cj) crops[i] = cj; else delete crops[i];
+  if (ci) crops[j] = ci; else delete crops[j];
+  return { photos, crops, signatures };
+}

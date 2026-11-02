@@ -152,6 +152,10 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'calendarOrg.chooseReady': '¡Listo! Caben todas',
   'calendarOrg.chooseDiscardLast': 'Descartar las últimas {count}',
   'calendarOrg.longPressHint': 'Mantén presionado un mes para cambiar sus fotos de lugar',
+  'calendarOrg.monthModalDesc': 'Arrastra una foto sobre otra para **intercambiarlas**, o suéltala abajo para cambiarla por una de **otro mes**.',
+  'calendarOrg.monthSendZone': 'Arrastra aquí para cambiarla con otro mes',
+  'calendarOrg.monthSwapTitle': '¿Con cuál foto la cambias?',
+  'calendarOrg.monthSwapDesc': 'Cada mes tiene 4 fotos fijas, así que se intercambian: la foto que toques pasa a este mes.',
   'calendarOrg.duplicateDesc': 'La foto **"{name}"** ya fue añadida anteriormente al calendario.',
 
   // ── Creador (guardado y avisos) ───────────────────────────────────────────
@@ -189,7 +193,10 @@ export const APP_TEXTS_ES: Record<string, string> = {
 
   // ── Editor del álbum: fotos, ajustes de página y carga ────────────────────
   'organizer.duplicateDesc': 'La foto **"{name}"** ya fue añadida anteriormente al álbum.',
-  'organizer.sendDropZone': 'Arrastra una foto aquí para enviarla a otra página',
+  'organizer.sendDropZone': 'Arrastra una foto aquí para enviarla o intercambiarla con otra página',
+  'organizer.swapTitle': 'Página {page}: ¿con cuál la cambias?',
+  'organizer.swapDesc': 'Toca la foto de esta página que quieres **intercambiar**, o un hueco vacío para ponerla ahí.',
+  'organizer.swapAddInstead': 'Agregarla sin quitar ninguna',
   'organizer.emptySlotsDesc': 'Esta página tiene **{count} hueco(s)** sin foto. Puedes elegir las {count} de una vez y se colocan en orden.',
   'organizer.pickerDesc': 'El carrete se cerrará solo cuando iOS termine y la app continuará automáticamente.',
   'organizer.pickerAccept': 'Entendido — esperaré sin cerrar la app hasta que el carrete se cierre solo.',

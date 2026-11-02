@@ -382,6 +382,51 @@ export function movePhotoToPage(
   return { state: next, success: true };
 }
 
+// ── swap two slots on different pages ────────────────────────────────────────
+// Intercambia el contenido completo de dos huecos (foto, recorte, texto y firma)
+// entre páginas distintas. A diferencia de movePhotoToPage, funciona aunque la
+// página destino esté llena: ninguna página cambia su número de huecos. Si el
+// hueco destino está vacío, la foto simplemente pasa a ese hueco.
+
+export function swapPhotosBetweenPages(
+  state: AlbumState,
+  pageA: number,
+  idxA: number,
+  pageB: number,
+  idxB: number
+): AlbumState {
+  if (pageA === pageB) return swapPhotosOnPage(state, pageA, idxA, idxB);
+  if (!state[pageA] || !state[pageB]) return state;
+
+  const next = cloneState(state);
+  const a = next[pageA];
+  const b = next[pageB];
+
+  const take = (p: PageState, i: number) => ({
+    photo: p.photos[i] ?? '',
+    sig: p.signatures[i] ?? '',
+    crop: p.crops[i],
+    text: p.texts[i],
+  });
+  const put = (p: PageState, i: number, s: ReturnType<typeof take>) => {
+    while (p.photos.length <= i) p.photos.push('');
+    while (p.signatures.length < p.photos.length) p.signatures.push('');
+    p.photos[i] = s.photo;
+    p.signatures[i] = s.sig;
+    if (s.crop !== undefined) p.crops[i] = s.crop; else delete p.crops[i];
+    if (s.text !== undefined) p.texts[i] = s.text; else delete p.texts[i];
+  };
+
+  const slotA = take(a, idxA);
+  const slotB = take(b, idxB);
+  put(a, idxA, slotB);
+  put(b, idxB, slotA);
+
+  // Sin recortar los vacíos del final: el largo del arreglo cuenta para cuántos
+  // huecos se dibujan, y un intercambio no debe encoger el diseño de ninguna página.
+  return next;
+}
+
 // ── swap two pages ────────────────────────────────────────────────────────────
 
 export function swapPages(state: AlbumState, a: number, b: number): AlbumState {

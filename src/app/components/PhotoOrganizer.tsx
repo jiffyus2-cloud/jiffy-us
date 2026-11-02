@@ -15,6 +15,7 @@ import {
   movePageToIndex as albumMovePageToIndex,
   insertBlankPages as albumInsertBlankPages,
   movePhotoToPage as albumMovePhotoToPage,
+  swapPhotosBetweenPages as albumSwapPhotosBetweenPages,
   rippleShift as albumRippleShift,
   pullShift as albumPullShift,
   deleteOverflow as albumDeleteOverflow,
@@ -53,7 +54,8 @@ import {
   Upload, X, ChevronUp, ChevronDown, Plus, Trash2,
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
-  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic
+  AlertCircle, Loader2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic,
+  ArrowLeftRight,
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -440,7 +442,8 @@ export default function PhotoOrganizer({
 
   const dragStateRef = useRef<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
   const [dragVisual, setDragVisual] = useState<{ pageIndex: number; fromIndex: number; toIndex: number | null; overSendZone: boolean } | null>(null);
-  const [sendPhotoPicker, setSendPhotoPicker] = useState<{ pageIndex: number; photoIndex: number } | null>(null);
+  // targetPage: segundo paso, elegir con qué foto de esa página intercambiar.
+  const [sendPhotoPicker, setSendPhotoPicker] = useState<{ pageIndex: number; photoIndex: number; targetPage?: number } | null>(null);
   const sendPhotoPickerScrollRef = useRef<HTMLDivElement>(null);
   const sendPhotoPickerItemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [reorderSelectedPage, setReorderSelectedPage] = useState<number | null>(null);
@@ -1649,6 +1652,19 @@ export default function PhotoOrganizer({
     }
   };
 
+  // Intercambia la foto con un hueco concreto de otra página. Funciona aunque la
+  // página destino esté llena (ninguna página cambia su número de huecos).
+  const handleSwapPhotoWithPage = (pageIndex: number, photoIndex: number, targetPage: number, targetIndex: number) => {
+    try {
+      applyAlbumState(albumSwapPhotosBetweenPages(currentAlbumState(), pageIndex, photoIndex, targetPage, targetIndex));
+    } catch (err) {
+      console.error('handleSwapPhotoWithPage failed:', err);
+      alert(t('organizer.sendFailed'));
+    } finally {
+      setSendPhotoPicker(null);
+    }
+  };
+
   const handleDragStart = useCallback((pageIndex: number, photoIndex: number, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2404,7 +2420,7 @@ export default function PhotoOrganizer({
             <button
               key={idx}
               disabled={isSource}
-              onClick={() => handleSendPhotoToPage(sendPhotoPicker.pageIndex, sendPhotoPicker.photoIndex, idx)}
+              onClick={() => setSendPhotoPicker({ ...sendPhotoPicker, targetPage: idx })}
               className={`relative flex flex-col items-center gap-1 group ${isSource ? 'opacity-30 cursor-not-allowed' : ''}`}
             >
               <div
@@ -2429,6 +2445,76 @@ export default function PhotoOrganizer({
             </button>
           );
         };
+
+        if (sendPhotoPicker.targetPage !== undefined) {
+          const { pageIndex: fromPage, photoIndex: fromPhoto, targetPage } = sendPhotoPicker;
+          const movingPhoto = safePhotos[fromPage]?.[fromPhoto] || '';
+          const targetSlots = getAlbumPageSlots(albumPageSource, targetPage, sizeStr);
+          // "Agregar" solo si la página destino tiene sitio (hueco libre o puede crecer).
+          const canAdd = albumMovePhotoToPage(currentAlbumState(), fromPage, fromPhoto, targetPage, albumConfig).success;
+          return (
+            <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+                  <h3 className="text-lg sm:text-xl font-bold">{t('organizer.swapTitle', { page: targetPage + 1 })}</h3>
+                  <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <X className="w-5 h-5"/>
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  {movingPhoto && <img src={movingPhoto} alt="" className="w-14 h-14 rounded-lg object-cover border-2 border-black shrink-0" />}
+                  <p className="text-sm text-gray-600"><RichText text={t('organizer.swapDesc')} /></p>
+                </div>
+                <AlbumPageFrame size={sizeStr} className="mx-auto w-full max-w-xs border-gray-200 shadow-sm">
+                  <AlbumPageSlots
+                    slots={targetSlots}
+                    renderSlot={(slot, slotIdx) => {
+                      const isText = !slot.photo && !!slot.text;
+                      return (
+                        <button
+                          type="button"
+                          disabled={isText}
+                          onClick={() => handleSwapPhotoWithPage(fromPage, fromPhoto, targetPage, slotIdx)}
+                          aria-label={slot.photo ? `Intercambiar con la foto ${slotIdx + 1}` : `Poner en el hueco ${slotIdx + 1}`}
+                          className="group relative w-full h-full overflow-hidden bg-gray-100 disabled:cursor-not-allowed"
+                        >
+                          {slot.photo ? (
+                            <img src={slot.photo} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-400 border border-dashed border-gray-300">
+                              {isText ? 'Texto' : 'Vacío'}
+                            </span>
+                          )}
+                          {!isText && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/50 transition-colors">
+                              <ArrowLeftRight className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }}
+                  />
+                </AlbumPageFrame>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setSendPhotoPicker({ pageIndex: fromPage, photoIndex: fromPhoto })}
+                    className="flex-1 py-2.5 rounded-lg border-2 border-gray-200 text-sm font-bold text-gray-700 hover:border-black transition-colors"
+                  >
+                    ← Elegir otra página
+                  </button>
+                  {canAdd && (
+                    <button
+                      onClick={() => handleSendPhotoToPage(fromPage, fromPhoto, targetPage)}
+                      className="flex-1 py-2.5 rounded-lg bg-black text-white text-sm font-bold hover:bg-gray-800 transition-colors"
+                    >
+                      {t('organizer.swapAddInstead')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
