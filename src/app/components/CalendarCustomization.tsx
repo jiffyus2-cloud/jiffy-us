@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
 import { ImageIcon, RectangleHorizontal, RectangleVertical } from 'lucide-react';
-import { CalendarMonthSheet } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, getCalendarYears, useCalendarHolidays } from './calendar/CalendarTemplate';
+import {
+  DEFAULT_HOLIDAY_COUNTRY, NO_HOLIDAYS, getColombianHolidays, getHolidayCountries, getHolidayCountryName, type HolidayCountry,
+} from '../utils/holidays';
 
 /** Desde septiembre lo normal es comprar el calendario del año siguiente. */
 const defaultCalendarYear = () => {
@@ -17,6 +20,8 @@ export interface CalendarCustomizationOptions {
   startMonth: number; // 1-12
   type: 'desk' | 'wall';
   imagesPerMonth: 1 | 4;
+  /** Código ISO del país cuyos festivos se marcan ('NONE' = sin festivos). Sin él, Colombia. */
+  holidayCountry?: string;
 }
 
 interface CalendarCustomizationProps {
@@ -31,6 +36,26 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
   const [startMonth, setStartMonth] = useState(1); // 1 = Enero
   const [type, setType] = useState<'desk' | 'wall'>('desk');
   const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
+  const [holidayCountry, setHolidayCountry] = useState(DEFAULT_HOLIDAY_COUNTRY);
+  const [countries, setCountries] = useState<HolidayCountry[]>([
+    { code: DEFAULT_HOLIDAY_COUNTRY, name: getHolidayCountryName(DEFAULT_HOLIDAY_COUNTRY) },
+  ]);
+
+  // La lista completa de países llega con la librería de festivos (carga bajo demanda).
+  useEffect(() => {
+    let cancelled = false;
+    getHolidayCountries().then(list => { if (!cancelled) setCountries(list); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const holidays = useCalendarHolidays(holidayCountry, year, startMonth);
+  // Festivos que caen dentro de los 12 meses del calendario
+  const holidayCount = useMemo(() => {
+    const list = holidays ?? getCalendarYears(year, startMonth).flatMap(getColombianHolidays);
+    const from = new Date(year, startMonth - 1, 1);
+    const to = new Date(year, startMonth - 1 + 12, 1);
+    return list.filter(h => h.date >= from && h.date < to).length;
+  }, [holidays, year, startMonth]);
 
   const MONTH_NAMES = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -55,6 +80,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       startMonth,
       type,
       imagesPerMonth: type === 'wall' ? imagesPerMonth : 1,
+      holidayCountry,
     });
   };
 
@@ -71,6 +97,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
               year={year}
               startMonth={startMonth}
               imagesPerMonth={type === 'wall' ? imagesPerMonth : 1}
+              holidays={holidays}
               renderPhoto={() => (
                 <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                   <ImageIcon className="w-8 h-8 text-gray-300" />
@@ -180,6 +207,26 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
                 {name}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Festivos del país */}
+        <div>
+          <h3 className="text-2xl mb-2 font-bold">{t('calendarSetup.holidaysTitle')}</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            <RichText text={holidayCountry === NO_HOLIDAYS
+              ? t('calendarSetup.noHolidaysDesc')
+              : t('calendarSetup.holidaysDesc', { count: holidayCount, country: getHolidayCountryName(holidayCountry) })} />
+          </p>
+          <div className="max-w-sm">
+            <select
+              value={holidayCountry}
+              onChange={(e) => setHolidayCountry(e.target.value)}
+              className="w-full p-3 border-2 border-gray-200 hover:border-black focus:border-black rounded-lg text-base font-medium bg-white focus:outline-none"
+            >
+              {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              <option value={NO_HOLIDAYS}>{getHolidayCountryName(NO_HOLIDAYS)}</option>
+            </select>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 /**
- * Utility to calculate Colombian holidays
+ * Festivos de los calendarios: Colombia (cálculo propio, por defecto) y cualquier otro país vía `date-holidays`.
  */
 
 export interface Holiday {
@@ -94,4 +94,79 @@ export function isHoliday(date: Date, holidays: Holiday[]): Holiday | undefined 
     h.date.getMonth() === date.getMonth() && 
     h.date.getFullYear() === date.getFullYear()
   );
+}
+
+// ============================================================================
+// Festivos por país
+// ============================================================================
+// Colombia usa el cálculo propio de arriba (es el que cuadra con las plantillas
+// de producción; los datos de Colombia de `date-holidays` traen días que no son
+// festivos nacionales, como la Virgen de Chiquinquirá). El resto de países sale
+// de `date-holidays`, que se carga bajo demanda para no inflar el bundle inicial.
+
+/** País por defecto de los calendarios. */
+export const DEFAULT_HOLIDAY_COUNTRY = 'CO';
+/** Valor para un calendario sin festivos marcados. */
+export const NO_HOLIDAYS = 'NONE';
+
+export interface HolidayCountry {
+  code: string;
+  name: string;
+}
+
+type HolidaysLib = typeof import('date-holidays');
+let libPromise: Promise<HolidaysLib['default']> | null = null;
+const loadLib = () => {
+  libPromise ??= import('date-holidays').then(m => m.default);
+  return libPromise;
+};
+
+const regionNames = (() => {
+  try { return new Intl.DisplayNames(['es'], { type: 'region' }); } catch { return null; }
+})();
+
+/** Nombre del país en español (o el código si el navegador no sabe traducirlo). */
+export const getHolidayCountryName = (code: string): string => {
+  if (code === NO_HOLIDAYS) return 'Sin festivos';
+  try { return regionNames?.of(code) || code; } catch { return code; }
+};
+
+/** Países con festivos disponibles, ordenados por nombre en español. */
+export async function getHolidayCountries(): Promise<HolidayCountry[]> {
+  const Holidays = await loadLib();
+  const codes = Object.keys(new Holidays().getCountries('es'));
+  if (!codes.includes(DEFAULT_HOLIDAY_COUNTRY)) codes.push(DEFAULT_HOLIDAY_COUNTRY);
+  return codes
+    .map(code => ({ code, name: getHolidayCountryName(code) }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+/** Convierte "2027-01-01 00:00:00" en una fecha local (sin desfase de zona horaria). */
+const parseLocalDate = (s: string) => {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+/**
+ * Festivos oficiales (tipo `public`) de un país para los años dados. Si el país
+ * no existe o la librería no carga, devuelve los de Colombia para no imprimir un
+ * calendario sin festivos por un fallo.
+ */
+export async function getHolidaysForCountry(country: string | undefined, years: number[]): Promise<Holiday[]> {
+  const code = (country || DEFAULT_HOLIDAY_COUNTRY).toUpperCase();
+  if (code === NO_HOLIDAYS) return [];
+  const colombian = () => years.flatMap(getColombianHolidays);
+  if (code === DEFAULT_HOLIDAY_COUNTRY) return colombian();
+  try {
+    const Holidays = await loadLib();
+    const hd = new Holidays();
+    if (!(code in hd.getCountries())) return colombian();
+    hd.init(code, { languages: ['es'], types: ['public'] });
+    const seen = new Set<string>();
+    return years.flatMap(year => (hd.getHolidays(year, 'es') || []))
+      .filter(h => h.type === 'public' && !seen.has(h.date.slice(0, 10)) && seen.add(h.date.slice(0, 10)))
+      .map(h => ({ date: parseLocalDate(h.date), name: h.name }));
+  } catch {
+    return colombian();
+  }
 }

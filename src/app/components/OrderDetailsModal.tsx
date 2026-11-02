@@ -5,7 +5,8 @@ import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
-import { CalendarMonthSheet, getCalendarMonths, getCalendarSlotPhoto, normalizeCalendarType } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, getCalendarMonths, getCalendarSlotPhoto, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
+import { getHolidayCountryName, DEFAULT_HOLIDAY_COUNTRY } from '../utils/holidays';
 import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 
@@ -126,12 +127,15 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
   const startMonth = c.startMonth || 1;
   const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
   const months = getCalendarMonths(startMonth, year);
+  const holidayCountry = c.holidayCountry || DEFAULT_HOLIDAY_COUNTRY;
+  const holidays = useCalendarHolidays(holidayCountry, year, startMonth);
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-gray-900 font-bold border-b pb-4">
         <CalendarIcon className="w-5 h-5 text-primary" />
         <h4>Meses del Calendario ({months[0].name} {months[0].year} – {months[11].name} {months[11].year})</h4>
+        <span className="ml-auto text-xs font-medium text-gray-500">Festivos: {getHolidayCountryName(holidayCountry)}</span>
       </div>
       <div className={`grid grid-cols-1 gap-8 ${type === 'desk' ? 'sm:grid-cols-2 md:grid-cols-3' : 'md:grid-cols-2'}`}>
         {months.map((month, position) => (
@@ -144,6 +148,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
                 year={year}
                 startMonth={startMonth}
                 imagesPerMonth={imagesPerMonth}
+                holidays={holidays}
                 renderPhoto={(pos, slot) => {
                   const { src, crop } = getCalendarSlotPhoto(order, pos, slot, imagesPerMonth);
                   if (!src) {

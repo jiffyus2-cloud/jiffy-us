@@ -19,8 +19,8 @@
  *   portada · por cada mes, la página de foto (impresa girada 180°, porque al
  *   colgarlo queda arriba, en el reverso de la hoja anterior) y la de cuadrícula.
  */
-import type { CSSProperties, ReactNode } from 'react';
-import { getColombianHolidays, isHoliday, type Holiday } from '../../utils/holidays';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { DEFAULT_HOLIDAY_COUNTRY, getColombianHolidays, getHolidaysForCountry, isHoliday, type Holiday } from '../../utils/holidays';
 
 export type CalendarType = 'desk' | 'wall';
 
@@ -291,10 +291,20 @@ function CoverFrame({ type, logoSrc }: { type: CalendarType; logoSrc?: string })
   );
 }
 
-const holidaysCache = new Map<number, Holiday[]>();
-const holidayOn = (year: number, monthIndex: number, day: number) => {
-  if (!holidaysCache.has(year)) holidaysCache.set(year, getColombianHolidays(year));
-  return isHoliday(new Date(year, monthIndex, day), holidaysCache.get(year)!);
+/** Festivo (si lo hay) de un día del calendario. */
+type HolidayLookup = (year: number, monthIndex: number, day: number) => Holiday | undefined;
+
+/** Sin lista explícita se marcan los festivos de Colombia (el país por defecto). */
+const colombianCache = new Map<number, Holiday[]>();
+const colombianLookup: HolidayLookup = (year, monthIndex, day) => {
+  if (!colombianCache.has(year)) colombianCache.set(year, getColombianHolidays(year));
+  return isHoliday(new Date(year, monthIndex, day), colombianCache.get(year)!);
+};
+
+const makeHolidayLookup = (holidays?: Holiday[]): HolidayLookup => {
+  if (!holidays) return colombianLookup;
+  const byDay = new Map(holidays.map(h => [`${h.date.getFullYear()}-${h.date.getMonth()}-${h.date.getDate()}`, h]));
+  return (year, monthIndex, day) => byDay.get(`${year}-${monthIndex}-${day}`);
 };
 
 // ----------------------------------------------------------------------------
@@ -307,7 +317,7 @@ const DESK_ROW = 19.5;
 const DESK_LABEL_X = 73;
 
 /** Bloque de un mes del escritorio: número grande + nombre a la izquierda, cuadrícula a la derecha. */
-function DeskMonthBlock({ month, headerY, showYear }: { month: CalendarMonth; headerY: number; showYear: boolean }) {
+function DeskMonthBlock({ month, headerY, showYear, holidayOn }: { month: CalendarMonth; headerY: number; showYear: boolean; holidayOn: HolidayLookup }) {
   const weeks = getMonthWeeks(month.year, month.monthIndex);
   const label = { fontFamily: FONT.label, fontWeight: 600, fontSize: 10.5, letterSpacing: 1.6, fill: COLOR.deskText, textAnchor: 'middle' as const };
   return (
@@ -356,23 +366,23 @@ function DeskCover({ title, logoSrc }: { title: string[]; logoSrc?: string }) {
   );
 }
 
-function DeskMonthPage({ month, renderPhoto }: { month: CalendarMonth; renderPhoto?: RenderPhoto }) {
+function DeskMonthPage({ month, renderPhoto, holidayOn }: { month: CalendarMonth; renderPhoto?: RenderPhoto; holidayOn: HolidayLookup }) {
   return (
     <PageFrame type="desk">
       <PhotoSlots type="desk" imagesPerMonth={1} renderPhoto={renderPhoto} />
       <Overlay type="desk">
-        <DeskMonthBlock month={month} headerY={368.1} showYear={false} />
+        <DeskMonthBlock month={month} headerY={368.1} showYear={false} holidayOn={holidayOn} />
       </Overlay>
     </PageFrame>
   );
 }
 
-function DeskNotesPage({ months }: { months: CalendarMonth[] }) {
+function DeskNotesPage({ months, holidayOn }: { months: CalendarMonth[]; holidayOn: HolidayLookup }) {
   return (
     <PageFrame type="desk">
       <Overlay type="desk">
-        <DeskMonthBlock month={months[0]} headerY={60.8} showYear />
-        <DeskMonthBlock month={months[1]} headerY={215.8} showYear />
+        <DeskMonthBlock month={months[0]} headerY={60.8} showYear holidayOn={holidayOn} />
+        <DeskMonthBlock month={months[1]} headerY={215.8} showYear holidayOn={holidayOn} />
         <text x={177} y={360.4} textAnchor="middle" fontFamily={FONT.label} fontWeight={300} fontSize={9.3} letterSpacing={3.7} fill={COLOR.notes}>NOTAS</text>
         {[0, 1, 2, 3].map(i => (
           <line key={i} x1={35} y1={391.5 + i * 29} x2={315} y2={391.5 + i * 29} stroke={COLOR.notesLine} strokeWidth={1.2} strokeDasharray="4 2" />
@@ -407,7 +417,7 @@ function WallPhotoPage({ imagesPerMonth, renderPhoto, rotated }: { imagesPerMont
   );
 }
 
-function WallGridPage({ month }: { month: CalendarMonth }) {
+function WallGridPage({ month, holidayOn }: { month: CalendarMonth; holidayOn: HolidayLookup }) {
   const weeks = getMonthWeeks(month.year, month.monthIndex);
   const colW = WALL_GRID.w / 7;
   // Siempre 5 filas: la sexta semana se escribe debajo, dentro de la misma celda (p. ej. "24 / 31").
@@ -470,9 +480,9 @@ function WallGridPage({ month }: { month: CalendarMonth }) {
  * en pared la hoja de la foto (derecha) sobre la del mes, como cuelga.
  */
 export function CalendarMonthSheet({
-  type, position, year, startMonth, imagesPerMonth = 1, renderPhoto,
+  type, position, year, startMonth, imagesPerMonth = 1, renderPhoto, holidays,
 }: Omit<CalendarTemplatePageProps, 'page' | 'logoSrc' | 'rotateWallPhoto'> & { position: number }) {
-  const common = { type, year, startMonth, imagesPerMonth, renderPhoto };
+  const common = { type, year, startMonth, imagesPerMonth, renderPhoto, holidays };
   if (type === 'desk') return <CalendarTemplatePage {...common} page={{ kind: 'month', position }} />;
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -493,14 +503,17 @@ export interface CalendarTemplatePageProps {
   /** Foto de un hueco del mes `position` (0-11). `slot` va de 0 a imagesPerMonth-1. */
   renderPhoto?: (position: number, slot: number) => ReactNode;
   logoSrc?: string;
+  /** Festivos a marcar (ver `getHolidaysForCountry`). Sin ella, los de Colombia. */
+  holidays?: Holiday[];
   /** Pared: gira la hoja de la foto 180° como va impresa. El editor la muestra derecha. */
   rotateWallPhoto?: boolean;
 }
 
 export function CalendarTemplatePage({
-  type, page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false,
+  type, page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false, holidays,
 }: CalendarTemplatePageProps) {
   const months = getCalendarMonths(startMonth, year, 14);
+  const holidayOn = useMemo(() => makeHolidayLookup(holidays), [holidays]);
   switch (page.kind) {
     case 'cover': {
       if (type === 'wall') return <WallCover logoSrc={logoSrc} />;
@@ -508,9 +521,9 @@ export function CalendarTemplatePage({
       return <DeskCover logoSrc={logoSrc} title={['Calendario', last.year === year ? `${year}` : `${year} - ${last.year}`]} />;
     }
     case 'month':
-      return <DeskMonthPage month={months[page.position]} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
+      return <DeskMonthPage month={months[page.position]} holidayOn={holidayOn} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
     case 'notes':
-      return <DeskNotesPage months={months.slice(12, 14)} />;
+      return <DeskNotesPage months={months.slice(12, 14)} holidayOn={holidayOn} />;
     case 'photo':
       return (
         <WallPhotoPage
@@ -520,6 +533,32 @@ export function CalendarTemplatePage({
         />
       );
     case 'grid':
-      return <WallGridPage month={months[page.position]} />;
+      return <WallGridPage month={months[page.position]} holidayOn={holidayOn} />;
   }
+}
+
+const NO_HOLIDAYS_YET: Holiday[] = [];
+
+/** Años que cubre un calendario (12 meses + los 2 de la hoja final del escritorio). */
+export const getCalendarYears = (year: number, startMonth: number) =>
+  [...new Set(getCalendarMonths(startMonth, year, 14).map(m => m.year))];
+
+/**
+ * Festivos del país elegido para un calendario. Colombia se resuelve al instante;
+ * otro país carga `date-holidays` y mientras tanto no marca ninguno (mejor eso
+ * que enseñar un instante los de Colombia en un calendario de otro país).
+ */
+export function useCalendarHolidays(country: string | undefined, year: number, startMonth: number): Holiday[] | undefined {
+  const code = country || DEFAULT_HOLIDAY_COUNTRY;
+  const key = `${code}|${year}|${startMonth}`;
+  const [loaded, setLoaded] = useState<{ key: string; holidays: Holiday[] } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getHolidaysForCountry(code, getCalendarYears(year, startMonth)).then(holidays => {
+      if (!cancelled) setLoaded({ key, holidays });
+    });
+    return () => { cancelled = true; };
+  }, [key, code, year, startMonth]);
+  if (loaded?.key === key) return loaded.holidays;
+  return code === DEFAULT_HOLIDAY_COUNTRY ? undefined : NO_HOLIDAYS_YET;
 }

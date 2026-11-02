@@ -25,7 +25,8 @@ import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
-import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, type CalendarPageSpec } from './calendar/CalendarTemplate';
+import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, getCalendarYears, type CalendarPageSpec } from './calendar/CalendarTemplate';
+import { getHolidaysForCountry, type Holiday } from '../utils/holidays';
 import { getCoverDimensions } from '../utils/cropMath';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
 import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
@@ -273,7 +274,7 @@ const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order
 
 // Página de calendario para el PDF: la plantilla compartida con las fotos
 // dibujadas por `CanvasCropper` (la hoja de foto de pared va girada 180°).
-const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, preloadedMap?: Record<string, string> }> = ({ order, page, preloadedMap }) => {
+const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays: Holiday[], preloadedMap?: Record<string, string> }> = ({ order, page, holidays, preloadedMap }) => {
   const c = order.customization || {};
   const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
   return (
@@ -284,6 +285,7 @@ const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, preloade
       startMonth={c.startMonth || 1}
       imagesPerMonth={imagesPerMonth}
       logoSrc={jiffyLogo}
+      holidays={holidays}
       rotateWallPhoto
       renderPhoto={(position, slot) => {
         const { src, crop } = getCalendarSlotPhoto(order, position, slot, imagesPerMonth);
@@ -883,6 +885,12 @@ const OwnerDashboard: React.FC = () => {
         // Las plantillas usan fuentes web: se cargan y se incrustan una sola vez para todas las páginas.
         await loadCalendarFonts();
         const fontEmbedCSS = (await getCalendarFontEmbedCSS()) || undefined;
+        // Festivos del país que eligió el cliente (Colombia en pedidos anteriores a la opción).
+        const c = order.customization || {};
+        const holidays = await getHolidaysForCountry(
+          c.holidayCountry,
+          getCalendarYears(c.year || new Date().getFullYear(), c.startMonth || 1),
+        );
 
         const container = document.createElement('div');
         container.style.position = 'fixed';
@@ -912,7 +920,7 @@ const OwnerDashboard: React.FC = () => {
           const page = pages[i];
           const pageDataUrl = await renderAndCapture(
             (preloadedMap) => (
-              <CalendarPrintPage key={i} order={order} page={page} preloadedMap={preloadedMap} />
+              <CalendarPrintPage key={i} order={order} page={page} holidays={holidays} preloadedMap={preloadedMap} />
             ),
             getCalendarPageImages(order, page)
           );
