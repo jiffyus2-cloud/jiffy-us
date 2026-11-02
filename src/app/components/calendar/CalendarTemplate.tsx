@@ -89,17 +89,20 @@ interface Box { x: number; y: number; w: number; h: number }
 
 const DESK_PHOTO: Box = { x: 16, y: 26, w: 322, h: 316 };
 const WALL_PHOTO: Box = { x: 0, y: 30.7, w: 850.5, h: 561.8 };
-const WALL_COLLAGE_GAP = 6;
+// Pared x4 ("Calendario de Pared 2027 x4 fotos"): cuadrícula 2x2 a todo el ancho,
+// un poco más alta que la foto única y con 19,75 pt entre fotos.
+const WALL_COLLAGE: Box = { x: 0, y: 27.88, w: 850.5, h: 567.5 };
+const WALL_COLLAGE_GAP = 19.75;
 
 /** Huecos de foto de una página de mes, en puntos de la plantilla. */
 export const getPhotoBoxes = (type: CalendarType, imagesPerMonth: number): Box[] => {
   if (type === 'desk') return [DESK_PHOTO];
   if (imagesPerMonth !== 4) return [WALL_PHOTO];
-  const w = (WALL_PHOTO.w - WALL_COLLAGE_GAP) / 2;
-  const h = (WALL_PHOTO.h - WALL_COLLAGE_GAP) / 2;
+  const w = (WALL_COLLAGE.w - WALL_COLLAGE_GAP) / 2;
+  const h = (WALL_COLLAGE.h - WALL_COLLAGE_GAP) / 2;
   return [0, 1, 2, 3].map(i => ({
-    x: WALL_PHOTO.x + (i % 2) * (w + WALL_COLLAGE_GAP),
-    y: WALL_PHOTO.y + Math.floor(i / 2) * (h + WALL_COLLAGE_GAP),
+    x: WALL_COLLAGE.x + (i % 2) * (w + WALL_COLLAGE_GAP),
+    y: WALL_COLLAGE.y + Math.floor(i / 2) * (h + WALL_COLLAGE_GAP),
     w,
     h,
   }));
