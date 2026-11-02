@@ -144,10 +144,13 @@ export const APP_TEXTS_ES: Record<string, string> = {
   // ── Organizador del calendario ────────────────────────────────────────────
   'calendarOrg.pickLimit': 'Puedes elegir hasta **{count} fotos** (las que caben en tu calendario).',
   'calendarOrg.full': 'Ya elegiste todas las fotos que caben en tu calendario.',
-  'calendarOrg.chooseTitle': 'Elige tus {max} fotos',
-  'calendarOrg.chooseDesc': 'Seleccionaste **{selected} fotos**, pero en tu calendario caben **{max}**. Toca las que quieres usar.',
+  'calendarOrg.chooseTitle': 'Elige cuáles descartar',
+  'calendarOrg.chooseDesc': 'Elegiste **{selected} fotos** y en tu calendario caben **{max}**. Toca las fotos que quieres **descartar**.',
   'calendarOrg.chooseConfirm': 'Usar {count} fotos',
   'calendarOrg.chooseCancel': 'Cancelar',
+  'calendarOrg.chooseRemaining': 'Descarta {count} más',
+  'calendarOrg.chooseReady': '¡Listo! Caben todas',
+  'calendarOrg.chooseDiscardLast': 'Descartar las últimas {count}',
   'calendarOrg.duplicateDesc': 'La foto **"{name}"** ya fue añadida anteriormente al calendario.',
 
   // ── Creador (guardado y avisos) ───────────────────────────────────────────
