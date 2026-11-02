@@ -13,6 +13,7 @@ import { convertFileIfHeic } from '../utils/imageUtils';
 import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
 import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
+import { moveCalendarMonth, swapCalendarMonths, type CalendarPhotoState } from './calendar/calendarReorder';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -62,6 +63,12 @@ export default function CalendarOrganizer({
 
   // Fotos elegidas de más: el cliente decide cuáles caben (ver CalendarPhotoChooser)
   const [photoChoice, setPhotoChoice] = useState<{ files: File[]; max: number } | null>(null);
+
+  // Reordenar meses como las páginas del álbum: mantener presionado selecciona,
+  // tocar otro mes abre Intercambiar / Insertar aquí.
+  const [reorderSelected, setReorderSelected] = useState<number | null>(null);
+  const [reorderTarget, setReorderTarget] = useState<number | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
@@ -255,6 +262,45 @@ export default function CalendarOrganizer({
     const newSigs = [...fileSignatures];
     if (newSigs[index]) newSigs[index] = '';
     setFileSignatures(newSigs);
+  };
+
+  const applyReorder = (fn: (state: CalendarPhotoState) => CalendarPhotoState) => {
+    const next = fn({ photos, crops: photoCrops, signatures: fileSignatures });
+    onPhotosChange(next.photos);
+    onPhotoCropsChange(next.crops);
+    setFileSignatures(next.signatures);
+  };
+
+  const exitReorderMode = () => {
+    setReorderSelected(null);
+    setReorderTarget(null);
+  };
+
+  const handleMonthLongPress = (position: number, e: React.PointerEvent) => {
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const cancel = () => {
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', cancel);
+      document.removeEventListener('pointercancel', cancel);
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) > 10 || Math.abs(ev.clientY - startY) > 10) cancel();
+    };
+
+    longPressTimerRef.current = setTimeout(() => {
+      cancel();
+      if (navigator.vibrate) navigator.vibrate(60);
+      setReorderSelected(position);
+      setReorderTarget(null);
+    }, 200);
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', cancel);
+    document.addEventListener('pointercancel', cancel);
   };
 
   const handleCropChange = (index: number, crop: { x: number, y: number, zoom: number }) => {
@@ -538,6 +584,7 @@ export default function CalendarOrganizer({
           <p className="text-gray-500">
             {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'} • Total: ${totalPrice.toLocaleString('es-CO')} COP
           </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{t('calendarOrg.longPressHint')}</p>
         </div>
         <button
           onClick={() => { if (!isSaving) onComplete(photos); }}
@@ -546,6 +593,16 @@ export default function CalendarOrganizer({
         >
           {t('organizer.complete')}
         </button>
+
+        {/* Banner superpuesto (absolute) para no cambiar la altura del header sticky */}
+        {reorderSelected !== null && (
+          <div className="absolute left-0 right-0 top-full mt-2 flex items-center justify-between bg-black text-white rounded-lg px-3 py-2 text-xs font-bold shadow-inner z-50">
+            <span>📌 {calendarMonths[reorderSelected].name} seleccionado — toca otro mes para moverlo</span>
+            <button onClick={exitReorderMode} className="ml-3 p-0.5 hover:bg-white/20 rounded-full transition-colors flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Cada tarjeta es la página real de la plantilla 2027 (la misma que se imprime) */}
@@ -554,17 +611,86 @@ export default function CalendarOrganizer({
           <CalendarTemplatePage type={calendarType} page={{ kind: 'cover' }} year={year} startMonth={startMonth} logoSrc={jiffyLogo} />
         ))}
 
-        {calendarMonths.map(({ name, year: monthYear }, position) => renderSheetCard(`${name} ${monthYear}`, position, (
-          <CalendarMonthSheet
-            type={calendarType}
-            position={position}
-            year={year}
-            startMonth={startMonth}
-            imagesPerMonth={imagesPerMonth}
-            holidays={holidays}
-            renderPhoto={(pos, slot) => renderSlot(pos * imagesPerMonth + slot)}
-          />
-        )))}
+        {calendarMonths.map(({ name, year: monthYear }, position) => {
+          const isReorderMode = reorderSelected !== null;
+          const isSelected = reorderSelected === position;
+          const isTarget = reorderTarget === position;
+          return (
+            <div
+              key={position}
+              className={`relative space-y-3 transition-all duration-200 ${isReorderMode && !isSelected && !isTarget ? 'opacity-50' : ''}`}
+            >
+              {/* Capa de toque para elegir el mes destino */}
+              {isReorderMode && !isSelected && reorderTarget === null && (
+                <button
+                  onClick={() => setReorderTarget(position)}
+                  className="absolute inset-0 z-20 w-full h-full cursor-pointer"
+                  aria-label={`Elegir ${name} ${monthYear} como destino`}
+                />
+              )}
+
+              <div className="flex items-center justify-center gap-2 mb-2 h-7">
+                <CalendarIcon className={`w-4 h-4 ${isSelected ? 'text-black' : 'text-gray-400'}`} />
+                <p className={`text-xs font-bold uppercase tracking-widest text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}>
+                  {name} {monthYear}
+                </p>
+                {isSelected && (
+                  <button
+                    onClick={exitReorderMode}
+                    className="p-1 rounded-full bg-black text-white"
+                    title="Cancelar"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="relative mx-auto w-full max-w-sm">
+                <div
+                  className={`bg-white shadow-lg border overflow-hidden hover:shadow-xl transition-all ${
+                    isSelected ? 'border-black ring-4 ring-black/15' : isTarget ? 'border-black ring-2 ring-black/30' : 'border-gray-100'
+                  }`}
+                  style={{ userSelect: 'none' }}
+                  onPointerDown={!isReorderMode ? e => handleMonthLongPress(position, e) : undefined}
+                >
+                  <CalendarMonthSheet
+                    type={calendarType}
+                    position={position}
+                    year={year}
+                    startMonth={startMonth}
+                    imagesPerMonth={imagesPerMonth}
+                    holidays={holidays}
+                    renderPhoto={(pos, slot) => renderSlot(pos * imagesPerMonth + slot)}
+                  />
+                </div>
+
+                {/* Acciones al elegir el mes destino (mismas que en el álbum) */}
+                {isTarget && reorderSelected !== null && (
+                  <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center gap-2.5 z-30 p-3">
+                    <button
+                      onClick={() => { applyReorder(s => swapCalendarMonths(s, reorderSelected, position, 12, imagesPerMonth)); exitReorderMode(); }}
+                      className="w-full max-w-xs py-3 bg-white text-black font-bold rounded-xl text-sm hover:bg-gray-100 transition-colors"
+                    >
+                      ↕ Intercambiar posiciones
+                    </button>
+                    <button
+                      onClick={() => { applyReorder(s => moveCalendarMonth(s, reorderSelected, position, 12, imagesPerMonth)); exitReorderMode(); }}
+                      className="w-full max-w-xs py-3 bg-transparent text-white font-bold rounded-xl text-sm border-2 border-white/70 hover:bg-white/10 transition-colors"
+                    >
+                      → Insertar en esta posición
+                    </button>
+                    <button
+                      onClick={() => setReorderTarget(null)}
+                      className="text-white/60 text-xs mt-1 hover:text-white/90 transition-colors"
+                    >
+                      ← Elegir otro mes
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {calendarType === 'desk' && renderSheetCard('Última hoja', 'notes', (
           <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} holidays={holidays} />
