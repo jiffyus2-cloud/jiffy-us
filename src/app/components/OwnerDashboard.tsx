@@ -32,7 +32,15 @@ import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
 import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
 import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
-import jiffyLogo from '../../assets/JiffyLogo.svg'; 
+import jiffyLogo from '../../assets/JiffyLogo.svg';
+
+// Logo de la contraportada como fracción del lado corto del panel. Medido sobre el
+// álbum 20x20 impreso de referencia (panel 19×20 cm → lado corto 19 cm) y escalado
+// igual en los demás tamaños.
+const BACK_LOGO_WIDTH_RATIO  = 4.4  / 19; // ancho del logo JIFFY.
+const BACK_HANDLE_FONT_RATIO = 0.38 / 19; // @jiffy.photos (~11pt en 20x20)
+const BACK_LOGO_GAP_RATIO    = 0.25 / 19; // logo ↔ @jiffy.photos
+const BACK_LOGO_BOTTOM_RATIO = 0.8  / 19; // borde inferior del panel → pie del @jiffy.photos
 
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
@@ -635,6 +643,7 @@ const OwnerDashboard: React.FC = () => {
         const spineCm  = isTela ? 0 : getSpineWidthCm(order.pages?.length);
         const gapCm    = isTela ? 0 : 1; // 1 cm entre caratula↔lomo y lomo↔contraportada
         const panelPxW = cmToPx(panelWCm);
+        const backSideCm = Math.min(panelWCm, hCm); // lado corto de la contraportada
 
         let canvasWCm: number;
         let canvasHCm: number;
@@ -723,9 +732,9 @@ const OwnerDashboard: React.FC = () => {
                     <>
                       {/* Contraportada */}
                       <div style={{ width: panelPxW, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
-                        <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${panelPxW * 0.01}px` }}>
-                          <img src={jiffyLogo} style={{ width: `${panelPxW * 0.125}px`, height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
-                          <span style={{ fontSize: `${panelPxW * 0.015}px`, fontWeight: 'bold', color: textColor, fontFamily: 'sans-serif' }}>@Jiffy.photos</span>
+                        <div style={{ position: 'absolute', bottom: cmToPx(backSideCm * BACK_LOGO_BOTTOM_RATIO), left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cmToPx(backSideCm * BACK_LOGO_GAP_RATIO) }}>
+                          <img src={jiffyLogo} style={{ width: cmToPx(backSideCm * BACK_LOGO_WIDTH_RATIO), height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <span style={{ fontSize: cmToPx(backSideCm * BACK_HANDLE_FONT_RATIO), lineHeight: 1, fontWeight: 'normal', color: textColor, fontFamily: 'sans-serif' }}>@jiffy.photos</span>
                         </div>
                       </div>
 
