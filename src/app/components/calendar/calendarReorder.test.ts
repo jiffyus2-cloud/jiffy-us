@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveCalendarMonth, swapCalendarMonths, type CalendarPhotoState } from './calendarReorder';
+import { moveCalendarMonth, swapCalendarMonths, swapCalendarPhotos, type CalendarPhotoState } from './calendarReorder';
 
 const state = (photos: string[], crops: CalendarPhotoState['crops'] = {}): CalendarPhotoState => ({
   photos, crops, signatures: photos.map(p => (p ? `sig-${p}` : '')),
@@ -40,5 +40,21 @@ describe('moveCalendarMonth', () => {
   it('mover al mismo lugar no cambia nada', () => {
     const s = state(['a', 'b']);
     expect(moveCalendarMonth(s, 1, 1, 2, 1)).toBe(s);
+  });
+});
+
+describe('swapCalendarPhotos', () => {
+  it('intercambia dos fotos de meses distintos con su recorte y firma', () => {
+    const s = state(['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4'], { 1: { x: 1, y: 2, zoom: 3 } });
+    const r = swapCalendarPhotos(s, 1, 6);
+    expect(r.photos).toEqual(['a1', 'b3', 'a3', 'a4', 'b1', 'b2', 'a2', 'b4']);
+    expect(r.signatures[1]).toBe('sig-b3');
+    expect(r.signatures[6]).toBe('sig-a2');
+    expect(r.crops).toEqual({ 6: { x: 1, y: 2, zoom: 3 } });
+  });
+
+  it('con un hueco vacío la foto pasa a ese hueco', () => {
+    const r = swapCalendarPhotos(state(['a', '']), 0, 5);
+    expect(r.photos).toEqual(['', '', '', '', '', 'a']);
   });
 });

@@ -10,6 +10,7 @@ import {
   swapPhotosOnPage,
   insertBlankPages,
   movePhotoToPage,
+  swapPhotosBetweenPages,
   swapPages,
   movePageToIndex,
   deleteOverflow,
@@ -182,6 +183,32 @@ describe('R1 — ninguna operación puede perder fotos', () => {
     expect(success).toBe(false);
     expect(after).toBe(before);
     expect(bag(after)).toEqual(bag(before));
+  });
+
+  it('swapPhotosBetweenPages intercambia aunque las dos páginas estén llenas', () => {
+    const before = albumOf(['a0', 'a1'], Array.from({ length: 6 }, (_, i) => `b${i}`));
+    before[0].crops[1] = { x: 1, y: 2, zoom: 3 };
+    before[1].texts[4] = { text: 'hola' };
+    const after = swapPhotosBetweenPages(before, 0, 1, 1, 4);
+    expect(bag(after)).toEqual(bag(before));
+    expect(after[0].photos).toEqual(['a0', 'b4']);
+    expect(after[1].photos[4]).toBe('a1');
+    expect(after[0].signatures[1]).toBe('sig:b4');
+    expect(after[1].signatures[4]).toBe('sig:a1');
+    expect(after[1].crops[4]).toEqual({ x: 1, y: 2, zoom: 3 });
+    expect(after[0].crops[1]).toBeUndefined();
+    expect(after[0].texts[1]).toEqual({ text: 'hola' });
+    expect(after[1].photos).toHaveLength(6);
+    expect(before[0].photos).toEqual(['a0', 'a1']); // no muta la entrada
+  });
+
+  it('swapPhotosBetweenPages con un hueco vacío mueve la foto sin encoger páginas', () => {
+    const before = albumOf(['a0', 'a1'], ['b0', '', 'b2']);
+    const after = swapPhotosBetweenPages(before, 0, 1, 1, 1);
+    expect(bag(after)).toEqual(bag(before));
+    expect(after[0].photos).toEqual(['a0', '']);
+    expect(after[1].photos).toEqual(['b0', 'a1', 'b2']);
+    expect(hidesPhotos(after, RECT)).toBe(false);
   });
 
   it('swapPages y movePageToIndex', () => {

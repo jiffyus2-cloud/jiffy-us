@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { 
   Upload, X, Image as ImageIcon, Trash2,
-  Check, Edit3, Plus, Loader2, Calendar as CalendarIcon, Crop as CropIcon, AlertCircle
+  Check, Edit3, Plus, Pencil, Loader2, Calendar as CalendarIcon, Crop as CropIcon, AlertCircle
 } from 'lucide-react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -13,7 +13,8 @@ import { convertFileIfHeic } from '../utils/imageUtils';
 import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
 import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
-import { moveCalendarMonth, swapCalendarMonths, type CalendarPhotoState } from './calendar/calendarReorder';
+import { moveCalendarMonth, swapCalendarMonths, swapCalendarPhotos, type CalendarPhotoState } from './calendar/calendarReorder';
+import CalendarMonthPhotosModal from './calendar/CalendarMonthPhotosModal';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -69,6 +70,8 @@ export default function CalendarOrganizer({
   const [reorderSelected, setReorderSelected] = useState<number | null>(null);
   const [reorderTarget, setReorderTarget] = useState<number | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Calendario de 4 fotos: ajustes del mes (reordenar dentro del mes o cambiar con otro mes)
+  const [monthModal, setMonthModal] = useState<number | null>(null);
 
   const getFileKey = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
@@ -634,6 +637,15 @@ export default function CalendarOrganizer({
                 <p className={`text-xs font-bold uppercase tracking-widest text-center ${isSelected ? 'text-black' : 'text-gray-400'}`}>
                   {name} {monthYear}
                 </p>
+                {imagesPerMonth > 1 && !isReorderMode && (
+                  <button
+                    onClick={() => setMonthModal(position)}
+                    className="relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full border-2 bg-white text-black border-gray-200 hover:border-black transition-all"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span className="text-[10px] font-bold uppercase tracking-tight">Ajustes</span>
+                  </button>
+                )}
                 {isSelected && (
                   <button
                     onClick={exitReorderMode}
@@ -696,6 +708,19 @@ export default function CalendarOrganizer({
           <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} holidays={holidays} />
         ))}
       </div>
+
+      {monthModal !== null && (
+        <CalendarMonthPhotosModal
+          position={monthModal}
+          monthLabels={calendarMonths.map(m => `${m.name} ${m.year}`)}
+          photos={photos}
+          crops={photoCrops}
+          imagesPerMonth={imagesPerMonth}
+          photoAspect={pageAspect}
+          onSwap={(from, to) => applyReorder(st => swapCalendarPhotos(st, from, to))}
+          onClose={() => setMonthModal(null)}
+        />
+      )}
 
       {cropModalData !== null && (
         <CropModal
