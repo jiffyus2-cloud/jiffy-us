@@ -64,6 +64,7 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'calendarSetup.fourPhotos': '4 Fotos',
   'calendarSetup.fourPhotosDesc': 'Un collage de 4 imágenes',
   'calendarSetup.startMonthTitle': 'Mes de inicio',
+  'calendarSetup.holidaysTitle': 'Festivos del país',
 
   // ── Preguntas frecuentes (landing) ──────────────────────────────────────
   'faq.1.q': '1. ¿Cómo creo mi álbum Jiffy?',
@@ -122,6 +123,8 @@ export const APP_TEXTS_ES: Record<string, string> = {
 
   // ── Configurar calendario ─────────────────────────────────────────────────
   'calendarSetup.range': 'Tu calendario irá desde **{from}** hasta **{to}**.',
+  'calendarSetup.holidaysDesc': 'Se marcarán en rojo **{count} festivos** de **{country}**.',
+  'calendarSetup.noHolidaysDesc': 'El calendario no marcará ningún festivo.',
 
   // ── Editor de portada ─────────────────────────────────────────────────────
   'cover.fixRedTexts': 'Ajusta los textos marcados en rojo para poder guardar.',

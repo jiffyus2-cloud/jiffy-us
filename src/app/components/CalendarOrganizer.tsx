@@ -10,7 +10,7 @@ import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { convertFileIfHeic } from '../utils/imageUtils';
-import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
 
 interface CalendarOrganizerProps {
@@ -72,6 +72,7 @@ export default function CalendarOrganizer({
   const requiredPhotos = imagesPerMonth * 12;
 
   const pageAspect = getPhotoAspect(calendarType, imagesPerMonth);
+  const holidays = useCalendarHolidays(customization.holidayCountry, year, startMonth);
   const totalPrice = customization.type === 'wall' ? 80000 : 60000;
 
   // ==========================================================================
@@ -540,12 +541,13 @@ export default function CalendarOrganizer({
             year={year}
             startMonth={startMonth}
             imagesPerMonth={imagesPerMonth}
+            holidays={holidays}
             renderPhoto={(pos, slot) => renderSlot(pos * imagesPerMonth + slot)}
           />
         )))}
 
         {calendarType === 'desk' && renderSheetCard('Última hoja', 'notes', (
-          <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} />
+          <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} holidays={holidays} />
         ))}
       </div>
 
