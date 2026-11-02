@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
 import { ImageIcon, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import { CalendarMonthSheet, getCalendarYears, useCalendarHolidays } from './calendar/CalendarTemplate';
+import HolidayCountryPicker from './calendar/HolidayCountryPicker';
 import {
   DEFAULT_HOLIDAY_COUNTRY, NO_HOLIDAYS, getColombianHolidays, getHolidayCountries, getHolidayCountryName, type HolidayCountry,
 } from '../utils/holidays';
@@ -219,14 +220,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
               : t('calendarSetup.holidaysDesc', { count: holidayCount, country: getHolidayCountryName(holidayCountry) })} />
           </p>
           <div className="max-w-sm">
-            <select
-              value={holidayCountry}
-              onChange={(e) => setHolidayCountry(e.target.value)}
-              className="w-full p-3 border-2 border-gray-200 hover:border-black focus:border-black rounded-lg text-base font-medium bg-white focus:outline-none"
-            >
-              {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-              <option value={NO_HOLIDAYS}>{getHolidayCountryName(NO_HOLIDAYS)}</option>
-            </select>
+            <HolidayCountryPicker value={holidayCountry} countries={countries} onChange={setHolidayCountry} />
           </div>
         </div>
       </div>
