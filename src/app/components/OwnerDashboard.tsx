@@ -45,6 +45,7 @@ const BACK_LOGO_BOTTOM_RATIO = 0.8  / 19; // borde inferior del panel → pie de
 // --- CONTEXTO DE LA TIENDA ---
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
 import { pickStoreConfig } from '../utils/storeConfigState';
+import { buildExportPrefix } from '../utils/exportFileNames';
 
 interface ConfigHistoryEntry {
   id: string;
@@ -73,6 +74,14 @@ interface Order {
 /** Título de la carátula (nombre del álbum). Los calendarios guardan el nombre del producto. */
 const getAlbumTitle = (order: Order): string =>
   String(order.coverData?.title || order.customization?.coverContent?.coverTitle || '').trim();
+
+/** Prefijo de los archivos exportados: iniciales del cliente, ALB/YC y fecha de la última edición. */
+const getExportPrefix = (order: Order): string =>
+  buildExportPrefix({
+    clientName: order.shippingAddress?.name || order.customerName || order.billingAddress?.name,
+    productCode: getDimensions(order).isCalendar ? 'YC' : 'ALB',
+    lastEditedAt: order.updatedAt || order.createdAt,
+  });
 
 const formatDateTime = (iso?: string): string =>
   iso ? format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es }) : '—';
@@ -282,7 +291,7 @@ const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order
 
 // Página de calendario para el PDF: la plantilla compartida con las fotos
 // dibujadas por `CanvasCropper` (la hoja de foto de pared va girada 180°).
-const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays: Holiday[], preloadedMap?: Record<string, string> }> = ({ order, page, holidays, preloadedMap }) => {
+const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays: Holiday[], sundaysAsHolidays?: boolean, preloadedMap?: Record<string, string> }> = ({ order, page, holidays, sundaysAsHolidays, preloadedMap }) => {
   const c = order.customization || {};
   const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
   return (
@@ -294,6 +303,7 @@ const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays
       imagesPerMonth={imagesPerMonth}
       logoSrc={jiffyLogo}
       holidays={holidays}
+      sundaysAsHolidays={sundaysAsHolidays}
       rotateWallPhoto
       renderPhoto={(position, slot) => {
         const { src, crop } = getCalendarSlotPhoto(order, position, slot, imagesPerMonth);
@@ -882,7 +892,7 @@ const OwnerDashboard: React.FC = () => {
     });
   };
 
-  const generateCalendarPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
+  const generateCalendarPDF = async (order: Order, onProgress: (p: number) => void, sundaysAsHolidays = false): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
       try {
         const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
@@ -929,7 +939,7 @@ const OwnerDashboard: React.FC = () => {
           const page = pages[i];
           const pageDataUrl = await renderAndCapture(
             (preloadedMap) => (
-              <CalendarPrintPage key={i} order={order} page={page} holidays={holidays} preloadedMap={preloadedMap} />
+              <CalendarPrintPage key={i} order={order} page={page} holidays={holidays} sundaysAsHolidays={sundaysAsHolidays} preloadedMap={preloadedMap} />
             ),
             getCalendarPageImages(order, page)
           );
@@ -1018,7 +1028,7 @@ const OwnerDashboard: React.FC = () => {
       if (imagenesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(imagenesData), "Reporte de Imágenes");
       
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      folder.file('resumen_pedido.xlsx', excelBuffer);
+      folder.file(`${getExportPrefix(order)}_resumen_pedido_${order.id}.xlsx`, excelBuffer);
 
       const imgFolder = folder.folder('imagenes');
       if (!imgFolder) throw new Error("No se pudo crear la subcarpeta de imágenes.");
@@ -1051,7 +1061,7 @@ const OwnerDashboard: React.FC = () => {
       if (isCalendar) {
         try {
           const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
-          folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+          folder.file(`${getExportPrefix(order)}_Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
         } catch (pdfError) {
           console.error("Error al generar PDF de calendario:", pdfError);
           alert("Advertencia: El PDF del calendario no se pudo crear. El resto del ZIP se descargará normalmente.");
@@ -1062,7 +1072,7 @@ const OwnerDashboard: React.FC = () => {
         // PDF 1: Portada — independiente del interior
         try {
           const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
-          folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+          folder.file(`${getExportPrefix(order)}_Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
         } catch (coverError) {
           console.error("Error al generar PDF de portada:", coverError);
           pdfErrors.push("portada");
@@ -1071,7 +1081,7 @@ const OwnerDashboard: React.FC = () => {
         // PDF 2: Interior — se intenta siempre, independientemente del resultado de la portada
         try {
           const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
-          folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+          folder.file(`${getExportPrefix(order)}_Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
         } catch (innerError) {
           console.error("Error al generar PDF de páginas interiores:", innerError);
           pdfErrors.push("páginas interiores");
@@ -1083,7 +1093,7 @@ const OwnerDashboard: React.FC = () => {
       }
       
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, `pedido_${order.id}.zip`);
+      saveAs(content, `${getExportPrefix(order)}_pedido_${order.id}.zip`);
       setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); }, 2000);
     } catch (error: any) {
       console.error("Error al descargar el ZIP:", error);
@@ -1092,7 +1102,8 @@ const OwnerDashboard: React.FC = () => {
     }
   };
 
-  const handleDownloadPDFs = async (order: Order) => {
+  /** `sundaysAsHolidays`: solo calendarios; marca los domingos como festivos (rojo y negrita). */
+  const handleDownloadPDFs = async (order: Order, sundaysAsHolidays = false) => {
     if (downloadProgress.orderId) return;
     setDownloadProgress({ orderId: order.id, progress: 0 });
     setDownloadType('pdfs');
@@ -1105,8 +1116,8 @@ const OwnerDashboard: React.FC = () => {
 
       if (isCalendar) {
         try {
-          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
-          folder.file(`Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); }, sundaysAsHolidays);
+          folder.file(`${getExportPrefix(order)}_Impresion_Calendario_${order.id}${sundaysAsHolidays ? '_DomFestivos' : ''}_300DPI.pdf`, pdfBlob);
         } catch (pdfError) {
           console.error("Error al generar PDF de calendario:", pdfError);
           alert("No se pudo generar el PDF del calendario.");
@@ -1118,14 +1129,14 @@ const OwnerDashboard: React.FC = () => {
         const pdfErrors: string[] = [];
         try {
           const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
-          folder.file(`Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+          folder.file(`${getExportPrefix(order)}_Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
         } catch (coverError) {
           console.error("Error al generar PDF de portada:", coverError);
           pdfErrors.push("portada");
         }
         try {
           const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
-          folder.file(`Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+          folder.file(`${getExportPrefix(order)}_Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
         } catch (innerError) {
           console.error("Error al generar PDF de páginas interiores:", innerError);
           pdfErrors.push("páginas interiores");
@@ -1136,7 +1147,7 @@ const OwnerDashboard: React.FC = () => {
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, `pdfs_pedido_${order.id}.zip`);
+      saveAs(content, `${getExportPrefix(order)}_pdfs_pedido_${order.id}.zip`);
       setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
     } catch (error: any) {
       console.error("Error al descargar PDFs:", error);
@@ -1209,7 +1220,7 @@ const OwnerDashboard: React.FC = () => {
       }
       if (imagenesData.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(imagenesData), "Reporte de Imágenes");
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      folder.file('resumen_pedido.xlsx', excelBuffer);
+      folder.file(`${getExportPrefix(order)}_resumen_pedido_${order.id}.xlsx`, excelBuffer);
 
       // Imágenes
       const imgFolder = folder.folder('imagenes');
@@ -1241,7 +1252,7 @@ const OwnerDashboard: React.FC = () => {
       await Promise.all(imagePromises.map(p => p.then(() => { done++; setDownloadProgress({ orderId: order.id, progress: Math.round((done / Math.max(total, 1)) * 100) }); })));
 
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, `imagenes_pedido_${order.id}.zip`);
+      saveAs(content, `${getExportPrefix(order)}_imagenes_pedido_${order.id}.zip`);
       setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
     } catch (error: any) {
       console.error("Error al descargar imágenes/Excel:", error);
@@ -1448,6 +1459,9 @@ const OwnerDashboard: React.FC = () => {
                                   ) : (
                                     <>
                                       <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                      {getDimensions(order).isCalendar && (
+                                        <button onClick={() => handleDownloadPDFs(order, true)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDF con los domingos marcados como festivos"><CalendarDays className="w-4 h-4" /></button>
+                                      )}
                                       <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
                                     </>
                                   )}
@@ -1610,6 +1624,9 @@ const OwnerDashboard: React.FC = () => {
                                     ) : (
                                       <>
                                         <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                        {getDimensions(order).isCalendar && (
+                                          <button onClick={() => handleDownloadPDFs(order, true)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDF con los domingos marcados como festivos"><CalendarDays className="w-4 h-4" /></button>
+                                        )}
                                         <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
                                       </>
                                     )}
