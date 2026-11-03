@@ -320,7 +320,7 @@ const DESK_ROW = 19.5;
 const DESK_LABEL_X = 73;
 
 /** Bloque de un mes del escritorio: número grande + nombre a la izquierda, cuadrícula a la derecha. */
-function DeskMonthBlock({ month, headerY, showYear, holidayOn, sundaysAsHolidays }: { month: CalendarMonth; headerY: number; showYear: boolean; holidayOn: HolidayLookup; sundaysAsHolidays: boolean }) {
+function DeskMonthBlock({ month, headerY, showYear, holidayOn }: { month: CalendarMonth; headerY: number; showYear: boolean; holidayOn: HolidayLookup }) {
   const weeks = getMonthWeeks(month.year, month.monthIndex);
   const label = { fontFamily: FONT.label, fontWeight: 600, fontSize: 10.5, letterSpacing: 1.6, fill: COLOR.deskText, textAnchor: 'middle' as const };
   return (
@@ -339,7 +339,7 @@ function DeskMonthBlock({ month, headerY, showYear, holidayOn, sundaysAsHolidays
             textAnchor="middle"
             fontFamily={FONT.desk}
             fontSize={10.5}
-            fontWeight={holiday || (sundaysAsHolidays && i === 6) ? 700 : 500}
+            fontWeight={holiday || i === 6 ? 700 : 500}
             fill={holiday || i === 6 ? COLOR.deskRed : COLOR.deskText}
           >
             {holiday && <title>{holiday.name}</title>}
@@ -369,23 +369,23 @@ function DeskCover({ title, logoSrc }: { title: string[]; logoSrc?: string }) {
   );
 }
 
-function DeskMonthPage({ month, renderPhoto, holidayOn, sundaysAsHolidays }: { month: CalendarMonth; renderPhoto?: RenderPhoto; holidayOn: HolidayLookup; sundaysAsHolidays: boolean }) {
+function DeskMonthPage({ month, renderPhoto, holidayOn }: { month: CalendarMonth; renderPhoto?: RenderPhoto; holidayOn: HolidayLookup }) {
   return (
     <PageFrame type="desk">
       <PhotoSlots type="desk" imagesPerMonth={1} renderPhoto={renderPhoto} />
       <Overlay type="desk">
-        <DeskMonthBlock month={month} headerY={368.1} showYear={false} holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} />
+        <DeskMonthBlock month={month} headerY={368.1} showYear={false} holidayOn={holidayOn} />
       </Overlay>
     </PageFrame>
   );
 }
 
-function DeskNotesPage({ months, holidayOn, sundaysAsHolidays }: { months: CalendarMonth[]; holidayOn: HolidayLookup; sundaysAsHolidays: boolean }) {
+function DeskNotesPage({ months, holidayOn }: { months: CalendarMonth[]; holidayOn: HolidayLookup }) {
   return (
     <PageFrame type="desk">
       <Overlay type="desk">
-        <DeskMonthBlock month={months[0]} headerY={60.8} showYear holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} />
-        <DeskMonthBlock month={months[1]} headerY={215.8} showYear holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} />
+        <DeskMonthBlock month={months[0]} headerY={60.8} showYear holidayOn={holidayOn} />
+        <DeskMonthBlock month={months[1]} headerY={215.8} showYear holidayOn={holidayOn} />
         <text x={177} y={360.4} textAnchor="middle" fontFamily={FONT.label} fontWeight={300} fontSize={9.3} letterSpacing={3.7} fill={COLOR.notes}>NOTAS</text>
         {[0, 1, 2, 3].map(i => (
           <line key={i} x1={35} y1={391.5 + i * 29} x2={315} y2={391.5 + i * 29} stroke={COLOR.notesLine} strokeWidth={1.2} strokeDasharray="4 2" />
@@ -420,7 +420,7 @@ function WallPhotoPage({ imagesPerMonth, renderPhoto, rotated }: { imagesPerMont
   );
 }
 
-function WallGridPage({ month, holidayOn, sundaysAsHolidays }: { month: CalendarMonth; holidayOn: HolidayLookup; sundaysAsHolidays: boolean }) {
+function WallGridPage({ month, holidayOn }: { month: CalendarMonth; holidayOn: HolidayLookup }) {
   const weeks = getMonthWeeks(month.year, month.monthIndex);
   const colW = WALL_GRID.w / 7;
   // Siempre 5 filas: la sexta semana se escribe debajo, dentro de la misma celda (p. ej. "24 / 31").
@@ -439,7 +439,7 @@ function WallGridPage({ month, holidayOn, sundaysAsHolidays }: { month: Calendar
         fontFamily={FONT.wall}
         fontSize={19.3}
         fontWeight={holiday || col === 6 ? 700 : 400}
-        fill={holiday || (sundaysAsHolidays && col === 6) ? COLOR.wallRed : COLOR.wallText}
+        fill={holiday || col === 6 ? COLOR.wallRed : COLOR.wallText}
       >
         {holiday && <title>{holiday.name}</title>}
         {day}
@@ -510,12 +510,10 @@ export interface CalendarTemplatePageProps {
   holidays?: Holiday[];
   /** Pared: gira la hoja de la foto 180° como va impresa. El editor la muestra derecha. */
   rotateWallPhoto?: boolean;
-  /** Pinta los domingos igual que los festivos (rojo y en negrita). Lo elige el dueño al descargar el PDF. */
-  sundaysAsHolidays?: boolean;
 }
 
 export function CalendarTemplatePage({
-  type, page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false, holidays, sundaysAsHolidays = false,
+  type, page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false, holidays,
 }: CalendarTemplatePageProps) {
   const months = getCalendarMonths(startMonth, year, 14);
   const holidayOn = useMemo(() => makeHolidayLookup(holidays), [holidays]);
@@ -526,9 +524,9 @@ export function CalendarTemplatePage({
       return <DeskCover logoSrc={logoSrc} title={['Calendario', last.year === year ? `${year}` : `${year} - ${last.year}`]} />;
     }
     case 'month':
-      return <DeskMonthPage month={months[page.position]} holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
+      return <DeskMonthPage month={months[page.position]} holidayOn={holidayOn} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
     case 'notes':
-      return <DeskNotesPage months={months.slice(12, 14)} holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} />;
+      return <DeskNotesPage months={months.slice(12, 14)} holidayOn={holidayOn} />;
     case 'photo':
       return (
         <WallPhotoPage
@@ -538,7 +536,7 @@ export function CalendarTemplatePage({
         />
       );
     case 'grid':
-      return <WallGridPage month={months[page.position]} holidayOn={holidayOn} sundaysAsHolidays={sundaysAsHolidays} />;
+      return <WallGridPage month={months[page.position]} holidayOn={holidayOn} />;
   }
 }
 
