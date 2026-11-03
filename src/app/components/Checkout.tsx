@@ -365,10 +365,12 @@ export default function Checkout() {
       if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) displayImage = januaryPage.images[0];
       else if (januaryPage.image) displayImage = januaryPage.image;
     }
-    if (!displayImage && orderData.photos && orderData.photos.length > 0) {
-      const firstPhoto = orderData.photos[0];
-      if (Array.isArray(firstPhoto) && firstPhoto.length > 0) displayImage = firstPhoto[0];
-      else if (typeof firstPhoto === 'string') displayImage = firstPhoto as string;
+    // Las fotos del calendario conservan huecos ('') por mes: tomar la primera real.
+    if (!displayImage && Array.isArray(orderData.photos)) {
+      const firstPhoto = orderData.photos
+        .map((p: any) => (Array.isArray(p) ? p[0] : p))
+        .find((p: any) => typeof p === 'string' && p.trim() !== '');
+      if (firstPhoto) displayImage = firstPhoto;
     }
   } else if (isAlbum) {
     // Si es Tela, buscar la primera foto interna para mostrarla
