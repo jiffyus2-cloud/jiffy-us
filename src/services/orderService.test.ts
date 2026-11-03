@@ -22,6 +22,7 @@ import {
   SCHEMA_VERSION,
   isLegacyOrder,
   buildLoosePhotos,
+  resolveProductString,
   type UploadContext,
 } from './orderService';
 
@@ -132,6 +133,19 @@ describe('isLegacyOrder', () => {
   it('un pedido creado con v3 o posterior no es del sistema anterior', () => {
     expect(isLegacyOrder({ createdSchemaVersion: 3 })).toBe(false);
     expect(isLegacyOrder({ createdSchemaVersion: SCHEMA_VERSION })).toBe(false);
+  });
+});
+
+describe('resolveProductString', () => {
+  it('el calendario va por la rama de calendario aunque product.type sea su formato', () => {
+    const calendar = { id: 'base-calendar', name: 'Classic Calendar', type: 'wall-notes' };
+    expect(resolveProductString(calendar, 'calendar')).toContain('calendar');
+  });
+
+  it('sin productType cae a product.type / id / name', () => {
+    expect(resolveProductString({ type: 'Album' })).toBe('album');
+    expect(resolveProductString({ id: 'x-photobook' })).toBe('x-photobook');
+    expect(resolveProductString(null)).toBe('');
   });
 });
 

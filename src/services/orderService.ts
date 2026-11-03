@@ -380,6 +380,16 @@ export interface SaveResult {
   uploadedUrlMap: Record<string, string>;
 }
 
+/**
+ * Cadena que decide la rama de subida (álbum / calendario). Manda `productType`
+ * ('album' | 'calendar'): `product.type` del calendario es su formato
+ * ('wall-notes', 'desk'…) y no contiene "calendar", así que con él las fotos del
+ * calendario no se subían y el pedido llegaba al checkout sin ninguna.
+ */
+export function resolveProductString(product: any, productType?: string): string {
+  return String(productType || product?.type || product?.id || product?.name || '').toLowerCase();
+}
+
 export async function createDraftOrder(
   userId: string,
   designData: any,
@@ -397,7 +407,7 @@ export async function createDraftOrder(
   const orderId = existingOrderId || orderRef.id;
   const folderPath = `orders/${userId}/${orderId}`;
 
-  const productString = String(product?.type || product?.id || product?.name || '').toLowerCase();
+  const productString = resolveProductString(product, productType);
 
   // Leemos el documento existente ANTES de subir nada: lo necesitamos para la guarda
   // anti-pérdida y para saber si toca crear o actualizar.
