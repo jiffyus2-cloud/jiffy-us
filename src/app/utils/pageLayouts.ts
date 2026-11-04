@@ -20,8 +20,22 @@
 // —con 1 foto hay hasta cuatro—, así que cada combinación de formato y conteo
 // es una LISTA de variantes. La primera es la que se aplica por defecto.
 //
-// Los dos tamaños cuadrados comparten exactamente los mismos nueve layouts, por
-// eso aquí solo hay tres formatos.
+// Los dos tamaños cuadrados comparten exactamente los mismos layouts, por eso
+// aquí solo hay tres formatos.
+//
+// Noviembre de 2026: los pliegos se rehicieron con páginas nuevas junto a las
+// que ya había (12 en cuadrado y en horizontal, 11 en vertical):
+//   - 2 fotos, "Foto sobre fondo" (cuadrado y vertical): una foto a sangre de
+//     fondo y otra encima con un 10 % de margen a los lados. Los marcos se
+//     solapan; el orden de lectura es también el de pintado, así que la foto
+//     de fondo va primero y la de encima queda por arriba.
+//   - 3 fotos, "Dos arriba, una abajo" y "Una arriba, dos abajo" (los tres
+//     formatos).
+//   - 9 fotos en 3×3 para horizontal y vertical, que antes llegaban a 6.
+// Las páginas que ya existían salen en los pliegos nuevos con derivas de
+// ±0,2 % propias de Canva y se dejan como estaban, para no mover los álbumes
+// ya aprobados. En las nuevas, la deriva se corrige para que el bloque quede
+// centrado (el 3×3 horizontal venía 0,6 % alto).
 // ============================================================================
 
 export type AlbumFormat = 'square' | 'horizontal' | 'vertical';
@@ -63,17 +77,19 @@ export const PAGE_ASPECT_RATIO: Record<AlbumFormat, number> = {
  * Fotos por página que admite cada pliego.
  *
  * El pliego vertical original solo definía 1, 2, 3 y 6; la página de 4 llegó
- * después en un pliego aparte (septiembre de 2026).
+ * después en un pliego aparte (septiembre de 2026), y la de 9 en horizontal y
+ * vertical con los pliegos de noviembre de 2026. Esas dos quedan con dos
+ * tamaños por encima de 4 (6 y 9); pageDistribution.ts los trata en general.
  */
 export const ALLOWED_PHOTOS_PER_PAGE: Record<AlbumFormat, number[]> = {
   square: [1, 2, 3, 4, 9],
-  horizontal: [1, 2, 3, 4, 6],
-  vertical: [1, 2, 3, 4, 6],
+  horizontal: [1, 2, 3, 4, 6, 9],
+  vertical: [1, 2, 3, 4, 6, 9],
 };
 
 const FULL_BLEED: SlotRect[] = [{ x: 0, y: 0, w: 100, h: 100 }];
 
-/** Las 34 páginas de los pliegos, agrupadas por formato y número de fotos. */
+/** Las páginas de los pliegos, agrupadas por formato y número de fotos. */
 const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
   square: {
     1: [
@@ -92,12 +108,28 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 17.34, y: 3.78, w: 65.32, h: 45.7 },
         { x: 17.34, y: 50.51, w: 65.32, h: 45.7 },
       ] },
+      { id: 'overlay', label: 'Foto sobre fondo', slots: [
+        { x: 0, y: 0, w: 100, h: 100 },
+        { x: 10, y: 15.02, w: 80, h: 69.97 },
+      ] },
     ],
     3: [
       { id: 'row', label: 'Fila de tres', slots: [
         { x: 0.87, y: 28.74, w: 31.83, h: 42.52 },
         { x: 34.09, y: 28.74, w: 31.83, h: 42.52 },
         { x: 67.31, y: 28.74, w: 31.83, h: 42.52 },
+      ] },
+      // El pliego trae un quinto marco casi idéntico al de arriba a la
+      // izquierda (resto de dibujo); se descarta.
+      { id: 'twoTop', label: 'Dos arriba, una abajo', slots: [
+        { x: 10, y: 3.78, w: 37.81, h: 45.7 },
+        { x: 52.19, y: 3.78, w: 37.81, h: 45.7 },
+        { x: 10, y: 52.35, w: 80, h: 43.86 },
+      ] },
+      { id: 'twoBottom', label: 'Una arriba, dos abajo', slots: [
+        { x: 10, y: 3.78, w: 80, h: 43.86 },
+        { x: 10, y: 50.51, w: 37.81, h: 45.7 },
+        { x: 52.19, y: 50.51, w: 37.81, h: 45.7 },
       ] },
     ],
     4: [
@@ -145,6 +177,17 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 37.27, y: 27.46, w: 25.47, h: 45.08 },
         { x: 63.78, y: 27.46, w: 25.47, h: 45.08 },
       ] },
+      // Misma familia que el 2×2: marcos de 36,13 × 42,89 y la ancha de 73,58.
+      { id: 'twoTop', label: 'Dos arriba, una abajo', slots: [
+        { x: 13.21, y: 5.73, w: 36.13, h: 42.89 },
+        { x: 50.66, y: 5.73, w: 36.13, h: 42.89 },
+        { x: 13.21, y: 51.21, w: 73.58, h: 43.06 },
+      ] },
+      { id: 'twoBottom', label: 'Una arriba, dos abajo', slots: [
+        { x: 13.21, y: 5.73, w: 73.58, h: 43.06 },
+        { x: 13.21, y: 51.38, w: 36.13, h: 42.89 },
+        { x: 50.66, y: 51.38, w: 36.13, h: 42.89 },
+      ] },
     ],
     4: [
       { id: 'row', label: 'Cuadrícula 2×2', slots: [
@@ -165,6 +208,20 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 66.99, y: 51.65, w: 30.36, h: 40.45 },
       ] },
     ],
+    9: [
+      // Slots cuadrados, como en el 3×2. El pliego los trae 0,6 % altos.
+      { id: 'row', label: 'Cuadrícula 3×3', slots: [
+        { x: 14.92, y: 3.18, w: 22.63, h: 30.15 },
+        { x: 38.69, y: 3.18, w: 22.63, h: 30.15 },
+        { x: 62.45, y: 3.18, w: 22.63, h: 30.15 },
+        { x: 14.92, y: 34.93, w: 22.63, h: 30.15 },
+        { x: 38.69, y: 34.93, w: 22.63, h: 30.15 },
+        { x: 62.45, y: 34.93, w: 22.63, h: 30.15 },
+        { x: 14.92, y: 66.68, w: 22.63, h: 30.15 },
+        { x: 38.69, y: 66.68, w: 22.63, h: 30.15 },
+        { x: 62.45, y: 66.68, w: 22.63, h: 30.15 },
+      ] },
+    ],
   },
   vertical: {
     1: [
@@ -173,10 +230,14 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
       { id: 'landscape', label: 'Horizontal', slots: [{ x: 0, y: 17.85, w: 100, h: 64.3 }] },
     ],
     2: [
-      // El pliego vertical solo trae las apiladas.
+      // El pliego vertical no trae las dos lado a lado.
       { id: 'row', label: 'Arriba y abajo', slots: [
         { x: 14.52, y: 9.16, w: 70.96, h: 39.17 },
         { x: 14.52, y: 51.67, w: 70.96, h: 39.17 },
+      ] },
+      { id: 'overlay', label: 'Foto sobre fondo', slots: [
+        { x: 0, y: 0, w: 100, h: 100 },
+        { x: 10, y: 17.86, w: 80, h: 64.29 },
       ] },
     ],
     3: [
@@ -184,6 +245,16 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 3.82, y: 34.46, w: 30.29, h: 31.07 },
         { x: 34.86, y: 34.46, w: 30.29, h: 31.07 },
         { x: 65.89, y: 34.46, w: 30.29, h: 31.07 },
+      ] },
+      { id: 'twoTop', label: 'Dos arriba, una abajo', slots: [
+        { x: 10, y: 8.21, w: 39.52, h: 40.54 },
+        { x: 50.48, y: 8.21, w: 39.52, h: 40.54 },
+        { x: 10, y: 52.61, w: 80, h: 39.17 },
+      ] },
+      { id: 'twoBottom', label: 'Una arriba, dos abajo', slots: [
+        { x: 10, y: 8.21, w: 80, h: 39.17 },
+        { x: 10, y: 51.24, w: 39.52, h: 40.54 },
+        { x: 50.48, y: 51.24, w: 39.52, h: 40.54 },
       ] },
     ],
     4: [
@@ -205,6 +276,20 @@ const PAGE_SLOTS: Record<AlbumFormat, Record<number, PageVariant[]>> = {
         { x: 3.82, y: 52.19, w: 30.29, h: 31.07 },
         { x: 34.86, y: 52.19, w: 30.29, h: 31.07 },
         { x: 65.89, y: 52.19, w: 30.29, h: 31.07 },
+      ] },
+    ],
+    9: [
+      // Slots cuadrados. El pliego los trae 0,06 % a la izquierda.
+      { id: 'row', label: 'Cuadrícula 3×3', slots: [
+        { x: 3.26, y: 14.85, w: 30.15, h: 22.63 },
+        { x: 34.93, y: 14.85, w: 30.15, h: 22.63 },
+        { x: 66.59, y: 14.85, w: 30.15, h: 22.63 },
+        { x: 3.26, y: 38.68, w: 30.15, h: 22.63 },
+        { x: 34.93, y: 38.68, w: 30.15, h: 22.63 },
+        { x: 66.59, y: 38.68, w: 30.15, h: 22.63 },
+        { x: 3.26, y: 62.51, w: 30.15, h: 22.63 },
+        { x: 34.93, y: 62.51, w: 30.15, h: 22.63 },
+        { x: 66.59, y: 62.51, w: 30.15, h: 22.63 },
       ] },
     ],
   },

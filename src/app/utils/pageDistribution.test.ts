@@ -61,8 +61,10 @@ describe('identificación de la variante', () => {
     // A y C comparten tamaños desde que el pliego vertical ganó su página de 4:
     // por lista de tamaños se resuelve la primera, y a efectos del reparto da
     // igual porque las fórmulas solo miran los tamaños.
-    expect(variantForAllowedSizes([1, 2, 3, 4, 6])).toBe('A');
+    expect(variantForAllowedSizes([1, 2, 3, 4, 6, 9])).toBe('A');
     expect(variantForAllowedSizes([1, 2, 3, 4, 9])).toBe('B');
+    // La lista de antes de la página de 9 ya no es ningún formato.
+    expect(variantForAllowedSizes([1, 2, 3, 4, 6])).toBeNull();
     expect(variantForAllowedSizes([1, 2, 3, 6])).toBeNull();
     expect(variantForAllowedSizes([1, 2, 5])).toBeNull();
   });
@@ -74,9 +76,10 @@ describe('identificación de la variante', () => {
   });
 
   it('el máximo de fotos es el tamaño mayor en las 250 páginas', () => {
-    expect(maxPhotosFor('A')).toBe(1500);
+    // Las tres llegan a 9 por página desde los pliegos de noviembre de 2026.
+    expect(maxPhotosFor('A')).toBe(2250);
     expect(maxPhotosFor('B')).toBe(2250);
-    expect(maxPhotosFor('C')).toBe(1500);
+    expect(maxPhotosFor('C')).toBe(2250);
   });
 });
 
@@ -131,17 +134,25 @@ describe('REGLA 1 — factibilidad', () => {
   });
 
   // ── los huecos del tope, variante por variante ──
-  it('variante A: 6G − 1 es el único valor inalcanzable', () => {
-    for (const pages of [MIN_PAGES, 41, 100, MAX_PAGES]) {
-      const r = checkFeasibility(6 * pages - 1, pages, 'A');
-      expect(r.feasible, `G=${pages}`).toBe(false);
-      expect(r.reason).toBe('unreachable_combination');
-      // Sus vecinos sí
-      expect(checkFeasibility(6 * pages, pages, 'A').feasible).toBe(true);
-      expect(checkFeasibility(6 * pages - 2, pages, 'A').feasible).toBe(true);
-      expect(checkFeasibility(6 * pages - 3, pages, 'A').feasible).toBe(true);
-    }
-  });
+  // A y C tienen dos tamaños por encima de 4 desde los pliegos de noviembre de
+  // 2026: de 9 se baja a 6 (−3), a 4 (−5), a 3 (−6)… así que los únicos huecos
+  // son 9G − 1, 9G − 2 y 9G − 4, y 9G − 3 sí se alcanza.
+  for (const variant of ['A', 'C'] as const) {
+    it(`variante ${variant}: 9G − 1, 9G − 2 y 9G − 4 son los únicos inalcanzables`, () => {
+      for (const pages of [MIN_PAGES, 41, 100, MAX_PAGES]) {
+        for (const gap of [1, 2, 4]) {
+          const r = checkFeasibility(9 * pages - gap, pages, variant);
+          expect(r.feasible, `G=${pages}, 9G-${gap}`).toBe(false);
+          expect(r.reason).toBe('unreachable_combination');
+        }
+        for (const gap of [0, 3, 5, 6, 7, 8, 9, 10]) {
+          expect(checkFeasibility(9 * pages - gap, pages, variant).feasible, `G=${pages}, 9G-${gap}`).toBe(true);
+        }
+        // El antiguo hueco del 6 ya no existe: se cubre con páginas de 9.
+        expect(checkFeasibility(6 * pages - 1, pages, variant).feasible, `G=${pages}, 6G-1`).toBe(true);
+      }
+    });
+  }
 
   it('variante B: 9G − 1 hasta 9G − 4 son inalcanzables, 9G − 5 ya no', () => {
     for (const pages of [MIN_PAGES, 41, 100, MAX_PAGES]) {
@@ -155,16 +166,11 @@ describe('REGLA 1 — factibilidad', () => {
     }
   });
 
-  it('variante C: con la página de 4 solo 6G − 1 es inalcanzable, como en A', () => {
-    // Antes del pliego vertical de 4 el salto de 6 a 3 dejaba también 6G − 2
-    // fuera; con el 4 el salto es de 2 y el hueco se reduce a uno.
-    for (const pages of [MIN_PAGES, 41, 100, MAX_PAGES]) {
-      const r = checkFeasibility(6 * pages - 1, pages, 'C');
-      expect(r.feasible, `G=${pages}, 6G-1`).toBe(false);
-      expect(r.reason).toBe('unreachable_combination');
-      expect(checkFeasibility(6 * pages - 2, pages, 'C').feasible, `G=${pages}, 6G-2`).toBe(true);
-      expect(checkFeasibility(6 * pages - 3, pages, 'C').feasible, `G=${pages}`).toBe(true);
-      expect(checkFeasibility(6 * pages, pages, 'C').feasible).toBe(true);
+  it('el espacio grande de A coincide con la fuerza bruta (G = 40, toda N)', () => {
+    // El bucle sobre las páginas de 9 se ejercita sobre todo con G grande; la
+    // fuerza bruta sola no llega a 250 páginas, pero 40 cubre el mínimo real.
+    for (let photos = 40; photos <= 9 * 40; photos++) {
+      expect(checkFeasibility(photos, 40, 'A').feasible, `N=${photos}`).toBe(bruteFeasible(photos, 40, 'A'));
     }
   });
 
@@ -173,29 +179,30 @@ describe('REGLA 1 — factibilidad', () => {
     expect(checkFeasibility(100, 251, 'B').reason).toBe('pages_out_of_range');
     expect(checkFeasibility(39, 40, 'B').reason).toBe('photos_out_of_range');
     expect(checkFeasibility(2251, 250, 'B').reason).toBe('photos_out_of_range');
-    expect(checkFeasibility(1501, 250, 'A').reason).toBe('photos_out_of_range');
+    expect(checkFeasibility(2251, 250, 'A').reason).toBe('photos_out_of_range');
+    expect(checkFeasibility(2250, 250, 'A').feasible).toBe(true);
   });
 
   it('informa del rango válido aunque la combinación falle', () => {
-    const r = checkFeasibility(6 * 100 - 1, 100, 'A');
+    const r = checkFeasibility(9 * 100 - 1, 100, 'A');
     expect(r.feasible).toBe(false);
     expect(r.minPhotos).toBe(100);
-    expect(r.maxPhotos).toBe(600);
-    // 599 fotos necesitan al menos 100 páginas (ceil(599/6)) y como mucho 599
+    expect(r.maxPhotos).toBe(900);
+    // 899 fotos necesitan al menos 100 páginas (ceil(899/9)) y como mucho 899
     expect(r.minPages).toBe(100);
-    expect(r.maxPages).toBe(599);
+    expect(r.maxPages).toBe(899);
   });
 
   it('propone los recuentos de páginas factibles más cercanos', () => {
-    // 6G−1 con G=100: 599 fotos. Hacia abajo/arriba debe encontrar alternativas.
-    const near = nearestFeasiblePages(599, 100, 'A');
-    expect(near.below).toBe(null); // 599 fotos no caben en menos de 100 páginas
+    // 9G−1 con G=100: 899 fotos. Hacia abajo/arriba debe encontrar alternativas.
+    const near = nearestFeasiblePages(899, 100, 'A');
+    expect(near.below).toBe(null); // 899 fotos no caben en menos de 100 páginas
     expect(near.above).toBe(101);
-    expect(checkFeasibility(599, 101, 'A').feasible).toBe(true);
+    expect(checkFeasibility(899, 101, 'A').feasible).toBe(true);
   });
 
   it('respeta el paso al buscar cercanos (el álbum cuenta páginas de dos en dos)', () => {
-    const near = nearestFeasiblePages(599, 100, 'A', { step: 2 });
+    const near = nearestFeasiblePages(899, 100, 'A', { step: 2 });
     expect(near.above).toBe(102);
     expect(near.above! % 2).toBe(0);
   });
@@ -251,9 +258,9 @@ describe('REGLA 2 — colocación de los tamaños', () => {
 
 describe('buildDistributionPlan', () => {
   it('devuelve null en las combinaciones no factibles, sin aproximar', () => {
-    expect(buildDistributionPlan(6 * 100 - 1, 100, 'A')).toBeNull();
+    expect(buildDistributionPlan(9 * 100 - 1, 100, 'A')).toBeNull();
     expect(buildDistributionPlan(9 * 100 - 3, 100, 'B')).toBeNull();
-    expect(buildDistributionPlan(6 * 100 - 1, 100, 'C')).toBeNull();
+    expect(buildDistributionPlan(9 * 100 - 4, 100, 'C')).toBeNull();
     expect(buildDistributionPlan(39, 40, 'B')).toBeNull();
   });
 
