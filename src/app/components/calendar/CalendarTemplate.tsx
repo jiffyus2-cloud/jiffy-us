@@ -15,6 +15,8 @@
  * Escritorio (12,5 x 17,5 cm, vertical) — 14 páginas:
  *   portada · 12 meses (foto + número grande + cuadrícula) · los 2 meses
  *   siguientes con año + NOTAS.
+ * Escritorio, diseño "etiqueta" ("Calendario de Escritorio 2025-2") — 13 páginas:
+ *   la misma portada y foto; el mes va en una etiqueta negra y no hay hoja de notas.
  * Pared (30 x 22 cm, horizontal) — 25 páginas:
  *   portada · por cada mes, la página de foto (impresa girada 180°, porque al
  *   colgarlo queda arriba, en el reverso de la hoja anterior) y la de cuadrícula.
@@ -36,6 +38,16 @@ export const CALENDAR_SPECS: Record<CalendarType, { wCm: number; hCm: number; wP
 };
 
 export const normalizeCalendarType = (type: unknown): CalendarType => (type === 'wall' ? 'wall' : 'desk');
+
+/**
+ * Diseño del escritorio: 'classic' (número grande del mes y hoja final de
+ * notas) o 'label' ("Calendario de Escritorio 2025-2": el mes en una etiqueta
+ * negra y sin hoja de notas). Pared tiene un solo diseño.
+ */
+export type CalendarDesign = 'classic' | 'label';
+
+export const normalizeCalendarDesign = (type: unknown, design: unknown): CalendarDesign =>
+  normalizeCalendarType(type) === 'desk' && design === 'label' ? 'label' : 'classic';
 
 export interface CalendarMonth {
   monthIndex: number; // 0-11
@@ -75,13 +87,13 @@ export type CalendarPageSpec =
   | { kind: 'grid'; position: number };      // pared: hoja del mes
 
 /** Orden de impresión de las páginas, igual que en los PDF de referencia. */
-export const getCalendarPrintPages = (type: CalendarType): CalendarPageSpec[] => {
+export const getCalendarPrintPages = (type: CalendarType, design: CalendarDesign = 'classic'): CalendarPageSpec[] => {
   const pages: CalendarPageSpec[] = [{ kind: 'cover' }];
   for (let position = 0; position < 12; position++) {
     if (type === 'desk') pages.push({ kind: 'month', position });
     else pages.push({ kind: 'photo', position }, { kind: 'grid', position });
   }
-  if (type === 'desk') pages.push({ kind: 'notes' });
+  if (type === 'desk' && design === 'classic') pages.push({ kind: 'notes' });
   return pages;
 };
 
@@ -148,12 +160,15 @@ const FONT = {
   label: "'Montserrat', sans-serif",
   desk: "'Nunito', sans-serif",
   wall: "'Open Sans', 'Myriad Pro', sans-serif",
+  deskLabel: "'Nunito Sans', sans-serif",
+  deskLabelGrid: "'Carlito', 'Calibri', sans-serif",
 };
 
 /** Fuentes que hay que tener cargadas antes de capturar una página (ver index.html). */
 export const CALENDAR_FONT_FACES = [
   '400 16px Anton', '300 16px Montserrat', '400 16px Montserrat', '600 16px Montserrat',
   '500 16px Nunito', '700 16px Nunito', '400 16px "Open Sans"', '700 16px "Open Sans"',
+  'italic 700 16px "Nunito Sans"', '400 16px Carlito', '700 16px Carlito',
 ];
 
 export const loadCalendarFonts = async () => {
@@ -163,7 +178,7 @@ export const loadCalendarFonts = async () => {
 };
 
 /** La misma hoja de estilos que carga index.html. */
-const CALENDAR_FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@300;400;600&family=Nunito:wght@400;500;700&family=Open+Sans:wght@400;700&display=swap';
+const CALENDAR_FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@300;400;600&family=Nunito:wght@400;500;700&family=Open+Sans:wght@400;700&family=Nunito+Sans:ital,wght@1,700&family=Carlito:wght@400;700&display=swap';
 
 const blobToDataURL = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
@@ -212,6 +227,8 @@ const COLOR = {
   wallLine: '#A8A8A8',
   wallText: '#222221',
   wallRed: '#FF3131',
+  labelGray: '#464E4F',
+  labelBlack: '#000000',
 };
 
 // ----------------------------------------------------------------------------
@@ -395,6 +412,75 @@ function DeskNotesPage({ months, holidayOn }: { months: CalendarMonth[]; holiday
   );
 }
 
+// Escritorio, diseño "etiqueta": cuadrícula en Carlito (días en gris; domingos
+// y festivos en negrita negra) y el mes en una etiqueta negra a la izquierda,
+// alineada a la derecha para que crezca hacia la foto según el largo del mes.
+const LABEL_COLS = [131.9, 162.8, 193.7, 224.6, 255.5, 286.4, 317.3];
+const LABEL_HEADER_Y = 370.8;
+const LABEL_ROW = 19.47;
+// Etiqueta: borde derecho fijo; el texto (13 pt, línea base 386) deja 16,5 pt a
+// la izquierda y PAD_RIGHT a la derecha. El año (11,5 pt, base 404,5) termina en YEAR_RIGHT.
+const LABEL_TAG = { right: 113, top: 370.75, h: 23, padLeft: 16.5, padRight: 2, padTop: 4.47 };
+const LABEL_YEAR = { right: 112.6, top: 394.97 };
+/** Medida de la plantilla (pt) en unidades del ancho de la página, para el texto HTML. */
+const cq = (pt: number) => `${(pt / CALENDAR_SPECS.desk.wPt) * 100}cqw`;
+
+function DeskLabelMonthPage({ month, renderPhoto, holidayOn }: { month: CalendarMonth; renderPhoto?: RenderPhoto; holidayOn: HolidayLookup }) {
+  const { wPt, hPt } = CALENDAR_SPECS.desk;
+  const weeks = getMonthWeeks(month.year, month.monthIndex);
+  const grid = { fontFamily: FONT.deskLabelGrid, fontSize: 11.5, textAnchor: 'middle' as const };
+  // El texto en HTML (no SVG) para que la etiqueta tome el ancho del nombre del mes.
+  const tagText: CSSProperties = {
+    fontFamily: FONT.deskLabel, fontStyle: 'italic', fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
+  };
+  return (
+    <PageFrame type="desk" style={{ containerType: 'inline-size' }}>
+      <PhotoSlots type="desk" imagesPerMonth={1} renderPhoto={renderPhoto} />
+      <Overlay type="desk">
+        {DESK_WEEKDAYS.map((d, i) => (
+          <text key={d} x={LABEL_COLS[i]} y={LABEL_HEADER_Y} {...grid} fill={COLOR.labelBlack}>{d}</text>
+        ))}
+        {weeks.map((week, w) => week.map((day, i) => {
+          if (!day) return null;
+          const holiday = holidayOn(month.year, month.monthIndex, day);
+          const strong = !!holiday || i === 6;
+          return (
+            <text
+              key={`${w}-${i}`}
+              x={LABEL_COLS[i]}
+              y={LABEL_HEADER_Y + LABEL_ROW * (w + 1)}
+              {...grid}
+              fontWeight={strong ? 700 : 400}
+              fill={strong ? COLOR.labelBlack : COLOR.labelGray}
+            >
+              {holiday && <title>{holiday.name}</title>}
+              {day}
+            </text>
+          );
+        }))}
+      </Overlay>
+      <div
+        style={{
+          ...tagText, position: 'absolute', backgroundColor: COLOR.labelBlack, color: 'white',
+          right: pct(wPt - LABEL_TAG.right, wPt), top: pct(LABEL_TAG.top, hPt), height: pct(LABEL_TAG.h, hPt),
+          boxSizing: 'border-box', paddingTop: cq(LABEL_TAG.padTop), paddingLeft: cq(LABEL_TAG.padLeft), paddingRight: cq(LABEL_TAG.padRight),
+          fontSize: cq(13),
+        }}
+      >
+        / {month.name.toUpperCase()}
+      </div>
+      <div
+        style={{
+          ...tagText, position: 'absolute', color: COLOR.labelBlack, textAlign: 'right',
+          right: pct(wPt - LABEL_YEAR.right, wPt), top: pct(LABEL_YEAR.top, hPt), fontSize: cq(11.5),
+        }}
+      >
+        {month.year}
+      </div>
+    </PageFrame>
+  );
+}
+
 // ----------------------------------------------------------------------------
 // Pared
 // ----------------------------------------------------------------------------
@@ -483,9 +569,9 @@ function WallGridPage({ month, holidayOn }: { month: CalendarMonth; holidayOn: H
  * en pared la hoja de la foto (derecha) sobre la del mes, como cuelga.
  */
 export function CalendarMonthSheet({
-  type, position, year, startMonth, imagesPerMonth = 1, renderPhoto, holidays,
+  type, design, position, year, startMonth, imagesPerMonth = 1, renderPhoto, holidays,
 }: Omit<CalendarTemplatePageProps, 'page' | 'logoSrc' | 'rotateWallPhoto'> & { position: number }) {
-  const common = { type, year, startMonth, imagesPerMonth, renderPhoto, holidays };
+  const common = { type, design, year, startMonth, imagesPerMonth, renderPhoto, holidays };
   if (type === 'desk') return <CalendarTemplatePage {...common} page={{ kind: 'month', position }} />;
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -499,6 +585,8 @@ export function CalendarMonthSheet({
 
 export interface CalendarTemplatePageProps {
   type: CalendarType;
+  /** Diseño del escritorio (ver `CalendarDesign`). Pared lo ignora. */
+  design?: CalendarDesign;
   page: CalendarPageSpec;
   year: number;
   startMonth: number;
@@ -513,7 +601,7 @@ export interface CalendarTemplatePageProps {
 }
 
 export function CalendarTemplatePage({
-  type, page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false, holidays,
+  type, design = 'classic', page, year, startMonth, imagesPerMonth = 1, renderPhoto, logoSrc, rotateWallPhoto = false, holidays,
 }: CalendarTemplatePageProps) {
   const months = getCalendarMonths(startMonth, year, 14);
   const holidayOn = useMemo(() => makeHolidayLookup(holidays), [holidays]);
@@ -524,6 +612,9 @@ export function CalendarTemplatePage({
       return <DeskCover logoSrc={logoSrc} title={['Calendario', last.year === year ? `${year}` : `${year} - ${last.year}`]} />;
     }
     case 'month':
+      if (design === 'label') {
+        return <DeskLabelMonthPage month={months[page.position]} holidayOn={holidayOn} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
+      }
       return <DeskMonthPage month={months[page.position]} holidayOn={holidayOn} renderPhoto={slot => renderPhoto?.(page.position, slot)} />;
     case 'notes':
       return <DeskNotesPage months={months.slice(12, 14)} holidayOn={holidayOn} />;

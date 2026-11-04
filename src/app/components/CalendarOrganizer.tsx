@@ -10,7 +10,7 @@ import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { convertFileIfHeic } from '../utils/imageUtils';
-import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarDesign, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
 import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
 import { moveCalendarMonth, swapCalendarMonths, swapCalendarPhotos, type CalendarPhotoState } from './calendar/calendarReorder';
@@ -82,6 +82,7 @@ export default function CalendarOrganizer({
   const startMonth = customization.startMonth || 1;
   const calendarMonths = getCalendarMonths(startMonth, year);
   const calendarType = normalizeCalendarType(customization.type);
+  const calendarDesign = normalizeCalendarDesign(customization.type, customization.design);
   const imagesPerMonth = calendarType === 'wall' && customization.imagesPerMonth === 4 ? 4 : 1;
   const requiredPhotos = imagesPerMonth * 12;
 
@@ -585,7 +586,7 @@ export default function CalendarOrganizer({
         <div>
           <h2 className="text-2xl font-bold">{calendar.name} Editor</h2>
           <p className="text-gray-500">
-            {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? 'Escritorio' : 'Pared'} • Total: ${totalPrice.toLocaleString('es-CO')} COP
+            {uploadedCount} / {requiredPhotos} fotos subidas • Diseño: {customization.type === 'desk' ? (calendarDesign === 'label' ? 'Escritorio (Etiqueta)' : 'Escritorio') : 'Pared'} • Total: ${totalPrice.toLocaleString('es-CO')} COP
           </p>
           <p className="text-[10px] text-gray-400 mt-0.5">{t('calendarOrg.longPressHint')}</p>
         </div>
@@ -611,7 +612,7 @@ export default function CalendarOrganizer({
       {/* Cada tarjeta es la página real de la plantilla 2027 (la misma que se imprime) */}
       <div className={`grid grid-cols-1 gap-10 ${calendarType === 'desk' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>
         {renderSheetCard('Portada', 'cover', (
-          <CalendarTemplatePage type={calendarType} page={{ kind: 'cover' }} year={year} startMonth={startMonth} logoSrc={jiffyLogo} />
+          <CalendarTemplatePage type={calendarType} design={calendarDesign} page={{ kind: 'cover' }} year={year} startMonth={startMonth} logoSrc={jiffyLogo} />
         ))}
 
         {calendarMonths.map(({ name, year: monthYear }, position) => {
@@ -667,6 +668,7 @@ export default function CalendarOrganizer({
                 >
                   <CalendarMonthSheet
                     type={calendarType}
+                    design={calendarDesign}
                     position={position}
                     year={year}
                     startMonth={startMonth}
@@ -704,7 +706,7 @@ export default function CalendarOrganizer({
           );
         })}
 
-        {calendarType === 'desk' && renderSheetCard('Última hoja', 'notes', (
+        {calendarType === 'desk' && calendarDesign === 'classic' && renderSheetCard('Última hoja', 'notes', (
           <CalendarTemplatePage type="desk" page={{ kind: 'notes' }} year={year} startMonth={startMonth} holidays={holidays} />
         ))}
       </div>

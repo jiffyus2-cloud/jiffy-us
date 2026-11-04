@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPhotoAspect, getPhotoBoxes } from './CalendarTemplate';
+import { getPhotoAspect, getPhotoBoxes, getCalendarPrintPages, normalizeCalendarDesign } from './CalendarTemplate';
 
 describe('getPhotoBoxes', () => {
   it('pared x4 sigue la plantilla: 2x2 a todo el ancho con 19,75 pt entre fotos', () => {
@@ -20,5 +20,20 @@ describe('getPhotoBoxes', () => {
   it('la foto única de pared no cambia', () => {
     expect(getPhotoBoxes('wall', 1)).toEqual([{ x: 0, y: 30.7, w: 850.5, h: 561.8 }]);
     expect(getPhotoAspect('wall', 4)).toBeCloseTo(415.375 / 273.875, 3);
+  });
+});
+
+describe('diseño de escritorio "etiqueta"', () => {
+  it('no lleva hoja de notas: 13 páginas', () => {
+    const pages = getCalendarPrintPages('desk', 'label');
+    expect(pages).toHaveLength(13);
+    expect(pages.some(p => p.kind === 'notes')).toBe(false);
+    expect(getCalendarPrintPages('desk')).toHaveLength(14);
+  });
+
+  it('solo aplica al escritorio', () => {
+    expect(normalizeCalendarDesign('desk', 'label')).toBe('label');
+    expect(normalizeCalendarDesign('wall', 'label')).toBe('classic');
+    expect(normalizeCalendarDesign('desk', undefined)).toBe('classic');
   });
 });
