@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
-import { CalendarMonthSheet, getCalendarMonths, getCalendarSlotPhoto, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, getCalendarMonths, getCalendarSlotPhoto, normalizeCalendarDesign, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import { getHolidayCountryName, DEFAULT_HOLIDAY_COUNTRY } from '../utils/holidays';
 import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
@@ -238,6 +238,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
             <div className="bg-white shadow-sm border-2 border-gray-100 overflow-hidden mx-auto w-full max-w-md">
               <CalendarMonthSheet
                 type={type}
+                design={normalizeCalendarDesign(c.type, c.design)}
                 position={position}
                 year={year}
                 startMonth={startMonth}
@@ -384,7 +385,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
 
   let formatText = 'N/A';
   if (isCalendar) {
-    formatText = order.customization?.type === 'wall' ? 'De Pared' : order.customization?.type === 'desk' ? 'De Escritorio' : (order.customization?.orientation || 'Escritorio');
+    formatText = order.customization?.type === 'wall' ? 'De Pared' : order.customization?.type === 'desk' ? (order.customization?.design === 'label' ? 'De Escritorio (Etiqueta)' : 'De Escritorio') : (order.customization?.orientation || 'Escritorio');
   } else if (isAlbum) {
     formatText = order.customization?.size || 'N/A';
   } else {

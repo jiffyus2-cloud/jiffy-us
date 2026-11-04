@@ -25,7 +25,7 @@ import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { createRoot } from 'react-dom/client';
 import CoverPreview from './CoverPreview'; 
-import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, getCalendarYears, type CalendarPageSpec } from './calendar/CalendarTemplate';
+import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarDesign, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, getCalendarYears, type CalendarPageSpec } from './calendar/CalendarTemplate';
 import { getHolidaysForCountry, type Holiday } from '../utils/holidays';
 import { getCoverDimensions } from '../utils/cropMath';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
@@ -297,6 +297,7 @@ const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays
   return (
     <CalendarTemplatePage
       type={normalizeCalendarType(c.type)}
+      design={normalizeCalendarDesign(c.type, c.design)}
       page={page}
       year={c.year || new Date().getFullYear()}
       startMonth={c.startMonth || 1}
@@ -895,7 +896,10 @@ const OwnerDashboard: React.FC = () => {
     return new Promise(async (resolve, reject) => {
       try {
         const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
-        const pages = getCalendarPrintPages(normalizeCalendarType(order.customization?.type));
+        const pages = getCalendarPrintPages(
+          normalizeCalendarType(order.customization?.type),
+          normalizeCalendarDesign(order.customization?.type, order.customization?.design),
+        );
         const totalItems = pages.length;
         let itemsProcessed = 0;
 

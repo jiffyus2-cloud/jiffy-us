@@ -149,7 +149,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 data-cover-title className="text-[4.4cqw] font-bold uppercase leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute text-center" style={{ top: '81%', left: '10%', right: '10%', transform: 'translateY(-50%)' }}>
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3.2cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3.2cqw] font-medium uppercase leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -166,7 +166,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   <h2 data-cover-title className="text-[4.6cqw] font-bold uppercase leading-none" style={{ color: typographyColor }}>{coverTitle}</h2>
                 </div>
                 <div className="absolute text-right" style={{ top: '85.5%', left: '13%', right: '13%', transform: 'translateY(-50%)' }}>
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3cqw] font-bold leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[3cqw] font-bold uppercase leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
               </div>
             </div>
@@ -180,7 +180,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
               {fabricLayer}
               <div className="absolute inset-0 z-10 pointer-events-none">
                 <div className="absolute text-left" style={{ top: '8.2%', left: '7.4%', right: '7.4%' }}>
-                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[5cqw] font-medium leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
+                  {(coverSubtitle || subtitlePlaceholder) && <p data-cover-subtitle className="text-[5cqw] font-medium uppercase leading-none" style={{ color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</p>}
                 </div>
                 <div className="absolute text-center" style={{ bottom: '6.5%', right: '11%', width: '66%' }}>
                   <h2 data-cover-title className="text-[6.6cqw] font-bold uppercase leading-[1.3]" style={{ color: typographyColor }}>{coverTitle}</h2>

@@ -383,7 +383,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     <input
                       type="text"
                       value={coverTitle}
-                      // Tela: el título va siempre en mayúsculas
+                      // Tela: el título y el subtítulo van siempre en mayúsculas
                       onChange={(e) => setCoverTitle(coverType === 'Tela' ? e.target.value.toUpperCase() : e.target.value)}
                       maxLength={textLimits.title}
                       aria-invalid={titleOverLimit}
@@ -423,7 +423,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     <input
                       type="text"
                       value={coverSubtitle}
-                      onChange={(e) => setCoverSubtitle(e.target.value)}
+                      onChange={(e) => setCoverSubtitle(coverType === 'Tela' ? e.target.value.toUpperCase() : e.target.value)}
                       maxLength={textLimits.subtitle}
                       aria-invalid={subtitleOverLimit}
                       className={inputClass(subtitleOverLimit, 'w-full p-2.5 md:p-3.5 rounded-lg outline-none transition-all font-medium text-[16px] md:text-sm')}

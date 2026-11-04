@@ -3,7 +3,7 @@ import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
 import { ImageIcon, RectangleHorizontal, RectangleVertical } from 'lucide-react';
-import { CalendarMonthSheet, getCalendarYears, useCalendarHolidays } from './calendar/CalendarTemplate';
+import { CalendarMonthSheet, getCalendarYears, useCalendarHolidays, type CalendarDesign } from './calendar/CalendarTemplate';
 import HolidayCountryPicker from './calendar/HolidayCountryPicker';
 import {
   DEFAULT_HOLIDAY_COUNTRY, NO_HOLIDAYS, getColombianHolidays, getHolidayCountries, getHolidayCountryName, type HolidayCountry,
@@ -21,6 +21,8 @@ export interface CalendarCustomizationOptions {
   startMonth: number; // 1-12
   type: 'desk' | 'wall';
   imagesPerMonth: 1 | 4;
+  /** Diseño del escritorio; pared siempre es 'classic'. Sin él, 'classic'. */
+  design?: CalendarDesign;
   /** Código ISO del país cuyos festivos se marcan ('NONE' = sin festivos). Sin él, Colombia. */
   holidayCountry?: string;
 }
@@ -37,6 +39,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
   const [startMonth, setStartMonth] = useState(1); // 1 = Enero
   const [type, setType] = useState<'desk' | 'wall'>('desk');
   const [imagesPerMonth, setImagesPerMonth] = useState<1 | 4>(1);
+  const [design, setDesign] = useState<CalendarDesign>('classic');
   const [holidayCountry, setHolidayCountry] = useState(DEFAULT_HOLIDAY_COUNTRY);
   const [countries, setCountries] = useState<HolidayCountry[]>([
     { code: DEFAULT_HOLIDAY_COUNTRY, name: getHolidayCountryName(DEFAULT_HOLIDAY_COUNTRY) },
@@ -81,6 +84,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
       startMonth,
       type,
       imagesPerMonth: type === 'wall' ? imagesPerMonth : 1,
+      design: type === 'desk' ? design : 'classic',
       holidayCountry,
     });
   };
@@ -94,6 +98,7 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
           <div className={`bg-white shadow-2xl overflow-hidden transition-all duration-500 ${type === 'desk' ? 'w-[260px]' : 'w-[340px]'}`}>
             <CalendarMonthSheet
               type={type}
+              design={type === 'desk' ? design : 'classic'}
               position={0}
               year={year}
               startMonth={startMonth}
@@ -149,6 +154,28 @@ export default function CalendarCustomization({ calendar, onCustomizationComplet
             </button>
           </div>
         </div>
+
+        {/* Diseño (solo escritorio) */}
+        {type === 'desk' && (
+          <div>
+            <h3 className="text-2xl mb-4 font-bold">{t('calendarSetup.designTitle')}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {([
+                ['classic', t('calendarSetup.designClassic'), t('calendarSetup.designClassicDesc')],
+                ['label', t('calendarSetup.designLabel'), t('calendarSetup.designLabelDesc')],
+              ] as const).map(([d, name, desc]) => (
+                <button
+                  key={d}
+                  onClick={() => setDesign(d)}
+                  className={`py-6 rounded-lg border-4 transition-all ${ design === d ? 'bg-black text-white border-black' : 'bg-white text-black border-black hover:bg-gray-50' }`}
+                >
+                  <div className="text-xl font-bold">{name}</div>
+                  <div className={`text-sm ${design === d ? 'text-gray-300' : 'text-gray-500'}`}>{desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Imágenes por Mes (condicional) */}
         {type === 'wall' && (
