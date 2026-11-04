@@ -34,7 +34,13 @@ import {
 
 // ── Configuraciones reales de la app ─────────────────────────────────────────
 const SQUARE: AlbumConfig = { allowedPhotosPerPage: [1, 2, 3, 4, 9], maxPages: 250 };
-const RECT: AlbumConfig = { allowedPhotosPerPage: [1, 2, 3, 4, 6], maxPages: 250 };
+const RECT: AlbumConfig = { allowedPhotosPerPage: [1, 2, 3, 4, 6, 9], maxPages: 250 };
+/**
+ * Un formato con tope de 6 por página, como era el horizontal hasta noviembre
+ * de 2026. Hoy ningún formato lo es, pero la migración a un tope menor sigue
+ * siendo la misma operación (y un pliego futuro podría volver a bajarlo).
+ */
+const SIX_MAX: AlbumConfig = { allowedPhotosPerPage: [1, 2, 3, 4, 6], maxPages: 250 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,10 +94,12 @@ describe('getNextAllowed', () => {
     expect(getNextAllowed(1, SQUARE.allowedPhotosPerPage)).toBe(1);
     expect(getNextAllowed(5, SQUARE.allowedPhotosPerPage)).toBe(9);
     expect(getNextAllowed(5, RECT.allowedPhotosPerPage)).toBe(6);
+    expect(getNextAllowed(7, RECT.allowedPhotosPerPage)).toBe(9);
   });
 
   it('satura en el máximo cuando el conteo lo excede', () => {
-    expect(getNextAllowed(20, RECT.allowedPhotosPerPage)).toBe(6);
+    expect(getNextAllowed(20, RECT.allowedPhotosPerPage)).toBe(9);
+    expect(getNextAllowed(20, SIX_MAX.allowedPhotosPerPage)).toBe(6);
   });
 });
 
@@ -178,7 +186,7 @@ describe('R1 — ninguna operación puede perder fotos', () => {
   });
 
   it('movePhotoToPage rechaza sin tocar el origen si el destino está lleno', () => {
-    const before = albumOf(['a1'], Array.from({ length: 6 }, (_, i) => `b${i}`));
+    const before = albumOf(['a1'], Array.from({ length: 9 }, (_, i) => `b${i}`));
     const { state: after, success } = movePhotoToPage(before, 0, 0, 1, RECT);
     expect(success).toBe(false);
     expect(after).toBe(before);
@@ -412,10 +420,16 @@ describe('analyzeConfigChange / migrateAlbumToConfig', () => {
       [],
     );
 
-  it('detecta las fotos que quedarían ocultas al pasar de Cuadrado a Horizontal', () => {
-    const impact = analyzeConfigChange(nineUp(), RECT);
+  it('detecta las fotos que quedarían ocultas al pasar a un formato con tope de 6', () => {
+    const impact = analyzeConfigChange(nineUp(), SIX_MAX);
     expect(impact.pagesAffected).toEqual([0, 1]);
     expect(impact.photosAtRisk).toBe(6); // 3 por página
+  });
+
+  it('pasar de Cuadrado a Horizontal ya no oculta fotos: los dos llegan a 9', () => {
+    const impact = analyzeConfigChange(nineUp(), RECT);
+    expect(impact.pagesAffected).toEqual([]);
+    expect(impact.photosAtRisk).toBe(0);
   });
 
   it('no señala nada cuando el formato crece', () => {
@@ -425,14 +439,14 @@ describe('analyzeConfigChange / migrateAlbumToConfig', () => {
 
   it('migra sin perder ni ocultar fotos', () => {
     const before = nineUp();
-    const result = migrateAlbumToConfig(before, RECT);
+    const result = migrateAlbumToConfig(before, SIX_MAX);
 
     expect(result.warnings).toEqual([]);
     expect(bag(result.state)).toEqual(bag(before));
     result.state.forEach(p => {
       expect(p.photos.filter(Boolean).length).toBeLessThanOrEqual(6);
     });
-    expect(hidesPhotos(result.state, RECT)).toBe(false);
+    expect(hidesPhotos(result.state, SIX_MAX)).toBe(false);
   });
 
   it('conserva el layout de cada página al migrar', () => {
@@ -652,10 +666,14 @@ describe('distributePhotosAcrossPages', () => {
   });
 
   it('rechaza (null) las combinaciones sin solución exacta', () => {
-    // 40 páginas horizontales admiten hasta 240 fotos, pero nunca exactamente 239.
-    expect(distributePhotosAcrossPages(items(239), 40, RECT)).toBeNull();
-    expect(distributePhotosAcrossPages(items(240), 40, RECT)).not.toBeNull();
-    expect(distributePhotosAcrossPages(items(238), 40, RECT)).not.toBeNull();
+    // 40 páginas horizontales admiten hasta 360 fotos, pero nunca exactamente
+    // 359, 358 ni 356: de 9 solo se baja a 6 (−3), a 4 (−5)…
+    expect(distributePhotosAcrossPages(items(359), 40, RECT)).toBeNull();
+    expect(distributePhotosAcrossPages(items(358), 40, RECT)).toBeNull();
+    expect(distributePhotosAcrossPages(items(356), 40, RECT)).toBeNull();
+    expect(distributePhotosAcrossPages(items(360), 40, RECT)).not.toBeNull();
+    expect(distributePhotosAcrossPages(items(357), 40, RECT)).not.toBeNull();
+    expect(distributePhotosAcrossPages(items(355), 40, RECT)).not.toBeNull();
   });
 
   it('rechaza (null) si se pide más páginas que el tope del álbum', () => {
@@ -829,8 +847,8 @@ describe('appendPhotosAsNewPages', () => {
     // 30 fotos cuadradas no caben en 2 páginas (máx. 18) ni 5 fotos en 6 páginas.
     expect(appendPhotosAsNewPages(organized, items(30, 'n'), 2, SQUARE)).toBeNull();
     expect(appendPhotosAsNewPages(organized, items(5, 'n'), 6, SQUARE)).toBeNull();
-    // 11 horizontales en 2 páginas: el hueco 6G−1 de la variante A.
-    expect(appendPhotosAsNewPages(organized, items(11, 'n'), 2, RECT)).toBeNull();
+    // 17 horizontales en 2 páginas: el hueco 9G−1 de la variante A.
+    expect(appendPhotosAsNewPages(organized, items(17, 'n'), 2, RECT)).toBeNull();
   });
 
   it('devuelve null si el álbum superaría el tope de páginas', () => {
@@ -861,8 +879,9 @@ describe('appendPageBounds / suggestAppendPages', () => {
   it('el mínimo sube cuando el lote no cabe en 2 páginas', () => {
     // 20 fotos cuadradas: 2 páginas admiten 18 como mucho, 4 admiten 36.
     expect(appendPageBounds(organized, 20, SQUARE)).toEqual({ min: 4, max: 20 });
-    // 50 horizontales: 2×6 = 12, 4×6 = 24, ..., 10×6 = 60 → 10 páginas.
-    expect(appendPageBounds(organized, 50, RECT)?.min).toBe(10);
+    // 50 horizontales: 6×9 = 54 alcanzaría, pero 50 = 9·6 − 4 es uno de los
+    // huecos de la variante A, así que el mínimo par es 8.
+    expect(appendPageBounds(organized, 50, RECT)?.min).toBe(8);
   });
 
   it('el máximo respeta las páginas que quedan hasta el tope del álbum', () => {

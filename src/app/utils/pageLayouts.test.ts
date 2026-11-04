@@ -41,9 +41,9 @@ describe('getAllowedPhotosPerPage', () => {
     expect(getAllowedPhotosPerPage(SQUARE_30)).toEqual([1, 2, 3, 4, 9]);
   });
 
-  it('horizontal y vertical admiten los mismos conteos desde el pliego de 4 en vertical', () => {
-    expect(getAllowedPhotosPerPage(VERTICAL)).toEqual([1, 2, 3, 4, 6]);
-    expect(getAllowedPhotosPerPage(HORIZONTAL)).toEqual([1, 2, 3, 4, 6]);
+  it('horizontal y vertical admiten 6 y 9 desde los pliegos de noviembre de 2026', () => {
+    expect(getAllowedPhotosPerPage(VERTICAL)).toEqual([1, 2, 3, 4, 6, 9]);
+    expect(getAllowedPhotosPerPage(HORIZONTAL)).toEqual([1, 2, 3, 4, 6, 9]);
   });
 });
 
@@ -55,7 +55,8 @@ describe('getClosestAllowed', () => {
   });
 
   it('tope al máximo del formato cuando no cabe', () => {
-    expect(getClosestAllowed(12, VERTICAL)).toBe(6);
+    expect(getClosestAllowed(12, VERTICAL)).toBe(9);
+    expect(getClosestAllowed(7, HORIZONTAL)).toBe(9);
     expect(getClosestAllowed(12, SQUARE_20)).toBe(9);
   });
 });
@@ -191,18 +192,64 @@ describe('getPageVariants', () => {
     expect(getPageVariants(1, VERTICAL).map(v => v.id)).toEqual(['margin', 'bleed', 'landscape']);
   });
 
-  it('las páginas de 2 tienen dos variantes salvo en vertical', () => {
-    expect(getPageVariants(2, SQUARE_20)).toHaveLength(2);
-    expect(getPageVariants(2, HORIZONTAL)).toHaveLength(2);
-    expect(getPageVariants(2, VERTICAL)).toHaveLength(1);
+  it('las páginas de 2 del pliego de noviembre', () => {
+    // Cuadrado y vertical ganan la foto sobre fondo; horizontal no la trae.
+    expect(getPageVariants(2, SQUARE_20).map(v => v.id)).toEqual(['row', 'column', 'overlay']);
+    expect(getPageVariants(2, HORIZONTAL).map(v => v.id)).toEqual(['row', 'column']);
+    expect(getPageVariants(2, VERTICAL).map(v => v.id)).toEqual(['row', 'overlay']);
   });
 
-  it('el resto de conteos tiene una sola página', () => {
+  it('las páginas de 3 son la fila y las dos combinaciones de dos y una ancha', () => {
+    for (const size of [SQUARE_20, HORIZONTAL, VERTICAL]) {
+      expect(getPageVariants(3, size).map(v => v.id)).toEqual(['row', 'twoTop', 'twoBottom']);
+    }
+  });
+
+  it('4, 6 y 9 fotos tienen una sola página', () => {
     for (const size of [SQUARE_20, HORIZONTAL, VERTICAL]) {
       for (const count of getAllowedPhotosPerPage(size)) {
-        if (count <= 2) continue;
+        if (count <= 3) continue;
         expect(getPageVariants(count, size)).toHaveLength(1);
       }
+    }
+  });
+
+  it('la foto sobre fondo pinta primero el fondo a sangre y encima la foto con borde', () => {
+    for (const size of [SQUARE_20, VERTICAL]) {
+      const [bg, fg] = getPageSlots(2, 'overlay', size);
+      expect(bg).toEqual({ x: 0, y: 0, w: 100, h: 100 });
+      expect(fg.x).toBeCloseTo(10, 5);
+      expect(fg.x + fg.w).toBeCloseTo(90, 5);
+    }
+  });
+
+  it('en «dos arriba» y «una arriba» la ancha ocupa lo mismo que las dos juntas', () => {
+    for (const size of [SQUARE_20, HORIZONTAL, VERTICAL]) {
+      const top = getPageSlots(3, 'twoTop', size);
+      const bottom = getPageSlots(3, 'twoBottom', size);
+      expect(top[0].y).toBe(top[1].y);
+      expect(top[2].y).toBeGreaterThan(top[0].y + top[0].h);
+      expect(bottom[1].y).toBe(bottom[2].y);
+      expect(bottom[1].y).toBeGreaterThan(bottom[0].y + bottom[0].h);
+      for (const [pair, wide] of [[top.slice(0, 2), top[2]], [bottom.slice(1), bottom[0]]] as const) {
+        expect(pair[0].x).toBeCloseTo(wide.x, 5);
+        expect(pair[1].x + pair[1].w).toBeCloseTo(wide.x + wide.w, 5);
+      }
+    }
+  });
+
+  it('el 3×3 de horizontal y vertical: slots cuadrados y bloque centrado', () => {
+    for (const size of [HORIZONTAL, VERTICAL]) {
+      expect(getAllowedPhotosPerPage(size)).toContain(9);
+      const slots = getPageSlots(9, 'row', size);
+      expect(slots).toHaveLength(9);
+      expect(new Set(slots.map(s => s.x)).size).toBe(3);
+      expect(new Set(slots.map(s => s.y)).size).toBe(3);
+      expect(near(slotRatio(slots[0], size), 1, 0.02)).toBe(true);
+      const left = slots[0].x, right = 100 - (slots[2].x + slots[2].w);
+      const top = slots[0].y, bottom = 100 - (slots[8].y + slots[8].h);
+      expect(near(left, right, 0.02)).toBe(true);
+      expect(near(top, bottom, 0.02)).toBe(true);
     }
   });
 

@@ -14,9 +14,9 @@
 // decirlo — nunca redondear ni aproximar.
 //
 // Tres variantes, una por formato de página:
-//   A — horizontal: {1, 2, 3, 4, 6}
+//   A — horizontal: {1, 2, 3, 4, 6, 9}
 //   B — cuadrado:   {1, 2, 3, 4, 9}
-//   C — vertical:   {1, 2, 3, 4, 6}
+//   C — vertical:   {1, 2, 3, 4, 6, 9}
 //
 // Los tamaños salen de ALLOWED_PHOTOS_PER_PAGE de pageLayouts.ts, que es la
 // única fuente de verdad de qué sabe maquetar cada formato; aquí solo se le
@@ -81,12 +81,18 @@ export function variantForAllowedSizes(allowed: number[]): DistributionVariant |
   return null;
 }
 
+/** Los tamaños pequeños, los que el reparto trata uno a uno. */
+const SMALL_LIMIT = 4;
+
 interface VariantSpec {
   sizes: number[];
-  /** Tamaño mayor de la variante (6, 9 o 6). */
+  /** Tamaño mayor de la variante (9 en las tres). */
   big: number;
-  /** Tamaño inmediatamente inferior al mayor (4 en las tres). */
-  second: number;
+  /**
+   * Los tamaños por encima de 4, de menor a mayor: [9] en B, [6, 9] en A y C.
+   * Antes de los pliegos de noviembre de 2026 era un único tamaño en las tres.
+   */
+  bigs: number[];
   hasFour: boolean;
 }
 
@@ -95,7 +101,7 @@ function specFor(variant: DistributionVariant): VariantSpec {
   return {
     sizes,
     big: sizes[sizes.length - 1],
-    second: sizes[sizes.length - 2],
+    bigs: sizes.filter(s => s > SMALL_LIMIT),
     hasFour: sizes.includes(4),
   };
 }
@@ -138,7 +144,14 @@ export interface FeasibilityOptions {
 
 /**
  * ¿Se puede repartir N fotos en exactamente G páginas usando solo los tamaños
- * de la variante? Fórmula cerrada, O(1), sin bucles.
+ * de la variante?
+ *
+ * La fórmula cerrada de abajo vale cuando los tamaños son "todos del 1 al
+ * segundo mayor, más el mayor" ({1,2,3,4,9} en B). Desde noviembre de 2026 A y
+ * C son {1,2,3,4,6,9}: falta el 5, así que no todo lo que queda por debajo del
+ * 9 es alcanzable. Para esos se fija cuántas páginas son del mayor (bucle O(G))
+ * y se aplica la fórmula al resto, que ya sí es {1,2,3,4,6}. Ver
+ * `extrasReachable`.
  *
  * El razonamiento es el mismo para las tres variantes. Se cuentan los "extras"
  * de cada página sobre el mínimo de 1 foto: E = N − G. Una página del tamaño
@@ -155,11 +168,10 @@ export interface FeasibilityOptions {
  * fórmulas del enunciado — incluido el hueco de la variante A en N = 6G − 1,
  * que aquí no hay que tratar aparte: las cotas se cruzan solas.
  *
- * Los huecos cerca del tope no son uno por variante sino tantos como distancia
- * haya entre los dos tamaños mayores: A y C no alcanzan 6G−1; B no alcanza
- * 9G−1 a 9G−4. Son los N que exigirían bajar del máximo "menos de lo que mide
- * el salto" entre el tamaño mayor y el siguiente. (Mientras el pliego vertical
- * no tenía página de 4, C tampoco alcanzaba 6G−2: el salto de 6 a 3 era de 3.)
+ * Los huecos cerca del tope son los N que exigirían bajar del máximo menos de
+ * lo que se puede bajar: B no alcanza 9G−1 a 9G−4 (el salto de 9 a 4 es de 5).
+ * A y C bajan de 9 a 6 (3), a 4 (5), a 3 (6)…, así que no alcanzan 9G−1, 9G−2
+ * ni 9G−4, pero sí 9G−3. (Con 6 como mayor, A y C no alcanzaban 6G−1.)
  */
 export function checkFeasibility(
   photos: number,
@@ -190,16 +202,41 @@ export function checkFeasibility(
   const extras = photos - pages;
   if (extras < 0) return { ...base, feasible: false, reason: 'too_few_photos' };
 
-  const bigX = spec.big - 1;
-  const smallX = spec.second - 1;
-  if (extras > bigX * pages) return { ...base, feasible: false, reason: 'too_many_photos' };
+  if (extras > (spec.big - 1) * pages) return { ...base, feasible: false, reason: 'too_many_photos' };
 
-  const kMin = Math.max(0, Math.ceil((extras - smallX * pages) / (bigX - smallX)));
-  const kMax = Math.min(pages, Math.floor(extras / bigX));
-
-  return kMin <= kMax
+  return extrasReachable(extras, pages, spec.sizes)
     ? { ...base, feasible: true }
     : { ...base, feasible: false, reason: 'unreachable_combination' };
+}
+
+/**
+ * ¿Se pueden repartir `extras` fotos de más (sobre una por página) entre
+ * exactamente `pages` páginas de los tamaños `sizes` (ascendentes, con el 1)?
+ *
+ * Si todos los tamaños menores que el mayor son consecutivos desde 1, es la
+ * fórmula cerrada de `checkFeasibility`. Si no, se prueba cada número de
+ * páginas del mayor y se resuelve el resto con los tamaños que quedan.
+ */
+function extrasReachable(extras: number, pages: number, sizes: number[]): boolean {
+  if (extras < 0) return false;
+  const top = sizes[sizes.length - 1];
+  const rest = sizes.slice(0, -1);
+  const bigX = top - 1;
+  if (rest.length === 0) return extras === bigX * pages;
+  if (extras > bigX * pages) return false;
+
+  const contiguous = rest.every((s, i) => s === i + 1);
+  if (contiguous) {
+    const smallX = rest[rest.length - 1] - 1;
+    const kMin = Math.max(0, Math.ceil((extras - smallX * pages) / (bigX - smallX)));
+    const kMax = Math.min(pages, Math.floor(extras / bigX));
+    return kMin <= kMax;
+  }
+
+  for (let k = Math.min(pages, Math.floor(extras / bigX)); k >= 0; k--) {
+    if (extrasReachable(extras - bigX * k, pages - k, rest)) return true;
+  }
+  return false;
 }
 
 /**
@@ -247,23 +284,40 @@ function totalPages(counts: SizeCounts): number {
 }
 
 /**
- * ¿Existe reparto con exactamente `three` páginas de 3 y `big` páginas del
- * tamaño mayor? Devuelve cuántas páginas y cuántas fotos quedan para el resto
- * de tamaños, o null si esa combinación ya no cuadra.
+ * Recorre cada combinación de páginas de los tamaños grandes (los de más de 4
+ * fotos) que todavía deja una foto como mínimo para cada página restante.
+ *
+ * `visit` recibe cuántas páginas hay de cada tamaño grande (en el orden de
+ * `spec.bigs`) y las páginas y fotos que quedan para 1, 2 y 4. El orden es
+ * lexicográfico ascendente, de modo que con un solo tamaño grande es el mismo
+ * recorrido `big = 0, 1, 2…` de antes. Si `visit` devuelve true se corta.
  */
-function remainderFor(
-  photos: number, pages: number, spec: VariantSpec, three: number, big: number
-): { restPages: number; restPhotos: number } | null {
-  const restPages = pages - three - big;
-  if (restPages < 0) return null;
-  const restPhotos = photos - SCARCE_SIZE * three - spec.big * big;
-  if (restPhotos < restPages) return null; // ni a una foto por página llega
-  return { restPages, restPhotos };
+function forEachBigCombo(
+  photos: number,
+  pages: number,
+  spec: VariantSpec,
+  visit: (bigCounts: number[], restPages: number, restPhotos: number) => boolean | void
+): void {
+  const bigCounts = new Array<number>(spec.bigs.length).fill(0);
+  const walk = (i: number, restPages: number, restPhotos: number): boolean => {
+    if (restPhotos < restPages) return false; // ni a una foto por página llega
+    if (i === spec.bigs.length) return visit(bigCounts, restPages, restPhotos) === true;
+    const size = spec.bigs[i];
+    for (let k = 0; k <= restPages; k++) {
+      const p = restPages - k, n = restPhotos - size * k;
+      if (n < p) break; // con más páginas grandes aún faltarían más fotos
+      bigCounts[i] = k;
+      if (walk(i + 1, p, n)) return true;
+    }
+    bigCounts[i] = 0;
+    return false;
+  };
+  walk(0, pages, photos);
 }
 
 /**
  * ¿Caben `restPhotos` fotos en `restPages` páginas usando solo los tamaños
- * pequeños distintos de 3 — {1,2,4} en A y B, {1,2} en C — dejando al menos
+ * pequeños distintos de 3 —{1,2,4} en las tres variantes— dejando al menos
  * `minOnes` páginas de una sola foto?
  *
  * Sobre el mínimo de una foto por página quedan `spare` fotos que repartir en
@@ -289,15 +343,6 @@ interface CandidateCounts {
   distinctSizes: number;
 }
 
-function scoreOf(counts: SizeCounts): { peak: number; distinctSizes: number } {
-  let peak = 0, distinctSizes = 0;
-  for (const count of counts.values()) {
-    if (count > 0) distinctSizes++;
-    if (count > peak) peak = count;
-  }
-  return { peak, distinctSizes };
-}
-
 /** ¿`a` es preferible a `b`? Menor pico primero; a igualdad, más variedad de tamaños. */
 function isBetter(a: CandidateCounts, b: CandidateCounts): boolean {
   if (a.peak !== b.peak) return a.peak < b.peak;
@@ -320,42 +365,52 @@ function findCounts(
   const minOnes = requireOne ? 1 : 0;
 
   for (let three = 0; three <= pages; three++) {
-    // ¿Este número de páginas de 3 admite alguna solución? O(G).
+    const afterThreePages = pages - three;
+    const afterThreePhotos = photos - SCARCE_SIZE * three;
+    if (afterThreePhotos < afterThreePages) break; // más páginas de 3 aún lo empeoran
+
+    // ¿Este número de páginas de 3 admite alguna solución?
     let viable = false;
-    for (let big = 0; big <= pages - three; big++) {
-      const rest = remainderFor(photos, pages, spec, three, big);
-      if (rest && restFits(rest.restPages, rest.restPhotos, spec, minOnes)) { viable = true; break; }
-    }
+    forEachBigCombo(afterThreePhotos, afterThreePages, spec, (_, restPages, restPhotos) =>
+      (viable = restFits(restPages, restPhotos, spec, minOnes)));
     if (!viable) continue;
 
     // Sí: ahora se explora a fondo ese `three` y se elige el mejor reparto.
+    // El pico y la variedad se calculan sobre números sueltos y el Map solo se
+    // construye para el mejor: con dos tamaños grandes salen muchos candidatos.
     let best: CandidateCounts | null = null;
 
-    for (let big = 0; big <= pages - three; big++) {
-      const rest = remainderFor(photos, pages, spec, three, big);
-      if (!rest) continue;
-      const spare = rest.restPhotos - rest.restPages;
-      if (spare < 0) continue;
+    forEachBigCombo(afterThreePhotos, afterThreePages, spec, (bigCounts, restPages, restPhotos) => {
+      const spare = restPhotos - restPages;
+
+      let bigPeak = three, bigDistinct = three > 0 ? 1 : 0;
+      for (const c of bigCounts) {
+        if (c > bigPeak) bigPeak = c;
+        if (c > 0) bigDistinct++;
+      }
 
       // `fours` es el único grado de libertad que queda: fijado él, las páginas
       // de 2 y de 1 salen de las dos ecuaciones (total de páginas y de fotos).
-      const maxFours = spec.hasFour ? Math.min(Math.floor(spare / 3), rest.restPages) : 0;
+      const maxFours = spec.hasFour ? Math.min(Math.floor(spare / 3), restPages) : 0;
       for (let fours = 0; fours <= maxFours; fours++) {
         const twos = spare - 3 * fours;
-        const ones = rest.restPages - twos - fours;
+        const ones = restPages - twos - fours;
         if (twos < 0 || ones < minOnes) continue;
 
-        const counts: SizeCounts = new Map([
-          [1, ones], [2, twos], [3, three], [spec.big, big],
-        ]);
+        const peak = Math.max(bigPeak, ones, twos, fours);
+        const distinctSizes = bigDistinct + (ones > 0 ? 1 : 0) + (twos > 0 ? 1 : 0) + (fours > 0 ? 1 : 0);
+        if (best && !isBetter({ counts: best.counts, peak, distinctSizes }, best)) continue;
+
+        // Mismo orden de inserción que antes —1, 2, 3, grandes, 4—: arrangeSizes
+        // desempata por él.
+        const counts: SizeCounts = new Map([[1, ones], [2, twos], [3, three]]);
+        spec.bigs.forEach((size, i) => counts.set(size, bigCounts[i]));
         if (spec.hasFour) counts.set(4, fours);
-
-        const candidate: CandidateCounts = { counts, ...scoreOf(counts) };
-        if (!best || isBetter(candidate, best)) best = candidate;
+        best = { counts, peak, distinctSizes };
       }
-    }
+    });
 
-    if (best) return best.counts;
+    if (best) return (best as CandidateCounts).counts;
   }
 
   return null;

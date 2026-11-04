@@ -22,7 +22,7 @@ export interface PageState {
 export type AlbumState = PageState[];
 
 export interface AlbumConfig {
-  allowedPhotosPerPage: number[]; // e.g. [1,2,3,4,9] or [1,2,3,4,6]
+  allowedPhotosPerPage: number[]; // e.g. [1,2,3,4,9] or [1,2,3,4,6,9]
   maxPages: number;               // 250
 }
 

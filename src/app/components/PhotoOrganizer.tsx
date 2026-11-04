@@ -1952,9 +1952,10 @@ export default function PhotoOrganizer({
   };
 
   // ── Cambio de tamaño del álbum (B5) ──────────────────────────────────────────
-  // Al pasar de Cuadrado (hasta 9 fotos/página) a Horizontal o Vertical (hasta 6),
-  // las fotos sobrantes de cada página quedaban fuera del render sin aviso ninguno.
-  // Ahora se detecta y se ofrece redistribuirlas.
+  // Al pasar a un formato con menos fotos por página (Cuadrado admitía 9 y
+  // Horizontal/Vertical 6 hasta noviembre de 2026; hoy los tres llegan a 9),
+  // las fotos sobrantes de cada página quedaban fuera del render sin aviso
+  // ninguno. Ahora se detecta y se ofrece redistribuirlas.
   const prevMaxAllowedRef = useRef(allowedPhotosPerPage[allowedPhotosPerPage.length - 1]);
   useEffect(() => {
     const max = allowedPhotosPerPage[allowedPhotosPerPage.length - 1];
