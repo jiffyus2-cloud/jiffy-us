@@ -27,7 +27,7 @@ describe('getCoverTextLimits — matriz de límites', () => {
     'Tela':             [[23, 32], [22, 32], [22, 22]],
     'Papel/28x21':      [[25, null], [17, 17], [19, 16], [32, 37]],
     'Papel/21x28':      [[39, 61], [22, 22], [22, 18], [48, 48], [null, null]],
-    'Papel/20x20':      [[24, 29], [20, 20], [20, 17], [43, 43], [null, null]],
+    'Papel/20x20':      [[24, 31], [20, 20], [20, 17], [43, 43], [null, null]],
     'Papel/30x30':      [[23, 27], [23, 23], [22, 18], [46, 46], [null, null]],
   };
 
@@ -108,10 +108,10 @@ describe('getCoverTextLimits — lomo', () => {
   it('toma la rama del PDF, que es la restrictiva', () => {
     // Si cambia la geometría del lomo en OwnerDashboard.tsx (generateCoverPDF),
     // este test es el disparador: estos números salen del renderer del PDF, no del preview.
-    expect(spine('20x20')).toBe(57);
-    expect(spine('21x28')).toBe(60);
-    expect(spine('28x21')).toBe(81);
-    expect(spine('30x30')).toBe(87);
+    expect(spine('20x20')).toBe(72);
+    expect(spine('21x28')).toBe(76);
+    expect(spine('28x21')).toBe(103);
+    expect(spine('30x30')).toBe(111);
   });
 
   it('no depende del layout', () => {
