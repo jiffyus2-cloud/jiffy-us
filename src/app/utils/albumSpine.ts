@@ -17,11 +17,22 @@ import { ALBUM_BASE_PAGES } from './albumPricing';
  */
 export const SPINE_CM_PER_PAGE = 0.6 / 40;
 
-/** El texto del lomo arranca a 1 cm del borde superior en todos los tamaños. */
-export const SPINE_TEXT_TOP_CM = 1;
+/**
+ * El texto del lomo arranca a 1,5 cm del borde superior en todos los tamaños
+ * (carátula de referencia del taller, hecha en Canva).
+ */
+export const SPINE_TEXT_TOP_CM = 1.5;
 
 /** Fuente del texto del lomo: 11pt (= 0.3881 cm), igual en todos los grosores. */
 export const SPINE_FONT_CM = 0.3881;
+
+/**
+ * Tipografía del lomo: Open Sans Bold, sin espaciado extra entre letras, como
+ * la carátula de referencia. Open Sans se carga en index.html; para el PDF hay
+ * que incrustarla en la captura (fontEmbedCSS), si no sale la de respaldo.
+ */
+export const SPINE_FONT_FAMILY = "'Open Sans', sans-serif";
+export const SPINE_FONT_WEIGHT = 700;
 
 /**
  * Ancho del lomo en cm para un álbum de `pageCount` páginas. Sin páginas

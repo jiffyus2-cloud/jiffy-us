@@ -178,7 +178,7 @@ export const loadCalendarFonts = async () => {
 };
 
 /** La misma hoja de estilos que carga index.html. */
-const CALENDAR_FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@300;400;600&family=Nunito:wght@400;500;700&family=Open+Sans:wght@400;700&family=Nunito+Sans:ital,wght@1,700&family=Carlito:wght@400;700&display=swap';
+const CALENDAR_FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@300;400;600&family=Nunito:wght@400;500;700&family=Open+Sans:wght@400;700&family=Nunito+Sans:ital,opsz,wght@0,10,400;0,10,700;1,12,700&family=Carlito:wght@400;700&display=swap';
 
 const blobToDataURL = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();

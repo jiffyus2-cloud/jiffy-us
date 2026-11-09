@@ -48,6 +48,13 @@ interface FieldGeometry {
   /** tracking-* de Tailwind en em. Es ancho real y se suma por carácter. */
   trackingEm: number;
   /**
+   * Avance medio por glifo cuando el campo NO usa el stack Avenir/Century
+   * Gothic sino una fuente propia (sustituye a AVG_CHAR_EM + delta de peso).
+   */
+  charEm?: number;
+  /** FIT propio del campo cuando se verificó con un render real (ver FIT). */
+  fit?: number;
+  /**
    * Líneas permitidas (por defecto 1). Con más de una, el ajuste por palabras
    * desperdicia el final de cada línea: se descuenta con WRAP_FILL.
    */
@@ -101,12 +108,12 @@ const SPINE_FIT = 0.9;
 /** Fracción aprovechable de cada línea cuando el texto ajusta por palabras. */
 const WRAP_FILL = 0.85;
 
-const advanceEm = (g: FieldGeometry) => AVG_CHAR_EM + WEIGHT_DELTA_EM[g.weight] + g.trackingEm;
+const advanceEm = (g: FieldGeometry) => (g.charEm ?? AVG_CHAR_EM + WEIGHT_DELTA_EM[g.weight]) + g.trackingEm;
 
 const lineCapacity = (g: FieldGeometry) => ((g.lines ?? 1) > 1 ? (g.lines ?? 1) * WRAP_FILL : 1);
 
 const charsFor = (g: FieldGeometry | null): number | null =>
-  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * FIT * lineCapacity(g)) / (advanceEm(g) * g.fontCqw)));
+  g === null ? null : Math.max(1, Math.floor((g.usableWidthPct * (g.fit ?? FIT) * lineCapacity(g)) / (advanceEm(g) * g.fontCqw)));
 
 const GEOMETRY: Record<Family, Record<number, LayoutGeometry>> = {
   // ── TELA — 3 layouts, idénticos en los 4 tamaños (geometría cqw pura)
@@ -182,11 +189,15 @@ const GEOMETRY: Record<Family, Record<number, LayoutGeometry>> = {
 
   // ── CUADRADO 20×20 — Papel, 5 layouts
   square20: {
-    // L1 :384-388 — columna centrada a ancho completo; título tracking-wide,
-    //   subtítulo tracking-widest
+    // L1 — columna centrada a ancho completo, en Nunito Sans 10pt (coverFonts.ts)
+    //   sin espaciado extra: medido 0.624 em en negrita y 0.610 en regular
+    //   (mayúsculas). En el PDF el panel mide 19cm y la fuente se agranda 20/19
+    //   para conservar su tamaño en cm (printScale), así que manda el PDF.
+    //   Título con fit 0.8: "MACARENA BORRERO HERRERA" (24) ocupa el 87% del panel
+    //   en el render del PDF, en una línea; es el título de la carátula de referencia.
     1: {
-      title:    { usableWidthPct: 100,   fontCqw: 5,    weight: 'bold',    trackingEm: TRACK.wide },
-      subtitle: { usableWidthPct: 100,   fontCqw: 3.8,  weight: 'regular', trackingEm: TRACK.widest },
+      title:    { usableWidthPct: 100,   fontCqw: 5 * 20 / 19,   weight: 'bold',    trackingEm: TRACK.none, charEm: 0.624, fit: 0.8 },
+      subtitle: { usableWidthPct: 100,   fontCqw: 3.8 * 20 / 19, weight: 'regular', trackingEm: TRACK.none, charEm: 0.610 },
     },
     // L2 :416-419 — fila con padding 5.5% a cada lado → 89, mitad = 44.5
     2: {
@@ -249,16 +260,16 @@ const ALBUM_HEIGHT_CM: Record<CoverSize, number> = {
 /**
  * El lomo tiene DOS implementaciones distintas y hay que respetar la más
  * estrecha:
- *  - preview  CoverPreview.tsx (data-spine) — fuente 11pt (= 0.3881cm),
- *    tracking-widest.
- *  - PDF      OwnerDashboard.tsx (generateCoverPDF) — dibuja su PROPIO lomo:
- *    fuente 11pt, letterSpacing '8px' (= 0.0677cm a 300 DPI).
- * En los dos el texto arranca a 1cm del tope y la fuente no depende del grosor
- * del lomo (albumSpine.ts), así que el límite sólo depende del alto del álbum.
- * En los 4 tamaños manda el PDF.
+ *  - preview  CoverPreview.tsx (data-spine)
+ *  - PDF      OwnerDashboard.tsx (generateCoverPDF) — dibuja su PROPIO lomo.
+ * Los dos usan Open Sans Bold de 11pt (= 0.3881cm) sin espaciado extra entre
+ * letras (SPINE_FONT_* de albumSpine.ts) y arrancan a 1,5cm del tope; la fuente
+ * no depende del grosor del lomo, así que el límite sólo depende del alto del
+ * álbum. Open Sans Bold mide 0.587 em de media en mayúsculas, prácticamente
+ * AVG_CHAR_EM, así que se reutiliza esa constante.
  */
-const PREVIEW_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: SPINE_FONT_CM * 0.1 };
-const PDF_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: (8 / 300) * 2.54 };
+const PREVIEW_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: 0 };
+const PDF_SPINE = { fontCm: SPINE_FONT_CM, topOffsetCm: SPINE_TEXT_TOP_CM, extraTrackingCm: 0 };
 
 function spineLimit(size: CoverSize): number {
   const h = ALBUM_HEIGHT_CM[size];
@@ -287,10 +298,10 @@ function familyFor(size: CoverSize, type: CoverType): Family {
  *
  *   Familia            L1        L2        L3        L4        L5        Lomo
  *   Tela (4 tamaños)   23 / 32   22 / 32   22 / 22   —         —         n/a
- *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         81
- *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 60
- *   Cuadrado 20x20     24 / 29   20 / 20   20 / 17   43 / 43   sin texto 57
- *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 87
+ *   Vertical 28x21     25 / —    17 / 17   19 / 16   32 / 37   —         103
+ *   Horizontal 21x28   39 / 61   22 / 22   22 / 18   48 / 48   sin texto 76
+ *   Cuadrado 20x20     24 / 31   20 / 20   20 / 17   43 / 43   sin texto 72
+ *   Cuadrado 30x30     23 / 27   23 / 23   22 / 18   46 / 46   sin texto 111
  *
  * En cada familia el título y el subtítulo de un mismo layout coinciden salvo
  * que cambie el tamaño de fuente o el tracking: en Century Gothic la negrita

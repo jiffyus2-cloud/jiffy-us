@@ -29,7 +29,8 @@ import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarDesign, normaliz
 import { getHolidaysForCountry, type Holiday } from '../utils/holidays';
 import { getCoverDimensions } from '../utils/cropMath';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
-import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
+import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM, SPINE_FONT_FAMILY, SPINE_FONT_WEIGHT } from '../utils/albumSpine';
+import { loadCoverFonts } from '../utils/coverFonts';
 import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
@@ -673,7 +674,7 @@ const OwnerDashboard: React.FC = () => {
         const totalPxHeight = Math.round((totalHCm  / 2.54) * 300);
         const spinePxWidth  = isTela ? 0 : cmToPx(spineCm);
         const pxGap         = isTela ? 0 : cmToPx(gapCm);
-        // Texto del lomo: 11pt en todos los grosores, arrancando a 1 cm del tope
+        // Texto del lomo: 11pt en todos los grosores, arrancando a 1,5 cm del tope
         const spineFontPx   = cmToPx(SPINE_FONT_CM);
         const spineTopPx    = cmToPx(SPINE_TEXT_TOP_CM);
 
@@ -698,6 +699,11 @@ const OwnerDashboard: React.FC = () => {
 
         const root = createRoot(container);
 
+        // Open Sans (lomo) y Nunito Sans (portada) son fuentes web: cargarlas y
+        // pasarlas incrustadas a html-to-image
+        await loadCoverFonts();
+        const fontEmbedCSS = (await getCalendarFontEmbedCSS()) || undefined;
+
         const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
           // Pre-cargar imagen de portada como Data URL antes de renderizar
           const preloadedMap = await preloadImages(imageUrls);
@@ -712,7 +718,7 @@ const OwnerDashboard: React.FC = () => {
           await waitForRenderReady(container);
 
           const node = container.firstChild as HTMLElement;
-          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
+          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1, fontEmbedCSS });
         };
 
         let coverImageForPdf = order.coverData?.image || '';
@@ -761,8 +767,9 @@ const OwnerDashboard: React.FC = () => {
                             whiteSpace: 'nowrap',
                             fontSize: `${spineFontPx}px`,
                             lineHeight: 1,
-                            fontWeight: 'bold',
-                            letterSpacing: '8px',
+                            fontFamily: SPINE_FONT_FAMILY,
+                            fontWeight: SPINE_FONT_WEIGHT,
+                            letterSpacing: 0,
                             color: textColor,
                           }}>
                             {spineText}

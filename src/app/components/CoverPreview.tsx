@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ImageCropper from './ImageCropper';
-import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM } from '../utils/albumSpine';
+import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM, SPINE_FONT_FAMILY, SPINE_FONT_WEIGHT } from '../utils/albumSpine';
+import { COVER_SANS_FONT_FAMILY, COVER_SANS_FONT_VARIATION } from '../utils/coverFonts';
 
 // Lienzo simulado para la portada de Tela: hilos de urdimbre + trama, fibras
 // irregulares (feTurbulence) y un vignette suave. Solo previsualización en
@@ -83,6 +84,10 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   const spineCm = getSpineWidthCm(pageCount);
   const albumWidthCm = coverSize === '30x30' ? 30 : coverSize === '20x20' ? 20 : isHorizontal ? 28 : 21;
   const albumHeightCm = coverSize === '30x30' ? 30 : coverSize === '20x20' ? 20 : isHorizontal ? 21 : 28;
+  // En impresión el panel puede ser más estrecho que el álbum (20x20 → 19cm):
+  // factor para que lo medido en cqw/% de ancho conserve su tamaño en cm.
+  const printPanelWidthCm = printAspectRatio ? parseFloat(printAspectRatio) : NaN;
+  const printScale = printPanelWidthCm > 0 ? albumWidthCm / printPanelWidthCm : 1;
   // Fuente fija de 11pt, expresada en cqw del ancho del lomo
   const spineTextCqw = (SPINE_FONT_CM / spineCm) * 100;
   // El texto arranca a 1cm del tope: 1cm / alto_álbum_cm × 100
@@ -415,13 +420,28 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
         // L1: margen top + imagen flex-1 + divisor+texto + margen bottom
         // 20x20: top=5%(1cm), lr=5%(1cm), textArea=19%, botSpacer=2.5%, total-bot=21.5%(4.3cm), t=5cqw, s=3.8cqw
         // 30x30: top=6.67%(2cm), lr=6.67%(2cm), textArea=19.17%, botSpacer=2.5%, total-bot=21.67%(6.5cm), t=5.2cqw, s=4.1cqw
+        // 20x20 según la carátula de referencia del taller (Canva): título Nunito
+        // Sans Bold de 1cm, línea de 14,8cm × 1,1mm, subtítulo Nunito Sans
+        // Regular de 0,76cm, sin espaciado extra, y foto a 1cm de cada borde.
         case 1: {
+          // Las medidas en cqw/% de ancho están pensadas para el ancho nominal
+          // del álbum; en el PDF el panel es más estrecho (19cm en 20x20) y
+          // todo saldría encogido, así que se compensa con printScale.
+          const k = printScale;
           const topH   = is30 ? '6.67%' : '5%';
-          const lrI    = is30 ? '6.67%' : '5%';
+          const lrI    = is30 ? '6.67%' : `${5 * k}%`;
           const textH  = is30 ? '19.17%' : '19%';
-          const titleF = is30 ? '5.2cqw' : '5cqw';
-          const subF   = is30 ? '4.1cqw' : '3.8cqw';
-          const divW   = is30 ? '76.67%' : '75%';
+          const titleF = is30 ? '5.2cqw' : `${5 * k}cqw`;
+          const subF   = is30 ? '4.1cqw' : `${3.8 * k}cqw`;
+          const divW   = is30 ? '76.67%' : `${74 * k}%`;
+          const divH   = is30 ? '0.5cqw' : `${0.55 * k}cqw`;
+          // Aire título↔línea y altura del bloque medidos sobre la referencia
+          const divMT    = is30 ? '1cqw' : `${1.4 * k}cqw`;
+          const divMB    = is30 ? '1cqw' : `${k}cqw`;
+          const textPadB = is30 ? undefined : `${1.9 * k}cqw`;
+          const sansFont  = { fontFamily: COVER_SANS_FONT_FAMILY, fontVariationSettings: COVER_SANS_FONT_VARIATION, letterSpacing: 0 };
+          const titleFont = is30 ? undefined : { ...sansFont, fontWeight: 700 };
+          const subFont   = is30 ? undefined : { ...sansFont, fontWeight: 400 };
           return (
             <div data-cover-root className={`relative bg-white ${containerShadow} overflow-hidden flex flex-col transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]`} style={baseStyle}>
               <div className="flex-shrink-0 bg-white" style={{ height: topH }} />
@@ -430,10 +450,10 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
                   {renderImageSlot()}
                 </div>
               </div>
-              <div data-cover-text-frame className="flex-shrink-0 flex flex-col items-center justify-center bg-white z-10" style={{ height: textH }}>
-                <div data-cover-title className="font-bold tracking-wide text-center leading-none" style={{ fontSize: titleF, color: typographyColor }}>{coverTitle}</div>
-                <div className="my-[1cqw]" style={{ width: divW, height: '0.5cqw', backgroundColor: typographyColor }} />
-                {(coverSubtitle || subtitlePlaceholder) && <div data-cover-subtitle className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1 }}>{coverSubtitle}</div>}
+              <div data-cover-text-frame className="flex-shrink-0 flex flex-col items-center justify-center bg-white z-10" style={{ height: textH, paddingBottom: textPadB }}>
+                <div data-cover-title className="font-bold tracking-wide text-center leading-none" style={{ fontSize: titleF, color: typographyColor, ...titleFont }}>{coverTitle}</div>
+                <div style={{ width: divW, height: divH, backgroundColor: typographyColor, marginTop: divMT, marginBottom: divMB }} />
+                {(coverSubtitle || subtitlePlaceholder) && <div data-cover-subtitle className="text-center font-medium tracking-widest leading-none" style={{ fontSize: subF, color: typographyColor, opacity: subtitlePlaceholder ? 0.4 : 1, ...subFont }}>{coverSubtitle}</div>}
               </div>
               <div className="flex-shrink-0 bg-white" style={{ height: '2.5%' }} />
             </div>
@@ -564,7 +584,7 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
   return (
     <div className="flex w-full items-stretch justify-center h-full" style={{ fontFamily: "Avenir, 'Century Gothic', 'Gill Sans', sans-serif" }}>
 
-      {/* Lomo (Spine): texto centrado en su ancho y a 1cm del tope — Oculto en TELA */}
+      {/* Lomo (Spine): texto centrado en su ancho y a 1,5cm del tope — Oculto en TELA */}
       {showSpine && (
         <div
           data-spine
@@ -574,9 +594,12 @@ const CoverPreview: React.FC<CoverPreviewProps> = ({
           <div className="absolute left-[50%]" style={{ top: spineTopPct }}>
             <span
               data-spine-text
-              className="block whitespace-nowrap tracking-widest font-bold opacity-80"
+              className="block whitespace-nowrap"
               style={{
                 color: typographyColor,
+                fontFamily: SPINE_FONT_FAMILY,
+                fontWeight: SPINE_FONT_WEIGHT,
+                letterSpacing: 0,
                 fontSize: `${spineTextCqw}cqw`,
                 lineHeight: 1, // la línea mide lo mismo que la fuente → queda centrada en el ancho del lomo
                 transform: 'rotate(90deg) translateY(-50%)',
