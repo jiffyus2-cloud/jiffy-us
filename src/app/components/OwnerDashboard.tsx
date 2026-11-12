@@ -48,7 +48,7 @@ import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
 import { pickStoreConfig } from '../utils/storeConfigState';
 import { buildExportPrefix } from '../utils/exportFileNames';
 import { findPaidDuplicateDrafts } from '../utils/paidDuplicateDrafts';
-import { isArchivedDelivery, deliveredAtMs, DELIVERED_VISIBLE_DAYS } from '../utils/deliveredArchive';
+import { getArchivedDeliveryIds, deliveredAtMs, DELIVERED_VISIBLE_COUNT } from '../utils/deliveredArchive';
 
 interface ConfigHistoryEntry {
   id: string;
@@ -370,6 +370,7 @@ const OwnerDashboard: React.FC = () => {
 
   // Entregados antiguos: fuera del Kanban, en la zona «Archivados» (plegada).
   const [showArchived, setShowArchived] = useState(false);
+  const archivedDeliveryIds = useMemo(() => getArchivedDeliveryIds(orders), [orders]);
 
   // Borradores que el cliente ya pagó como otro pedido: se ocultan por defecto.
   const [showPaidDuplicates, setShowPaidDuplicates] = useState(false);
@@ -1389,7 +1390,7 @@ const OwnerDashboard: React.FC = () => {
           // Los más recientes primero. Si la búsqueda general encuentra algo aquí, se
           // despliega solo: si no, un pedido archivado "desaparecería" del buscador.
           const archivedOrders = orders
-            .filter(o => isArchivedDelivery(o) && matchesSearch(o))
+            .filter(o => archivedDeliveryIds.has(o.id) && matchesSearch(o))
             .sort((a, b) => deliveredAtMs(b) - deliveredAtMs(a));
           const archivedOpen = showArchived || (!!searchTerm && archivedOrders.length > 0);
 
@@ -1476,7 +1477,7 @@ const OwnerDashboard: React.FC = () => {
                   <div className="flex gap-4 overflow-x-auto pb-4 items-start">
                     {KANBAN_COLUMNS.map(col => {
                       const colOrders = orders.filter(o =>
-                        col.statuses.includes(o.status) && matchesSearch(o) && !isArchivedDelivery(o)
+                        col.statuses.includes(o.status) && matchesSearch(o) && !archivedDeliveryIds.has(o.id)
                       );
                       return (
                         <div key={col.id} className="min-w-[300px] flex-shrink-0 flex flex-col rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
@@ -1546,7 +1547,7 @@ const OwnerDashboard: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Archivados: entregados hace más de DELIVERED_VISIBLE_DAYS días */}
+                  {/* Archivados: entregados salvo los DELIVERED_VISIBLE_COUNT más recientes */}
                   {archivedOrders.length > 0 && (
                     <div className="mt-6" data-testid="archived-orders">
                       <button
@@ -1556,7 +1557,7 @@ const OwnerDashboard: React.FC = () => {
                         <span className="flex items-center gap-2 text-sm font-bold text-gray-500 uppercase tracking-wider">
                           <Package className="w-4 h-4" /> Archivados
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs normal-case tracking-normal">{archivedOrders.length}</span>
-                          <span className="hidden md:inline text-xs font-normal normal-case tracking-normal text-gray-400">Entregados hace más de {DELIVERED_VISIBLE_DAYS} días</span>
+                          <span className="hidden md:inline text-xs font-normal normal-case tracking-normal text-gray-400">Entregados anteriores a los {DELIVERED_VISIBLE_COUNT} más recientes</span>
                         </span>
                         <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${archivedOpen ? 'rotate-90' : ''}`} />
                       </button>

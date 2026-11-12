@@ -1,30 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { isArchivedDelivery, deliveredAtMs } from './deliveredArchive';
+import { getArchivedDeliveryIds, deliveredAtMs } from './deliveredArchive';
 
 const NOW = new Date('2026-11-12T12:00:00Z').getTime();
 const daysAgo = (d: number) => new Date(NOW - d * 24 * 60 * 60 * 1000).toISOString();
+const delivered = (id: string, d: number) => ({ id, status: 'entregado', deliveredAt: daysAgo(d) });
 
-describe('isArchivedDelivery', () => {
-  it('deja visibles los entregados recientes', () => {
-    expect(isArchivedDelivery({ status: 'entregado', deliveredAt: daysAgo(5) }, NOW)).toBe(false);
+describe('getArchivedDeliveryIds', () => {
+  it('deja visibles los 3 entregados más recientes y archiva el resto', () => {
+    const orders = [delivered('a', 10), delivered('b', 1), delivered('c', 30), delivered('d', 5), delivered('e', 2)];
+    expect([...getArchivedDeliveryIds(orders)].sort()).toEqual(['a', 'c']);
   });
 
-  it('archiva los entregados de hace más de 30 días', () => {
-    expect(isArchivedDelivery({ status: 'entregado', deliveredAt: daysAgo(31) }, NOW)).toBe(true);
+  it('con 3 o menos entregados no archiva nada', () => {
+    expect(getArchivedDeliveryIds([delivered('a', 100), delivered('b', 200)]).size).toBe(0);
+  });
+
+  it('ignora pedidos que no están entregados', () => {
+    const orders = [
+      { id: 'x', status: 'enviado', updatedAt: daysAgo(400) },
+      delivered('a', 1), delivered('b', 2), delivered('c', 3), delivered('d', 4),
+    ];
+    expect([...getArchivedDeliveryIds(orders)]).toEqual(['d']);
   });
 
   it('sin deliveredAt usa la última edición', () => {
-    expect(isArchivedDelivery({ status: 'entregado', updatedAt: daysAgo(40), createdAt: daysAgo(60) }, NOW)).toBe(true);
-    expect(isArchivedDelivery({ status: 'entregado', updatedAt: daysAgo(2), createdAt: daysAgo(60) }, NOW)).toBe(false);
+    const orders = [
+      { id: 'old', status: 'entregado', updatedAt: daysAgo(50), createdAt: daysAgo(90) },
+      delivered('a', 1), delivered('b', 2), delivered('c', 3),
+    ];
+    expect([...getArchivedDeliveryIds(orders)]).toEqual(['old']);
   });
 
   it('deliveredAt manda sobre una edición posterior', () => {
     const o = { status: 'entregado', deliveredAt: daysAgo(45), updatedAt: daysAgo(1) };
-    expect(isArchivedDelivery(o, NOW)).toBe(true);
     expect(deliveredAtMs(o)).toBe(new Date(daysAgo(45)).getTime());
-  });
-
-  it('nunca archiva pedidos que no están entregados', () => {
-    expect(isArchivedDelivery({ status: 'enviado', updatedAt: daysAgo(400) }, NOW)).toBe(false);
   });
 });
