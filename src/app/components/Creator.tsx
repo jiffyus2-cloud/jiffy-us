@@ -168,8 +168,15 @@ export default function Creator() {
       if (location.state?.fromCheckout) return;
       if (location.state?.editPaidOrder) return;
       if (location.state?.adminEditOrder) return;
+      // Ya viene a retomar un borrador concreto: preguntarle cuál quiere sobra.
+      if (location.state?.resumeSavedDraft) return;
       try {
         const drafts = await getUserSavedDrafts(user.uid);
+        // La consulta es asíncrona y compite con la restauración del diseño: si
+        // mientras tanto ya se cargó uno (o ya tiene id), el aviso aparecería ENCIMA
+        // y cerrarlo dejaba el diseño cargado sin su id → el siguiente guardado
+        // creaba un pedido nuevo y el borrador original quedaba huérfano tras pagar.
+        if (designRef.current.selectedProduct || activeDraftIdRef.current) return;
         if (drafts.length > 0) {
           setSavedDrafts(drafts);
           setShowDraftPrompt(true);
@@ -829,6 +836,10 @@ export default function Creator() {
 
   const handleStartNew = () => {
     setShowDraftPrompt(false);
+    // Si ya hay un diseño cargado en el editor, olvidar su id NO lo vacía: solo
+    // haría que el próximo guardado lo duplique como pedido nuevo. Cerrar el aviso
+    // deja el diseño (y su id) tal cual.
+    if (designRef.current.selectedProduct) return;
     updateActiveDraftId(null);
   };
 

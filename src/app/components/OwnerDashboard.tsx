@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, getDocs, Timestamp, doc, deleteDoc, setDoc, query, orderBy, limit, addDoc } from 'firebase/firestore';
 // Importamos la lógica de Autenticación de Firebase
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -47,6 +47,8 @@ const BACK_LOGO_BOTTOM_RATIO = 0.8  / 19; // borde inferior del panel → pie de
 import { useStoreConfig, StoreConfig } from '../context/StoreConfigContext';
 import { pickStoreConfig } from '../utils/storeConfigState';
 import { buildExportPrefix } from '../utils/exportFileNames';
+import { findPaidDuplicateDrafts } from '../utils/paidDuplicateDrafts';
+import { isArchivedDelivery, deliveredAtMs, DELIVERED_VISIBLE_DAYS } from '../utils/deliveredArchive';
 
 interface ConfigHistoryEntry {
   id: string;
@@ -366,6 +368,42 @@ const OwnerDashboard: React.FC = () => {
     setDraftDateTo('');
   };
 
+  // Entregados antiguos: fuera del Kanban, en la zona «Archivados» (plegada).
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Borradores que el cliente ya pagó como otro pedido: se ocultan por defecto.
+  const [showPaidDuplicates, setShowPaidDuplicates] = useState(false);
+  const [isDeletingPaidDuplicates, setIsDeletingPaidDuplicates] = useState(false);
+  const paidDuplicates = useMemo(() => findPaidDuplicateDrafts(orders), [orders]);
+
+  /**
+   * Borra SOLO los documentos de los borradores sobrantes. Sus fotos en Storage no
+   * se tocan: el pedido pagado las está usando, y la gestión de almacenamiento ya
+   * trata como viva una carpeta que otro pedido referencia.
+   */
+  const handleDeletePaidDuplicates = async () => {
+    const ids = Array.from(paidDuplicates.keys());
+    if (ids.length === 0) return;
+    if (!window.confirm(
+      `Se eliminarán ${ids.length} borrador(es) que el cliente ya pagó como otro pedido.\n\n` +
+      'Los pedidos pagados y sus fotos no se tocan. ¿Continuar?'
+    )) return;
+    setIsDeletingPaidDuplicates(true);
+    const deleted: string[] = [];
+    try {
+      for (const id of ids) {
+        await deleteDoc(doc(db, 'orders', id));
+        deleted.push(id);
+      }
+    } catch (error) {
+      console.error('Error eliminando borradores ya pagados: ', error);
+      alert(`Se eliminaron ${deleted.length} de ${ids.length}. Inténtalo de nuevo para el resto.`);
+    } finally {
+      setOrders(prev => prev.filter(o => !deleted.includes(o.id)));
+      setIsDeletingPaidDuplicates(false);
+    }
+  };
+
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
@@ -624,7 +662,10 @@ const OwnerDashboard: React.FC = () => {
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       await updateOrderStatus(orderId, newStatus);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      const now = new Date().toISOString();
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, status: newStatus, updatedAt: now, ...(newStatus === 'entregado' ? { deliveredAt: now } : {}) }
+        : o));
     } catch (error) {
       console.error('Error updating order status:', error);
       alert('No se pudo actualizar el estado del pedido.');
@@ -1345,7 +1386,18 @@ const OwnerDashboard: React.FC = () => {
             (order.shippingAddress?.email || '').toLowerCase().includes(searchLow) ||
             (order.shippingAddress?.name || '').toLowerCase().includes(searchLow);
 
-          const allDrafts = orders.filter(o => ASSISTABLE_DRAFT_STATUSES.includes(o.status) && matchesSearch(o));
+          // Los más recientes primero. Si la búsqueda general encuentra algo aquí, se
+          // despliega solo: si no, un pedido archivado "desaparecería" del buscador.
+          const archivedOrders = orders
+            .filter(o => isArchivedDelivery(o) && matchesSearch(o))
+            .sort((a, b) => deliveredAtMs(b) - deliveredAtMs(a));
+          const archivedOpen = showArchived || (!!searchTerm && archivedOrders.length > 0);
+
+          const allDrafts = orders.filter(o =>
+            ASSISTABLE_DRAFT_STATUSES.includes(o.status) &&
+            matchesSearch(o) &&
+            (showPaidDuplicates || !paidDuplicates.has(o.id))
+          );
 
           // Clave estable por cliente: correo si lo hay, si no el nombre.
           const clientKey = (o: Order) =>
@@ -1423,7 +1475,9 @@ const OwnerDashboard: React.FC = () => {
                   {/* KANBAN */}
                   <div className="flex gap-4 overflow-x-auto pb-4 items-start">
                     {KANBAN_COLUMNS.map(col => {
-                      const colOrders = orders.filter(o => col.statuses.includes(o.status) && matchesSearch(o));
+                      const colOrders = orders.filter(o =>
+                        col.statuses.includes(o.status) && matchesSearch(o) && !isArchivedDelivery(o)
+                      );
                       return (
                         <div key={col.id} className="min-w-[300px] flex-shrink-0 flex flex-col rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
                           {/* Header */}
@@ -1491,6 +1545,96 @@ const OwnerDashboard: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/* Archivados: entregados hace más de DELIVERED_VISIBLE_DAYS días */}
+                  {archivedOrders.length > 0 && (
+                    <div className="mt-6" data-testid="archived-orders">
+                      <button
+                        onClick={() => setShowArchived(v => !v)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 text-sm font-bold text-gray-500 uppercase tracking-wider">
+                          <Package className="w-4 h-4" /> Archivados
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs normal-case tracking-normal">{archivedOrders.length}</span>
+                          <span className="hidden md:inline text-xs font-normal normal-case tracking-normal text-gray-400">Entregados hace más de {DELIVERED_VISIBLE_DAYS} días</span>
+                        </span>
+                        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${archivedOpen ? 'rotate-90' : ''}`} />
+                      </button>
+                      {archivedOpen && (
+                        <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-100">
+                            <thead>
+                              <tr className="bg-gray-50/50">
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Álbum</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Creado</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Entregado</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Monto</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Acciones</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {archivedOrders.map(order => (
+                                <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-4 py-3 max-w-[220px]">
+                                    <p className="text-sm font-semibold text-gray-900 truncate" title={getAlbumTitle(order) || undefined}>{getAlbumTitle(order) || <span className="text-gray-400 font-normal">Sin título</span>}</p>
+                                    <p className="text-xs font-mono text-gray-400">#{order.id.slice(0, 8)}</p>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="text-sm font-semibold text-gray-900">{order.shippingAddress?.name || order.customerName || 'Sin nombre'}</p>
+                                    <p className="text-xs text-gray-400">{order.shippingAddress?.email || order.customerEmail || '—'}</p>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap"><span className="text-xs text-gray-600">{formatDateTime(order.createdAt)}</span></td>
+                                  <td className="px-4 py-3 whitespace-nowrap"><span className="text-xs text-gray-600">{formatDateTime(new Date(deliveredAtMs(order)).toISOString())}</span></td>
+                                  <td className="px-4 py-3 text-right"><span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span></td>
+                                  <td className="px-4 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
+                                      {downloadProgress.orderId === order.id ? (
+                                        <span className="text-[10px] font-mono text-emerald-600">{downloadProgress.progress}%</span>
+                                      ) : (
+                                        <>
+                                          <button onClick={() => handleDownloadPDFs(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar PDFs de impresión"><FileText className="w-4 h-4" /></button>
+                                          <button onClick={() => handleDownloadImagesExcel(order)} disabled={downloadProgress.orderId !== null} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Descargar imágenes y Excel"><Images className="w-4 h-4" /></button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Borradores que ya se pagaron como otro pedido */}
+                  {paidDuplicates.size > 0 && (
+                    <div className="mt-6 flex flex-col md:flex-row md:items-center gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-900" data-testid="paid-duplicates-notice">
+                      <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+                      <p className="text-sm flex-1">
+                        <span className="font-bold">{paidDuplicates.size} borrador(es) ya se pagaron como otro pedido.</span>{' '}
+                        El cliente pagó una copia y el original se quedó como borrador.{' '}
+                        {showPaidDuplicates ? 'Aparecen abajo marcados como «Ya pagado».' : 'Se ocultan de la lista de borradores.'}
+                      </p>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => setShowPaidDuplicates(v => !v)}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 bg-white hover:bg-amber-100 transition-colors"
+                        >
+                          {showPaidDuplicates ? 'Ocultar' : 'Ver'}
+                        </button>
+                        <button
+                          onClick={handleDeletePaidDuplicates}
+                          disabled={isDeletingPaidDuplicates}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50"
+                        >
+                          {isDeletingPaidDuplicates ? 'Eliminando…' : `Eliminar ${paidDuplicates.size}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Pedidos pendientes de pago (fuera del Kanban) */}
                   {allDrafts.length > 0 && (
@@ -1604,6 +1748,11 @@ const OwnerDashboard: React.FC = () => {
                                     <span className="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">{order.status === 'pending_payment' ? 'Pendiente de Pago' : 'Borrador'}</span>
                                     {isLegacyOrder(order) && (
                                       <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-gray-100 text-gray-500 border border-gray-200" title="Creado antes del cambio de sistema (2026-09-18)">Sistema anterior</span>
+                                    )}
+                                    {paidDuplicates.has(order.id) && (
+                                      <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-green-100 text-green-800 border border-green-200" title="El cliente pagó una copia de este borrador">
+                                        Ya pagado · #{paidDuplicates.get(order.id)!.id.slice(0, 8)}
+                                      </span>
                                     )}
                                   </div>
                                 </td>

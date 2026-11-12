@@ -613,7 +613,14 @@ export async function deleteSavedDraft(draftId: string): Promise<void> {
 
 export async function updateOrderStatus(orderId: string, status: string): Promise<void> {
   const docRef = doc(db, 'orders', orderId);
-  await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
+  const now = new Date().toISOString();
+  // `deliveredAt` decide cuándo el pedido pasa a «Archivados» en el panel; no se
+  // puede confiar en `updatedAt`, que cambia con cualquier edición posterior.
+  await updateDoc(docRef, {
+    status,
+    updatedAt: now,
+    ...(status === 'entregado' ? { deliveredAt: now } : {}),
+  });
 }
 
 export async function updateOrderDesign(
