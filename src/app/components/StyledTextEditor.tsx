@@ -243,6 +243,11 @@ interface StyledTextEditorProps {
   text: string;
   marks?: string;
   maxLength: number;
+  /**
+   * Si el texto completo aún cabe en la caja (líneas, no solo caracteres). Lo
+   * que no quepa no entra; borrar siempre se puede.
+   */
+  fits?: (text: string, marks: string) => boolean;
   placeholder?: string;
   /** Tipografía, tamaño, color y alineación de la caja. */
   style: React.CSSProperties;
@@ -263,7 +268,7 @@ function supportsPlaintextOnly(): boolean {
 }
 
 export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEditorProps>(function StyledTextEditor(
-  { text, marks, maxLength, placeholder, style, onChange, onActiveMarkChange, autoFocus },
+  { text, marks, maxLength, fits, placeholder, style, onChange, onActiveMarkChange, autoFocus },
   ref
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -281,6 +286,11 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
   onActiveRef.current = onActiveMarkChange;
   const maxRef = useRef(maxLength);
   maxRef.current = maxLength;
+  const fitsRef = useRef(fits);
+  fitsRef.current = fits;
+  /** ¿Puede quedar así el texto? */
+  const allowedRef = useRef((next: string, nextMarks: string) =>
+    next.length <= maxRef.current && (!fitsRef.current || fitsRef.current(next, nextMarks)));
 
   const reportActive = useCallback(() => {
     const { marks: m } = modelRef.current;
@@ -323,7 +333,23 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
     const { text: t, marks: m } = modelRef.current;
     const sel = range ?? getSelectionOffsets(root) ?? selRef.current ?? { start: t.length, end: t.length };
     const room = maxRef.current - (t.length - (sel.end - sel.start));
-    const piece = str.slice(0, Math.max(0, room));
+    let piece = str.slice(0, Math.max(0, room));
+    // Entra el trozo más largo que todavía cabe en la caja.
+    const pendingMark = pendingRef.current && pendingRef.current.at === sel.start ? pendingRef.current.mark : undefined;
+    const fitsWith = (p: string) => {
+      const candidate = t.slice(0, sel.start) + p + t.slice(sel.end);
+      return allowedRef.current(candidate, marksAfterEdit(t, m, candidate, pendingMark));
+    };
+    if (piece && !fitsWith(piece)) {
+      let lo = 0;
+      let hi = piece.length - 1;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (fitsWith(piece.slice(0, mid))) lo = mid;
+        else hi = mid - 1;
+      }
+      piece = piece.slice(0, lo);
+    }
     if (!piece && sel.start === sel.end) return;
     const next = t.slice(0, sel.start) + piece + t.slice(sel.end);
     const pending = pendingRef.current && pendingRef.current.at === sel.start ? pendingRef.current.mark : undefined;
@@ -351,6 +377,15 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
       next = next.slice(0, maxRef.current);
       nextMarks = normalizeMarks(next, nextMarks);
     }
+    // Lo que entró por un camino que no pasa por beforeinput (autocorrector,
+    // dictado) y ya no cabe se deshace: el texto nunca desborda la caja.
+    if (next.length > t.length && !allowedRef.current(next, nextMarks)) {
+      const caret = sel ? Math.max(0, sel.start - (next.length - t.length)) : t.length;
+      if (root.innerHTML !== canonicalHtml(t, m)) paint(root, t, m);
+      if (document.activeElement === root) setSelectionOffsets(root, caret, caret);
+      selRef.current = { start: caret, end: caret };
+      return;
+    }
     if (next !== t) pendingRef.current = null;
     commit(next, nextMarks, sel);
   }, [commit]);
@@ -363,7 +398,10 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
     if (!sel) {
       // Nunca se tocó el editor: se aplica a todo el texto.
       if (!t) return;
-      commit(t, setMarkInRange(t, m, 0, t.length, bit, !rangeHasMark(m, 0, t.length, bit)), null);
+      const all = setMarkInRange(t, m, 0, t.length, bit, !rangeHasMark(m, 0, t.length, bit));
+      // La negrilla ensancha el texto: si con ella ya no cabe, no se aplica.
+      if (!allowedRef.current(t, all)) return;
+      commit(t, all, null);
       return;
     }
     root.focus();
@@ -378,7 +416,12 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
       return;
     }
     const on = !rangeHasMark(m, sel.start, sel.end, bit);
-    commit(t, setMarkInRange(t, m, sel.start, sel.end, bit, on), sel);
+    const nextMarks = setMarkInRange(t, m, sel.start, sel.end, bit, on);
+    if (on && !allowedRef.current(t, nextMarks)) {
+      setSelectionOffsets(root, sel.start, sel.end);
+      return;
+    }
+    commit(t, nextMarks, sel);
     setSelectionOffsets(root, sel.start, sel.end);
   }, [commit, reportActive]);
 
@@ -440,7 +483,11 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
       const sel = getSelectionOffsets(root);
       const selected = sel ? sel.end - sel.start : 0;
       const incoming = e.data?.length ?? 1;
-      if (modelRef.current.text.length - selected + incoming > maxRef.current) {
+      const { text: t, marks: m } = modelRef.current;
+      const at = sel ?? { start: t.length, end: t.length };
+      const simulated = t.slice(0, at.start) + (e.data ?? (e.inputType.includes('Paragraph') || e.inputType.includes('LineBreak') ? '\n' : 'x')) + t.slice(at.end);
+      const pendingMark = pendingRef.current && pendingRef.current.at === at.start ? pendingRef.current.mark : undefined;
+      if (t.length - selected + incoming > maxRef.current || !allowedRef.current(simulated, marksAfterEdit(t, m, simulated, pendingMark))) {
         e.preventDefault();
         // Una sugerencia del teclado o un bloque largo entra hasta donde quepa.
         if (e.data) replaceSelectionRef.current(e.data);

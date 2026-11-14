@@ -15,7 +15,7 @@
 // impresión pinten exactamente los mismos marcos con el mismo contenido.
 // ============================================================================
 
-import { getClosestAllowed, getPageSlots } from './pageLayouts';
+import { getClosestAllowed, getPageSlots, getSlotAspect } from './pageLayouts';
 import type { PageVariantId, SlotRect } from './pageLayouts';
 
 /** Recorte por defecto: foto centrada y sin zoom. */
@@ -35,6 +35,8 @@ export interface AlbumPageSlot {
   text: any | null;
   crop: PhotoCrop;
   rect: SlotRect;
+  /** Proporción ancho/alto real del marco: decide cuánto texto cabe. */
+  aspect: number;
 }
 
 /**
@@ -103,6 +105,7 @@ export function getAlbumPageSlots(
       text: fromPage?.texts?.[i] ?? order.textBoxSlots?.[pageIndex]?.[i] ?? null,
       crop: fromPage?.crops?.[i] || order.photoCrops?.[`${pageIndex}-${i}`] || DEFAULT_CROP,
       rect,
+      aspect: getSlotAspect(rect, size),
     });
   }
   return slots;
