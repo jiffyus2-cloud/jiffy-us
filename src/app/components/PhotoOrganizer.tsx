@@ -44,6 +44,8 @@ import {
   FONT_SIZES,
   getMaxCharsForFontSize,
   getEffectiveFontSize,
+  clampTextForMode,
+  textFitsForMode,
   MAX_SHRINK_CHARS,
   type TextOverflowMode,
 } from '../utils/textOverflowUtils';
@@ -200,7 +202,10 @@ const AlbumEditorPhotoSlot: React.FC<{
   onPhotoError?: (url: string) => void;
   onPhotoRetry?: (url: string, pageIndex: number, photoIndex: number) => void;
   t: (key: string) => string;
+  /** Proporción ancho/alto real del marco, para saber cuánto texto cabe. */
+  textAspect?: number;
 }> = ({
+  textAspect = 1,
   photo, textBox, crop, pageIndex, photoIndex, photoCount, editingPageIndex,
   isDragging, isDragTarget, onDragStart,
   handleRemovePhotoFromPage, setEditingTextSlot,
@@ -265,7 +270,7 @@ const AlbumEditorPhotoSlot: React.FC<{
             onPointerDown={isEditing ? e => onDragStart(pageIndex, photoIndex, e) : undefined}
             style={{
               width: '90%',
-              fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
+              fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, textBox.text || '', textBox.overflowMode || 'limit', { aspect: textAspect, fontFamily: textBox.fontFamily, marks: textBox.marks }) * 0.25}cqi`,
               fontFamily: textBox.fontFamily,
               color: textBox.color,
               textAlign: textBox.textAlign || 'center',
@@ -1747,17 +1752,23 @@ export default function PhotoOrganizer({
     setDeleteSlotConfirm(null);
   };
 
+  /** Proporción ancho/alto real del marco `photoIndex` de la página `pageIndex`. */
+  const getTextSlotAspect = (pageIndex: number, photoIndex: number): number =>
+    getAlbumPageSlots(albumPageSource, pageIndex, sizeStr)[photoIndex]?.aspect ?? 1;
+
   const updateTextBox = (pageIndex: number, photoIndex: number, updates: any) => {
     const newSlots = { ...textBoxSlots };
     if (newSlots[pageIndex] && newSlots[pageIndex][photoIndex]) {
       const merged = { ...newSlots[pageIndex][photoIndex], ...updates };
-      // In 'limit' mode, text must never exceed what the current font size allows —
-      // re-clamp on every change (font size bump, mode switch, etc), not just on typing.
-      if ((merged.overflowMode || 'limit') === 'limit') {
-        const maxChars = getMaxCharsForFontSize(merged.fontSize || 24);
-        if (typeof merged.text === 'string' && merged.text.length > maxChars) {
-          merged.text = merged.text.slice(0, maxChars);
-        }
+      // Al subir la letra o volver a 'limit', lo que ya no cabe en el marco se
+      // recorta (escribir ya lo frena el editor). Solo en esos cambios: cambiar
+      // color o alineación nunca le quita texto a una caja vieja.
+      if (typeof merged.text === 'string' && ('fontSize' in updates || 'overflowMode' in updates || 'fontFamily' in updates)) {
+        merged.text = clampTextForMode(merged.text, merged.fontSize || 24, merged.overflowMode || 'limit', {
+          aspect: getTextSlotAspect(pageIndex, photoIndex),
+          fontFamily: merged.fontFamily,
+          marks: merged.marks,
+        });
       }
       // Los estilos por carácter siguen al texto: si se recortó, se recortan con él.
       if (typeof merged.text === 'string') merged.marks = normalizeMarks(merged.text, merged.marks);
@@ -2151,6 +2162,10 @@ export default function PhotoOrganizer({
   };
 
   const currentEditingText = editingTextSlot ? textBoxSlots[editingTextSlot.pageIndex]?.[editingTextSlot.photoIndex] : null;
+  // Forma real del marco que se edita: lo que cabe y la vista previa salen de ella.
+  const editingTextAspect = editingTextSlot ? getTextSlotAspect(editingTextSlot.pageIndex, editingTextSlot.photoIndex) : 1;
+  const editingOverflowMode: TextOverflowMode = currentEditingText?.overflowMode || 'limit';
+  const editingTextShape = { aspect: editingTextAspect, fontFamily: currentEditingText?.fontFamily, marks: currentEditingText?.marks };
 
   const renderDuplicateModal = () => {
     if (!duplicateModal) return null;
@@ -2272,7 +2287,7 @@ export default function PhotoOrganizer({
                   slots={modalSlots}
                   renderSlot={(slot, photoIndex) => (
                     <AlbumEditorPhotoSlot
-                      photo={slot.photo} textBox={slot.text} crop={slot.crop}
+                      photo={slot.photo} textBox={slot.text} crop={slot.crop} textAspect={slot.aspect}
                       pageIndex={pageIndex} photoIndex={photoIndex}
                       photoCount={currentVariant}
                       editingPageIndex={pageIndex}
@@ -3959,7 +3974,7 @@ export default function PhotoOrganizer({
                         renderSlot={(slot, photoIndex) => (
                           <>
                             <AlbumEditorPhotoSlot
-                              photo={slot.photo} textBox={slot.text} crop={slot.crop}
+                              photo={slot.photo} textBox={slot.text} crop={slot.crop} textAspect={slot.aspect}
                               pageIndex={pageIndex} photoIndex={photoIndex}
                               photoCount={slots.length}
                               editingPageIndex={null}
@@ -4103,10 +4118,16 @@ export default function PhotoOrganizer({
             <div className="space-y-6">
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.content')}</label>
-                {/* Contenedor configurado para Container Queries en el área de edición */}
-                <div 
-                  className="w-full border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center h-[200px]"
-                  style={{ containerType: 'inline-size' }}
+                {/* El área de edición tiene la forma del marco real: la letra va en
+                    cqi sobre su ancho, así que se ve exactamente cuánto cabe. */}
+                <div
+                  className="mx-auto border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center"
+                  style={{
+                    containerType: 'inline-size',
+                    aspectRatio: String(editingTextAspect),
+                    width: `min(100%, calc(min(50vh, 340px) * ${editingTextAspect}))`,
+                  }}
+                  data-text-editor-box
                 >
                   <StyledTextEditor
                     key={`${editingTextSlot.pageIndex}-${editingTextSlot.photoIndex}`}
@@ -4116,9 +4137,10 @@ export default function PhotoOrganizer({
                     onChange={(text, marks) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text, marks })}
                     onActiveMarkChange={setActiveTextMark}
                     placeholder="Escribe tu texto aquí..."
-                    maxLength={(currentEditingText.overflowMode || 'limit') === 'limit' ? getMaxCharsForFontSize(currentEditingText.fontSize) : MAX_SHRINK_CHARS}
+                    maxLength={MAX_SHRINK_CHARS}
+                    fits={(text, marks) => textFitsForMode(text, currentEditingText.fontSize || 24, editingOverflowMode, { ...editingTextShape, marks })}
                     style={{
-                      fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, (currentEditingText.text || '').length, currentEditingText.overflowMode || 'limit') * 0.25}cqi`,
+                      fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, currentEditingText.text || '', editingOverflowMode, editingTextShape) * 0.25}cqi`,
                       fontFamily: currentEditingText.fontFamily,
                       color: currentEditingText.color,
                       textAlign: currentEditingText.textAlign || 'center',
@@ -4133,7 +4155,7 @@ export default function PhotoOrganizer({
                   <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label>
                   <select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{FONT_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}</select>
                   {(currentEditingText.overflowMode || 'limit') === 'limit' && (
-                    <p className="text-[10px] text-gray-400 mt-1">{t('organizer.maxCharsHint', { count: getMaxCharsForFontSize(currentEditingText.fontSize) })}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{t('organizer.maxCharsHint', { count: getMaxCharsForFontSize(currentEditingText.fontSize || 24, editingTextShape) })}</p>
                   )}
                   <div className="flex items-center justify-between gap-2 mt-2">
                     <span className="text-[11px] font-medium text-gray-500">{(currentEditingText.overflowMode || 'limit') === 'shrink' ? t('organizer.overflowShrink') : t('organizer.overflowLimit')}</span>

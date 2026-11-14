@@ -36,12 +36,12 @@ export function getPageAspectRatioCss(size?: string | null): string {
  * igual en la miniatura del editor, en el visor y en el PDF, que se renderizan
  * a anchos muy distintos.
  */
-export const AlbumPageTextBox: React.FC<{ textBox: any }> = ({ textBox }) => (
+export const AlbumPageTextBox: React.FC<{ textBox: any; aspect?: number }> = ({ textBox, aspect = 1 }) => (
   <div className="w-full h-full flex flex-col items-center justify-center bg-white" style={{ containerType: 'inline-size' }}>
     <div
       style={{
         width: '90%',
-        fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, (textBox.text || '').length, textBox.overflowMode || 'limit') * 0.25}cqi`,
+        fontSize: `${getEffectiveFontSize(textBox.fontSize || 24, textBox.text || '', textBox.overflowMode || 'limit', { aspect, fontFamily: textBox.fontFamily, marks: textBox.marks }) * 0.25}cqi`,
         fontFamily: textBox.fontFamily,
         color: textBox.color,
         textAlign: textBox.textAlign || 'center',
@@ -69,7 +69,7 @@ export const AlbumPageSlotContent: React.FC<{
           : <ImageCropper src={slot.photo} position={slot.crop || DEFAULT_CROP} alt="Foto del álbum" />}
       </div>
     ) : slot.text ? (
-      <AlbumPageTextBox textBox={slot.text} />
+      <AlbumPageTextBox textBox={slot.text} aspect={slot.aspect} />
     ) : null}
   </div>
 );

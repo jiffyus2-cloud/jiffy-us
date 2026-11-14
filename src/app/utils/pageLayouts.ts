@@ -312,6 +312,16 @@ export function getPageAspectRatio(size?: string | null): number {
   return PAGE_ASPECT_RATIO[getAlbumFormat(size)];
 }
 
+/**
+ * Proporción ancho/alto REAL de un marco (no en % de la página): un marco al
+ * 100 % de ancho en una página horizontal 4:3 es más ancho que alto aunque sus
+ * porcentajes coincidan.
+ */
+export function getSlotAspect(rect: SlotRect, size?: string | null): number {
+  if (!rect || rect.h <= 0) return 1;
+  return (rect.w * getPageAspectRatio(size)) / rect.h;
+}
+
 export function getAllowedPhotosPerPage(size?: string | null): number[] {
   return ALLOWED_PHOTOS_PER_PAGE[getAlbumFormat(size)];
 }
