@@ -5,7 +5,7 @@ import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
-import { convertFileIfHeic } from '../utils/imageUtils';
+import { convertPhotoFile, PHOTO_ACCEPT } from '../utils/imageUtils';
 import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 
 interface CoverEditorProps {
@@ -171,7 +171,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     let file = e.target.files?.[0];
     if (!file) return;
 
-    file = await convertFileIfHeic(file);
+    file = await convertPhotoFile(file);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     setIsValidating(false);
@@ -484,7 +484,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
                     </div>
                  )}
-                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageChange} disabled={isValidating} />
+                 <input ref={fileInputRef} type="file" className="hidden" accept={PHOTO_ACCEPT} onChange={handleImageChange} disabled={isValidating} />
               </section>
             )}
           </div>

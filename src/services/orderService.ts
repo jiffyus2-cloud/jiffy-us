@@ -1,6 +1,7 @@
 import { db, storage } from '../lib/firebase';
 import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { isDecodableImageBlob } from '../app/utils/photoHealth';
 
 /**
  * Versión del esquema del documento `orders/{id}`.
@@ -61,6 +62,20 @@ export interface UploadFailure {
   slotIndex: number;
   /** URL local original, para poder señalarla en el editor. */
   sourceUrl: string;
+  /**
+   * `unreadable`: el archivo está vacío, dañado o en un formato que el navegador
+   * no lee; reintentar no sirve, hay que reemplazar la foto. `upload` (o sin
+   * valor): falló la subida (conexión).
+   */
+  reason?: 'upload' | 'unreadable';
+}
+
+/** La foto local no es una imagen legible: subirla dejaría un hueco en el álbum. */
+export class UnreadableImageError extends Error {
+  constructor() {
+    super('La foto está vacía, dañada o en un formato que no se puede leer');
+    this.name = 'UnreadableImageError';
+  }
 }
 
 /**
@@ -133,13 +148,18 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function uploadImage(path: string, imageData: string): Promise<string> {
   const storageRef = ref(storage, path);
 
+  // Antes de subir, comprobar que es una imagen legible: si no, se guardaba igual
+  // y el pedido quedaba con "No se cargó" y huecos en el PDF sin avisar a nadie.
+  if (!isLocalUrl(imageData)) return imageData;
+
+  const localBlob = await (await fetch(imageData)).blob();
+  if (!(await isDecodableImageBlob(localBlob))) throw new UnreadableImageError();
+
   if (isBase64(imageData)) {
     const result = await uploadString(storageRef, imageData, 'data_url');
     return await getDownloadURL(result.ref);
   } else if (isBlobUrl(imageData)) {
-    const response = await fetch(imageData);
-    const blob = await response.blob();
-    const result = await uploadBytes(storageRef, blob);
+    const result = await uploadBytes(storageRef, localBlob);
     return await getDownloadURL(result.ref);
   }
 
@@ -153,6 +173,8 @@ async function uploadImageWithRetry(path: string, imageData: string, attempts = 
     try {
       return await uploadImage(path, imageData);
     } catch (error) {
+      // Una foto ilegible no mejora reintentando.
+      if (error instanceof UnreadableImageError) throw error;
       lastError = error;
       console.warn(`[upload] intento ${i + 1}/${attempts} falló para ${path}`, error);
       if (i < attempts - 1) await sleep(500 * 2 ** i + Math.random() * 250);
@@ -197,8 +219,11 @@ async function resolvePhotoUrl(
     const url = await uploadImageWithRetry(buildPath(), source);
     ctx.newUrls[source] = url;
     return url;
-  } catch {
-    ctx.failures.push({ pageIndex, slotIndex, sourceUrl: source });
+  } catch (error) {
+    ctx.failures.push({
+      pageIndex, slotIndex, sourceUrl: source,
+      reason: error instanceof UnreadableImageError ? 'unreadable' : 'upload',
+    });
     return null;
   } finally {
     ctx.tick();

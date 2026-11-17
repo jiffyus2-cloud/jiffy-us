@@ -17,7 +17,9 @@
  * .HEIC original (el carrete suele entregar JPEG ya convertido).
  */
 
-/** Cola global: solo una conversión HEIC viva a la vez, sin importar cómo agrupe el llamante. */
+import { isRawFile, convertRawToJpeg, RAW_ACCEPT } from './rawImage';
+
+/** Cola global: solo una conversión (HEIC o RAW) viva a la vez, sin importar cómo agrupe el llamante. */
 let conversionQueue: Promise<unknown> = Promise.resolve();
 
 function enqueueConversion<T>(task: () => Promise<T>): Promise<T> {
@@ -35,7 +37,33 @@ function releaseCanvas(canvas: HTMLCanvasElement) {
 
 const MAX_DIM = 4096;
 
-export async function convertFileIfHeic(file: File): Promise<File> {
+/**
+ * Formatos que se pueden elegir en los selectores de fotos. Los RAW se aceptan
+ * pero nunca se suben tal cual: `convertPhotoFile` los pasa a JPEG.
+ */
+export const PHOTO_ACCEPT = `image/*,${RAW_ACCEPT}`;
+/** Variante por extensiones (sin `image/*`) de los selectores masivos del álbum. */
+export const PHOTO_EXT_ACCEPT = `.heic,.heif,.jpg,.jpeg,.png,.webp,.gif,${RAW_ACCEPT}`;
+
+/**
+ * Deja la foto en un formato que el navegador (y el PDF) sabe mostrar:
+ * HEIC/HEIF → JPEG, RAW de cámara → JPEG; el resto pasa igual.
+ * Si una conversión falla se devuelve el original: el editor lo mostrará como
+ * "No se cargó" y el guardado se negará a subirlo (orderService), así que
+ * nunca llega roto al servidor.
+ */
+export async function convertPhotoFile(file: File): Promise<File> {
+  if (isRawFile(file)) {
+    return enqueueConversion(async () => {
+      try {
+        return await convertRawToJpeg(file, MAX_DIM);
+      } catch (err) {
+        console.error(`[RAW] No se pudo convertir ${file.name}; no se subirá:`, err);
+        return file;
+      }
+    });
+  }
+
   const isHeic =
     /\.(heic|heif)$/i.test(file.name) ||
     file.type.includes('heic') ||

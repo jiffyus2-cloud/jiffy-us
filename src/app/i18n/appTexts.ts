@@ -141,6 +141,9 @@ export const APP_TEXTS_ES: Record<string, string> = {
 
   // ── Visor del pedido (detalle) ────────────────────────────────────────────
   'orderView.noPreview': 'No hay una vista previa disponible para este tipo de producto.',
+  'orderView.brokenPhotosTitle': '{count} foto(s) no se pueden cargar',
+  'orderView.brokenPhotosDesc': 'Están en {where}. Saldrían en blanco al imprimir, así que hay que reemplazarlas antes de producir el pedido.',
+  'orderView.checkingPhotos': 'Comprobando que todas las fotos carguen…',
 
   // ── Fotos (avisos comunes de álbum y calendario) ──────────────────────────
   'photos.lowResDesc': 'Esta imagen mide **{size}** (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.',
@@ -169,6 +172,12 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'creator.photoLossAutoSave': 'No guardamos automáticamente: el diseño tenía menos fotos de lo esperado.',
   'creator.autoSaveFailed': 'No pudimos guardar automáticamente. Usa "Guardar borrador".',
   'creator.uploadFailedDesc': 'Tus fotos siguen aquí, no se perdió nada y tu diseño no cambió. Revisa tu conexión e inténtalo otra vez.',
+  'creator.unreadablePhotosDesc': '{count} de ellas no se pueden leer (archivo vacío, dañado o en un formato no compatible). Reintentar no lo soluciona: pulsa "Ver fotos afectadas" y reemplázalas por otra copia.',
+  'creator.brokenPhotosTitle': '{count} foto(s) no se pueden cargar',
+  'creator.brokenPhotosWhere': 'Están en {where}.',
+  'creator.brokenPhotosSaved': 'Guardamos tu borrador, pero estas fotos no se ven y saldrían en blanco al imprimir. Reemplázalas antes de hacer tu pedido.',
+  'creator.brokenPhotosCheckout': 'Guardamos tu borrador, pero no puedes continuar al pago todavía: estas fotos saldrían en blanco al imprimir. Reemplázalas y vuelve a intentarlo.',
+  'creator.brokenPhotosAdmin': 'El borrador se guardó, pero estas fotos no cargan: el PDF de impresión no podrá generarse completo hasta reemplazarlas.',
 
   // ── Editor del álbum: avisos de reparto y páginas ─────────────────────────
   'organizer.feasTooFewPhotos': 'Tienes {photos} foto(s) para {pages} páginas con foto. Cada página necesita al menos una: quita páginas hasta {maxPages} o añade {missing} foto(s) más.',
