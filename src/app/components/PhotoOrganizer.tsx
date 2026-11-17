@@ -47,6 +47,8 @@ import {
   clampTextForMode,
   textFitsForMode,
   MAX_SHRINK_CHARS,
+  MIN_FONT_SIZE,
+  measureTextFill,
   type TextOverflowMode,
 } from '../utils/textOverflowUtils';
 import { normalizeMarks, MARK_BOLD, MARK_ITALIC } from '../utils/textMarks';
@@ -4108,146 +4110,219 @@ export default function PhotoOrganizer({
         />
       )}
 
-      {editingTextSlot && currentEditingText && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2"><Type className="w-5 h-5" /><h4 className="text-xl font-bold">{t('organizer.editText')}</h4></div>
-              <button onClick={() => setEditingTextSlot(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="space-y-6">
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.content')}</label>
-                {/* El área de edición tiene la forma del marco real: la letra va en
-                    cqi sobre su ancho, así que se ve exactamente cuánto cabe. */}
-                <div
-                  className="mx-auto border-2 border-gray-100 rounded-xl focus-within:border-black bg-white flex items-center justify-center"
-                  style={{
-                    containerType: 'inline-size',
-                    aspectRatio: String(editingTextAspect),
-                    width: `min(100%, calc(min(50vh, 340px) * ${editingTextAspect}))`,
-                  }}
-                  data-text-editor-box
-                >
-                  <StyledTextEditor
-                    key={`${editingTextSlot.pageIndex}-${editingTextSlot.photoIndex}`}
-                    ref={textEditorRef}
-                    text={currentEditingText.text || ''}
-                    marks={currentEditingText.marks}
-                    onChange={(text, marks) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { text, marks })}
-                    onActiveMarkChange={setActiveTextMark}
-                    placeholder="Escribe tu texto aquí..."
-                    maxLength={MAX_SHRINK_CHARS}
-                    fits={(text, marks) => textFitsForMode(text, currentEditingText.fontSize || 24, editingOverflowMode, { ...editingTextShape, marks })}
-                    style={{
-                      fontSize: `${getEffectiveFontSize(currentEditingText.fontSize || 24, currentEditingText.text || '', editingOverflowMode, editingTextShape) * 0.25}cqi`,
-                      fontFamily: currentEditingText.fontFamily,
-                      color: currentEditingText.color,
-                      textAlign: currentEditingText.textAlign || 'center',
-                      lineHeight: '1.3'
-                    }}
-                    autoFocus
-                  />
+      {editingTextSlot && currentEditingText && (() => {
+        const pIdx = editingTextSlot.pageIndex;
+        const tIdx = editingTextSlot.photoIndex;
+        const fontSize = currentEditingText.fontSize || 24;
+        const textValue = currentEditingText.text || '';
+        const isShrink = editingOverflowMode === 'shrink';
+        // Cuánto del alto útil del marco ocupa el texto, medido de verdad. En
+        // 'shrink' cuenta con la letra mínima, que es hasta donde se puede bajar.
+        const fill = measureTextFill(textValue, isShrink ? Math.min(fontSize, MIN_FONT_SIZE) : fontSize, editingTextShape);
+        const fillPct = fill === null ? null : Math.min(100, Math.round(fill * 100));
+        const close = () => setEditingTextSlot(null);
+        const labelCls = 'text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5';
+        const selectCls = 'w-full px-3 py-2.5 md:py-2 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white cursor-pointer';
+        const toolBtn = (active: boolean) =>
+          `flex-1 md:flex-none md:w-9 h-11 md:h-9 rounded-lg border-2 flex items-center justify-center transition-all ${active ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-500 hover:border-gray-300 hover:text-black'}`;
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6"
+            onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('organizer.editText')}
+              className="bg-white rounded-2xl w-full max-w-md md:max-w-5xl max-h-full md:max-h-[min(92vh,820px)] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            >
+              {/* Cabecera */}
+              <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-3 border-b border-gray-100 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Type className="w-5 h-5 md:w-4 md:h-4 shrink-0" />
+                  <h4 className="text-lg md:text-base font-bold truncate">{t('organizer.editText')}</h4>
                 </div>
+                <button onClick={close} aria-label="Cerrar" className="p-2 md:p-1.5 -mr-1 hover:bg-gray-100 rounded-full transition-colors">
+                  <X className="w-5 h-5 md:w-4 md:h-4" />
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase mb-2 block items-center gap-2"><ALargeSmall className="w-4 h-4" /> {t('organizer.size')}</label>
-                  <select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontSize: parseInt(e.target.value) })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white">{FONT_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}</select>
-                  {(currentEditingText.overflowMode || 'limit') === 'limit' && (
-                    <p className="text-[10px] text-gray-400 mt-1">{t('organizer.maxCharsHint', { count: getMaxCharsForFontSize(currentEditingText.fontSize || 24, editingTextShape) })}</p>
-                  )}
-                  <div className="flex items-center justify-between gap-2 mt-2">
-                    <span className="text-[11px] font-medium text-gray-500">{(currentEditingText.overflowMode || 'limit') === 'shrink' ? t('organizer.overflowShrink') : t('organizer.overflowLimit')}</span>
+
+              {/* Cuerpo: en móvil una columna con scroll; en PC el marco a la
+                  izquierda, grande, y los controles a la derecha. */}
+              <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="bg-gray-50 px-4 py-4 md:p-8 flex flex-col items-center justify-center gap-2 md:overflow-y-auto">
+                  {/* El área de edición tiene la forma del marco real y la letra va
+                      en cqi sobre su ancho, igual que en la página: lo que se ve
+                      aquí es lo que se imprime. */}
+                  <div
+                    className="bg-white shadow-sm ring-1 ring-gray-200 focus-within:ring-2 focus-within:ring-black flex items-center justify-center cursor-text transition-shadow [--editor-h:min(34vh,300px)] md:[--editor-h:min(60vh,520px)]"
+                    style={{
+                      containerType: 'inline-size',
+                      aspectRatio: String(editingTextAspect),
+                      width: `min(100%, calc(var(--editor-h) * ${editingTextAspect}))`,
+                    }}
+                    onMouseDown={(e) => {
+                      // Clic en el margen del marco: escribir sigue al final.
+                      if (e.target === e.currentTarget) {
+                        e.preventDefault();
+                        textEditorRef.current?.focusEnd();
+                      }
+                    }}
+                    data-text-editor-box
+                  >
+                    <StyledTextEditor
+                      key={`${pIdx}-${tIdx}`}
+                      ref={textEditorRef}
+                      text={textValue}
+                      marks={currentEditingText.marks}
+                      onChange={(text, marks) => updateTextBox(pIdx, tIdx, { text, marks })}
+                      onActiveMarkChange={setActiveTextMark}
+                      placeholder="Escribe tu texto aquí..."
+                      maxLength={MAX_SHRINK_CHARS}
+                      fits={(text, marks) => textFitsForMode(text, fontSize, editingOverflowMode, { ...editingTextShape, marks })}
+                      style={{
+                        fontSize: `${getEffectiveFontSize(fontSize, textValue, editingOverflowMode, editingTextShape) * 0.25}cqi`,
+                        fontFamily: currentEditingText.fontFamily,
+                        color: currentEditingText.color,
+                        textAlign: currentEditingText.textAlign || 'center',
+                        lineHeight: '1.3'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  {/* Cuánto queda: así nadie cree que hay sitio cuando ya no lo hay. */}
+                  <div className="w-full max-w-xs" data-text-fill>
+                    {fillPct !== null ? (
+                      <>
+                        <div className="h-1 rounded-full bg-gray-200 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${fillPct >= 97 ? 'bg-red-500' : fillPct >= 85 ? 'bg-amber-500' : 'bg-black'}`}
+                            style={{ width: `${fillPct}%` }}
+                          />
+                        </div>
+                        <p className={`text-[11px] mt-1 text-center ${fillPct >= 97 ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                          {fillPct >= 97 ? t('organizer.boxFull') : t('organizer.spaceUsed', { percent: fillPct })}
+                        </p>
+                      </>
+                    ) : !isShrink ? (
+                      <p className="text-[11px] text-gray-500 text-center">{t('organizer.maxCharsHint', { count: getMaxCharsForFontSize(fontSize, editingTextShape) })}</p>
+                    ) : null}
+                    <p className="hidden md:block text-[11px] text-gray-400 text-center mt-0.5">{t('organizer.previewHint')}</p>
+                  </div>
+                </div>
+
+                <div className="px-4 py-4 md:px-5 md:py-5 space-y-4 md:border-l md:border-gray-100 md:overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}><ALargeSmall className="w-3.5 h-3.5" /> {t('organizer.size')}</label>
+                      <select value={currentEditingText.fontSize} onChange={(e) => updateTextBox(pIdx, tIdx, { fontSize: parseInt(e.target.value) })} className={selectCls}>{FONT_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}</select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>{t('organizer.font')}</label>
+                      <select value={currentEditingText.fontFamily} onChange={(e) => updateTextBox(pIdx, tIdx, { fontFamily: e.target.value })} className={selectCls}><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Monospace</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Handwritten</option></select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium text-gray-600">{isShrink ? t('organizer.overflowShrink') : t('organizer.overflowLimit')}</span>
                     <Switch
-                      checked={(currentEditingText.overflowMode || 'limit') === 'shrink'}
-                      onCheckedChange={(checked: boolean) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { overflowMode: (checked ? 'shrink' : 'limit') as TextOverflowMode })}
+                      checked={isShrink}
+                      onCheckedChange={(checked: boolean) => updateTextBox(pIdx, tIdx, { overflowMode: (checked ? 'shrink' : 'limit') as TextOverflowMode })}
                       title={t('organizer.overflowMode')}
                     />
                   </div>
-                </div>
-                <div><label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.font')}</label><select value={currentEditingText.fontFamily} onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { fontFamily: e.target.value })} className="w-full p-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-black bg-white"><option value="Arial">Sans Serif</option><option value="Georgia">Serif</option><option value="Courier New">Monospace</option><option value="'Playfair Display', serif">Elegant</option><option value="'Dancing Script', cursive">Handwritten</option></select></div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.textAlign')}</label>
-                <div className="flex gap-2">
-                  {([
-                    { value: 'left', Icon: AlignLeft },
-                    { value: 'center', Icon: AlignCenter },
-                    { value: 'right', Icon: AlignRight },
-                    { value: 'justify', Icon: AlignJustify },
-                  ] as const).map(({ value, Icon }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { textAlign: value })}
-                      title={t(`organizer.align.${value}`)}
-                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${(currentEditingText.textAlign || 'center') === value ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.textStyle')}</label>
-                <div className="flex gap-2">
-                  {([
-                    { key: 'bold', bit: MARK_BOLD, Icon: Bold },
-                    { key: 'italic', bit: MARK_ITALIC, Icon: Italic },
-                  ] as const).map(({ key, bit, Icon }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-pressed={!!(activeTextMark & bit)}
-                      // Sin robar el foco al editor: así la selección sigue viva.
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => textEditorRef.current?.toggle(bit)}
-                      title={t(`organizer.style.${key}`)}
-                      className={`flex-1 p-3 rounded-xl border-2 flex items-center justify-center transition-all ${activeTextMark & bit ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">{t('organizer.styleHint')}</p>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">{t('organizer.color')}</label>
-                {(() => {
-                  const presets = ['#000000', '#EF4444', '#3B82F6', '#10B981'];
-                  const current = (currentEditingText.color || '#000000').toUpperCase();
-                  const isCustom = !presets.includes(current);
-                  return (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {presets.map(color => (
-                        <button key={color} onClick={() => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color })} className={`w-8 h-8 rounded-full border-2 transition-transform ${current === color ? 'scale-125 border-black' : 'border-transparent'}`} style={{ backgroundColor: color }} />
-                      ))}
-                      {/* Color personalizado: el selector nativo del sistema, tapado por
-                          un círculo. Un "+" discreto mientras no se use; el color elegido después. */}
-                      <label
-                        title={t('organizer.customColor')}
-                        className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center transition-transform ${isCustom ? 'scale-125 border-black' : 'border-dashed border-gray-300 text-gray-400 hover:border-gray-500 hover:text-gray-600'}`}
-                        style={isCustom ? { backgroundColor: current } : undefined}
-                      >
-                        {!isCustom && <Plus className="w-4 h-4" />}
-                        <input
-                          type="color"
-                          aria-label={t('organizer.customColor')}
-                          value={/^#[0-9A-F]{6}$/.test(current) ? current.toLowerCase() : '#000000'}
-                          onChange={(e) => updateTextBox(editingTextSlot.pageIndex, editingTextSlot.photoIndex, { color: e.target.value.toUpperCase() })}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none border-0 p-0"
-                        />
-                      </label>
+
+                  <div>
+                    <label className={labelCls}>{t('organizer.textAlign')} · {t('organizer.textStyle')}</label>
+                    <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-1.5">
+                      <div className="flex gap-2 md:gap-1.5 flex-[4] md:flex-none">
+                        {([
+                          { value: 'left', Icon: AlignLeft },
+                          { value: 'center', Icon: AlignCenter },
+                          { value: 'right', Icon: AlignRight },
+                          { value: 'justify', Icon: AlignJustify },
+                        ] as const).map(({ value, Icon }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => updateTextBox(pIdx, tIdx, { textAlign: value })}
+                            title={t(`organizer.align.${value}`)}
+                            aria-pressed={(currentEditingText.textAlign || 'center') === value}
+                            className={toolBtn((currentEditingText.textAlign || 'center') === value)}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </button>
+                        ))}
+                      </div>
+                      <span className="hidden md:block w-px h-6 bg-gray-200 mx-1" />
+                      <div className="flex gap-2 md:gap-1.5 flex-[2] md:flex-none">
+                        {([
+                          { key: 'bold', bit: MARK_BOLD, Icon: Bold },
+                          { key: 'italic', bit: MARK_ITALIC, Icon: Italic },
+                        ] as const).map(({ key, bit, Icon }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            aria-pressed={!!(activeTextMark & bit)}
+                            // Sin robar el foco al editor: así la selección sigue viva.
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => textEditorRef.current?.toggle(bit)}
+                            title={t(`organizer.style.${key}`)}
+                            className={toolBtn(!!(activeTextMark & bit))}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  );
-                })()}
+                    <p className="text-[11px] text-gray-400 mt-1.5">{t('organizer.styleHint')}</p>
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>{t('organizer.color')}</label>
+                    {(() => {
+                      const presets = ['#000000', '#EF4444', '#3B82F6', '#10B981'];
+                      const current = (currentEditingText.color || '#000000').toUpperCase();
+                      const isCustom = !presets.includes(current);
+                      const dot = 'w-9 h-9 md:w-7 md:h-7 rounded-full transition-shadow';
+                      const selected = 'ring-2 ring-offset-2 ring-black';
+                      return (
+                        <div className="flex flex-wrap items-center gap-3 md:gap-2.5 p-1">
+                          {presets.map(color => (
+                            <button key={color} type="button" aria-label={color} aria-pressed={current === color} onMouseDown={(e) => e.preventDefault()} onClick={() => updateTextBox(pIdx, tIdx, { color })} className={`${dot} border border-black/10 ${current === color ? selected : 'hover:ring-2 hover:ring-offset-2 hover:ring-gray-300'}`} style={{ backgroundColor: color }} />
+                          ))}
+                          {/* Color personalizado: el selector nativo del sistema, tapado por
+                              un círculo. Un "+" discreto mientras no se use; el color elegido después. */}
+                          <label
+                            title={t('organizer.customColor')}
+                            className={`${dot} relative cursor-pointer flex items-center justify-center ${isCustom ? selected : 'border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-500 hover:text-gray-600'}`}
+                            style={isCustom ? { backgroundColor: current } : undefined}
+                          >
+                            {!isCustom && <Plus className="w-4 h-4 md:w-3.5 md:h-3.5" />}
+                            <input
+                              type="color"
+                              aria-label={t('organizer.customColor')}
+                              value={/^#[0-9A-F]{6}$/.test(current) ? current.toLowerCase() : '#000000'}
+                              onChange={(e) => updateTextBox(pIdx, tIdx, { color: e.target.value.toUpperCase() })}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none border-0 p-0"
+                            />
+                          </label>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
-              <button onClick={() => setEditingTextSlot(null)} className="w-full py-4 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-bold text-lg shadow-lg shadow-black/10">{t('organizer.saveChanges')}</button>
+
+              {/* Pie: siempre visible, también con el teclado del móvil abierto. */}
+              <div className="shrink-0 border-t border-gray-100 px-4 md:px-6 py-3 flex justify-end">
+                <button onClick={close} className="w-full md:w-auto md:px-8 py-3 md:py-2.5 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-bold text-base md:text-sm shadow-lg shadow-black/10">{t('organizer.saveChanges')}</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
