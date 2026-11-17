@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
+import { LEGAL_PATHS } from './legal/legalContent';
 import { motion } from 'motion/react';
 import { ChevronDown, ShoppingBag, Tag, Truck, Gift, Star } from 'lucide-react';
 import ProductDetailsModal from './ProductDetailsModal';
@@ -355,8 +356,8 @@ export default function LandingPage() {
             <div>
               <h4 className={DESIGN.text.footerHeading}>{t('footer.legal')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.privacyPolicy')}</a></li>
-                <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.termsOfService')}</a></li>
+                <li><Link to={LEGAL_PATHS.privacy} className={DESIGN.text.footerLink}>{t('footer.privacyPolicy')}</Link></li>
+                <li><Link to={LEGAL_PATHS.terms} className={DESIGN.text.footerLink}>{t('footer.termsOfService')}</Link></li>
                 <li><a href="#" className={DESIGN.text.footerLink}>{t('footer.cookiePolicy')}</a></li>
               </ul>
             </div>
