@@ -23,11 +23,18 @@ import * as XLSX from 'xlsx';
 // --- DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import CoverPreview from './CoverPreview'; 
 import { CalendarTemplatePage, CALENDAR_SPECS, normalizeCalendarDesign, normalizeCalendarType, getCalendarPrintPages, getCalendarSlotPhoto, loadCalendarFonts, getCalendarFontEmbedCSS, getCalendarYears, type CalendarPageSpec } from './calendar/CalendarTemplate';
 import { getHolidaysForCountry, type Holiday } from '../utils/holidays';
-import { getCoverDimensions } from '../utils/cropMath';
+import {
+  assessDevice, initialProfileFor, profileForAttempt, SAFE_PROFILE, IncompleteRenderError,
+  preloadImagesStrict, waitForRenderReadyStrict, captureVerifiedJpeg, releaseCanvases,
+  drawCroppedImage, canvasLooksAllocated, yieldToBrowser, sleep,
+  type CaptureProfile, type DeviceAssessment,
+} from '../utils/pdfCapture';
+import { collectOrderPhotos, findBrokenPhotos, describePhotoLocations, isLocalPhotoUrl, getOrderPhotoKind } from '../utils/photoHealth';
 import { getAlbumPageSlots, getPageImages } from '../utils/albumPageData';
 import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM, SPINE_FONT_FAMILY, SPINE_FONT_WEIGHT } from '../utils/albumSpine';
 import { loadCoverFonts } from '../utils/coverFonts';
@@ -126,131 +133,58 @@ const getDimensions = (order: Order) => {
 }
 
 // ============================================================================
-// PRE-CARGA DE IMÁGENES COMO DATA URLS
-// ============================================================================
-async function preloadImages(urls: string[]): Promise<Record<string, string>> {
-  const entries = await Promise.all(
-    urls.filter(Boolean).map(async (url) => {
-      try {
-        const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-        const blob = await response.blob();
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        return [url, dataUrl] as [string, string];
-      } catch {
-        return [url, url] as [string, string];
-      }
-    })
-  );
-  return Object.fromEntries(entries);
-}
-
-// ============================================================================
-// ESPERA ACTIVA HASTA QUE TODAS LAS IMÁGENES (CanvasCropper / ImageCropper)
-// DEL CONTENEDOR ESTÉN REALMENTE PINTADAS ANTES DE CAPTURAR CON html-to-image
-// ============================================================================
-function waitForRenderReady(container: HTMLElement, opts: { maxWaitMs?: number; minWaitMs?: number } = {}): Promise<void> {
-  const MAX_WAIT_MS = opts.maxWaitMs ?? 15000;
-  const MIN_WAIT_MS = opts.minWaitMs ?? 150;
-  const POLL_MS = 100;
-  const startTime = Date.now();
-
-  return new Promise((resolve) => {
-    const poll = setInterval(() => {
-      const targets = container.querySelectorAll('[data-canvas-cropper], [data-image-cropper]');
-      const readyTargets = container.querySelectorAll('[data-canvas-cropper][data-ready], [data-image-cropper][data-ready]');
-      const elapsed = Date.now() - startTime;
-      const allDone = targets.length === readyTargets.length;
-      const timedOut = elapsed > MAX_WAIT_MS;
-
-      if ((allDone && elapsed >= MIN_WAIT_MS) || timedOut) {
-        clearInterval(poll);
-        resolve();
-      }
-    }, POLL_MS);
-  });
-}
-
-// ============================================================================
 // RENDERIZADOR CANVAS NATIVO
 // ============================================================================
-const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
+// `scale` es el sobremuestreo respecto a los 300 ppp finales: 2 en equipos con
+// recursos y 1 (la resolución exacta de salida) en el modo cuidadoso.
+const CanvasCropper: React.FC<{ src: string, crop: any, scale?: number }> = ({ src, crop, scale = 2 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
     let cancelled = false;
-
     canvas.removeAttribute('data-ready');
 
     const rect = canvas.getBoundingClientRect();
-    const destWidth = Math.round(rect.width * 2);
-    const destHeight = Math.round(rect.height * 2);
+    const destWidth = Math.round(rect.width * scale);
+    const destHeight = Math.round(rect.height * scale);
     if (destWidth === 0 || destHeight === 0) {
       canvas.setAttribute('data-ready', 'error');
       return;
     }
     canvas.width = destWidth;
     canvas.height = destHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      canvas.setAttribute('data-ready', 'error');
+      return;
+    }
 
-    const drawOnCanvas = (imgEl: HTMLImageElement) => {
+    const drawOnCanvas = async (imgEl: HTMLImageElement) => {
+      // Safari puede disparar `load` antes de tener la imagen decodificada y
+      // dibujarla así deja el lienzo en blanco: se fuerza la decodificación.
+      try { await imgEl.decode(); } catch { /* si falla, naturalWidth lo delata abajo */ }
       if (cancelled) return;
-      const imgWidth = imgEl.naturalWidth;
-      const imgHeight = imgEl.naturalHeight;
-      if (imgWidth === 0 || imgHeight === 0) {
+      if (imgEl.naturalWidth === 0 || imgEl.naturalHeight === 0) {
         canvas.setAttribute('data-ready', 'error');
         return;
       }
-
-      const { x = 50, y = 50, zoom = 1, rotation = 0 } = crop || {};
-
-      // Espejo exacto de ImageCropper: en vez de recortar un rectángulo DENTRO de
-      // la imagen, se dibuja la imagen entera en un destino calculado. Es la única
-      // forma de representar zoom < 1 ("foto completa"), donde el marco es más
-      // grande que la imagen y el rectángulo fuente se saldría de ella: al recortar
-      // el canvas la fuente contra los bordes, la foto salía pegada a la esquina y
-      // el desplazamiento del usuario se ignoraba por completo.
-      const { Rw, Rh } = getCoverDimensions(destWidth, destHeight, imgWidth, imgHeight);
-
-      const drawWidth = Rw * zoom;
-      const drawHeight = Rh * zoom;
-      const dX = destWidth / 2 - (x / 100) * Rw * zoom;
-      const dY = destHeight / 2 - (y / 100) * Rh * zoom;
-
-      // El hueco que deja un zoom < 1 es blanco intencional, igual que el fondo de
-      // ImageCropper en pantalla, y no el gris del contenedor que hay detrás.
-      ctx.clearRect(0, 0, destWidth, destHeight);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, destWidth, destHeight);
-
-      if (rotation !== 0) {
-        ctx.save();
-        ctx.translate(destWidth / 2, destHeight / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.translate(-destWidth / 2, -destHeight / 2);
-      }
-
       try {
-        ctx.drawImage(imgEl, 0, 0, imgWidth, imgHeight, dX, dY, drawWidth, drawHeight);
+        drawCroppedImage(ctx, imgEl, destWidth, destHeight, crop);
       } catch {
-        ctx.drawImage(imgEl, 0, 0, destWidth, destHeight);
+        canvas.setAttribute('data-ready', 'error');
+        return;
       }
-
-      if (rotation !== 0) ctx.restore();
-      canvas.setAttribute('data-ready', 'true');
+      // Sin memoria, el navegador entrega un lienzo vacío sin avisar.
+      canvas.setAttribute('data-ready', canvasLooksAllocated(canvas) ? 'true' : 'error');
     };
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => drawOnCanvas(img);
+    img.decoding = 'async';
+    img.onload = () => { void drawOnCanvas(img); };
     img.onerror = () => {
       if (cancelled) return;
       // No reintentar sin crossOrigin: eso "mancharía" (taint) el canvas y
@@ -261,8 +195,10 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
 
     return () => {
       cancelled = true;
+      img.onload = null;
+      img.onerror = null;
     };
-  }, [src, crop]);
+  }, [src, crop, scale]);
 
   return <canvas data-canvas-cropper ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />;
 };
@@ -274,7 +210,7 @@ const CanvasCropper: React.FC<{ src: string, crop: any }> = ({ src, crop }) => {
 // editor y el visor del pedido (`AlbumPageSlots`); lo único propio de aquí es
 // que la foto se dibuja con `CanvasCropper`, porque html-to-image no captura
 // bien el `ImageCropper` de pantalla.
-const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order: any, preloadedMap?: Record<string, string>}> = ({customization, pageIndex, order, preloadedMap}) => {
+const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order: any, preloadedMap?: Record<string, string>, cropperScale?: number}> = ({customization, pageIndex, order, preloadedMap, cropperScale}) => {
   const size = customization?.size || '';
   const slots = getAlbumPageSlots(order, pageIndex, size);
 
@@ -284,7 +220,7 @@ const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order
         slots={slots}
         renderPhoto={(photo, crop) => (
           <div className="absolute inset-0 w-full h-full pointer-events-none">
-            <CanvasCropper src={preloadedMap?.[photo] || photo} crop={crop} />
+            <CanvasCropper src={preloadedMap?.[photo] || photo} crop={crop} scale={cropperScale} />
           </div>
         )}
       />
@@ -294,7 +230,7 @@ const AlbumPagePrintView: React.FC<{customization: any, pageIndex: number, order
 
 // Página de calendario para el PDF: la plantilla compartida con las fotos
 // dibujadas por `CanvasCropper` (la hoja de foto de pared va girada 180°).
-const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays: Holiday[], preloadedMap?: Record<string, string> }> = ({ order, page, holidays, preloadedMap }) => {
+const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays: Holiday[], preloadedMap?: Record<string, string>, cropperScale?: number }> = ({ order, page, holidays, preloadedMap, cropperScale }) => {
   const c = order.customization || {};
   const imagesPerMonth = c.imagesPerMonth === 4 ? 4 : 1;
   return (
@@ -313,7 +249,7 @@ const CalendarPrintPage: React.FC<{ order: any, page: CalendarPageSpec, holidays
         if (!src) return null;
         return (
           <div className="absolute inset-0 w-full h-full pointer-events-none">
-            <CanvasCropper src={preloadedMap?.[src] || src} crop={crop} />
+            <CanvasCropper src={preloadedMap?.[src] || src} crop={crop} scale={cropperScale} />
           </div>
         );
       }}
@@ -327,6 +263,148 @@ const getCalendarPageImages = (order: any, page: CalendarPageSpec): string[] => 
   const imagesPerMonth = order.customization?.imagesPerMonth === 4 ? 4 : 1;
   return Array.from({ length: imagesPerMonth }, (_, slot) => getCalendarSlotPhoto(order, page.position, slot, imagesPerMonth).src).filter(Boolean);
 };
+
+// ============================================================================
+// RENDER + CAPTURA VERIFICADA DE UNA PÁGINA, CON REINTENTOS
+// ============================================================================
+// Cada página se pinta en un contenedor nuevo, se espera a que TODAS sus fotos
+// estén dibujadas y se comprueba en la captura que ninguna salió en blanco
+// (ver utils/pdfCapture.ts). Si algo falla se libera la memoria y se reintenta
+// con un perfil más lento y ligero; si tras MAX_PAGE_ATTEMPTS sigue fallando,
+// se lanza un error y ese PDF no se entrega: nunca un PDF con huecos.
+const MAX_PAGE_ATTEMPTS = 5;
+
+/** Estado compartido por todos los PDF de una misma descarga. */
+interface PdfJob {
+  device: DeviceAssessment;
+  /** Perfil vigente: pasa a "cuidadoso" en cuanto una página falla y ya no vuelve. */
+  profile: CaptureProfile;
+  onNote: (note: string | null) => void;
+}
+
+const careModeNote = (device: DeviceAssessment) =>
+  `Modo cuidadoso${device.reasons.length ? ` (${device.reasons.join(', ')})` : ''}: tardará más, pero el PDF saldrá completo. Mantén esta pestaña abierta.`;
+
+const createPdfJob = (onNote: (note: string | null) => void): PdfJob => {
+  const device = assessDevice();
+  const profile = initialProfileFor(device);
+  onNote(profile.name === 'safe' ? careModeNote(device) : null);
+  return { device, profile, onNote };
+};
+
+interface PageRenderSpec {
+  /** Para mensajes: "la página 3 del interior". */
+  label: string;
+  widthPx: number;
+  heightPx: number;
+  imageUrls: string[];
+  /** `dataUrl` cuando la foto la pinta un <img> que html-to-image debe incrustar. */
+  preloadAs: 'objectUrl' | 'dataUrl';
+  expectedPhotos?: number;
+  fontEmbedCSS?: string;
+  build: (preloadedMap: Record<string, string>, profile: CaptureProfile) => React.ReactNode;
+}
+
+async function renderVerifiedPage(job: PdfJob, spec: PageRenderSpec): Promise<Uint8Array> {
+  let lastReason = '';
+  for (let attempt = 0; attempt < MAX_PAGE_ATTEMPTS; attempt++) {
+    const profile = profileForAttempt(job.profile, attempt, job.device);
+    if (attempt > 0) {
+      job.onNote(`Reintentando ${spec.label} en modo cuidadoso (intento ${attempt + 1} de ${MAX_PAGE_ATTEMPTS})…`);
+      await sleep(profile.pauseBetweenPagesMs);
+    }
+
+    const preloaded = await preloadImagesStrict(spec.imageUrls, spec.preloadAs, profile.name === 'safe');
+    const container = document.createElement('div');
+    container.style.cssText = `position:fixed;top:0;left:-99999px;width:${spec.widthPx}px;height:${spec.heightPx}px;pointer-events:none;`;
+    document.body.appendChild(container);
+    const root: Root = createRoot(container);
+
+    try {
+      // flushSync: el DOM queda montado ya, así el recuento de fotos es fiable.
+      flushSync(() => {
+        root.render(
+          <div style={{ width: spec.widthPx, height: spec.heightPx, position: 'relative', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+            {spec.build(preloaded.map, profile)}
+          </div>
+        );
+      });
+      await waitForRenderReadyStrict(container, profile, spec.expectedPhotos);
+      const node = container.firstChild as HTMLElement;
+      const { bytes } = await captureVerifiedJpeg(
+        htmlToImage.toCanvas as any, node, spec.widthPx, spec.heightPx, profile,
+        { quality: 0.95, fontEmbedCSS: spec.fontEmbedCSS },
+      );
+      if (attempt > 0) job.onNote(careModeNote(job.device));
+      return bytes;
+    } catch (err) {
+      lastReason = err instanceof Error ? err.message : String(err);
+      console.warn(`[PDF] ${spec.label}: intento ${attempt + 1} de ${MAX_PAGE_ATTEMPTS} fallido —`, lastReason);
+      // A partir de aquí todo el trabajo sigue en modo cuidadoso.
+      job.profile = { ...SAFE_PROFILE, warmupCapture: job.device.isSafari };
+    } finally {
+      releaseCanvases(container);
+      root.unmount();
+      container.remove();
+      preloaded.release();
+      // Respiro para que el navegador libere memoria y pinte el progreso.
+      await yieldToBrowser(profile.pauseBetweenPagesMs);
+    }
+  }
+  throw new IncompleteRenderError(`No se pudo generar ${spec.label} completa tras ${MAX_PAGE_ATTEMPTS} intentos (${lastReason}).`);
+}
+
+/** El pedido tiene fotos guardadas que no cargan: el PDF saldría con huecos. */
+class MissingPhotosError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MissingPhotosError';
+  }
+}
+
+/**
+ * Antes de pintar una sola página, comprueba que todas las fotos de ese PDF
+ * carguen (en modo CORS, como las carga el PDF). Si alguna no carga se cancela
+ * de inmediato diciendo cuáles son, en vez de reintentar página a página para
+ * acabar fallando igual.
+ */
+async function assertOrderPhotosLoad(order: Order, job: PdfJob, part: 'cover' | 'inner' | 'all'): Promise<void> {
+  const kind = getOrderPhotoKind(order);
+  const refs = collectOrderPhotos(order, kind)
+    .filter(r => !isLocalPhotoUrl(r.url) && !r.url.includes('justwhite'))
+    .filter(r => part === 'all' || (part === 'cover' ? r.pageIndex < 0 : r.pageIndex >= 0));
+  if (refs.length === 0) return;
+  const total = new Set(refs.map(r => r.url)).size;
+  job.onNote(`Comprobando que las ${total} fotos carguen…`);
+  const broken = await findBrokenPhotos(refs, {
+    crossOrigin: true,
+    onProgress: (done, all) => job.onNote(`Comprobando que las fotos carguen… ${done}/${all}`),
+  });
+  job.onNote(job.profile.name === 'safe' ? careModeNote(job.device) : null);
+  if (broken.length > 0) {
+    throw new MissingPhotosError(
+      `${broken.length} foto(s) no cargan (${describePhotoLocations(broken, kind)}). El PDF saldría con huecos, así que no se generó: reemplázalas (modo asistencia o pidiéndoselo al cliente) y vuelve a intentarlo.`
+    );
+  }
+}
+
+/** Motivo legible de un PDF que no se entregó. */
+const pdfFailureReason = (err: unknown): string => {
+  const msg = err instanceof Error ? err.message : String(err);
+  return err instanceof IncompleteRenderError
+    ? `${msg} Para no entregar un PDF con huecos se canceló. Cierra otras pestañas o programas y vuelve a intentarlo.`
+    : msg;
+};
+
+/** Fuentes incrustadas para html-to-image; si la descarga falla, se reintenta. */
+async function getFontEmbedCSSWithRetry(): Promise<string | undefined> {
+  for (let i = 0; i < 3; i++) {
+    const css = await getCalendarFontEmbedCSS();
+    if (css) return css;
+    await sleep(800 * (i + 1));
+  }
+  throw new IncompleteRenderError('no se pudieron descargar las fuentes del diseño (revisa la conexión)');
+}
 
 
 // ============================================================================
@@ -409,6 +487,8 @@ const OwnerDashboard: React.FC = () => {
   const [downloadProgress, setDownloadProgress] = useState<{ orderId: string | null; progress: number }>({ orderId: null, progress: 0 });
   const [downloadType, setDownloadType] = useState<'pdfs' | 'images' | null>(null);
   const [isTabHidden, setIsTabHidden] = useState(false);
+  // Aviso bajo la barra de progreso (modo cuidadoso, reintentos).
+  const [downloadNote, setDownloadNote] = useState<string | null>(null);
 
   // --- Detectar cambio de pestaña durante la descarga ---
   useEffect(() => {
@@ -676,9 +756,10 @@ const OwnerDashboard: React.FC = () => {
   // GENERADORES DE PDF SEPARADOS (PORTADA A DOBLE PÁGINA E INTERIORES)
   // ==========================================================================
 
-  const generateCoverPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
+  const generateCoverPDF = async (order: Order, onProgress: (p: number) => void, job: PdfJob): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
       try {
+        await assertOrderPhotosLoad(order, job, 'cover');
         const { wCm, hCm, coverSizeProp, pxWidth, pxHeight } = getDimensions(order);
 
         // VALIDACIÓN DE TELA: Si es Tela, el PDF no debe tener lomo ni contraportada
@@ -730,37 +811,10 @@ const OwnerDashboard: React.FC = () => {
           format: [totalWCm, totalHCm],
         });
 
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top  = '0';
-        container.style.left = '-99999px';
-        container.style.width  = `${totalPxWidth}px`;
-        container.style.height = `${totalPxHeight}px`;
-        document.body.appendChild(container);
-
-        const root = createRoot(container);
-
         // Open Sans (lomo) y Nunito Sans (portada) son fuentes web: cargarlas y
         // pasarlas incrustadas a html-to-image
         await loadCoverFonts();
-        const fontEmbedCSS = (await getCalendarFontEmbedCSS()) || undefined;
-
-        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
-          // Pre-cargar imagen de portada como Data URL antes de renderizar
-          const preloadedMap = await preloadImages(imageUrls);
-
-          root.render(
-            <div style={{ width: totalPxWidth, height: totalPxHeight, position: 'relative', overflow: 'hidden' }}>
-              {buildElement(preloadedMap)}
-            </div>
-          );
-
-          // Esperar activamente hasta que la imagen de portada esté realmente pintada
-          await waitForRenderReady(container);
-
-          const node = container.firstChild as HTMLElement;
-          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1, fontEmbedCSS });
-        };
+        const fontEmbedCSS = await getFontEmbedCSSWithRetry();
 
         let coverImageForPdf = order.coverData?.image || '';
         if (typeof coverImageForPdf === 'string' && coverImageForPdf.includes('justwhite')) {
@@ -771,8 +825,16 @@ const OwnerDashboard: React.FC = () => {
         const spineText = order.coverData?.spineText || order.customization?.coverContent?.spineText || order.coverData?.title || '';
 
         const coverUrls = coverImageForPdf && !coverImageForPdf.startsWith('data:') ? [coverImageForPdf] : [];
-        const dataUrl = await renderAndCapture(
-          (preloadedMap) => {
+        const coverBytes = await renderVerifiedPage(job, {
+          label: 'la portada',
+          widthPx: totalPxWidth,
+          heightPx: totalPxHeight,
+          imageUrls: coverUrls,
+          // La portada pinta la foto con un <img> (ImageCropper): html-to-image
+          // necesita poder incrustarla, por eso va como Data URL.
+          preloadAs: 'dataUrl',
+          fontEmbedCSS,
+          build: (preloadedMap) => {
             const resolvedCoverImage = preloadedMap[coverImageForPdf] || coverImageForPdf;
             return (
               <div style={{ width: totalPxWidth, height: totalPxHeight, backgroundColor: '#FFFFFF', position: 'relative' }}>
@@ -844,10 +906,9 @@ const OwnerDashboard: React.FC = () => {
               </div>
             );
           },
-          coverUrls
-        );
+        });
 
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, totalWCm, totalHCm);
+        pdf.addImage(coverBytes, 'JPEG', 0, 0, totalWCm, totalHCm);
 
         // ── Cm-space layout for cut lines ─────────────────────────────────────
         const contentWCm = isTela ? wCm : (panelWCm * 2) + spineCm + (gapCm * 2);
@@ -871,9 +932,6 @@ const OwnerDashboard: React.FC = () => {
         }
 
         onProgress(100);
-
-        root.unmount();
-        document.body.removeChild(container);
         resolve(pdf.output('blob'));
       } catch (err) {
         reject(err);
@@ -881,132 +939,74 @@ const OwnerDashboard: React.FC = () => {
     });
   };
 
-  const generateInnerPagesPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
-        const totalItems = order.pages?.length || 0;
-        let itemsProcessed = 0;
+  const generateInnerPagesPDF = async (order: Order, onProgress: (p: number) => void, job: PdfJob): Promise<Blob> => {
+    await assertOrderPhotosLoad(order, job, 'inner');
+    const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
+    const pages = order.pages || [];
+    const size = order.customization?.size || '';
 
-        const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
+    const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
 
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top = '0';
-        container.style.left = '-99999px'; 
-        container.style.width = `${pxWidth}px`;
-        container.style.height = `${pxHeight}px`;
-        document.body.appendChild(container); 
-        
-        const root = createRoot(container);
+    for (let i = 0; i < pages.length; i++) {
+      const pageBytes = await renderVerifiedPage(job, {
+        label: `la página ${i + 1} del interior`,
+        widthPx: pxWidth,
+        heightPx: pxHeight,
+        imageUrls: getPageImages(pages[i]).filter(Boolean) as string[],
+        preloadAs: 'objectUrl',
+        expectedPhotos: getAlbumPageSlots(order, i, size).filter(slot => slot.photo).length,
+        build: (preloadedMap, profile) => (
+          <AlbumPagePrintView key={i} customization={order.customization} pageIndex={i} order={order} preloadedMap={preloadedMap} cropperScale={profile.cropperScale} />
+        ),
+      });
+      if (i > 0) pdf.addPage();
+      pdf.addImage(pageBytes, 'JPEG', 0, 0, wCm, hCm);
+      onProgress(Math.round(((i + 1) / pages.length) * 100));
+    }
 
-        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
-          // Pre-cargar todas las imágenes de la página como Data URLs antes de renderizar
-          const preloadedMap = await preloadImages(imageUrls);
-
-          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
-
-          // Esperar activamente hasta que todos los CanvasCropper de la página estén dibujados
-          await waitForRenderReady(container);
-
-          const node = container.firstChild as HTMLElement;
-          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1 });
-        };
-
-        if (order.pages && order.pages.length > 0) {
-          for (let i = 0; i < order.pages.length; i++) {
-            if (i > 0) pdf.addPage();
-            const currentPage = order.pages[i];
-            const pageImages = getPageImages(currentPage).filter(Boolean) as string[];
-            const pageDataUrl = await renderAndCapture(
-              (preloadedMap) => (
-                <AlbumPagePrintView key={i} customization={order.customization} pageIndex={i} order={order} preloadedMap={preloadedMap} />
-              ),
-              pageImages
-            );
-            pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
-            itemsProcessed++;
-            onProgress(Math.round((itemsProcessed / totalItems) * 100));
-          }
-        }
-
-        root.unmount();
-        document.body.removeChild(container);
-        onProgress(100);
-        resolve(pdf.output('blob'));
-      } catch (err) {
-        reject(err);
-      }
-    });
+    onProgress(100);
+    return pdf.output('blob');
   };
 
-  const generateCalendarPDF = async (order: Order, onProgress: (p: number) => void): Promise<Blob> => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
-        const pages = getCalendarPrintPages(
-          normalizeCalendarType(order.customization?.type),
-          normalizeCalendarDesign(order.customization?.type, order.customization?.design),
-        );
-        const totalItems = pages.length;
-        let itemsProcessed = 0;
+  const generateCalendarPDF = async (order: Order, onProgress: (p: number) => void, job: PdfJob): Promise<Blob> => {
+    await assertOrderPhotosLoad(order, job, 'all');
+    const { wCm, hCm, pxWidth, pxHeight } = getDimensions(order);
+    const pages = getCalendarPrintPages(
+      normalizeCalendarType(order.customization?.type),
+      normalizeCalendarDesign(order.customization?.type, order.customization?.design),
+    );
 
-        const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
-        // Las plantillas usan fuentes web: se cargan y se incrustan una sola vez para todas las páginas.
-        await loadCalendarFonts();
-        const fontEmbedCSS = (await getCalendarFontEmbedCSS()) || undefined;
-        // Festivos del país que eligió el cliente (Colombia en pedidos anteriores a la opción).
-        const c = order.customization || {};
-        const holidays = await getHolidaysForCountry(
-          c.holidayCountry,
-          getCalendarYears(c.year || new Date().getFullYear(), c.startMonth || 1),
-        );
+    const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
+    // Las plantillas usan fuentes web: se cargan y se incrustan una sola vez para todas las páginas.
+    await loadCalendarFonts();
+    const fontEmbedCSS = await getFontEmbedCSSWithRetry();
+    // Festivos del país que eligió el cliente (Colombia en pedidos anteriores a la opción).
+    const c = order.customization || {};
+    const holidays = await getHolidaysForCountry(
+      c.holidayCountry,
+      getCalendarYears(c.year || new Date().getFullYear(), c.startMonth || 1),
+    );
 
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top = '0';
-        container.style.left = '-99999px'; 
-        container.style.width = `${pxWidth}px`;
-        container.style.height = `${pxHeight}px`;
-        document.body.appendChild(container); 
-        
-        const root = createRoot(container);
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const pageBytes = await renderVerifiedPage(job, {
+        label: `la hoja ${i + 1} del calendario`,
+        widthPx: pxWidth,
+        heightPx: pxHeight,
+        imageUrls: getCalendarPageImages(order, page),
+        preloadAs: 'objectUrl',
+        fontEmbedCSS,
+        build: (preloadedMap, profile) => (
+          <CalendarPrintPage key={i} order={order} page={page} holidays={holidays} preloadedMap={preloadedMap} cropperScale={profile.cropperScale} />
+        ),
+      });
+      if (i > 0) pdf.addPage();
+      pdf.addImage(pageBytes, 'JPEG', 0, 0, wCm, hCm);
+      onProgress(Math.round(((i + 1) / pages.length) * 100));
+    }
 
-        const renderAndCapture = async (buildElement: (preloadedMap: Record<string, string>) => React.ReactNode, imageUrls: string[] = []) => {
-          // Pre-cargar imagen(es) del mes como Data URLs antes de renderizar
-          const preloadedMap = await preloadImages(imageUrls);
-
-          root.render(<div style={{ width: pxWidth, height: pxHeight, position: 'relative', overflow: 'hidden' }}>{buildElement(preloadedMap)}</div>);
-
-          // Esperar activamente hasta que la imagen del mes esté realmente pintada
-          await waitForRenderReady(container);
-
-          const node = container.firstChild as HTMLElement;
-          return htmlToImage.toJpeg(node, { quality: 0.95, pixelRatio: 1, fontEmbedCSS });
-        };
-
-        for (let i = 0; i < pages.length; i++) {
-          if (i > 0) pdf.addPage();
-          const page = pages[i];
-          const pageDataUrl = await renderAndCapture(
-            (preloadedMap) => (
-              <CalendarPrintPage key={i} order={order} page={page} holidays={holidays} preloadedMap={preloadedMap} />
-            ),
-            getCalendarPageImages(order, page)
-          );
-          pdf.addImage(pageDataUrl, 'JPEG', 0, 0, wCm, hCm);
-          itemsProcessed++;
-          onProgress(Math.round((itemsProcessed / totalItems) * 100));
-        }
-
-        root.unmount();
-        document.body.removeChild(container);
-        onProgress(100);
-        resolve(pdf.output('blob'));
-      } catch (err) {
-        reject(err);
-      }
-    });
+    onProgress(100);
+    return pdf.output('blob');
   };
 
   // ==========================================================================
@@ -1109,46 +1109,49 @@ const OwnerDashboard: React.FC = () => {
       }
       await Promise.all(imagePromises);
 
+      const job = createPdfJob(setDownloadNote);
       if (isCalendar) {
         try {
-          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
         } catch (pdfError) {
           console.error("Error al generar PDF de calendario:", pdfError);
-          alert("Advertencia: El PDF del calendario no se pudo crear. El resto del ZIP se descargará normalmente.");
+          alert(`Advertencia: el PDF del calendario NO se incluyó porque no se pudo generar completo.\n\n${pdfFailureReason(pdfError)}\n\nEl resto del ZIP se descargará normalmente.`);
         }
       } else if (isAlbum) {
         const pdfErrors: string[] = [];
 
         // PDF 1: Portada — independiente del interior
         try {
-          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
+          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
         } catch (coverError) {
           console.error("Error al generar PDF de portada:", coverError);
-          pdfErrors.push("portada");
+          pdfErrors.push(`portada — ${pdfFailureReason(coverError)}`);
         }
 
         // PDF 2: Interior — se intenta siempre, independientemente del resultado de la portada
         try {
-          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
+          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
         } catch (innerError) {
           console.error("Error al generar PDF de páginas interiores:", innerError);
-          pdfErrors.push("páginas interiores");
+          pdfErrors.push(`páginas interiores — ${pdfFailureReason(innerError)}`);
         }
 
         if (pdfErrors.length > 0) {
-          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}. Los demás archivos se incluirán en el ZIP normalmente.`);
+          alert(`Advertencia: estos PDF NO se incluyeron porque no se pudieron generar completos:\n\n• ${pdfErrors.join('\n• ')}\n\nLos demás archivos se incluirán en el ZIP normalmente.`);
         }
       }
       
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${getExportPrefix(order)}_pedido_${order.id}.zip`);
+      setDownloadNote(null);
       setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); }, 2000);
     } catch (error: any) {
       console.error("Error al descargar el ZIP:", error);
       alert("Hubo un problema al empaquetar el pedido: " + (error.message || 'Error desconocido'));
+      setDownloadNote(null);
       setDownloadProgress({ orderId: null, progress: 0 });
     }
   };
@@ -1164,13 +1167,17 @@ const OwnerDashboard: React.FC = () => {
 
       const { isCalendar, isAlbum } = getDimensions(order);
 
+      const job = createPdfJob(setDownloadNote);
+      let pdfCount = 0;
       if (isCalendar) {
         try {
-          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); });
+          const pdfBlob = await generateCalendarPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Calendario_${order.id}_300DPI.pdf`, pdfBlob);
+          pdfCount++;
         } catch (pdfError) {
           console.error("Error al generar PDF de calendario:", pdfError);
-          alert("No se pudo generar el PDF del calendario.");
+          alert(`No se pudo generar el PDF del calendario completo, así que no se descargó.\n\n${pdfFailureReason(pdfError)}`);
+          setDownloadNote(null);
           setDownloadProgress({ orderId: null, progress: 0 });
           setDownloadType(null);
           return;
@@ -1178,30 +1185,42 @@ const OwnerDashboard: React.FC = () => {
       } else if (isAlbum) {
         const pdfErrors: string[] = [];
         try {
-          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); });
+          const coverBlob = await generateCoverPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: Math.round(progress * 0.3) }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Portada_${order.id}_300DPI.pdf`, coverBlob);
+          pdfCount++;
         } catch (coverError) {
           console.error("Error al generar PDF de portada:", coverError);
-          pdfErrors.push("portada");
+          pdfErrors.push(`portada — ${pdfFailureReason(coverError)}`);
         }
         try {
-          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); });
+          const innerBlob = await generateInnerPagesPDF(order, (progress) => { setDownloadProgress({ orderId: order.id, progress: 30 + Math.round(progress * 0.7) }); }, job);
           folder.file(`${getExportPrefix(order)}_Impresion_Interior_${order.id}_300DPI.pdf`, innerBlob);
+          pdfCount++;
         } catch (innerError) {
           console.error("Error al generar PDF de páginas interiores:", innerError);
-          pdfErrors.push("páginas interiores");
+          pdfErrors.push(`páginas interiores — ${pdfFailureReason(innerError)}`);
         }
         if (pdfErrors.length > 0) {
-          alert(`Advertencia: No se pudo generar el PDF de ${pdfErrors.join(" ni ")}.`);
+          alert(`Advertencia: estos PDF NO se incluyeron porque no se pudieron generar completos:\n\n• ${pdfErrors.join('\n• ')}`);
         }
+      }
+
+      // Ningún PDF salió completo: no descargar un ZIP vacío.
+      if (pdfCount === 0) {
+        setDownloadNote(null);
+        setDownloadProgress({ orderId: null, progress: 0 });
+        setDownloadType(null);
+        return;
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${getExportPrefix(order)}_pdfs_pedido_${order.id}.zip`);
+      setDownloadNote(null);
       setTimeout(() => { setDownloadProgress({ orderId: null, progress: 0 }); setDownloadType(null); }, 2000);
     } catch (error: any) {
       console.error("Error al descargar PDFs:", error);
       alert("Hubo un problema al generar los PDFs: " + (error.message || 'Error desconocido'));
+      setDownloadNote(null);
       setDownloadProgress({ orderId: null, progress: 0 });
       setDownloadType(null);
     }
@@ -2213,6 +2232,11 @@ const OwnerDashboard: React.FC = () => {
               {downloadProgress.progress}%
             </span>
           </div>
+          {downloadNote && !isTabHidden && (
+            <p className="text-[11px] text-sky-800 bg-sky-50 rounded-xl px-3 py-2 leading-snug max-w-[320px]">
+              {downloadNote}
+            </p>
+          )}
           {isTabHidden && (
             <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 leading-snug">
               El navegador pausa la generación en pestañas inactivas. <strong>Vuelve a esta pestaña</strong> para que continúe.

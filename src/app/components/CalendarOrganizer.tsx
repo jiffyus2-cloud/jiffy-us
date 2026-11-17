@@ -9,7 +9,7 @@ import { RichText } from './ui/RichText';
 import { CalendarCustomizationOptions } from './CalendarCustomization';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
-import { convertFileIfHeic } from '../utils/imageUtils';
+import { convertPhotoFile, PHOTO_ACCEPT } from '../utils/imageUtils';
 import { CalendarMonthSheet, CalendarTemplatePage, getCalendarMonths, getPhotoAspect, MONTHS_ES, normalizeCalendarDesign, normalizeCalendarType, useCalendarHolidays } from './calendar/CalendarTemplate';
 import jiffyLogo from '../../assets/JiffyLogo.svg';
 import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
@@ -129,7 +129,7 @@ export default function CalendarOrganizer({
   const uploadChosenFiles = async (filesArray: File[]) => {
     if (filesArray.length === 0) return;
     setIsValidating(true);
-    const convertedFiles = await Promise.all(filesArray.map(convertFileIfHeic));
+    const convertedFiles = await Promise.all(filesArray.map(convertPhotoFile));
     const results = await Promise.all(convertedFiles.map(checkImageDimensions));
 
     // Guardar info de baja resolución para mostrar el ícono después
@@ -146,7 +146,7 @@ export default function CalendarOrganizer({
     let file = event.target.files?.[0];
     if (!file) return;
 
-    file = await convertFileIfHeic(file);
+    file = await convertPhotoFile(file);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     if (result.isLowRes) {
@@ -542,7 +542,7 @@ export default function CalendarOrganizer({
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*"
+            accept={PHOTO_ACCEPT}
             onChange={handleBatchUpload}
             className="hidden"
             disabled={isProcessingFiles || isValidating}
@@ -580,7 +580,7 @@ export default function CalendarOrganizer({
         </div>
       )}
 
-      <input type="file" ref={specificFileInputRef} accept="image/*" onChange={handleSpecificUpload} className="hidden" disabled={isValidating || isProcessingFiles} />
+      <input type="file" ref={specificFileInputRef} accept={PHOTO_ACCEPT} onChange={handleSpecificUpload} className="hidden" disabled={isValidating || isProcessingFiles} />
 
       <div className="flex items-center justify-between mb-8 sticky top-24 bg-white/95 backdrop-blur-sm z-40 py-4 border-b">
         <div>

@@ -98,7 +98,7 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
   }, [x, y, zoom, rotation, src]);
 
   return (
-    <div ref={containerRef} data-image-cropper className="w-full h-full overflow-hidden bg-white relative">
+    <div ref={containerRef} data-image-cropper data-crop={JSON.stringify({ x, y, zoom, rotation })} className="w-full h-full overflow-hidden bg-white relative">
       <img
         ref={imgRef}
         src={src}
@@ -107,9 +107,10 @@ export default function ImageCropper({ src, position, alt = "Photo", onError, on
         style={style}
         onError={() => {
           setHasError(true);
-          // No hay más nada que pintar para esta imagen: marcar listo de una vez
-          // para que waitForRenderReady() (exportación PDF) no espere el timeout completo.
-          containerRef.current?.setAttribute('data-ready', 'true');
+          // No hay más nada que pintar: marcar como error de una vez para que la
+          // exportación PDF no espere en vano y, sobre todo, no capture la foto
+          // en blanco como si estuviera lista (reintenta o cancela ese PDF).
+          containerRef.current?.setAttribute('data-ready', 'error');
           onError?.(src);
         }}
       />

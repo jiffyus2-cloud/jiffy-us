@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { convertFileIfHeic } from '../utils/imageUtils';
+import { convertPhotoFile, PHOTO_ACCEPT, PHOTO_EXT_ACCEPT } from '../utils/imageUtils';
 import {
   savePendingPhotos,
   loadPendingPhotos,
@@ -295,7 +295,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       ) : (
         isEditing && (
           <div className="flex flex-col gap-1 sm:gap-2 p-1 items-center justify-center w-full h-full">
-            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
+            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = PHOTO_ACCEPT; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
               <div className="p-1.5 sm:p-2 bg-gray-200 group-hover:bg-gray-300 rounded-full"><ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
               <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{t('organizer.addPhoto')}</span>
             </button>
@@ -831,7 +831,7 @@ export default function PhotoOrganizer({
         const batch = filesArray.slice(i, i + BATCH_SIZE);
 
         // Convertir HEIC si iOS lo entregó sin convertir (edge case en algunos dispositivos)
-        const processedBatch = await Promise.all(batch.map(convertFileIfHeic));
+        const processedBatch = await Promise.all(batch.map(convertPhotoFile));
         allProcessed.push(...processedBatch);
 
         // Capturar info de debug por lote (solo cuando debugMode está activo)
@@ -1043,7 +1043,7 @@ export default function PhotoOrganizer({
     try {
       for (let i = 0; i < filesArray.length; i += BATCH_SIZE) {
         const batch = filesArray.slice(i, i + BATCH_SIZE);
-        const converted = await Promise.all(batch.map(convertFileIfHeic));
+        const converted = await Promise.all(batch.map(convertPhotoFile));
         const dims = await Promise.all(converted.map(checkImageDimensions));
         dims.filter(r => r.isLowRes).forEach(r => {
           pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
@@ -2796,8 +2796,8 @@ export default function PhotoOrganizer({
               </button>
             </>
           )}
-          <input ref={fileInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
-          <input ref={retryInputRef} type="file" multiple accept="image/*" onChange={handleRetryFileSelection} className="hidden" />
+          <input ref={fileInputRef} type="file" multiple accept={PHOTO_EXT_ACCEPT} onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
+          <input ref={retryInputRef} type="file" multiple accept={PHOTO_ACCEPT} onChange={handleRetryFileSelection} className="hidden" />
 
           <div className="mt-8 flex flex-col gap-4">
             {uploadedPhotos.length > 0 && (
@@ -3058,8 +3058,8 @@ export default function PhotoOrganizer({
       {renderAdvancedSettingsModal()}
 
       {/* SELECTORES DE ARCHIVOS DE LAS CARGAS MASIVAS DESDE EL EDITOR */}
-      <input ref={appendInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleAppendFileSelection} className="hidden" />
-      <input ref={fillInputRef} type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFillFileSelection} className="hidden" />
+      <input ref={appendInputRef} type="file" multiple accept={PHOTO_EXT_ACCEPT} onChange={handleAppendFileSelection} className="hidden" />
+      <input ref={fillInputRef} type="file" multiple accept={PHOTO_EXT_ACCEPT} onChange={handleFillFileSelection} className="hidden" />
 
       {/* PROGRESO DEL LOTE QUE SE ESTÁ PROCESANDO DESDE EL EDITOR */}
       {editorBatchProgress && (

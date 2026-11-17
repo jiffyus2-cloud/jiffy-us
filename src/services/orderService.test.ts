@@ -201,4 +201,15 @@ describe('buildLoosePhotos (calendario)', () => {
     expect(result).toEqual(['https://storage/x/r?token=r', 'https://storage/x/known?token=k']);
     expect(storage.uploadBytes).not.toHaveBeenCalled();
   });
+
+  it('no sube una foto vacía/ilegible: la marca como "unreadable" sin reintentar', async () => {
+    const storage = await import('firebase/storage');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ blob: async () => new Blob([]) })));
+    const ctx = makeCtx();
+    const result = await buildLoosePhotos(['blob:http://x/broken'], ctx);
+    expect(result).toEqual([]);
+    expect(storage.uploadBytes).not.toHaveBeenCalled();
+    expect(ctx.failures).toEqual([{ pageIndex: 0, slotIndex: 0, sourceUrl: 'blob:http://x/broken', reason: 'unreadable' }]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

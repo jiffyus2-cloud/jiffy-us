@@ -16,6 +16,7 @@ import { Album, Calendar, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_CU
 import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError, ASSISTABLE_DRAFT_STATUSES } from '../../services/orderService';
 import { buildWhatsAppUrl } from '../config/contact';
 import type { PageVariantId } from '../utils/pageLayouts';
+import { collectDesignPhotos, findBrokenPhotos, describePhotoLocations, isLocalPhotoUrl, type PhotoRef } from '../utils/photoHealth';
 
 const DB_NAME = 'JiffyAppDB';
 const STORE_NAME = 'drafts';
@@ -141,7 +142,13 @@ export default function Creator() {
    */
   const [uploadedUrlMap, setUploadedUrlMap] = useState<Record<string, string>>({});
   /** Fotos que no se pudieron subir tras los reintentos; bloquea el avance a checkout. */
-  const [uploadFailure, setUploadFailure] = useState<{ urls: string[]; count: number } | null>(null);
+  const [uploadFailure, setUploadFailure] = useState<{ urls: string[]; count: number; unreadable: number } | null>(null);
+  /**
+   * Fotos ya guardadas que no cargan (archivo borrado o dañado). El guardado sí
+   * se hace, para no perder trabajo, pero se avisa y no se pasa al pago: esas
+   * fotos saldrían en blanco en el álbum impreso.
+   */
+  const [brokenPhotosWarning, setBrokenPhotosWarning] = useState<{ refs: PhotoRef[]; kind: 'album' | 'calendar'; context: 'saved' | 'checkout' | 'admin' } | null>(null);
   /** URLs señaladas en el editor para que el usuario las reemplace una a una. */
   const [failedUploadUrls, setFailedUploadUrls] = useState<string[]>([]);
 
@@ -341,6 +348,7 @@ export default function Creator() {
       setUploadFailure({
         urls: e.failures.map(f => f.sourceUrl),
         count: e.failures.length,
+        unreadable: e.failures.filter(f => f.reason === 'unreadable').length,
       });
       return true;
     }
@@ -366,6 +374,25 @@ export default function Creator() {
       return true;
     }
     return false;
+  };
+
+  /**
+   * Comprueba que las fotos YA GUARDADAS del diseño (URLs de Storage) carguen de
+   * verdad. Las locales nuevas se comprueban al subirlas (orderService). Lo ya
+   * comprobado en la sesión no se vuelve a descargar.
+   */
+  const auditSavedPhotos = async (overrides?: Parameters<typeof buildDesignData>[0]): Promise<{ refs: PhotoRef[]; kind: 'album' | 'calendar' }> => {
+    const kind = designRef.current.selectedProduct === 'calendar' ? 'calendar' : 'album';
+    try {
+      const { designData } = buildDesignData(overrides);
+      const refs = collectDesignPhotos(designData.photos as any[], designData.coverData?.image, kind)
+        .filter(r => !isLocalPhotoUrl(r.url));
+      return { refs: await findBrokenPhotos(refs), kind };
+    } catch (e) {
+      // La comprobación nunca debe impedir guardar.
+      console.warn('[Creator] No se pudo comprobar las fotos guardadas', e);
+      return { refs: [], kind };
+    }
   };
 
   const handleCheckoutRedirect = async (finalData?: {
@@ -394,12 +421,19 @@ export default function Creator() {
         return;
       }
 
+      const audit = await auditSavedPhotos(overrides);
       const orderId = await persistDraft({
         status: 'saved_draft',
         onProgress: (progress) => setUploadProgress(progress),
         overrides,
         allowShrink,
       });
+
+      // Con fotos que no cargan no se pasa al pago: se imprimirían en blanco.
+      if (audit.refs.length > 0) {
+        setBrokenPhotosWarning({ ...audit, context: 'checkout' });
+        return;
+      }
 
       setResumingOrderId(null);
       navigate('/checkout', {
@@ -441,12 +475,17 @@ export default function Creator() {
     setUploadProgress(0);
 
     const attempt = async (allowShrink: boolean) => {
+      const audit = await auditSavedPhotos({ photos: finalData?.photos });
       await persistDraft({
         status: 'saved_draft',
         onProgress: (progress) => setUploadProgress(progress),
         overrides: { photos: finalData?.photos },
         allowShrink,
       });
+      if (audit.refs.length > 0) {
+        setBrokenPhotosWarning({ ...audit, context: 'admin' });
+        return;
+      }
       navigate('/owner-dashboard');
     };
 
@@ -573,6 +612,7 @@ export default function Creator() {
     // ya descubiertas: sin ellas, al volver del login las blob: muertas fallarían al subir.
     setUploadedUrlMap(designData.uploadedUrlMap || {});
     setUploadFailure(null);
+    setBrokenPhotosWarning(null);
     setFailedUploadUrls([]);
 
     if (productType === 'album') {
@@ -747,7 +787,9 @@ export default function Creator() {
       setIsSavingDraft(true);
 
       const attempt = async (allowShrink: boolean) => {
+        const audit = await auditSavedPhotos();
         const newDraftId = await persistDraft({ status: 'saved_draft', allowShrink });
+        if (audit.refs.length > 0) setBrokenPhotosWarning({ ...audit, context: 'saved' });
 
         setSavedDrafts(prev => {
           const exists = prev.find(d => d.id === newDraftId);
@@ -791,6 +833,8 @@ export default function Creator() {
     setUploadProgress(0);
     const attempt = (allowShrink: boolean) =>
       enqueueSave(async () => {
+        const audit = await auditSavedPhotos();
+        if (audit.refs.length > 0) setBrokenPhotosWarning({ ...audit, context: 'saved' });
         const { designData } = buildDesignData();
         const result = await updateOrderDesign(
           editingPaidOrderId, user.uid, designData, setUploadProgress, allowShrink
@@ -1423,10 +1467,16 @@ export default function Creator() {
                 <p className="text-sm text-gray-600 mt-1">
                   {t('creator.uploadFailedDesc')}
                 </p>
+                {uploadFailure.unreadable > 0 && (
+                  <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2 mt-2">
+                    {t('creator.unreadablePhotosDesc', { count: uploadFailure.unreadable })}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
+              {/* Reintentar no arregla una foto ilegible: solo reemplazarla. */}
+              {uploadFailure.unreadable < uploadFailure.count && <button
                 onClick={() => {
                   setUploadFailure(null);
                   if (adminEdit) handleAdminSaveAndReturn();
@@ -1437,7 +1487,7 @@ export default function Creator() {
               >
                 <RefreshCw className="w-4 h-4" />
                 Reintentar
-              </button>
+              </button>}
               <button
                 onClick={() => {
                   setFailedUploadUrls(uploadFailure.urls);
@@ -1447,6 +1497,54 @@ export default function Creator() {
               >
                 Ver fotos afectadas
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        Fotos ya guardadas que no cargan: el borrador se guardó, pero se avisa
+        dónde están para reemplazarlas antes de imprimir.
+      */}
+      {brokenPhotosWarning && (
+        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">
+                  {t('creator.brokenPhotosTitle', { count: brokenPhotosWarning.refs.length })}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {t('creator.brokenPhotosWhere', { where: describePhotoLocations(brokenPhotosWarning.refs, brokenPhotosWarning.kind) })}
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  {t(brokenPhotosWarning.context === 'checkout' ? 'creator.brokenPhotosCheckout'
+                    : brokenPhotosWarning.context === 'admin' ? 'creator.brokenPhotosAdmin'
+                    : 'creator.brokenPhotosSaved')}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  setFailedUploadUrls(Array.from(new Set(brokenPhotosWarning.refs.map(r => r.url))));
+                  setBrokenPhotosWarning(null);
+                }}
+                className="flex-1 bg-black text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                Ver fotos afectadas
+              </button>
+              {brokenPhotosWarning.context === 'admin' && (
+                <button
+                  onClick={() => { setBrokenPhotosWarning(null); navigate('/owner-dashboard'); }}
+                  className="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Volver al panel
+                </button>
+              )}
             </div>
           </div>
         </div>

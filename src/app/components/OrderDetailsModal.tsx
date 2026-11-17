@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Image as ImageIcon, Pencil } from 'lucide-react';
+import { X, Package, Calendar as CalendarIcon, MapPin, CreditCard, BookOpen, Layers, CheckCircle2, Clock, Image as ImageIcon, Pencil, AlertTriangle, Loader2 } from 'lucide-react';
+import { collectOrderPhotos, findBrokenPhotos, describePhotoLocations, isLocalPhotoUrl, getOrderPhotoKind, type PhotoRef } from '../utils/photoHealth';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from './ui/badge';
@@ -279,6 +280,20 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
     });
   }, [isOpen, order]);
 
+  // Fotos guardadas que no cargan: antes solo se veía "No se cargó" en el marco,
+  // perdido entre decenas de páginas. Se comprueban todas y se avisa arriba.
+  const [brokenPhotos, setBrokenPhotos] = useState<PhotoRef[] | null>(null);
+  useEffect(() => {
+    setBrokenPhotos(null);
+    if (!isOpen || !order) return;
+    let cancelled = false;
+    const kind = getOrderPhotoKind(order);
+    const refs = collectOrderPhotos(order, kind)
+      .filter(r => !isLocalPhotoUrl(r.url) && !r.url.includes('justwhite'));
+    findBrokenPhotos(refs).then(broken => { if (!cancelled) setBrokenPhotos(broken); });
+    return () => { cancelled = true; };
+  }, [isOpen, order]);
+
   if (!isOpen || !order) return null;
 
   const formatDate = (dateString: string) => {
@@ -451,6 +466,23 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
         </div>
 
         <div className="overflow-y-auto p-6 space-y-8">
+          {brokenPhotos === null ? (
+            <p className="text-xs text-gray-400 flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('orderView.checkingPhotos')}
+            </p>
+          ) : brokenPhotos.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-900 text-sm">
+                  {t('orderView.brokenPhotosTitle', { count: brokenPhotos.length })}
+                </p>
+                <p className="text-sm text-amber-800 mt-0.5">
+                  {t('orderView.brokenPhotosDesc', { where: describePhotoLocations(brokenPhotos, getOrderPhotoKind(order)) })}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
               <div className="aspect-square rounded-[3%] overflow-hidden shadow-inner bg-white border border-gray-100 p-2">
