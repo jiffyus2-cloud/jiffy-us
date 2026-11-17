@@ -14,7 +14,7 @@
 // de la tipografía elegida.
 // ============================================================================
 
-import { markAt, MARK_BOLD } from './textMarks';
+import { markAt, markStyle, segmentText, MARK_BOLD } from './textMarks';
 
 export type TextOverflowMode = 'limit' | 'shrink';
 
@@ -128,8 +128,102 @@ export function countWrappedLines(
   return total;
 }
 
+// ── Medición real en el navegador ───────────────────────────────────────────
+// La estimación de arriba es a propósito pesimista (ancho medio con margen,
+// palabras que no entran donde dice el promedio): con ella el cliente veía
+// medio cuadro vacío y ya no le dejaba escribir. En el navegador se mide el
+// texto de verdad: un bloque oculto con la misma tipografía, el mismo ajuste de
+// línea y la misma escala (`fontSize * 0.25` % del ancho del marco) que la
+// página. La estimación queda para Node (tests) o si el navegador no maqueta.
+
+/** Ancho del marco de medición. A esta escala 1 cqi = 10 px. */
+const MEASURE_FRAME_PX = 1000;
+/**
+ * Se mide con la caja un 1 % más estrecha que la que se pinta (89 % frente a
+ * 90 %): margen para las diferencias de ajuste entre navegadores y entre la
+ * miniatura, el visor y el PDF. A simple vista no se nota.
+ */
+const MEASURE_BOX_WIDTH_CQI = BOX_WIDTH_CQI - 1;
+
+let probe: HTMLDivElement | null = null;
+let probeWorks: boolean | null = null;
+const measureCache = new Map<string, number>();
+
+function getProbe(): HTMLDivElement | null {
+  if (probeWorks === false) return null;
+  if (typeof document === 'undefined' || !document.body) return null;
+  if (!probe || !probe.isConnected) {
+    const host = document.createElement('div');
+    host.setAttribute('aria-hidden', 'true');
+    host.dataset.textMeasure = '';
+    Object.assign(host.style, {
+      position: 'fixed',
+      left: '-20000px',
+      top: '0',
+      width: `${MEASURE_FRAME_PX}px`,
+      visibility: 'hidden',
+      pointerEvents: 'none',
+      contain: 'layout style',
+    });
+    probe = document.createElement('div');
+    Object.assign(probe.style, {
+      width: `${(MEASURE_FRAME_PX * MEASURE_BOX_WIDTH_CQI) / 100}px`,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+      lineHeight: String(LINE_HEIGHT_EM),
+      padding: '0',
+      margin: '0',
+    });
+    host.appendChild(probe);
+    document.body.appendChild(host);
+    // Una tipografía web que termina de cargar cambia lo que cabe.
+    document.fonts?.addEventListener?.('loadingdone', () => measureCache.clear());
+  }
+  if (probeWorks === null) {
+    probe.style.fontSize = '20px';
+    probe.textContent = 'x';
+    // jsdom y similares no maquetan: todo mediría 0.
+    probeWorks = probe.offsetHeight > 0;
+    if (!probeWorks) return null;
+  }
+  return probe;
+}
+
+/**
+ * Alto que ocupa `text` a `fontSize`, como fracción del alto utilizable del
+ * marco (1 = lleno). null si no se puede medir.
+ */
+export function measureTextFill(text: string, fontSize: number, shape: TextBoxShape = {}): number | null {
+  const el = getProbe();
+  if (!el) return null;
+  const aspect = shape.aspect && shape.aspect > 0 && Number.isFinite(shape.aspect) ? shape.aspect : 1;
+  const key = `${fontSize}|${aspect}|${shape.fontFamily ?? ''}|${shape.marks ?? ''}|${text}`;
+  let height = measureCache.get(key);
+  if (height === undefined) {
+    el.style.fontFamily = shape.fontFamily || '';
+    el.style.fontSize = `${(Math.max(1, fontSize) * 0.25 * MEASURE_FRAME_PX) / 100}px`;
+    el.replaceChildren();
+    for (const seg of segmentText(text, shape.marks)) {
+      const span = document.createElement('span');
+      const st = markStyle(seg.mark);
+      span.style.fontWeight = st.fontWeight;
+      span.style.fontStyle = st.fontStyle;
+      span.textContent = seg.text;
+      el.appendChild(span);
+    }
+    height = el.getBoundingClientRect().height;
+    if (measureCache.size > 3000) measureCache.clear();
+    measureCache.set(key, height);
+  }
+  const usable = (MEASURE_FRAME_PX / aspect) * USABLE_HEIGHT;
+  return height / usable;
+}
+
 /** ¿Cabe `text` a `fontSize` en el marco? */
 export function textFitsBox(text: string, fontSize: number, shape: TextBoxShape = {}): boolean {
+  // Medio píxel de tolerancia sobre ~900 px por redondeos de subpíxel.
+  const fill = measureTextFill(text, fontSize, shape);
+  if (fill !== null) return fill <= 1.0005;
   const { charsPerLine, maxLines } = getTextBoxGrid(fontSize, shape);
   const { upper, bold } = charWidthFor(shape.fontFamily);
   const marks = shape.marks;

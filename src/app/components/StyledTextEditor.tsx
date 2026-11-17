@@ -237,6 +237,8 @@ function deletionRange(
 export interface StyledTextEditorHandle {
   /** Pone o quita negrilla/itálica en la selección (o para lo próximo que se escriba). */
   toggle: (bit: number) => void;
+  /** Pone el foco con el cursor al final (clic en el área vacía del marco). */
+  focusEnd: () => void;
 }
 
 interface StyledTextEditorProps {
@@ -425,7 +427,15 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
     setSelectionOffsets(root, sel.start, sel.end);
   }, [commit, reportActive]);
 
-  useImperativeHandle(ref, () => ({ toggle }), [toggle]);
+  const focusEnd = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    root.focus();
+    const end = modelRef.current.text.length;
+    setSelectionOffsets(root, end, end);
+  }, []);
+
+  useImperativeHandle(ref, () => ({ toggle, focusEnd }), [toggle, focusEnd]);
 
   // Pintado inicial y cambios que llegan de fuera (p. ej. el recorte al bajar
   // el límite de caracteres al cambiar el tamaño de letra).
@@ -504,20 +514,25 @@ export const StyledTextEditor = forwardRef<StyledTextEditorHandle, StyledTextEdi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Igual que en la página: la caja ocupa el 90 % del ancho y el texto va
+  // centrado en vertical. Su alto es el del texto (lo que cabe ya lo garantiza
+  // `fits`); el scroll solo es red de seguridad para textos viejos.
   const baseStyle: React.CSSProperties = {
     width: '100%',
-    height: '100%',
+    maxHeight: '100%',
+    minHeight: '1.3em',
     overflowY: 'auto',
     outline: 'none',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+    cursor: 'text',
     ...style,
   };
 
   return (
-    <div className="relative" style={{ width: '90%', height: '90%' }}>
+    <div className="relative flex flex-col justify-center" style={{ width: '90%', maxHeight: '100%' }}>
       {!text && placeholder && (
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-40" style={{ ...baseStyle, overflowY: 'hidden' }}>
+        <div aria-hidden className="absolute inset-x-0 top-0 pointer-events-none opacity-40" style={{ ...baseStyle, overflowY: 'hidden' }}>
           {placeholder}
         </div>
       )}
