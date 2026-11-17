@@ -11,6 +11,8 @@ import { Header } from './components/navigation/Header';
 import ProtectedRoute from './components/ProtectedRoute';
 import { SupportFab } from './components/support/SupportFab';
 import OneclicLabPage, { ONECLIC_LAB_PATH } from './components/oneclic/OneclicLabPage';
+import LegalPage from './components/legal/LegalPage';
+import { LEGAL_PATHS } from './components/legal/legalContent';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -80,6 +82,14 @@ export const router = createBrowserRouter([
   {
     path: '/success',
     element: <Success />,
+  },
+  {
+    path: LEGAL_PATHS.privacy,
+    element: <LegalPage kind="privacy" />,
+  },
+  {
+    path: LEGAL_PATHS.terms,
+    element: <LegalPage kind="terms" />,
   },
   {
     path: '/owner-dashboard',
