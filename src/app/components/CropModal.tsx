@@ -88,10 +88,11 @@ export default function CropModal({
       const areaPadX = (parseFloat(areaStyle.paddingLeft) || 0) + (parseFloat(areaStyle.paddingRight) || 0);
       const availW = Math.min(area.clientWidth - areaPadX, MAX_FRAME_WIDTH);
 
-      // Alto máximo real del modal: su max-height (95vh) o, si es menor, el hueco que deja el overlay
+      // Alto máximo real del modal: max-h-[min(95vh,100%)] → 95vh o, si es menor, el
+      // hueco visible que deja el overlay (en móvil la barra del navegador lo achica).
       const overlay = modal.parentElement;
-      const overlayInnerH = window.innerHeight - (overlay ? paddingY(overlay) : 0);
-      const modalMaxH = Math.min(parseFloat(getComputedStyle(modal).maxHeight) || overlayInnerH, overlayInnerH);
+      const overlayInnerH = (overlay?.clientHeight || window.innerHeight) - (overlay ? paddingY(overlay) : 0);
+      const modalMaxH = Math.min(window.innerHeight * 0.95, overlayInnerH);
 
       const fixedH =
         (headerRef.current?.offsetHeight ?? 0) +
@@ -242,10 +243,10 @@ export default function CropModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
         ref={modalRef}
-        className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto flex flex-col animate-in zoom-in-95 duration-300"
+        className="my-auto bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[min(95vh,100%)] overflow-y-auto flex flex-col animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         {/* CABECERA */}

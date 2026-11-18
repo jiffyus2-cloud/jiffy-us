@@ -227,7 +227,7 @@ export default function AlbumCustomization({ album, onCustomizationComplete, ini
 
             {previewImage && (
               <div
-                className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+                className="fixed inset-0 overflow-y-auto z-50 bg-black/80 flex items-center justify-center"
                 style={{ animation: `${previewFadingOut ? 'fadeOut' : 'fadeIn'} 500ms ease forwards` }}
                 onMouseUp={cancelPreview}
                 onTouchEnd={cancelPreview}

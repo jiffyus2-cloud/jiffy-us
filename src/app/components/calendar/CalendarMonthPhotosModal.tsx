@@ -81,8 +81,8 @@ export default function CalendarMonthPhotosModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-4 sm:p-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-xl w-full p-4 sm:p-6 max-h-[min(95vh,100%)] overflow-y-auto animate-in zoom-in-95 duration-200">
           <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
             <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <Settings className="w-5 h-5 sm:w-6 sm:h-6" /> {monthLabels[position]}
@@ -138,8 +138,8 @@ export default function CalendarMonthPhotosModal({
       </div>
 
       {swapFrom !== null && (
-        <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[min(85vh,100%)] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3 gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-12 shrink-0 overflow-hidden rounded border-2 border-black" style={{ aspectRatio: String(photoAspect) }}>

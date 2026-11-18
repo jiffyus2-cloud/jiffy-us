@@ -104,8 +104,8 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ onClose, onCreated }) =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="my-auto bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="p-6 border-b border-gray-100">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Key className="w-5 h-5" /> Nueva Clave de Agente

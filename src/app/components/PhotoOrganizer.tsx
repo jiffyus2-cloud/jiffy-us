@@ -2276,8 +2276,8 @@ export default function PhotoOrganizer({
   const renderDuplicateModal = () => {
     if (!duplicateModal) return null;
     return (
-      <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
           <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
@@ -2315,8 +2315,8 @@ export default function PhotoOrganizer({
     if (!selectedLowResWarning) return null;
     const { url, pageIndex, photoIndex, width, height } = selectedLowResWarning;
     return (
-      <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
           <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
@@ -2370,8 +2370,8 @@ export default function PhotoOrganizer({
 
     return (
       <>
-      <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full p-4 sm:p-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-5xl w-full p-4 sm:p-6 max-h-[min(95vh,100%)] overflow-y-auto animate-in zoom-in-95 duration-200">
           <div className="flex justify-between items-center mb-4 sm:mb-6 border-b border-gray-100 pb-3 sm:pb-4">
             <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><Settings className="w-5 h-5 sm:w-6 sm:h-6"/> Ajustes de la Página {pageIndex + 1}</h3>
             <button onClick={() => { setAdvancedSettingsModal(null); setEditingPageIndex(null); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -2575,8 +2575,8 @@ export default function PhotoOrganizer({
           // "Agregar" solo si la página destino tiene sitio (hueco libre o puede crecer).
           const canAdd = albumMovePhotoToPage(currentAlbumState(), fromPage, fromPhoto, targetPage, albumConfig).success;
           return (
-            <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-lg w-full p-4 sm:p-6 max-h-[min(90vh,100%)] overflow-y-auto flex flex-col gap-4 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center border-b border-gray-100 pb-3">
                   <h3 className="text-lg sm:text-xl font-bold">{t('organizer.swapTitle', { page: targetPage + 1 })}</h3>
                   <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -2639,8 +2639,8 @@ export default function PhotoOrganizer({
         }
 
         return (
-          <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[130] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 max-h-[min(85vh,100%)] flex flex-col animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
                 <h3 className="text-lg sm:text-xl font-bold">Enviar foto a la página...</h3>
                 <button onClick={() => setSendPhotoPicker(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -2674,8 +2674,8 @@ export default function PhotoOrganizer({
 
         {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
         {showPickerWarning && (
-          <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+          <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[250] bg-black/60 flex items-center justify-center p-4">
+            <div className="my-auto bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
               <h3 className="text-xl font-bold text-center">Antes de subir tus fotos</h3>
 
               {/* Video explicativo iOS */}
@@ -3287,8 +3287,8 @@ export default function PhotoOrganizer({
         };
 
         return (
-          <div className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+          <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="mt-auto sm:my-auto bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[min(90vh,100%)] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
               <div className="flex items-start gap-4 mb-5">
                 <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shrink-0">
                   <Upload className="w-6 h-6" />
@@ -3433,8 +3433,8 @@ export default function PhotoOrganizer({
 
       {/* CAMBIO DE TAMAÑO DEL ÁLBUM: fotos que ya no cabrían por página */}
       {sizeMigrationModal && (
-        <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
                 <AlertCircle className="w-6 h-6" />
@@ -3496,8 +3496,8 @@ export default function PhotoOrganizer({
 
       {/* MODAL INTELIGENTE DE PÁGINAS VACÍAS */}
       {emptyPagesModalData && (
-        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
                 <AlertCircle className="w-6 h-6" />
@@ -3572,8 +3572,8 @@ export default function PhotoOrganizer({
 
       {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE PÁGINA */}
       {deletePageConfirm && (
-        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-5">
               <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
                 <Trash2 className="w-6 h-6" />
@@ -3667,8 +3667,8 @@ export default function PhotoOrganizer({
 
       {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE FOTO / TEXTO */}
       {deleteSlotConfirm && (
-        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-5">
               <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
                 <Trash2 className="w-6 h-6" />
@@ -3749,8 +3749,8 @@ export default function PhotoOrganizer({
         };
 
         return (
-          <div className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+          <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[220] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="mt-auto sm:my-auto bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[min(90vh,100%)] overflow-y-auto animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
               <div className="flex items-start gap-4 mb-5">
                 <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0">
                   <Shuffle className="w-6 h-6" />
@@ -3905,8 +3905,8 @@ export default function PhotoOrganizer({
 
       {/* MODAL DE AYUDA */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[300] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="mt-auto sm:my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold">Cómo organizar tu álbum</h3>
               <button onClick={() => setShowHelpModal(false)} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
@@ -3954,8 +3954,8 @@ export default function PhotoOrganizer({
 
       {/* MODAL DE CONFLICTOS DE LAYOUT */}
       {layoutChangeModal && (
-        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
                 <AlertCircle className="w-6 h-6" />
@@ -4319,7 +4319,7 @@ export default function PhotoOrganizer({
           `flex-1 md:flex-none md:w-9 h-11 md:h-9 rounded-lg border-2 flex items-center justify-center transition-all ${active ? 'border-black bg-black text-white' : 'border-gray-100 text-gray-500 hover:border-gray-300 hover:text-black'}`;
         return (
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6"
+            className="fixed inset-0 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6"
             onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
           >
             <div

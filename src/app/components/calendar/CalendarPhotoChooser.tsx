@@ -48,8 +48,8 @@ export default function CalendarPhotoChooser({ files, max, onConfirm, onCancel }
   };
 
   return (
-    <div className="fixed inset-0 z-[220] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[220] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[min(90vh,100%)] flex flex-col animate-in zoom-in-95 duration-200">
         <div className="p-6 pb-4 text-center border-b">
           <h3 className="text-2xl font-bold text-gray-900 mb-2">{t('calendarOrg.chooseTitle')}</h3>
           <p className="text-sm text-gray-500">
@@ -98,8 +98,9 @@ export default function CalendarPhotoChooser({ files, max, onConfirm, onCancel }
           </div>
         </div>
 
-        {/* pr-20 en móvil: el botón flotante de WhatsApp (z-400) tapaba la esquina de "Usar" */}
-        <div className="p-4 pr-20 sm:pr-4 border-t flex flex-col sm:flex-row items-center gap-3">
+        {/* El botón flotante de WhatsApp (z-400) ya no tapa "Usar": el fondo del modal
+            reserva max-sm:pb-24 debajo del panel en móvil. */}
+        <div className="p-4 border-t flex flex-col sm:flex-row items-center gap-3">
           <div className="flex flex-col items-center sm:items-start">
             <span className={`text-sm font-bold ${stillToDiscard > 0 ? 'text-red-600' : 'text-green-700'}`}>
               {stillToDiscard > 0

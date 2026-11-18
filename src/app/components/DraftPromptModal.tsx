@@ -95,8 +95,8 @@ const DraftPromptModal: React.FC<DraftPromptModalProps> = ({
   const mostRecentDuplicateIds = getMostRecentDuplicateIds(drafts);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4 py-4">
+      <div className="my-auto bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-4">
           <div className="flex items-center gap-3">

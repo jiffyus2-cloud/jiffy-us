@@ -318,8 +318,8 @@ export default function CalendarOrganizer({
   const renderDuplicateModal = () => {
     if (!duplicateModal) return null;
     return (
-      <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[210] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
           <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
@@ -357,8 +357,8 @@ export default function CalendarOrganizer({
     if (!selectedLowResWarning) return null;
     const { url, slotIndex, width, height } = selectedLowResWarning;
     return (
-      <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
           <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8" />
           </div>
