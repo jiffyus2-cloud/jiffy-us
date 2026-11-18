@@ -279,7 +279,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
   const productData = getProductData();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm overscroll-none" onClick={onClose}>
+    <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm overscroll-none" onClick={onClose}>
       <div 
         className="bg-white w-full h-[100dvh] md:h-auto md:max-h-[90dvh] md:rounded-3xl shadow-2xl max-w-5xl flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -415,7 +415,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
       {/* Preview tamaños de álbum */}
       {sizePreviewImage && (
         <div
-          className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center"
+          className="fixed inset-0 overflow-y-auto z-[300] bg-black/80 flex items-center justify-center"
           style={{ animation: `${sizePreviewFadingOut ? 'fadeOut' : 'fadeIn'} 500ms ease forwards` }}
           onMouseUp={cancelSizePreview}
           onTouchEnd={cancelSizePreview}
@@ -431,7 +431,7 @@ export default function ProductDetailsModal({ isOpen, onClose, productType, onCo
       {/* Lightbox para Imágenes */}
       {selectedImage && (
         <div 
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-300 overscroll-none"
+          className="fixed inset-0 overflow-y-auto z-[200] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-300 overscroll-none"
           onClick={() => setSelectedImage(null)}
         >
           <button

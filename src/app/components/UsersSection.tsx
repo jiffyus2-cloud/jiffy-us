@@ -199,8 +199,8 @@ const UserDetailModal: React.FC<{
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="my-auto bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[min(90vh,100%)] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -408,8 +408,8 @@ const UserFormModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="my-auto bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold">{isEdit ? 'Editar Usuario' : 'Crear Usuario'}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -501,8 +501,8 @@ const DeleteConfirmModal: React.FC<{
   onCancel: () => void;
   deleting: boolean;
 }> = ({ userName, onConfirm, onCancel, deleting }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+  <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div className="my-auto bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
           <Trash2 className="w-6 h-6 text-red-600" />

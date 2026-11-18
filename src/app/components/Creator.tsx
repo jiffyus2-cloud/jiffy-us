@@ -1363,8 +1363,8 @@ export default function Creator() {
       {currentStep === 'organize' && renderOrganizer()}
 
       {isSaving && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center px-4">
-          <div className="bg-white p-8 rounded-3xl max-w-md w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center px-4 py-4">
+          <div className="my-auto bg-white p-8 rounded-3xl max-w-md w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-300">
             
             <div className="bg-gray-50 p-4 rounded-full">
               <Upload className="w-8 h-8 text-black animate-bounce" />
@@ -1454,8 +1454,8 @@ export default function Creator() {
         el mensaje debe dejar claro que no se perdió nada.
       */}
       {uploadFailure && (
-        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[120] bg-black/50 flex items-center justify-center p-4">
+          <div className="my-auto bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -1507,8 +1507,8 @@ export default function Creator() {
         dónde están para reemplazarlas antes de imprimir.
       */}
       {brokenPhotosWarning && (
-        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[120] bg-black/50 flex items-center justify-center p-4">
+          <div className="my-auto bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-amber-600" />

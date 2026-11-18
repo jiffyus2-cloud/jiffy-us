@@ -437,9 +437,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-white/90 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[100] flex items-center justify-center p-4 bg-white/90 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div 
-        className="bg-gray-50/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="my-auto bg-gray-50/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[min(90vh,100%)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">

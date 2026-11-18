@@ -74,7 +74,7 @@ export function SupportChatPanel({ onClose }: SupportChatPanelProps) {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm sm:w-96 flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
+    <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-h-[calc(100%-2rem)] max-w-sm sm:w-96 flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-black text-white">
         <span className="text-sm font-medium">{t('support.title')}</span>
         <button
@@ -86,7 +86,7 @@ export function SupportChatPanel({ onClose }: SupportChatPanelProps) {
         </button>
       </div>
 
-      <div className="flex-1 h-80 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
+      <div className="h-80 min-h-0 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
         {messages.length === 0 && (
           <p className="text-sm text-gray-400">{t('support.placeholder')}</p>
         )}
