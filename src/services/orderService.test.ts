@@ -21,6 +21,7 @@ import {
   assertNoLocalUrls,
   SCHEMA_VERSION,
   isLegacyOrder,
+  createCustomAlbumOrder,
   buildLoosePhotos,
   resolveProductString,
   type UploadContext,
@@ -133,6 +134,15 @@ describe('isLegacyOrder', () => {
   it('un pedido creado con v3 o posterior no es del sistema anterior', () => {
     expect(isLegacyOrder({ createdSchemaVersion: 3 })).toBe(false);
     expect(isLegacyOrder({ createdSchemaVersion: SCHEMA_VERSION })).toBe(false);
+  });
+
+  it('un álbum personalizado recién creado no sale como sistema anterior', async () => {
+    const firestore = await import('firebase/firestore');
+    vi.mocked(firestore.doc).mockReturnValue({ id: 'custom-1' } as any);
+    vi.mocked(firestore.setDoc).mockClear();
+    await createCustomAlbumOrder('uid-1', 'customAlbum20x20');
+    const payload = vi.mocked(firestore.setDoc).mock.calls[0][1];
+    expect(isLegacyOrder(payload)).toBe(false);
   });
 });
 
