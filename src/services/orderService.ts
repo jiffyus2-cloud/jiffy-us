@@ -552,6 +552,7 @@ export async function createCustomAlbumOrder(
     customAlbumSize: size,
     total: 0,
     schemaVersion: SCHEMA_VERSION,
+    createdSchemaVersion: SCHEMA_VERSION,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
