@@ -58,8 +58,8 @@ const ConfirmSendModal: React.FC<{
   }, [segment]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 max-sm:pb-24 overflow-y-auto bg-black/40 backdrop-blur-sm">
+      <div className="my-auto bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
         <div className="flex items-start justify-between">
           <h3 className="text-lg font-bold text-gray-900">Confirmar envío masivo</h3>
           <button onClick={onClose} disabled={sending} className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-50">
