@@ -72,6 +72,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Plantillas de correo masivo: borradores con nombre del panel. Solo el dueño.
+    match /email_templates/{templateId} {
+      allow read, write: if isOwner();
+    }
+
     // MCP API keys — owner-only
     match /mcp_api_keys/{keyId} {
       allow read, write: if isOwner();
