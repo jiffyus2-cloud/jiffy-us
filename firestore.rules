@@ -65,6 +65,13 @@ service cloud.firestore {
       allow list, write: if isOwner();
     }
 
+    // Historial de campañas de correo masivo. Lo escribe solo el backend
+    // (Admin SDK, que no pasa por estas reglas); el panel lo lee vía /email/campaigns.
+    match /email_campaigns/{campaignId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
     // MCP API keys — owner-only
     match /mcp_api_keys/{keyId} {
       allow read, write: if isOwner();
