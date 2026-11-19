@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mail, Send, Loader2, RefreshCw, AlertCircle, CheckCircle2, X, Eye, Users,
-  ChevronDown, ChevronRight, FlaskConical, ShieldCheck
+  ChevronDown, ChevronRight, FlaskConical, ShieldCheck, ImagePlus, Save, Trash2, FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -10,6 +10,10 @@ import {
   SEGMENT_LABELS, getEmailAudience, getEmailStatus, listCampaigns, newCampaignId,
   previewEmail, sendCampaign, sendTestEmail,
 } from '../../services/massEmailApi';
+import {
+  EmailTemplate, listEmailTemplates, saveEmailTemplate, deleteEmailTemplate, newTemplateId,
+} from '../../services/emailTemplates';
+import { altFromFileName, imageSnippet, insertOnOwnLine, uploadEmailImage } from '../utils/emailImage';
 
 /**
  * Pestaña "Correos" del panel del dueño: campañas de correo a los usuarios
@@ -154,6 +158,104 @@ const CampaignRow: React.FC<{ campaign: EmailCampaign }> = ({ campaign }) => {
   );
 };
 
+// ─── Plantillas ───────────────────────────────────────────────────────────────
+
+const TemplateBar: React.FC<{
+  templates: EmailTemplate[];
+  loading: boolean;
+  error: string;
+  current: EmailTemplate | null;
+  hasContent: boolean;
+  dirty: boolean;
+  onLoad: (t: EmailTemplate) => void;
+  onSave: (name: string, asNew: boolean) => Promise<void>;
+  onDelete: (t: EmailTemplate) => Promise<void>;
+}> = ({ templates, loading, error, current, hasContent, dirty, onLoad, onSave, onDelete }) => {
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try { await fn(); setNaming(false); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+        <select
+          value={current?.id ?? ''}
+          disabled={loading || templates.length === 0}
+          onChange={e => {
+            const t = templates.find(x => x.id === e.target.value);
+            if (!t) return;
+            if (dirty && hasContent && !window.confirm(`¿Reemplazar lo que has escrito por la plantilla «${t.name}»?`)) return;
+            onLoad(t);
+          }}
+          className="flex-1 min-w-[10rem] px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/10 disabled:text-gray-400"
+          aria-label="Plantillas guardadas"
+        >
+          <option value="" disabled>
+            {loading ? 'Cargando plantillas…' : templates.length === 0 ? 'Aún no hay plantillas' : `Usar una plantilla (${templates.length})`}
+          </option>
+          {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        {current && (
+          <button
+            onClick={() => { if (window.confirm(`¿Borrar la plantilla «${current.name}»? No se puede deshacer.`)) void run(() => onDelete(current)); }}
+            disabled={busy}
+            title="Borrar esta plantilla"
+            className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+        {current && dirty && (
+          <button
+            onClick={() => void run(() => onSave(current.name, false))}
+            disabled={busy || !hasContent}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Actualizar «{current.name}»
+          </button>
+        )}
+        <button
+          onClick={() => { setName(current ? `${current.name} (copia)` : ''); setNaming(n => !n); }}
+          disabled={busy || !hasContent}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50"
+        >
+          <Save className="w-3.5 h-3.5" />
+          {current ? 'Guardar como nueva' : 'Guardar como plantilla'}
+        </button>
+      </div>
+      {naming && (
+        <form
+          className="flex gap-2"
+          onSubmit={e => { e.preventDefault(); if (name.trim()) void run(() => onSave(name, true)); }}
+        >
+          <input
+            autoFocus
+            value={name}
+            maxLength={120}
+            onChange={e => setName(e.target.value)}
+            placeholder="Nombre de la plantilla (ej.: Promo Navidad)"
+            className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/10"
+          />
+          <button type="submit" disabled={busy || !name.trim()} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50">
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Guardar'}
+          </button>
+          <button type="button" onClick={() => setNaming(false)} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white hover:bg-gray-50">
+            Cancelar
+          </button>
+        </form>
+      )}
+      {error && <p className="text-xs text-red-600 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{error}</p>}
+    </div>
+  );
+};
+
 // ─── Sección principal ────────────────────────────────────────────────────────
 
 const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }) => {
@@ -180,6 +282,15 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
   const [sending, setSending] = useState(false);
   const campaignIdRef = useRef<string>(newCampaignId());
 
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesError, setTemplatesError] = useState('');
+  const [currentTemplate, setCurrentTemplate] = useState<EmailTemplate | null>(null);
+
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
   const [campaignsError, setCampaignsError] = useState('');
@@ -202,7 +313,80 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
       .finally(() => setLoadingCampaigns(false));
   }, []);
 
-  useEffect(() => { loadStatus(); loadCampaigns(); }, [loadStatus, loadCampaigns]);
+  const loadTemplates = useCallback(() => {
+    setTemplatesLoading(true);
+    setTemplatesError('');
+    return listEmailTemplates()
+      .then(setTemplates)
+      .catch(e => setTemplatesError(`No se pudieron cargar las plantillas: ${e.message}`))
+      .finally(() => setTemplatesLoading(false));
+  }, []);
+
+  useEffect(() => { loadStatus(); loadCampaigns(); void loadTemplates(); }, [loadStatus, loadCampaigns, loadTemplates]);
+
+  const templateDirty = !currentTemplate
+    || currentTemplate.subject !== subject
+    || currentTemplate.body !== body
+    || currentTemplate.format !== bodyFormat;
+
+  const handleLoadTemplate = (t: EmailTemplate) => {
+    setSubject(t.subject);
+    setBody(t.body);
+    setBodyFormat(t.format);
+    setCurrentTemplate(t);
+  };
+
+  const handleSaveTemplate = async (name: string, asNew: boolean) => {
+    setTemplatesError('');
+    const id = asNew || !currentTemplate ? newTemplateId() : currentTemplate.id;
+    try {
+      await saveEmailTemplate({ id, name, subject, body, format: bodyFormat }, adminEmail ?? '');
+      setCurrentTemplate({ id, name: name.trim(), subject, body, format: bodyFormat, updatedAt: new Date(), updatedBy: adminEmail ?? '' });
+      setNotice({ kind: 'ok', text: `Plantilla «${name.trim()}» guardada.` });
+      await loadTemplates();
+    } catch (e: any) {
+      setTemplatesError(`No se pudo guardar la plantilla: ${e.message}`);
+    }
+  };
+
+  const handleDeleteTemplate = async (t: EmailTemplate) => {
+    setTemplatesError('');
+    try {
+      await deleteEmailTemplate(t.id);
+      setCurrentTemplate(null);
+      setNotice({ kind: 'ok', text: `Plantilla «${t.name}» borrada. Lo que hay en el editor se mantiene.` });
+      await loadTemplates();
+    } catch (e: any) {
+      setTemplatesError(`No se pudo borrar la plantilla: ${e.message}`);
+    }
+  };
+
+  const handleImageFile = async (file: File) => {
+    setNotice(null);
+    setUploadingImage(true);
+    // Posición del cursor al elegir la imagen (el diálogo de archivos le quita el foco).
+    const el = bodyRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    try {
+      const url = await uploadEmailImage(file);
+      const snippet = imageSnippet(url, altFromFileName(file.name), bodyFormat);
+      let cursor = 0;
+      setBody(prev => {
+        const next = insertOnOwnLine(prev, Math.min(start, prev.length), Math.min(end, prev.length), snippet);
+        cursor = next.cursor;
+        return next.text;
+      });
+      requestAnimationFrame(() => {
+        bodyRef.current?.focus();
+        bodyRef.current?.setSelectionRange(cursor, cursor);
+      });
+    } catch (e: any) {
+      setNotice({ kind: 'error', text: `No se pudo subir la imagen: ${e.message}` });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   useEffect(() => { if (!testTo && adminEmail) setTestTo(adminEmail); }, [adminEmail, testTo]);
 
@@ -256,6 +440,7 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
       setConfirming(false);
       setSubject('');
       setBody('');
+      setCurrentTemplate(null);
       campaignIdRef.current = newCampaignId();
     } catch (e: any) {
       setNotice({ kind: 'error', text: e.message });
@@ -323,6 +508,18 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Editor ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+          <TemplateBar
+            templates={templates}
+            loading={templatesLoading}
+            error={templatesError}
+            current={currentTemplate}
+            hasContent={draftReady}
+            dirty={templateDirty}
+            onLoad={handleLoadTemplate}
+            onSave={handleSaveTemplate}
+            onDelete={handleDeleteTemplate}
+          />
+
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Asunto</label>
             <input
@@ -338,6 +535,28 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Contenido</label>
+              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploadingImage}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                title="Subir una imagen e insertarla donde está el cursor"
+              >
+                {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                {uploadingImage ? 'Subiendo…' : 'Imagen'}
+              </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*,.heic,.heif"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void handleImageFile(file);
+                }}
+              />
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
                 {(['text', 'html'] as EmailBodyFormat[]).map(f => (
                   <button
@@ -349,8 +568,10 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
                   </button>
                 ))}
               </div>
+              </div>
             </div>
             <textarea
+              ref={bodyRef}
               value={body}
               onChange={e => setBody(e.target.value)}
               rows={12}
@@ -361,6 +582,7 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
             />
             <p className="text-xs text-gray-400 mt-1">
               <span className="font-mono">{'{{nombre}}'}</span> se sustituye por el nombre de cada usuario. El pie con el enlace de baja se añade solo.
+              {bodyFormat === 'text' && <> Las imágenes van en su propia línea como <span className="font-mono">![descripción](enlace)</span>; la descripción es lo que se lee si la imagen no carga.</>}
             </p>
           </div>
 
