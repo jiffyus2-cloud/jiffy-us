@@ -141,8 +141,10 @@ async function api<T>(token: string, path: string, init: RequestInit = {}, signa
   return (text ? JSON.parse(text) : {}) as T;
 }
 
-export function createPickerSession(token: string): Promise<PickerSession> {
-  return api<PickerSession>(token, '/sessions', { method: 'POST', body: '{}' });
+/** `maxItems` limita cuántas fotos deja marcar Google (p. ej. 1 para la portada). */
+export function createPickerSession(token: string, maxItems?: number): Promise<PickerSession> {
+  const body = maxItems && maxItems > 0 ? { pickingConfig: { maxItemCount: String(Math.floor(maxItems)) } } : {};
+  return api<PickerSession>(token, '/sessions', { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** URL para abrir el selector; `/autoclose` cierra la ventana al terminar (web). */

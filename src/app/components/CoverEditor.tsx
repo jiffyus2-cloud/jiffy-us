@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { RichText } from './ui/RichText';
 import { convertPhotoFile, PHOTO_ACCEPT } from '../utils/imageUtils';
 import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
+import { usePhotoSource } from '../hooks/usePhotoSource';
 
 interface CoverEditorProps {
   coverSize: '20x20' | '30x30' | '21x28' | '28x21';
@@ -71,6 +72,13 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   const [showLowResWarning, setShowLowResWarning] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Origen de la foto de portada: dispositivo o Google Fotos (igual que en el álbum).
+  const photoSource = usePhotoSource();
+  const openCoverPhoto = () => photoSource.choose({
+    device: () => fileInputRef.current?.click(),
+    onFiles: files => applyCoverFile(files[0]),
+    maxItems: 1,
+  });
 
   const isVertical = coverSize === '28x21';
   const isSquare = coverSize === '20x20' || coverSize === '30x30';
@@ -168,10 +176,14 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    let file = e.target.files?.[0];
-    if (!file) return;
+    const picked = e.target.files?.[0];
+    e.target.value = '';
+    if (!picked) return;
+    await applyCoverFile(picked);
+  };
 
-    file = await convertPhotoFile(file);
+  const applyCoverFile = async (original: File) => {
+    const file = await convertPhotoFile(original);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     setIsValidating(false);
@@ -245,6 +257,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
 
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden overscroll-none">
+      {photoSource.ui}
       <style>{`
         @media (max-width: 768px) {
           #oneclic-badge, [id*="1clic"], iframe[src*="1clic"] {
@@ -297,7 +310,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
             <div
               className={`w-full relative group ${!hidePhoto ? 'cursor-pointer' : ''}`}
               style={{ maxWidth: isVertical ? '210px' : isHorizontal ? '300px' : '240px' }}
-              onClick={() => { if (!hidePhoto) fileInputRef.current?.click(); }}
+              onClick={() => { if (!hidePhoto) openCoverPhoto(); }}
             >
               <div className="md:hidden">
                 <CoverPreview
@@ -479,7 +492,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                       </div>
                     </div>
                  ) : (
-                    <div className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group" onClick={() => fileInputRef.current?.click()}>
+                    <div className="flex flex-col items-center justify-center w-full h-24 md:h-32 border-2 border-dashed border-gray-200 rounded-xl md:rounded-2xl cursor-pointer hover:border-black hover:bg-gray-50 transition-all group" onClick={openCoverPhoto}>
                       <div className="p-2 md:p-3 bg-gray-50 rounded-full group-hover:bg-white transition-colors"><Upload className="text-gray-400 group-hover:text-black transition-colors w-5 h-5 md:w-6 md:h-6" /></div>
                       <span className="mt-2 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-black transition-colors">Subir Foto</span>
                     </div>

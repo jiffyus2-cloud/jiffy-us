@@ -15,6 +15,7 @@ import jiffyLogo from '../../assets/JiffyLogo.svg';
 import CalendarPhotoChooser from './calendar/CalendarPhotoChooser';
 import { moveCalendarMonth, swapCalendarMonths, swapCalendarPhotos, type CalendarPhotoState } from './calendar/calendarReorder';
 import CalendarMonthPhotosModal from './calendar/CalendarMonthPhotosModal';
+import { usePhotoSource } from '../hooks/usePhotoSource';
 
 interface CalendarOrganizerProps {
   calendar: Calendar;
@@ -77,6 +78,8 @@ export default function CalendarOrganizer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const specificFileInputRef = useRef<HTMLInputElement>(null);
+  // Origen de las fotos: dispositivo o Google Fotos (igual que en el álbum).
+  const photoSource = usePhotoSource();
 
   const year = customization.year || new Date().getFullYear();
   const startMonth = customization.startMonth || 1;
@@ -116,6 +119,16 @@ export default function CalendarOrganizer({
 
     const filesArray = Array.from(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    await addBatchFiles(filesArray);
+  };
+
+  const openBatchPhotos = () => photoSource.choose({
+    device: () => fileInputRef.current?.click(),
+    onFiles: addBatchFiles,
+    maxItems: remainingSlots > 0 ? remainingSlots : undefined,
+  });
+
+  const addBatchFiles = async (filesArray: File[]) => {
     if (remainingSlots <= 0) return;
 
     // Más fotos de las que caben: que el cliente elija cuáles, no solo las primeras.
@@ -143,19 +156,31 @@ export default function CalendarOrganizer({
 
   const handleSpecificUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (targetSlot === null) return;
-    let file = event.target.files?.[0];
-    if (!file) return;
+    const picked = event.target.files?.[0];
+    if (specificFileInputRef.current) specificFileInputRef.current.value = '';
+    if (!picked) return;
+    await addSpecificFile(picked, targetSlot);
+  };
 
-    file = await convertPhotoFile(file);
+  // Foto para un hueco concreto (vacío o que no cargó).
+  const openSpecificPhoto = (slot: number) => {
+    setTargetSlot(slot);
+    photoSource.choose({
+      device: () => specificFileInputRef.current?.click(),
+      onFiles: files => addSpecificFile(files[0], slot),
+      maxItems: 1,
+    });
+  };
+
+  const addSpecificFile = async (original: File, slot: number) => {
+    const file = await convertPhotoFile(original);
     setIsValidating(true);
     const result = await checkImageDimensions(file);
     if (result.isLowRes) {
       pendingLowResRef.current.set(getFileKey(file), { width: result.width, height: result.height });
     }
     setIsValidating(false);
-    processSpecificUpload(file);
-
-    if (specificFileInputRef.current) specificFileInputRef.current.value = '';
+    processSpecificUpload(file, slot);
   };
 
   const processBatchUpload = async (finalFiles: File[]) => {
@@ -223,8 +248,8 @@ export default function CalendarOrganizer({
     }
   };
 
-  const processSpecificUpload = (file: File) => {
-    if (targetSlot === null) return;
+  const processSpecificUpload = (file: File, slot: number | null = targetSlot) => {
+    if (slot === null) return;
     const key = getFileKey(file);
     const existingKeys = new Set(fileSignatures.filter(Boolean));
 
@@ -232,10 +257,10 @@ export default function CalendarOrganizer({
       const newUrl = URL.createObjectURL(file);
       const newPhotos = [...photos];
       while (newPhotos.length < requiredPhotos) newPhotos.push('');
-      newPhotos[targetSlot!] = newUrl;
+      newPhotos[slot] = newUrl;
       const newSigs = [...fileSignatures];
       while (newSigs.length < requiredPhotos) newSigs.push('');
-      newSigs[targetSlot!] = key;
+      newSigs[slot] = key;
       if (pendingLowResRef.current.has(key)) {
         const info = pendingLowResRef.current.get(key)!;
         pendingLowResRef.current.delete(key);
@@ -406,10 +431,7 @@ export default function CalendarOrganizer({
           <ImageCropper
             src={photo}
             position={crop || { x: 50, y: 50, zoom: 1 }}
-            onRetry={() => {
-              setTargetSlot(globalIdx);
-              specificFileInputRef.current?.click();
-            }}
+            onRetry={() => openSpecificPhoto(globalIdx)}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
@@ -452,10 +474,7 @@ export default function CalendarOrganizer({
           )}
           {(!photo || photo.trim() === '') && (
             <button
-              onClick={() => {
-                setTargetSlot(globalIdx);
-                specificFileInputRef.current?.click();
-              }}
+              onClick={() => openSpecificPhoto(globalIdx)}
               className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-sm transition-all"
             >
               <Plus className="w-3.5 h-3.5"/>
@@ -481,6 +500,7 @@ export default function CalendarOrganizer({
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
+        {photoSource.ui}
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
         {photoChoice && (
@@ -517,7 +537,7 @@ export default function CalendarOrganizer({
              </div>
           ) : (
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={openBatchPhotos}
               disabled={remainingSlots === 0}
               className="w-full py-16 border-2 border-dashed border-gray-300 rounded-lg hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:bg-white"
             >
@@ -569,6 +589,7 @@ export default function CalendarOrganizer({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
+      {photoSource.ui}
       {renderDuplicateModal()}
       {renderLowResWarningModal()}
 
