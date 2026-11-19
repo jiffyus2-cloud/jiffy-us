@@ -223,6 +223,10 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'organizer.cloudHint.android': '¿Tus fotos están en la nube? En el menú que se abre puedes elegir **Google Fotos**, **Drive** u otra app de nube que tengas instalada.',
   'organizer.cloudHint.mac': '¿Tus fotos están en **iCloud**? En la ventana que se abre, busca **Fotos** en la barra lateral (Multimedia) o tu carpeta de **iCloud Drive**.',
   'organizer.cloudHint.desktop': '¿Tus fotos están en **iCloud**, **OneDrive** o Google Drive? Si tienes su app instalada, aparecen como una carpeta en la ventana que se abre; si no, descárgalas primero a tu computador.',
+  'photos.source.title': '¿De dónde quieres traer tus fotos?',
+  'photos.source.titleOne': '¿De dónde quieres traer la foto?',
+  'photos.source.device': 'Fotos de este dispositivo',
+  'photos.source.google': 'Google Fotos',
   'organizer.googlePhotosWaiting': 'Elige tus fotos en la ventana de **Google Fotos** y toca **Listo**. Luego vuelve aquí: la importación empieza sola.',
   'organizer.googlePhotosFailed': 'No se pudieron traer {failed} de las fotos elegidas en Google Fotos. Las demás se importaron bien; puedes intentar de nuevo con las que faltan.',
 

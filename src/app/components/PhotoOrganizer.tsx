@@ -1,19 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { convertPhotoFile, PHOTO_ACCEPT, PHOTO_EXT_ACCEPT } from '../utils/imageUtils';
 import { currentCloudPlatform } from '../utils/deviceCloud';
-import {
-  isGooglePhotosEnabled,
-  preloadGoogleIdentity,
-  currentGoogleToken,
-  requestGoogleToken,
-  createPickerSession,
-  pickerUrl,
-  waitForSelection,
-  downloadPickedPhotos,
-  deletePickerSession,
-  GooglePhotosError,
-  type PickerSession,
-} from '../utils/googlePhotosPicker';
+import { isGooglePhotosEnabled } from '../utils/googlePhotosPicker';
+import { usePhotoSource } from '../hooks/usePhotoSource';
 import {
   savePendingPhotos,
   loadPendingPhotos,
@@ -213,6 +202,8 @@ const AlbumEditorPhotoSlot: React.FC<{
   setEditingTextSlot: (slot: { pageIndex: number, photoIndex: number } | null) => void;
   handleRemoveTextBox: (pageIndex: number, photoIndex: number) => void;
   handleAddPhotoToPage: (pageIndex: number, file: File, targetPhotoIndex?: number) => void;
+  /** Elegir el origen (dispositivo / Google Fotos); `device` abre el selector de archivos. */
+  onPickPhoto?: (pageIndex: number, photoIndex: number, device: () => void) => void;
   handleAddTextBox: (pageIndex: number, photoIndex: number) => void;
   onOpenCropModal: (pageIndex: number, photoIndex: number, aspect: number) => void;
   onPhotoError?: (url: string) => void;
@@ -225,7 +216,7 @@ const AlbumEditorPhotoSlot: React.FC<{
   photo, textBox, crop, pageIndex, photoIndex, photoCount, editingPageIndex,
   isDragging, isDragTarget, onDragStart,
   handleRemovePhotoFromPage, setEditingTextSlot,
-  handleRemoveTextBox, handleAddPhotoToPage, handleAddTextBox, onOpenCropModal,
+  handleRemoveTextBox, handleAddPhotoToPage, onPickPhoto, handleAddTextBox, onOpenCropModal,
   onPhotoError, onPhotoRetry, t
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -311,7 +302,7 @@ const AlbumEditorPhotoSlot: React.FC<{
       ) : (
         isEditing && (
           <div className="flex flex-col gap-1 sm:gap-2 p-1 items-center justify-center w-full h-full">
-            <button onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = PHOTO_ACCEPT; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
+            <button onClick={() => { const device = () => { const input = document.createElement('input'); input.type = 'file'; input.accept = PHOTO_ACCEPT; input.onchange = (e: any) => { const file = e.target.files?.[0]; if (file) handleAddPhotoToPage(pageIndex, file, photoIndex); }; input.click(); }; if (onPickPhoto) onPickPhoto(pageIndex, photoIndex, device); else device(); }} className="flex flex-col items-center gap-0.5 sm:gap-1 text-gray-400 hover:text-black transition-colors">
               <div className="p-1.5 sm:p-2 bg-gray-200 group-hover:bg-gray-300 rounded-full"><ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
               <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{t('organizer.addPhoto')}</span>
             </button>
@@ -423,21 +414,9 @@ export default function PhotoOrganizer({
   const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
   const [conversionProgress, setConversionProgress] = useState<{ done: number; total: number } | null>(null);
   const [isTransferringFiles, setIsTransferringFiles] = useState(false);
-  // Importación desde Google Fotos (null = no hay ninguna en curso).
-  const [googlePhotos, setGooglePhotos] = useState<
-    | { phase: 'auth' }
-    | { phase: 'picking'; url: string; opened: boolean }
-    | { phase: 'downloading'; done: number; total: number }
-    | null
-  >(null);
-  const [googlePhotosError, setGooglePhotosError] = useState<string | null>(null);
-  const googleAbortRef = useRef<AbortController | null>(null);
-  const googleWindowRef = useRef<Window | null>(null);
+  // Origen de las fotos (dispositivo o Google Fotos), igual en todas las subidas.
+  const photoSource = usePhotoSource();
   const cloudPlatform = useState(currentCloudPlatform)[0];
-  useEffect(() => {
-    preloadGoogleIdentity();
-    return () => googleAbortRef.current?.abort();
-  }, []);
 
   // Debug mode: activar con 5 taps en el área inferior de la pantalla de subida,
   // o con ?debug=1 en la URL. Se guarda en localStorage para sobrevivir recargas y PWA.
@@ -607,19 +586,38 @@ export default function PhotoOrganizer({
     void clearPendingPhotos();
   };
 
+  // Reemplazar fotos que no cargaron: una concreta (target) o todas en orden.
+  const openRetryPhotos = (target: { pageIndex: number; photoIndex: number } | null) => {
+    photoSource.choose({
+      device: () => {
+        retryTargetRef.current = target;
+        retryInputRef.current?.click();
+      },
+      onFiles: files => replaceBrokenWithFiles(target, files),
+      maxItems: target ? 1 : undefined,
+    });
+  };
+  const openRetryRef = useRef(openRetryPhotos);
+  openRetryRef.current = openRetryPhotos;
+
   const handlePhotoRetry = useCallback((url: string, pageIndex: number, photoIndex: number) => {
-    retryTargetRef.current = { pageIndex, photoIndex };
-    retryInputRef.current?.click();
+    openRetryRef.current({ pageIndex, photoIndex });
   }, []);
 
   const handleRetryFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     event.target.value = '';
-
     const target = retryTargetRef.current;
+    retryTargetRef.current = null;
+    await replaceBrokenWithFiles(target, Array.from(files));
+  };
+
+  const replaceBrokenWithFiles = async (
+    target: { pageIndex: number; photoIndex: number } | null,
+    files: File[],
+  ) => {
     if (target) {
-      retryTargetRef.current = null;
       await handleSpecificFileSelection(target.pageIndex, files[0], target.photoIndex);
     } else {
       // Retry masivo: reemplazar todos los slots rotos en orden
@@ -922,77 +920,6 @@ export default function PhotoOrganizer({
     })();
   };
 
-  // ── IMPORTAR DESDE GOOGLE FOTOS ─────────────────────────────────────────────
-  // El cliente elige en la ventana de Google Fotos; al terminar, las fotos se
-  // descargan aquí y entran por ingestInitialFiles como si vinieran del carrete.
-  const startGooglePhotosImport = async () => {
-    if (googlePhotos) return;
-    setGooglePhotosError(null);
-    const ctrl = new AbortController();
-    googleAbortRef.current = ctrl;
-
-    let token = currentGoogleToken();
-    // Con permiso ya dado, la ventana se abre YA (dentro del clic) para que el
-    // navegador no la bloquee; se le pone la URL cuando exista la sesión.
-    const win = token ? window.open('', '_blank') : null;
-    let session: PickerSession | null = null;
-    try {
-      if (!token) {
-        setGooglePhotos({ phase: 'auth' });
-        token = await requestGoogleToken();
-      }
-      if (ctrl.signal.aborted) throw new GooglePhotosError('cancelled', 'Cancelado');
-      session = await createPickerSession(token);
-      const url = pickerUrl(session);
-      if (win && !win.closed) win.location.href = url;
-      googleWindowRef.current = win;
-      setGooglePhotos({ phase: 'picking', url, opened: !!win });
-
-      await waitForSelection(token, session, ctrl.signal);
-      try { googleWindowRef.current?.close(); } catch { /* ya cerrada */ }
-
-      setGooglePhotos({ phase: 'downloading', done: 0, total: 0 });
-      const { files, failed } = await downloadPickedPhotos(
-        token,
-        session.id,
-        (done, total) => setGooglePhotos({ phase: 'downloading', done, total }),
-        ctrl.signal,
-      );
-      setGooglePhotos(null);
-      if (failed > 0) setGooglePhotosError(t('organizer.googlePhotosFailed', { failed }));
-      if (files.length > 0) ingestInitialFiles(files);
-    } catch (err) {
-      try { if (win && !session) win.close(); } catch { /* ya cerrada */ }
-      setGooglePhotos(null);
-      const code = err instanceof GooglePhotosError ? err.code : 'api';
-      console.warn('[GoogleFotos]', err);
-      if (code !== 'cancelled') {
-        setGooglePhotosError(
-          code === 'auth' ? 'Google no dio permiso para ver tus fotos. Inténtalo de nuevo y acepta el acceso.'
-          : code === 'timeout' ? 'Pasó demasiado tiempo sin elegir fotos en Google Fotos. Inténtalo de nuevo.'
-          : code === 'network' ? 'No hubo conexión con Google Fotos. Revisa tu internet e inténtalo de nuevo.'
-          : 'Google Fotos no respondió como esperábamos. Inténtalo de nuevo en un momento.'
-        );
-      }
-    } finally {
-      if (token && session) deletePickerSession(token, session.id);
-      googleWindowRef.current = null;
-      if (googleAbortRef.current === ctrl) googleAbortRef.current = null;
-    }
-  };
-
-  const cancelGooglePhotosImport = () => {
-    googleAbortRef.current?.abort();
-    try { googleWindowRef.current?.close(); } catch { /* ya cerrada */ }
-    setGooglePhotos(null);
-  };
-
-  const reopenGooglePhotos = (url: string) => {
-    const w = window.open(url, '_blank');
-    if (w) googleWindowRef.current = w;
-    setGooglePhotos(prev => (prev?.phase === 'picking' ? { ...prev, opened: !!w } : prev));
-  };
-
 
   /**
    * Muestra el modal de duplicados y espera la decisión del usuario.
@@ -1204,7 +1131,15 @@ export default function PhotoOrganizer({
     if (!files || files.length === 0) return;
     const filesArray = Array.from(files);
     event.target.value = '';
+    await appendFiles(filesArray);
+  };
 
+  const openAppendPhotos = () => photoSource.choose({
+    device: () => appendInputRef.current?.click(),
+    onFiles: appendFiles,
+  });
+
+  const appendFiles = async (filesArray: File[]) => {
     const accepted = await ingestEditorFiles(filesArray);
     if (accepted.length === 0) return;
     const items = toDistributable(accepted);
@@ -1261,8 +1196,16 @@ export default function PhotoOrganizer({
   // Una página con diseño de 6 y 3 huecos recibe 3 fotos de una vez, en orden
   // de hueco, sin tocar las que ya tiene ni su diseño.
   const openFillEmptySlots = (pageIndex: number) => {
-    fillTargetRef.current = pageIndex;
-    fillInputRef.current?.click();
+    const page = currentAlbumState()[pageIndex];
+    const empty = page ? emptySlotIndexes(page, albumConfig).length : 0;
+    photoSource.choose({
+      device: () => {
+        fillTargetRef.current = pageIndex;
+        fillInputRef.current?.click();
+      },
+      onFiles: files => fillPageWithFiles(pageIndex, files),
+      maxItems: empty > 0 ? empty : undefined,
+    });
   };
 
   const handleFillFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1272,7 +1215,10 @@ export default function PhotoOrganizer({
     if (!files || files.length === 0 || pageIndex === null) return;
     const filesArray = Array.from(files);
     event.target.value = '';
+    await fillPageWithFiles(pageIndex, filesArray);
+  };
 
+  const fillPageWithFiles = async (pageIndex: number, filesArray: File[]) => {
     const before = currentAlbumState();
     const page = before[pageIndex];
     if (!page) return;
@@ -1308,6 +1254,13 @@ export default function PhotoOrganizer({
       (leftOut > 0 ? ' ' + t('organizer.fillLeftOut', { photos: leftOut, slots: emptyCount }) : '')
     );
   };
+
+  // Foto suelta en un hueco concreto de una página.
+  const pickSlotPhoto = (pageIndex: number, photoIndex: number, device: () => void) => photoSource.choose({
+    device,
+    maxItems: 1,
+    onFiles: files => handleSpecificFileSelection(pageIndex, files[0], photoIndex),
+  });
 
   const handleSpecificFileSelection = async (pageIndex: number, file: File, targetPhotoIndex?: number) => {
     setIsValidating(true);
@@ -2403,7 +2356,7 @@ export default function PhotoOrganizer({
                       handleRemovePhotoFromPage={handleRemovePhotoFromPage}
                       setEditingTextSlot={setEditingTextSlot}
                       handleRemoveTextBox={handleRemoveTextBox}
-                      handleAddPhotoToPage={handleSpecificFileSelection}
+                      handleAddPhotoToPage={handleSpecificFileSelection} onPickPhoto={pickSlotPhoto}
                       handleAddTextBox={handleAddTextBox}
                       onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
                       onPhotoError={handlePhotoError}
@@ -2669,6 +2622,7 @@ export default function PhotoOrganizer({
   if (step === 'upload') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
+        {photoSource.ui}
         {renderDuplicateModal()}
         {renderLowResWarningModal()}
 
@@ -2776,59 +2730,6 @@ export default function PhotoOrganizer({
                 cleanupPickerFocusListener();
                 setIsTransferringFiles(false);
               }}
-              className="mt-2 px-6 py-2 border border-gray-300 rounded-xl text-gray-500 text-sm"
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
-
-        {/* IMPORTACIÓN DESDE GOOGLE FOTOS: permiso → elegir → descargar */}
-        {googlePhotos && (
-          <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center gap-6 p-8">
-            <Loader2 className="w-16 h-16 text-black animate-spin" />
-            {googlePhotos.phase === 'auth' && (
-              <div className="text-center">
-                <p className="text-2xl font-bold">Conectando con Google Fotos</p>
-                <p className="text-gray-500 mt-2">Acepta el permiso en la ventana de Google</p>
-              </div>
-            )}
-            {googlePhotos.phase === 'picking' && (
-              <>
-                <div className="text-center max-w-sm">
-                  <p className="text-2xl font-bold">Esperando tus fotos</p>
-                  <p className="text-gray-600 mt-2">
-                    <RichText text={t('organizer.googlePhotosWaiting')} />
-                  </p>
-                </div>
-                <button
-                  onClick={() => reopenGooglePhotos(googlePhotos.url)}
-                  className="inline-flex items-center gap-2 bg-black text-white font-semibold px-6 py-3 rounded-full hover:bg-gray-800"
-                >
-                  <ImageIcon className="w-5 h-5" />
-                  {googlePhotos.opened ? 'Volver a abrir Google Fotos' : 'Abrir Google Fotos'}
-                </button>
-              </>
-            )}
-            {googlePhotos.phase === 'downloading' && (
-              <>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">Trayendo tus fotos de Google Fotos</p>
-                  <p className="text-gray-500 mt-2">
-                    {googlePhotos.total > 0 ? `Foto ${googlePhotos.done} de ${googlePhotos.total}` : 'Preparando…'}
-                  </p>
-                </div>
-                <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-black h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${googlePhotos.total > 0 ? (googlePhotos.done / googlePhotos.total) * 100 : 0}%` }}
-                  />
-                </div>
-                <p className="text-sm text-gray-400 text-center max-w-xs">Por favor espera sin cerrar la app</p>
-              </>
-            )}
-            <button
-              onClick={cancelGooglePhotosImport}
               className="mt-2 px-6 py-2 border border-gray-300 rounded-xl text-gray-500 text-sm"
             >
               Cancelar
@@ -2970,8 +2871,8 @@ export default function PhotoOrganizer({
 
               {isGooglePhotosEnabled() && (
                 <button
-                  onClick={startGooglePhotosImport}
-                  disabled={!!googlePhotos || !!conversionProgress}
+                  onClick={() => void photoSource.importFromGoogle({ onFiles: ingestInitialFiles })}
+                  disabled={photoSource.busy || !!conversionProgress}
                   className="mt-4 w-full inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white text-gray-800 font-semibold px-6 py-3 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   <ImageIcon className="w-5 h-5 shrink-0" />
@@ -2979,15 +2880,6 @@ export default function PhotoOrganizer({
                 </button>
               )}
 
-              {googlePhotosError && (
-                <div className="mt-4 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
-                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                  <p className="flex-1">{googlePhotosError}</p>
-                  <button onClick={() => setGooglePhotosError(null)} className="shrink-0 text-red-700" aria-label="Cerrar">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
             </>
           )}
           <input ref={fileInputRef} type="file" multiple accept={PHOTO_EXT_ACCEPT} onChange={handleFileSelection} className="hidden" disabled={isValidating || !!conversionProgress} />
@@ -3238,6 +3130,7 @@ export default function PhotoOrganizer({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pt-4 pb-12">
+      {photoSource.ui}
 
       {/* CAPA DE CARGA PARA SUBIDA DE 1 FOTO ESPECÍFICA */}
       {isValidating && step === 'editor' && (
@@ -3479,10 +3372,7 @@ export default function PhotoOrganizer({
               <p className="text-xs text-gray-500 leading-tight mt-0.5">Los slots con ⚠️ necesitan reemplazarse</p>
             </div>
             <button
-              onClick={() => {
-                retryTargetRef.current = null;
-                retryInputRef.current?.click();
-              }}
+              onClick={() => openRetryPhotos(null)}
               className="shrink-0 bg-orange-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg active:bg-orange-600"
             >
               Reintentar
@@ -4030,7 +3920,7 @@ export default function PhotoOrganizer({
           <div className="flex items-center gap-2">
             {!pagesLocked && (
               <button
-                onClick={() => appendInputRef.current?.click()}
+                onClick={openAppendPhotos}
                 disabled={!!editorBatchProgress}
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border-2 border-black bg-black text-white hover:bg-gray-800 transition-all text-xs font-bold disabled:opacity-50"
                 title="Añadir más fotos: van a páginas nuevas al final, sin tocar las que ya tienes"
@@ -4175,7 +4065,7 @@ export default function PhotoOrganizer({
                               isDragging={false}
                               isDragTarget={false}
                               onDragStart={handleDragStart}
-                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} handleAddTextBox={handleAddTextBox}
+                              handleRemovePhotoFromPage={handleRemovePhotoFromPage} setEditingTextSlot={setEditingTextSlot} handleRemoveTextBox={handleRemoveTextBox} handleAddPhotoToPage={handleSpecificFileSelection} onPickPhoto={pickSlotPhoto} handleAddTextBox={handleAddTextBox}
                               onOpenCropModal={(pIdx, idx, aspect) => setCropModalData({ pageIndex: pIdx, photoIndex: idx, aspectRatio: aspect })}
                               onPhotoError={handlePhotoError}
                               onPhotoRetry={handlePhotoRetry}
