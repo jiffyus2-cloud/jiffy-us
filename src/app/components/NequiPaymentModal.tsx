@@ -94,8 +94,8 @@ export default function NequiPaymentModal({ orderId, initial, onPaid, onResend, 
   const amount = `$${Number(payment.value || 0).toLocaleString('es-CO')} COP`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" role="dialog" aria-modal="true" aria-labelledby="nequi-modal-title">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 px-4 py-6 max-sm:pb-24" role="dialog" aria-modal="true" aria-labelledby="nequi-modal-title">
+      <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         {payment.state === 'pending' && (
           <>
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#200020] text-white">
