@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
+import { CreditCard, Smartphone, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
 import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
@@ -15,6 +15,8 @@ import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
 import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
 import { RichText } from './ui/RichText';
+import NequiPaymentModal from './NequiPaymentModal';
+import { createNequiPayment, isNequiEnabled, normalizeNequiPhone, type NequiPaymentView } from '../../services/nequiApi';
 
 export default function Checkout() {
   const { state } = useLocation();
@@ -45,6 +47,13 @@ export default function Checkout() {
   const [shouldSaveBilling, setShouldSaveBilling] = useState(true);
 
   const [pickupLocation, setPickupLocation] = useState<'' | 'Arboleda' | 'Ciudad Jardin'>('');
+
+  // Método de pago. Nequi solo aparece si el backend lo tiene configurado.
+  const [nequiEnabled, setNequiEnabled] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'nequi'>('card');
+  const [nequiPhone, setNequiPhone] = useState('');
+  const [nequiPhoneTouched, setNequiPhoneTouched] = useState(false);
+  const [nequiPayment, setNequiPayment] = useState<NequiPaymentView | null>(null);
 
   const [formData, setFormData] = useState({
     name: '', email: user?.email || '', phoneCode: '+57', phone: '',
@@ -78,6 +87,19 @@ export default function Checkout() {
     };
     fetchOrderDetails();
   }, [state?.orderId]);
+
+  useEffect(() => {
+    let alive = true;
+    isNequiEnabled().then(enabled => { if (alive) setNequiEnabled(enabled); });
+    return () => { alive = false; };
+  }, []);
+
+  // Mientras el cliente no escriba otro, el celular de Nequi es el de contacto
+  // (si es colombiano): casi siempre coinciden.
+  useEffect(() => {
+    if (nequiPhoneTouched) return;
+    setNequiPhone(formData.phoneCode === '+57' ? formData.phone.replace(/\D/g, '') : '');
+  }, [formData.phone, formData.phoneCode, nequiPhoneTouched]);
 
   // Load saved addresses and billing from Firestore
   useEffect(() => {
@@ -195,6 +217,10 @@ export default function Checkout() {
         : config.prices.shippingNational;
   const tax = 0;
   const total = Math.max(0, subtotal - discountAmount - codeDiscount) + shipping + tax;
+  const totalLabel = `$${total.toLocaleString('es-CO')} COP`;
+  const payLabel = nequiEnabled && paymentMethod === 'nequi'
+    ? t('checkout.payNequi', { total: totalLabel })
+    : t('checkout.payNow', { total: totalLabel });
 
   /**
    * Comprueba el código contra el backend. Se llama al pulsar «Aplicar» y otra
@@ -233,6 +259,14 @@ export default function Checkout() {
 
     if (!user) {
       setErrorMessage(t('checkout.loginRequired'));
+      return;
+    }
+
+    const useNequi = nequiEnabled && paymentMethod === 'nequi';
+    const nequiNumber = useNequi ? normalizeNequiPhone(nequiPhone) : null;
+    if (useNequi && !nequiNumber) {
+      setNequiPhoneTouched(true);
+      setErrorMessage(t('checkout.nequiPhoneInvalid'));
       return;
     }
 
@@ -308,6 +342,15 @@ export default function Checkout() {
           }));
         }
         await Promise.all(saves);
+      }
+
+      if (useNequi && nequiNumber) {
+        // El backend envía la notificación al celular y el modal espera a
+        // que el cliente la acepte; no hay redirección como con Stripe.
+        const payment = await createNequiPayment(state.orderId, nequiNumber);
+        setNequiPayment(payment);
+        setIsProcessing(false);
+        return;
       }
 
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://jiffy-backend-938778636106.europe-west1.run.app';
@@ -621,15 +664,76 @@ export default function Checkout() {
               )}
             </div>
 
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
-              <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
-              <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
-            </div>
+            {nequiEnabled && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+                <h3 className="text-base md:text-xl font-bold mb-3 md:mb-5">{t('checkout.paymentMethod')}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label={t('checkout.paymentMethod')}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={paymentMethod === 'card'}
+                    onClick={() => setPaymentMethod('card')}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${paymentMethod === 'card' ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400 text-gray-700'}`}
+                  >
+                    <CreditCard className={`w-5 h-5 mt-0.5 shrink-0 ${paymentMethod === 'card' ? 'text-white' : 'text-gray-400'}`} />
+                    <div>
+                      <p className="font-semibold text-sm">{t('checkout.methodCard')}</p>
+                      <p className={`text-xs mt-0.5 ${paymentMethod === 'card' ? 'text-gray-300' : 'text-gray-500'}`}>{t('checkout.methodCardDesc')}</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={paymentMethod === 'nequi'}
+                    onClick={() => setPaymentMethod('nequi')}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${paymentMethod === 'nequi' ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400 text-gray-700'}`}
+                  >
+                    <Smartphone className={`w-5 h-5 mt-0.5 shrink-0 ${paymentMethod === 'nequi' ? 'text-white' : 'text-gray-400'}`} />
+                    <div>
+                      <p className="font-semibold text-sm">Nequi</p>
+                      <p className={`text-xs mt-0.5 ${paymentMethod === 'nequi' ? 'text-gray-300' : 'text-gray-500'}`}>{t('checkout.methodNequiDesc')}</p>
+                    </div>
+                  </button>
+                </div>
+
+                {paymentMethod === 'nequi' && (
+                  <div className="mt-4 space-y-1.5">
+                    <label htmlFor="nequiPhone" className="text-sm font-medium text-gray-700">{t('checkout.nequiPhone')} *</label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel-national"
+                      id="nequiPhone"
+                      value={nequiPhone}
+                      onChange={e => { setNequiPhoneTouched(true); setNequiPhone(e.target.value); }}
+                      onBlur={() => setNequiPhoneTouched(true)}
+                      maxLength={16}
+                      placeholder="300 123 4567"
+                      aria-invalid={nequiPhoneTouched && !normalizeNequiPhone(nequiPhone)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all outline-none ${nequiPhoneTouched && nequiPhone && !normalizeNequiPhone(nequiPhone) ? 'border-red-400' : 'border-gray-300'}`}
+                    />
+                    <p className="text-xs text-gray-500">{t('checkout.nequiPhoneHelp')}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(!nequiEnabled || paymentMethod === 'card') ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+                <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
+                <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
+                <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
+                <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-[#200020] text-white rounded-lg"><Smartphone className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.nequiTitle')}</h3></div>
+                <p className="text-gray-600 text-sm leading-relaxed">{t('checkout.nequiDesc')}</p>
+              </div>
+            )}
 
             {/* Botón pagar — solo visible en desktop dentro del form */}
             <button type="submit" disabled={isProcessing} className="hidden md:flex w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
-              {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
+              {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{payLabel}</>)}
             </button>
             <p className="hidden md:block text-center text-xs text-gray-400">{t('checkout.terms')}</p>
           </form>
@@ -785,7 +889,7 @@ export default function Checkout() {
       {/* Botón pagar mobile-only — aparece después del resumen */}
       <div className="mt-4 md:hidden">
         <button type="submit" form="checkout-form" disabled={isProcessing} className="w-full bg-black text-white py-4 rounded-xl hover:bg-gray-900 transition-all text-lg font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
-          {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{t('checkout.payNow', { total: `$${total.toLocaleString('es-CO')} COP` })}</>)}
+          {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{payLabel}</>)}
         </button>
         <p className="text-center text-xs text-gray-400 mt-2">{t('checkout.terms')}</p>
       </div>
@@ -797,6 +901,20 @@ export default function Checkout() {
         hideAddressInfo={true}
         onGoToEdit={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })}
       />
+
+      {nequiPayment && state?.orderId && (
+        <NequiPaymentModal
+          orderId={state.orderId}
+          initial={nequiPayment}
+          onPaid={() => navigate('/success?method=nequi')}
+          onResend={async () => {
+            const number = normalizeNequiPhone(nequiPhone);
+            if (!number) throw new Error(t('checkout.nequiPhoneInvalid'));
+            setNequiPayment(await createNequiPayment(state.orderId, number));
+          }}
+          onClose={() => setNequiPayment(null)}
+        />
+      )}
     </div>
   );
 }
