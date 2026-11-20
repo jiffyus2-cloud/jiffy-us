@@ -16,6 +16,7 @@ import { validateDiscountCode, type AppliedDiscount } from '../../services/disco
 import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
 import { RichText } from './ui/RichText';
 import NequiPaymentModal from './NequiPaymentModal';
+import { TRACKING_EVENTS, TRACKING_IDS, trackEventThen } from '../utils/analytics';
 import { createNequiPayment, isNequiEnabled, normalizeNequiPhone, type NequiPaymentView } from '../../services/nequiApi';
 
 export default function Checkout() {
@@ -218,6 +219,10 @@ export default function Checkout() {
   const tax = 0;
   const total = Math.max(0, subtotal - discountAmount - codeDiscount) + shipping + tax;
   const totalLabel = `$${total.toLocaleString('es-CO')} COP`;
+  // id y data-gtm-action únicos por método para los activadores de clic de GTM.
+  const payWithNequi = nequiEnabled && paymentMethod === 'nequi';
+  const payButtonId = payWithNequi ? TRACKING_IDS.checkoutNequi : TRACKING_IDS.checkoutStripe;
+  const payButtonAction = payWithNequi ? 'compra_nequi' : 'compra_stripe';
   const payLabel = nequiEnabled && paymentMethod === 'nequi'
     ? t('checkout.payNequi', { total: totalLabel })
     : t('checkout.payNow', { total: totalLabel });
@@ -375,7 +380,12 @@ export default function Checkout() {
 
       const sessionData = await response.json();
       if (sessionData && sessionData.url) {
-        window.location.href = sessionData.url;
+        // Avisar a GTM antes de salir hacia Stripe (espera a sus etiquetas, máx. 1 s).
+        trackEventThen(
+          TRACKING_EVENTS.stripeCheckoutStarted,
+          { order_id: state.orderId, value: finalTotal, currency: 'COP', product_type: productTypeStr || null },
+          () => { window.location.href = sessionData.url; },
+        );
       } else {
         throw new Error(t('checkout.errorStripe'));
       }
@@ -732,7 +742,7 @@ export default function Checkout() {
             )}
 
             {/* Botón pagar — solo visible en desktop dentro del form */}
-            <button type="submit" disabled={isProcessing} className="hidden md:flex w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+            <button type="submit" id={payButtonId} data-gtm-action={payButtonAction} disabled={isProcessing} className="hidden md:flex w-full bg-black text-white py-4 md:py-5 rounded-xl hover:bg-gray-900 transition-all text-lg md:text-xl font-bold items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
               {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{payLabel}</>)}
             </button>
             <p className="hidden md:block text-center text-xs text-gray-400">{t('checkout.terms')}</p>
@@ -888,7 +898,7 @@ export default function Checkout() {
 
       {/* Botón pagar mobile-only — aparece después del resumen */}
       <div className="mt-4 md:hidden">
-        <button type="submit" form="checkout-form" disabled={isProcessing} className="w-full bg-black text-white py-4 rounded-xl hover:bg-gray-900 transition-all text-lg font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
+        <button type="submit" form="checkout-form" id={`${payButtonId}-movil`} data-gtm-action={payButtonAction} disabled={isProcessing} className="w-full bg-black text-white py-4 rounded-xl hover:bg-gray-900 transition-all text-lg font-bold flex items-center justify-center gap-3 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg shadow-gray-200">
           {isProcessing ? (<><Loader2 className="w-6 h-6 animate-spin" />{t('checkout.processing')}</>) : (<>{payLabel}</>)}
         </button>
         <p className="text-center text-xs text-gray-400 mt-2">{t('checkout.terms')}</p>

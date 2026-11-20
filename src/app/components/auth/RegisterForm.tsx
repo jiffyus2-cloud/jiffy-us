@@ -10,6 +10,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 import { mapAuthErrorToKey } from '../../utils/errorMapping';
 import { PhoneInput } from '../ui/PhoneInput';
+import { TRACKING_EVENTS, TRACKING_IDS, trackEvent } from '../../utils/analytics';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -43,6 +44,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     try {
       const phone = phoneNumber.trim() ? `${phoneCode}${phoneNumber.trim()}` : undefined;
       await register(email, password, name, phone);
+      trackEvent(TRACKING_EVENTS.registerCompleted, { method: 'email' });
       onSuccess?.();
       
       // --- CORRECCIÓN DE ENRUTAMIENTO ---
@@ -145,7 +147,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full bg-primary" disabled={isLoading}>
+          <Button type="submit" id={TRACKING_IDS.registerSubmit} data-gtm-action="registro_final" className="w-full bg-primary" disabled={isLoading}>
             {isLoading ? t('auth.registering') : t('auth.registerButton')}
           </Button>
           <div className="text-center text-sm">
