@@ -29,12 +29,16 @@ export default function Success() {
     // 3. LEER URL DE FORMA SEGURA
     const searchParams = new URLSearchParams(location.search);
     const sessionId = searchParams.get('session_id');
+    // Nequi no redirige: el checkout llega aquí cuando el backend ya confirmó
+    // el pago, así que la espera de abajo termina en la primera lectura.
+    const isNequi = searchParams.get('method') === 'nequi';
     const orderId = localStorage.getItem('pending_order_id');
 
-    if (sessionId && orderId) {
+    if ((sessionId || isNequi) && orderId) {
       const confirmPayment = async () => {
         try {
-          // Esperamos a que el webhook de Stripe actualice el status en Firestore
+          // Esperamos a que el backend (webhook de Stripe o consulta a Nequi)
+          // actualice el status en Firestore
           const orderRef = doc(db, 'orders', orderId);
           const POLL_INTERVAL = 2000;
           const MAX_ATTEMPTS = 15; // 30 segundos máximo
