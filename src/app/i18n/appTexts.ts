@@ -133,7 +133,6 @@ export const APP_TEXTS_ES: Record<string, string> = {
 
   // ── Editor de portada ─────────────────────────────────────────────────────
   'cover.fixRedTexts': 'Ajusta los textos marcados en rojo para poder guardar.',
-  'cover.lowResDesc': 'Esta imagen mide **{size}** (menor a 1080p). Al imprimirse en la portada podría verse pixelada o borrosa.',
 
   // ── Mi cuenta y borradores ────────────────────────────────────────────────
   'dashboard.customAlbumPending': 'Un curador se pondrá en contacto contigo por WhatsApp para continuar con tu solicitud.',
@@ -146,7 +145,6 @@ export const APP_TEXTS_ES: Record<string, string> = {
   'orderView.checkingPhotos': 'Comprobando que todas las fotos carguen…',
 
   // ── Fotos (avisos comunes de álbum y calendario) ──────────────────────────
-  'photos.lowResDesc': 'Esta imagen mide **{size}** (menor a 1080p). Al imprimirla podría verse pixelada o borrosa.',
   'photos.checkingQualityDesc': 'Asegurando la mejor resolución para tu impresión',
 
   // ── Organizador del calendario ────────────────────────────────────────────
