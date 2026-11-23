@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { 
   Upload, X, Image as ImageIcon, Trash2,
-  Check, Edit3, Plus, Pencil, Loader2, Calendar as CalendarIcon, Crop as CropIcon, AlertCircle
+  Check, Edit3, Plus, Pencil, Loader2, Calendar as CalendarIcon, Crop as CropIcon, AlertCircle, Info
 } from 'lucide-react';
 import { Calendar } from '../types/products';
 import { useLanguage } from '../context/LanguageContext';
@@ -50,7 +50,9 @@ export default function CalendarOrganizer({
   // Estados para validación de resolución
   const [isValidating, setIsValidating] = useState(false);
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
-  const [selectedLowResWarning, setSelectedLowResWarning] = useState<{url: string, slotIndex: number, width: number, height: number} | null>(null);
+  // Aviso discreto de baja resolución: plegado por defecto, solo se despliega
+  // (lista + número sobre cada foto) si el usuario hace clic.
+  const [showLowResDetails, setShowLowResDetails] = useState(false);
   // Mapa clave de archivo → info de baja resolución, para aplicarla cuando se crea la URL definitiva
   const pendingLowResRef = useRef<Map<string, {width: number, height: number}>>(new Map());
 
@@ -378,52 +380,18 @@ export default function CalendarOrganizer({
     );
   };
 
-  const renderLowResWarningModal = () => {
-    if (!selectedLowResWarning) return null;
-    const { url, slotIndex, width, height } = selectedLowResWarning;
-    return (
-      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-          <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            <RichText text={t('photos.lowResDesc', { size: `${width}x${height}px` })} />
-          </p>
-          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
-            <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                removePhoto(slotIndex);
-                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
-                setSelectedLowResWarning(null);
-              }}
-              className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
-            >
-              Descartar
-            </button>
-            <button
-              onClick={() => {
-                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
-                setSelectedLowResWarning(null);
-              }}
-              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
-            >
-              Usar de todos modos
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Fotos de baja resolución en orden de calendario, numeradas para cruzar la
+  // lista del aviso con el número que aparece sobre cada foto.
+  const lowResList = photos.flatMap((photo, idx) =>
+    photo && photo.trim() !== '' && lowResInfo[photo]
+      ? [{ photo, idx, ...lowResInfo[photo] }]
+      : []
+  );
+  const lowResNumber = new Map(lowResList.map((item, n) => [item.idx, n + 1]));
 
   const renderSlot = (globalIdx: number) => {
     const photo = photos[globalIdx];
     const crop = photoCrops[globalIdx];
-    const isPhotoLowRes = photo && photo.trim() !== '' && lowResInfo[photo];
 
     return (
       <div key={globalIdx} className="relative bg-gray-200 overflow-hidden w-full h-full group">
@@ -440,17 +408,10 @@ export default function CalendarOrganizer({
           </div>
         )}
 
-        {isPhotoLowRes && (
-          <button
-            className="absolute top-1 left-1 z-20 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedLowResWarning({ url: photo!, slotIndex: globalIdx, ...lowResInfo[photo!] });
-            }}
-            title="Advertencia de resolución"
-          >
-            !
-          </button>
+        {showLowResDetails && lowResNumber.has(globalIdx) && (
+          <span className="pointer-events-none absolute top-1 left-1 z-20 w-4 h-4 rounded-full bg-gray-500/90 text-white text-[9px] font-bold flex items-center justify-center">
+            {lowResNumber.get(globalIdx)}
+          </span>
         )}
 
         <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -502,7 +463,6 @@ export default function CalendarOrganizer({
       <div className="w-full max-w-4xl mx-auto px-4 py-12">
         {photoSource.ui}
         {renderDuplicateModal()}
-        {renderLowResWarningModal()}
         {photoChoice && (
           <CalendarPhotoChooser
             files={photoChoice.files}
@@ -591,7 +551,6 @@ export default function CalendarOrganizer({
     <div className="w-full max-w-6xl mx-auto px-4 py-12">
       {photoSource.ui}
       {renderDuplicateModal()}
-      {renderLowResWarningModal()}
 
       {/* OVERLAY DE VALIDACIÓN PARA SUBIDA ESPECÍFICA */}
       {isValidating && step === 'editor' && (
@@ -629,6 +588,42 @@ export default function CalendarOrganizer({
           </div>
         )}
       </div>
+
+      {/* Aviso de baja resolución: una línea gris discreta (antes era un «!»
+          morado sobre cada foto con un modal grande que parecía un error grave).
+          Cuáles son solo se muestra al hacer clic. */}
+      {lowResList.length > 0 && (
+        <div className="-mt-4 mb-8 flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => setShowLowResDetails(v => !v)}
+            aria-expanded={showLowResDetails}
+            className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline transition-colors"
+          >
+            <Info className="w-3 h-3 shrink-0" />
+            Imágenes con baja resolución detectadas
+          </button>
+          {showLowResDetails && (
+            <div className="mt-2 w-full max-w-sm text-[11px] text-gray-500 bg-white border border-gray-200 rounded-lg p-2.5">
+              <p className="mb-2 text-gray-400">
+                Miden menos de 1080 px por el lado corto; al imprimirse podrían verse algo menos nítidas.
+              </p>
+              <ul className="space-y-1.5">
+                {lowResList.map(({ photo, idx, width, height }, n) => {
+                  const month = calendarMonths[Math.floor(idx / imagesPerMonth)];
+                  return (
+                    <li key={`${idx}-${photo}`} className="flex items-center gap-2">
+                      <span className="w-4 h-4 shrink-0 rounded-full bg-gray-500 text-white text-[9px] font-bold flex items-center justify-center">{n + 1}</span>
+                      <img src={photo} alt="" className="w-8 h-8 rounded object-cover bg-gray-100 shrink-0" />
+                      <span className="text-gray-500">{month ? `${month.name} ${month.year} · ` : ''}{width}×{height} px</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Cada tarjeta es la página real de la plantilla 2027 (la misma que se imprime) */}
       <div className={`grid grid-cols-1 gap-10 ${calendarType === 'desk' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>

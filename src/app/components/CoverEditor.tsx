@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, Check, Layout, Type, Image as ImageIcon, Palette, Crop as CropIcon, AlertCircle, Info, Loader2 } from 'lucide-react';
 import CoverPreview from './CoverPreview';
 import ImageCropper from './ImageCropper';
 import CropModal from './CropModal';
 import { useLanguage } from '../context/LanguageContext';
-import { RichText } from './ui/RichText';
 import { convertPhotoFile, PHOTO_ACCEPT } from '../utils/imageUtils';
 import { getCoverTextLimits, getSampleSubtitle } from '../utils/coverTextLimits';
 import { usePhotoSource } from '../hooks/usePhotoSource';
@@ -188,6 +187,7 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
     const result = await checkImageDimensions(file);
     setIsValidating(false);
     processCoverUpload(file);
+    setShowLowResWarning(false); // cada foto nueva empieza con el aviso plegado
     if (result.isLowRes) {
       setCoverImageLowResInfo({ width: result.width, height: result.height });
     } else {
@@ -265,37 +265,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
           }
         }
       `}</style>
-
-      {showLowResWarning && coverImageLowResInfo && (
-        <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
-            <p className="text-sm text-gray-500 mb-6">
-              <RichText text={t('cover.lowResDesc', { size: `${coverImageLowResInfo.width}x${coverImageLowResInfo.height}px` })} />
-            </p>
-            <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
-              <img src={coverImage} className="w-full h-full object-contain" alt="Low res preview" />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setCoverImage(''); setCoverCrop({x:50,y:50,zoom:1,rotation:0}); setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
-                className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
-              >
-                Descartar
-              </button>
-              <button
-                onClick={() => { setCoverImageLowResInfo(null); setShowLowResWarning(false); }}
-                className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
-              >
-                Usar de todos modos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="md:hidden p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-20">
         <h2 className="text-lg font-black tracking-tighter">DISEÑA TU PORTADA</h2>
@@ -474,15 +443,6 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                         position={coverCrop} 
                       />
                       <div className="absolute top-2 right-2 md:top-2 md:right-2 z-10 flex gap-2.5 md:gap-2">
-                        {coverImageLowResInfo && (
-                          <button
-                            onClick={() => setShowLowResWarning(true)}
-                            className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-sm md:text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
-                            title="Advertencia de resolución"
-                          >
-                            !
-                          </button>
-                        )}
                         <button onClick={() => setIsCropModalOpen(true)} className="bg-white/95 text-black p-2 md:p-2 rounded-full hover:scale-110 transition-transform shadow-lg hover:bg-white" title="Ajustar Recorte">
                           <CropIcon className="w-6 h-6 md:w-4 md:h-4" />
                         </button>
@@ -498,6 +458,27 @@ const CoverEditor: React.FC<CoverEditorProps> = ({
                     </div>
                  )}
                  <input ref={fileInputRef} type="file" className="hidden" accept={PHOTO_ACCEPT} onChange={handleImageChange} disabled={isValidating} />
+                 {/* Aviso de baja resolución: una línea gris discreta (antes un «!»
+                     morado con un modal grande que parecía un error grave). El
+                     detalle solo aparece si el usuario hace clic. */}
+                 {coverImage && coverImageLowResInfo && !isValidating && (
+                   <div className="mt-2 flex flex-col items-center">
+                     <button
+                       type="button"
+                       onClick={() => setShowLowResWarning(v => !v)}
+                       aria-expanded={showLowResWarning}
+                       className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline transition-colors"
+                     >
+                       <Info className="w-3 h-3 shrink-0" />
+                       Imagen con baja resolución detectada
+                     </button>
+                     {showLowResWarning && (
+                       <p className="mt-1.5 max-w-xs text-center text-[11px] text-gray-400">
+                         La foto de portada mide {coverImageLowResInfo.width}×{coverImageLowResInfo.height} px (menos de 1080 px por el lado corto); al imprimirse podría verse algo menos nítida.
+                       </p>
+                     )}
+                   </div>
+                 )}
               </section>
             )}
           </div>
