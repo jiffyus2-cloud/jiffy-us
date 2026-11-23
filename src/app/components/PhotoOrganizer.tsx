@@ -62,7 +62,7 @@ import {
   Image as ImageIcon, Grid3x3, Edit3, HelpCircle,
   Layers, Type, ALargeSmall, Settings, Pencil, Crop as CropIcon,
   AlertCircle, Loader2, Cloud, AlignLeft, AlignCenter, AlignRight, AlignJustify, Shuffle, Bold, Italic,
-  ArrowLeftRight,
+  ArrowLeftRight, Info,
 } from 'lucide-react';
 import {
   getAllowedPhotosPerPage,
@@ -408,7 +408,11 @@ export default function PhotoOrganizer({
 
   const [isValidating, setIsValidating] = useState(false);
   const [lowResInfo, setLowResInfo] = useState<Record<string, {width: number, height: number}>>({});
-  const [selectedLowResWarning, setSelectedLowResWarning] = useState<{url: string, pageIndex: number, photoIndex: number, width: number, height: number} | null>(null);
+  // Detalle del aviso discreto de baja resolución en «Ajustes de la página»:
+  // plegado por defecto, solo se despliega si el usuario lo pide.
+  const [showLowResDetails, setShowLowResDetails] = useState(false);
+  // Cada página abre con el aviso plegado.
+  useEffect(() => { setShowLowResDetails(false); }, [advancedSettingsModal]);
 
   const [showPickerWarning, setShowPickerWarning] = useState(false);
   const [pickerWarningAccepted, setPickerWarningAccepted] = useState(false);
@@ -818,9 +822,20 @@ export default function PhotoOrganizer({
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const results = await Promise.all(batch.map(checkImageDimensions));
+      // En la carga inicial los archivos ya se registraron (acceptFiles) antes de
+      // medirlos, así que la marca se aplica directamente a su URL; dejarla solo
+      // en pendingLowResRef hacía que nunca llegara a la foto.
+      const urlByKey = new Map<string, string>();
+      pendingFileKeysRef.current.forEach((key, url) => urlByKey.set(key, url));
+      const found: Record<string, {width: number, height: number}> = {};
       results.filter(r => r.isLowRes).forEach(r => {
-        pendingLowResRef.current.set(getFileKey(r.file), { width: r.width, height: r.height });
+        const key = getFileKey(r.file);
+        const info = { width: r.width, height: r.height };
+        const url = urlByKey.get(key);
+        if (url) found[url] = info;
+        else pendingLowResRef.current.set(key, info);
       });
+      if (Object.keys(found).length > 0) setLowResInfo(prev => ({ ...prev, ...found }));
       await new Promise<void>(r => setTimeout(r, 100));
     }
   };
@@ -2264,50 +2279,6 @@ export default function PhotoOrganizer({
     );
   };
 
-  const renderLowResWarningModal = () => {
-    if (!selectedLowResWarning) return null;
-    const { url, pageIndex, photoIndex, width, height } = selectedLowResWarning;
-    return (
-      <div className="fixed inset-0 overflow-y-auto overscroll-contain max-sm:pb-24 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="my-auto bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 text-center">
-          <div className="w-16 h-16 bg-purple-100 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">Baja Resolución Detectada</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            <RichText text={t('photos.lowResDesc', { size: `${width}x${height}px` })} />
-          </p>
-          <div className="w-full aspect-square bg-gray-100 rounded-xl overflow-hidden mb-6 flex items-center justify-center">
-            <img src={url} className="w-full h-full object-contain" alt="Low res preview" />
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                // Directo al execute*: el usuario ya está confirmando aquí, un
-                // segundo modal encima sobraría.
-                executeRemovePhotoFromPage(pageIndex, photoIndex);
-                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
-                setSelectedLowResWarning(null);
-              }}
-              className="flex-1 py-3 bg-white border-2 border-gray-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all"
-            >
-              Descartar
-            </button>
-            <button
-              onClick={() => {
-                setLowResInfo(prev => { const n = { ...prev }; delete n[url]; return n; });
-                setSelectedLowResWarning(null);
-              }}
-              className="flex-1 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md"
-            >
-              Usar de todos modos
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderAdvancedSettingsModal = () => {
     if (advancedSettingsModal === null) return null;
     const pageIndex = advancedSettingsModal;
@@ -2320,6 +2291,12 @@ export default function PhotoOrganizer({
     const currentVariantId = getSelectedVariantId(currentVariant, currentLayout, sizeStr);
 
     const modalSlots = getAlbumPageSlots(albumPageSource, pageIndex, sizeStr);
+    const lowResSlots = modalSlots.flatMap((slot, photoIndex) =>
+      slot.photo && lowResInfo[slot.photo]
+        ? [{ photo: slot.photo, photoIndex, ...lowResInfo[slot.photo] }]
+        : []
+    );
+    const lowResNumberBySlot = new Map(lowResSlots.map((s, n) => [s.photoIndex, n + 1]));
 
     return (
       <>
@@ -2345,6 +2322,7 @@ export default function PhotoOrganizer({
                 <AlbumPageSlots
                   slots={modalSlots}
                   renderSlot={(slot, photoIndex) => (
+                    <>
                     <AlbumEditorPhotoSlot
                       photo={slot.photo} textBox={slot.text} crop={slot.crop} textAspect={slot.aspect}
                       pageIndex={pageIndex} photoIndex={photoIndex}
@@ -2363,6 +2341,14 @@ export default function PhotoOrganizer({
                       onPhotoRetry={handlePhotoRetry}
                       t={t}
                     />
+                    {/* Número gris sobre la foto, solo con el detalle desplegado,
+                        para saber a cuál se refiere cada línea de la lista. */}
+                    {showLowResDetails && lowResNumberBySlot.has(photoIndex) && (
+                      <span className="pointer-events-none absolute top-1 left-1 z-10 w-4 h-4 rounded-full bg-gray-500/90 text-white text-[9px] font-bold flex items-center justify-center">
+                        {lowResNumberBySlot.get(photoIndex)}
+                      </span>
+                    )}
+                    </>
                   )}
                 />
               </AlbumPageFrame>
@@ -2379,6 +2365,40 @@ export default function PhotoOrganizer({
                 <ImageIcon className="w-4 h-4 shrink-0 pointer-events-none" />
                 <span className="pointer-events-none">{t('organizer.sendDropZone')}</span>
               </div>
+
+              {/* Aviso de baja resolución: una línea gris discreta. Antes era
+                  un «!» morado sobre cada foto con un modal grande, y la gente
+                  lo leía como un error grave. Ahora solo se ve aquí, y cuáles
+                  son solo se dice si el usuario hace clic. */}
+              {lowResSlots.length > 0 && (
+                <div className="mt-3 w-full max-w-sm text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowLowResDetails(v => !v)}
+                    aria-expanded={showLowResDetails}
+                    className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline transition-colors"
+                  >
+                    <Info className="w-3 h-3 shrink-0" />
+                    Imágenes con baja resolución detectadas
+                  </button>
+                  {showLowResDetails && (
+                    <div className="mt-2 text-left text-[11px] text-gray-500 bg-white border border-gray-200 rounded-lg p-2.5">
+                      <p className="mb-2 text-gray-400">
+                        Miden menos de 1080 px por el lado corto; al imprimirse podrían verse algo menos nítidas.
+                      </p>
+                      <ul className="space-y-1.5">
+                        {lowResSlots.map(({ photo, photoIndex, width, height }, n) => (
+                          <li key={`${photoIndex}-${photo}`} className="flex items-center gap-2">
+                            <span className="w-4 h-4 shrink-0 rounded-full bg-gray-500 text-white text-[9px] font-bold flex items-center justify-center">{n + 1}</span>
+                            <img src={photo} alt="" className="w-8 h-8 rounded object-cover bg-gray-100 shrink-0" />
+                            <span className="text-gray-500">{width}×{height} px</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col justify-center">
@@ -2624,7 +2644,6 @@ export default function PhotoOrganizer({
       <div className="w-full max-w-4xl mx-auto px-4 pt-4 pb-12">
         {photoSource.ui}
         {renderDuplicateModal()}
-        {renderLowResWarningModal()}
 
         {/* MODAL AVISO ANTES DE ABRIR CARRETE */}
         {showPickerWarning && (
@@ -2963,7 +2982,6 @@ export default function PhotoOrganizer({
     return (
       <div className="w-full max-w-3xl mx-auto px-4 pt-4 pb-12">
         {renderDuplicateModal()}
-        {renderLowResWarningModal()}
 
         {!isPreparingAlbum && (
           <div className="text-center mb-8"><h2 className="text-3xl mb-2">{t('organizer.howManyPages')}</h2><p className="text-gray-600">{t('organizer.distributeDesc')}</p></div>
@@ -3141,7 +3159,6 @@ export default function PhotoOrganizer({
       )}
 
       {renderDuplicateModal()}
-      {renderLowResWarningModal()}
       {renderAdvancedSettingsModal()}
 
       {/* SELECTORES DE ARCHIVOS DE LAS CARGAS MASIVAS DESDE EL EDITOR */}
@@ -4071,18 +4088,6 @@ export default function PhotoOrganizer({
                               onPhotoRetry={handlePhotoRetry}
                               t={t}
                             />
-                            {slot.photo && lowResInfo[slot.photo] && (
-                              <button
-                                className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-200 text-purple-600 flex items-center justify-center text-xs font-bold shadow-md hover:bg-purple-300 transition-colors"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedLowResWarning({ url: slot.photo!, pageIndex, photoIndex, ...lowResInfo[slot.photo!] });
-                                }}
-                                title="Advertencia de resolución"
-                              >
-                                !
-                              </button>
-                            )}
                           </>
                         )}
                       />
