@@ -6,6 +6,7 @@ import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { sendOrderConfirmationToCustomer, sendNewOrderNotificationToOwner } from '../../services/emailService';
+import { PURCHASE_TEST_PARAM, trackPurchase } from '../utils/analytics';
 
 export default function Success() {
   const navigate = useNavigate();
@@ -17,6 +18,9 @@ export default function Success() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const hasAttempted = useRef(false);
+  // /success?prueba_compra=1&valor=120000 → solo envía el evento de compra a
+  // GTM (para que marketing configure etiquetas); no toca pedidos ni redirige.
+  const [testPurchaseValue, setTestPurchaseValue] = useState<number | null>(null);
 
   useEffect(() => {
     // 1. ESPERAR A FIREBASE AUTH
@@ -34,6 +38,21 @@ export default function Success() {
     const isNequi = searchParams.get('method') === 'nequi';
     const orderId = localStorage.getItem('pending_order_id');
 
+    if (searchParams.has(PURCHASE_TEST_PARAM)) {
+      const raw = Number(searchParams.get('valor'));
+      const value = Number.isFinite(raw) && raw > 0 ? raw : 100000;
+      trackPurchase({
+        transactionId: `PRUEBA-${Date.now()}`,
+        value,
+        paymentMethod: 'prueba',
+        productType: 'prueba',
+        test: true,
+      });
+      setTestPurchaseValue(value);
+      setIsVerifying(false);
+      return;
+    }
+
     if ((sessionId || isNequi) && orderId) {
       const confirmPayment = async () => {
         try {
@@ -48,6 +67,14 @@ export default function Success() {
             const orderSnap = await getDoc(orderRef);
             if (orderSnap.exists() && orderSnap.data()?.status === 'paid') {
               paid = true;
+              const paidOrder = orderSnap.data();
+              const value = Number(paidOrder?.total);
+              trackPurchase({
+                transactionId: orderId,
+                value: Number.isFinite(value) ? value : 0,
+                paymentMethod: isNequi ? 'nequi' : 'stripe',
+                productType: paidOrder?.productType || paidOrder?.product?.type || null,
+              });
 
               // Enviamos correos de confirmación (sin bloquear el flujo si fallan)
               try {
@@ -118,6 +145,12 @@ export default function Success() {
       {!isVerifying && !verificationError && countdown !== null && (
         <p className="text-sm text-gray-400 mb-6 -mt-4">
           Redirigiendo a tus pedidos en {countdown}...
+        </p>
+      )}
+
+      {testPurchaseValue !== null && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-6 -mt-4">
+          Compra de prueba enviada a GTM: ${testPurchaseValue.toLocaleString('es-CO')} COP (no es un pedido real).
         </p>
       )}
 

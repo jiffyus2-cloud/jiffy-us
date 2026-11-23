@@ -22,7 +22,50 @@ export const TRACKING_IDS = {
 export const TRACKING_EVENTS = {
   registerCompleted: 'registro_completado',
   stripeCheckoutStarted: 'compra_stripe_inicio',
+  /** Pago confirmado (Stripe o Nequi) en /success. Lleva valor y moneda. */
+  purchaseCompleted: 'compra_completada',
 } as const;
+
+/** Parámetro de /success que dispara una compra de prueba (sin pedido real). */
+export const PURCHASE_TEST_PARAM = 'prueba_compra';
+
+export interface PurchaseInfo {
+  transactionId: string;
+  value: number;
+  currency?: string;
+  paymentMethod: 'stripe' | 'nequi' | 'prueba';
+  productType?: string | null;
+  test?: boolean;
+}
+
+/**
+ * Compra completada. Formato de comercio electrónico de GA4 (`ecommerce`)
+ * más los mismos datos en el nivel superior para variables simples de GTM.
+ */
+export function trackPurchase(p: PurchaseInfo): void {
+  const currency = p.currency || 'COP';
+  const productType = p.productType || null;
+  try {
+    // GA4 recomienda vaciar el objeto ecommerce anterior antes de uno nuevo.
+    getDataLayer().push({ ecommerce: null });
+  } catch {
+    // ignorar
+  }
+  trackEvent(TRACKING_EVENTS.purchaseCompleted, {
+    transaction_id: p.transactionId,
+    value: p.value,
+    currency,
+    payment_method: p.paymentMethod,
+    product_type: productType,
+    test: !!p.test,
+    ecommerce: {
+      transaction_id: p.transactionId,
+      value: p.value,
+      currency,
+      items: [{ item_id: productType || 'pedido', item_name: productType || 'pedido', price: p.value, quantity: 1 }],
+    },
+  });
+}
 
 function getDataLayer(): Record<string, unknown>[] {
   window.dataLayer = window.dataLayer || [];
