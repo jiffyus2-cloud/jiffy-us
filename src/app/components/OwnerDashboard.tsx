@@ -17,6 +17,8 @@ import DiscountCodesSection from './DiscountCodesSection';
 import UsersSection from './UsersSection';
 import StorageManagementSection from './StorageManagementSection';
 import EmailCampaignsSection from './EmailCampaignsSection';
+import OrderEmailAutomationsSection from './OrderEmailAutomationsSection';
+import { notifyOrderStatusChange } from '../../services/massEmailApi';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import { reverseNequiPayment } from '../../services/nequiApi';
@@ -424,6 +426,7 @@ const OwnerDashboard: React.FC = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'orders' | 'custom-albums' | 'settings' | 'discounts' | 'images' | 'texts' | 'users' | 'connections' | 'storage' | 'emails'>('orders');
+  const [emailsView, setEmailsView] = useState<'campaigns' | 'automatic'>('campaigns');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -744,6 +747,8 @@ const OwnerDashboard: React.FC = () => {
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       await updateOrderStatus(orderId, newStatus);
+      // Correo automático del nuevo estado (si está activado). No bloquea ni falla el cambio.
+      void notifyOrderStatusChange(orderId);
       const now = new Date().toISOString();
       setOrders(prev => prev.map(o => o.id === orderId
         ? { ...o, status: newStatus, updatedAt: now, ...(newStatus === 'entregado' ? { deliveredAt: now } : {}) }
@@ -2242,7 +2247,22 @@ const OwnerDashboard: React.FC = () => {
         )}
 
         {activeTab === 'emails' && (
-          <EmailCampaignsSection adminEmail={currentUserEmail ?? undefined} />
+          <div className="space-y-6">
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+              {([['campaigns', 'Campañas'], ['automatic', 'Automáticos de pedido']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setEmailsView(id)}
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${emailsView === id ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {emailsView === 'campaigns'
+              ? <EmailCampaignsSection adminEmail={currentUserEmail ?? undefined} />
+              : <OrderEmailAutomationsSection adminEmail={currentUserEmail ?? undefined} />}
+          </div>
         )}
 
         {activeTab === 'storage' && (
