@@ -8,7 +8,7 @@ import { auth } from '../lib/firebase';
  * ya la aceptó. El backend es quien marca el pedido como pagado.
  */
 
-export type NequiState = 'pending' | 'paid' | 'rejected' | 'expired' | 'failed' | 'cancelled';
+export type NequiState = 'pending' | 'paid' | 'rejected' | 'expired' | 'failed' | 'cancelled' | 'reversed';
 
 export interface NequiPaymentView {
   state: NequiState;
@@ -69,3 +69,7 @@ export function normalizeNequiPhone(raw: string): string | null {
   if (digits.length === 12 && digits.startsWith('57')) digits = digits.slice(2);
   return /^3\d{9}$/.test(digits) ? digits : null;
 }
+
+/** Solo el dueño de la tienda: devuelve al cliente un pago Nequi de un pedido en "Pagado". */
+export const reverseNequiPayment = (orderId: string) =>
+  post<NequiPaymentView>('/nequi/reverse', { orderId });
