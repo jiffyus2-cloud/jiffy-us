@@ -147,3 +147,66 @@ export function newCampaignId(): string {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
   return `c_${random}`.slice(0, 40);
 }
+
+// ─── Correos automáticos de pedido ───────────────────────────────────────────
+
+export type OrderEmailEvent = 'paid' | 'en_produccion' | 'enviado' | 'entregado';
+export const ORDER_EMAIL_EVENTS: OrderEmailEvent[] = ['paid', 'en_produccion', 'enviado', 'entregado'];
+
+export interface OrderEmailTemplate {
+  enabled: boolean;
+  subject: string;
+  body: string;
+  format: EmailBodyFormat;
+  /** false = el texto es el de por defecto (nunca se guardó). */
+  customized?: boolean;
+}
+
+export interface OrderEmailLogEntry {
+  id: string;
+  orderId: string;
+  event: OrderEmailEvent;
+  to: string;
+  subject: string;
+  state: 'sending' | 'sent' | 'failed';
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotifyOutcome {
+  status: 'sent' | 'failed' | 'skipped';
+  event: OrderEmailEvent | null;
+  to?: string;
+  error?: string;
+  reason?: string;
+}
+
+export function getOrderEmailTemplates(): Promise<Record<OrderEmailEvent, OrderEmailTemplate>> {
+  return request('/email/automations');
+}
+
+export function previewOrderEmail(event: OrderEmailEvent, draft: EmailDraft): Promise<RenderedEmail> {
+  return request<RenderedEmail>('/email/automations/preview', { method: 'POST', body: { ...draft, event } });
+}
+
+export function sendOrderEmailTest(event: OrderEmailEvent, draft: EmailDraft, to: string): Promise<SendResult> {
+  return request<SendResult>('/email/automations/test', { method: 'POST', body: { ...draft, event, to } });
+}
+
+export function listOrderEmailLog(): Promise<OrderEmailLogEntry[]> {
+  return request<OrderEmailLogEntry[]>('/email/automations/log');
+}
+
+/**
+ * Avisa al backend de que el pedido cambió de estado; si el correo de ese
+ * estado está activado y no se había enviado, lo envía. Nunca lanza.
+ */
+export async function notifyOrderStatusChange(orderId: string): Promise<NotifyOutcome | null> {
+  try {
+    return await request<NotifyOutcome>('/email/automations/notify', { method: 'POST', body: { orderId } });
+  } catch (err) {
+    console.warn('[correos automáticos] no se pudo avisar del cambio de estado:', err);
+    return null;
+  }
+}

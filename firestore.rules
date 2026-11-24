@@ -72,6 +72,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Correos automáticos de pedido: el texto lo edita el dueño desde el panel y
+    // lo lee el backend (Admin SDK). El registro de envíos (order_emails) lo
+    // escribe solo el backend; el panel lo lee vía /email/automations/log.
+    match /email_automations/{event} {
+      allow read, write: if isOwner();
+    }
+    match /order_emails/{entryId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
     // Plantillas de correo masivo: borradores con nombre del panel. Solo el dueño.
     match /email_templates/{templateId} {
       allow read, write: if isOwner();
