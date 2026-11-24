@@ -9,7 +9,7 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Header } from './navigation/Header';
-import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays, HardDrive, Mail } from 'lucide-react';
+import { AlertCircle, Lock, LogOut, Download, Eye, Search, Loader2, Trash2, Settings as SettingsIcon, ShoppingBag, Tag, Save, Plus, Star, ChevronRight, Package, Zap, Users, FileText, Images, Sparkles, Ticket, Pencil, X, CalendarDays, HardDrive, Mail, Undo2 } from 'lucide-react';
 import ConnectionsSection from './ConnectionsSection';
 import SystemImagesSection from './SystemImagesSection';
 import SystemTextsSection from './SystemTextsSection';
@@ -19,6 +19,7 @@ import StorageManagementSection from './StorageManagementSection';
 import EmailCampaignsSection from './EmailCampaignsSection';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
+import { reverseNequiPayment } from '../../services/nequiApi';
 import * as XLSX from 'xlsx';
 
 // --- DEPENDENCIAS PARA GENERAR EL PDF DE ALTA RESOLUCIÓN ---
@@ -750,6 +751,30 @@ const OwnerDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error updating order status:', error);
       alert('No se pudo actualizar el estado del pedido.');
+    }
+  };
+
+  // Reversión de pagos Nequi: devuelve la plata al cliente. Solo pedidos en "Pagado".
+  const [reversingOrderId, setReversingOrderId] = useState<string | null>(null);
+  const handleReverseNequi = async (order: Order) => {
+    const ok = window.confirm(
+      `¿Devolver el pago Nequi de $${Number(order.total || 0).toLocaleString('es-CO')} COP a${order.shippingAddress?.name || 'este cliente'}?\n\n` +
+      'Nequi le devuelve la plata al cliente y el pedido vuelve a "Pendiente de pago". Esta acción no se puede deshacer.'
+    );
+    if (!ok) return;
+    setReversingOrderId(order.id);
+    try {
+      await reverseNequiPayment(order.id);
+      const now = new Date().toISOString();
+      setOrders(prev => prev.map(o => o.id === order.id
+        ? { ...o, status: 'pending_payment', nequiState: 'reversed', updatedAt: now }
+        : o));
+      alert('Pago Nequi reversado: el dinero vuelve al cliente.');
+    } catch (error: any) {
+      console.error('Error reversando pago Nequi:', error);
+      alert(error?.message || 'No se pudo reversar el pago de Nequi.');
+    } finally {
+      setReversingOrderId(null);
     }
   };
 
@@ -1557,6 +1582,17 @@ const OwnerDashboard: React.FC = () => {
                                   )}
                                   {(order.status === 'pending_payment' || order.status === 'draft') && (
                                     <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
+                                  )}
+                                  {order.status === 'paid' && order.paymentMethod === 'nequi' && order.nequiState === 'paid' && (
+                                    <button
+                                      onClick={() => handleReverseNequi(order)}
+                                      disabled={reversingOrderId !== null}
+                                      className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors disabled:opacity-50"
+                                      title="Devolver pago Nequi"
+                                      aria-label="Devolver pago Nequi"
+                                    >
+                                      {reversingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                    </button>
                                   )}
                                 </div>
                               </div>
