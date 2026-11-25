@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mail, Send, Loader2, RefreshCw, AlertCircle, CheckCircle2, X, Eye, Users,
-  ChevronDown, ChevronRight, FlaskConical, ShieldCheck, ImagePlus, Save, Trash2, FileText
+  ChevronDown, ChevronRight, FlaskConical, ShieldCheck, Save, Trash2, FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -13,7 +13,7 @@ import {
 import {
   EmailTemplate, listEmailTemplates, saveEmailTemplate, deleteEmailTemplate, newTemplateId,
 } from '../../services/emailTemplates';
-import { altFromFileName, imageSnippet, insertOnOwnLine, uploadEmailImage } from '../utils/emailImage';
+import EmailImageButton from './EmailImageButton';
 
 /**
  * Pestaña "Correos" del panel del dueño: campañas de correo a los usuarios
@@ -160,7 +160,8 @@ const CampaignRow: React.FC<{ campaign: EmailCampaign }> = ({ campaign }) => {
 
 // ─── Plantillas ───────────────────────────────────────────────────────────────
 
-const TemplateBar: React.FC<{
+/** Barra de plantillas guardadas; la usan también los correos automáticos de pedido. */
+export const TemplateBar: React.FC<{
   templates: EmailTemplate[];
   loading: boolean;
   error: string;
@@ -288,8 +289,6 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
   const [currentTemplate, setCurrentTemplate] = useState<EmailTemplate | null>(null);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
@@ -358,33 +357,6 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
       await loadTemplates();
     } catch (e: any) {
       setTemplatesError(`No se pudo borrar la plantilla: ${e.message}`);
-    }
-  };
-
-  const handleImageFile = async (file: File) => {
-    setNotice(null);
-    setUploadingImage(true);
-    // Posición del cursor al elegir la imagen (el diálogo de archivos le quita el foco).
-    const el = bodyRef.current;
-    const start = el?.selectionStart ?? body.length;
-    const end = el?.selectionEnd ?? body.length;
-    try {
-      const url = await uploadEmailImage(file);
-      const snippet = imageSnippet(url, altFromFileName(file.name), bodyFormat);
-      let cursor = 0;
-      setBody(prev => {
-        const next = insertOnOwnLine(prev, Math.min(start, prev.length), Math.min(end, prev.length), snippet);
-        cursor = next.cursor;
-        return next.text;
-      });
-      requestAnimationFrame(() => {
-        bodyRef.current?.focus();
-        bodyRef.current?.setSelectionRange(cursor, cursor);
-      });
-    } catch (e: any) {
-      setNotice({ kind: 'error', text: `No se pudo subir la imagen: ${e.message}` });
-    } finally {
-      setUploadingImage(false);
     }
   };
 
@@ -536,26 +508,11 @@ const EmailCampaignsSection: React.FC<{ adminEmail?: string }> = ({ adminEmail }
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Contenido</label>
               <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={uploadingImage}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                title="Subir una imagen e insertarla donde está el cursor"
-              >
-                {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
-                {uploadingImage ? 'Subiendo…' : 'Imagen'}
-              </button>
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*,.heic,.heif"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (file) void handleImageFile(file);
-                }}
+              <EmailImageButton
+                textareaRef={bodyRef}
+                format={bodyFormat}
+                setBody={setBody}
+                onError={text => setNotice({ kind: 'error', text })}
               />
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
                 {(['text', 'html'] as EmailBodyFormat[]).map(f => (
