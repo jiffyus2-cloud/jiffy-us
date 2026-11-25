@@ -15,6 +15,7 @@ import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
 import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
 import { RichText } from './ui/RichText';
+import type { PaymentSummarySnapshot } from '../utils/orderPaymentSummary';
 import NequiPaymentModal from './NequiPaymentModal';
 import { TRACKING_EVENTS, TRACKING_IDS, trackEventThen } from '../utils/analytics';
 import { createNequiPayment, isNequiEnabled, normalizeNequiPhone, type NequiPaymentView } from '../../services/nequiApi';
@@ -258,6 +259,39 @@ export default function Checkout() {
     setCodeInput('');
   };
 
+  const buildPaymentSummary = (
+    code: AppliedDiscount | null,
+    finalTotal: number,
+    method: 'card' | 'nequi',
+  ): PaymentSummarySnapshot => {
+    const city = formData.city.trim();
+    return {
+      version: 1,
+      productKind: isAlbum ? 'album' : isCalendar ? 'calendar' : 'other',
+      productLabel: isAlbum ? 'Álbum' : String(product?.name || (isCalendar ? 'Calendario' : 'Producto')),
+      size: orderData.customization?.size ?? null,
+      coverType: isAlbum ? (orderData.customization?.coverType || orderData.customization?.material || null) : null,
+      quantity: 1,
+      pages: isAlbum ? totalPageCount : null,
+      extraPages: isAlbum ? extraPagesCount : null,
+      basePrice: isAlbum ? albumBasePrice : subtotal,
+      extraPagePrice: isAlbum ? albumExtraPagePrice : null,
+      extraPagesCost: isAlbum ? extraPagesCost : null,
+      subtotal,
+      storeDiscountPct: config.discounts.active ? config.discounts.percentage : null,
+      storeDiscount: discountAmount,
+      discountCode: code?.code ?? null,
+      codeDiscount: code?.discount ?? 0,
+      shippingMethod: isPickup ? 'pickup' : city === '' ? 'unknown' : city.toLowerCase().includes('cali') ? 'cali' : 'national',
+      pickupLocation: isPickup ? (pickupLocation === 'Arboleda' ? 'Arboleda, Cali' : 'Ciudad Jardín, Cali') : null,
+      shippingCity: isPickup ? 'Cali' : city || null,
+      shipping,
+      total: finalTotal,
+      paymentMethod: method,
+      createdAt: new Date().toISOString(),
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -317,9 +351,13 @@ export default function Checkout() {
         { shippingAddress, billingAddress },
         finalTotal,
         'pending_payment',
-        confirmedCode
-          ? { discountCode: confirmedCode.code, discountCodeAmount: confirmedCode.discount }
-          : { discountCode: null, discountCodeAmount: 0 }
+        {
+          ...(confirmedCode
+            ? { discountCode: confirmedCode.code, discountCodeAmount: confirmedCode.discount }
+            : { discountCode: null, discountCodeAmount: 0 }),
+          // Desglose exacto de lo cobrado: el panel del dueño lo muestra tal cual.
+          paymentSummary: buildPaymentSummary(confirmedCode, finalTotal, useNequi ? 'nequi' : 'card'),
+        }
       );
       localStorage.setItem('pending_order_id', state.orderId);
 
