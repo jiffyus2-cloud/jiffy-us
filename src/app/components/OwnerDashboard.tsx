@@ -21,6 +21,8 @@ import OrderEmailAutomationsSection from './OrderEmailAutomationsSection';
 import { notifyOrderStatusChange } from '../../services/massEmailApi';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
+import OrderPaidSummary from './OrderPaidSummary';
+import { describeOrderPayment, formatPaymentLine } from '../utils/orderPaymentSummary';
 import { reverseNequiPayment } from '../../services/nequiApi';
 import * as XLSX from 'xlsx';
 
@@ -1060,7 +1062,7 @@ const OwnerDashboard: React.FC = () => {
       const resumenData = [{
         'ID del Pedido': order.id, 'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
         'Estado': order.status === 'paid' || order.status === 'mock_paid' ? 'Pagado' : order.status,
-        'Total Pagado ($)': order.total?.toFixed(2), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
+        'Total Pagado ($)': order.total?.toFixed(2), 'Lo pagado': describeOrderPayment(order).lines.map(formatPaymentLine).join(' | '), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
         'Email': order.shippingAddress?.email || 'N/A', 'Dirección de Envío': order.shippingAddress?.address || 'N/A',
         'Ciudad': order.shippingAddress?.city || 'N/A', 'Código Postal': order.shippingAddress?.zipCode || 'N/A'
       }];
@@ -1274,7 +1276,7 @@ const OwnerDashboard: React.FC = () => {
       const resumenData = [{
         'ID del Pedido': order.id, 'Fecha': new Date(order.createdAt).toLocaleString('es-ES'),
         'Estado': order.status === 'paid' || order.status === 'mock_paid' ? 'Pagado' : order.status,
-        'Total Pagado ($)': order.total?.toFixed(2), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
+        'Total Pagado ($)': order.total?.toFixed(2), 'Lo pagado': describeOrderPayment(order).lines.map(formatPaymentLine).join(' | '), 'Nombre del Cliente': order.shippingAddress?.name || 'N/A',
         'Email': order.shippingAddress?.email || 'N/A', 'Dirección de Envío': order.shippingAddress?.address || 'N/A',
         'Ciudad': order.shippingAddress?.city || 'N/A', 'Código Postal': order.shippingAddress?.zipCode || 'N/A'
       }];
@@ -1558,8 +1560,8 @@ const OwnerDashboard: React.FC = () => {
                                   <p className="text-xs font-medium text-gray-700 truncate mb-1" title={getAlbumTitle(order)}>📖 {getAlbumTitle(order)}</p>
                                 )}
                                 <p className="text-[10px] text-gray-400 mb-2">Creado {formatDateTime(order.createdAt)} · Editado {formatDateTime(order.updatedAt)}</p>
-                                {/* Monto */}
-                                <p className="text-sm font-bold text-gray-800 mb-3">{formatCOP(order.total)}</p>
+                                {/* Lo pagado: producto, tamaño, cantidad, envío, descuentos y total */}
+                                <OrderPaidSummary order={order} className="mb-3" />
                                 {/* Acciones */}
                                 <div className="flex items-center gap-1.5">
                                   <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
@@ -1631,7 +1633,7 @@ const OwnerDashboard: React.FC = () => {
                                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Cliente</th>
                                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Creado</th>
                                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Entregado</th>
-                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Monto</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Lo pagado</th>
                                 <th className="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Acciones</th>
                               </tr>
                             </thead>
@@ -1648,7 +1650,7 @@ const OwnerDashboard: React.FC = () => {
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap"><span className="text-xs text-gray-600">{formatDateTime(order.createdAt)}</span></td>
                                   <td className="px-4 py-3 whitespace-nowrap"><span className="text-xs text-gray-600">{formatDateTime(new Date(deliveredAtMs(order)).toISOString())}</span></td>
-                                  <td className="px-4 py-3 text-right"><span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span></td>
+                                  <td className="px-4 py-3 min-w-[260px]"><OrderPaidSummary order={order} /></td>
                                   <td className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center gap-2">
                                       <button onClick={() => handleViewDetails(order)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver detalles"><Eye className="w-4 h-4" /></button>
