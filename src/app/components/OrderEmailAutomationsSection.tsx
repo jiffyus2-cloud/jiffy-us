@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle, CheckCircle2, Eye, FlaskConical, Loader2, RefreshCw, Save, X,
   CreditCard, Factory, Truck, PackageCheck,
@@ -10,6 +10,19 @@ import {
   getOrderEmailTemplates, listOrderEmailLog, previewOrderEmail, sendOrderEmailTest,
 } from '../../services/massEmailApi';
 import { saveOrderEmailTemplate } from '../../services/emailAutomations';
+import {
+  EmailTemplate, deleteEmailTemplate, listEmailTemplates, newTemplateId, saveEmailTemplate,
+} from '../../services/emailTemplates';
+import { TemplateBar } from './EmailCampaignsSection';
+import EmailImageButton from './EmailImageButton';
+
+/** Plantillas guardadas (las mismas que en Campañas), compartidas por las cuatro tarjetas. */
+interface TemplatesState {
+  list: EmailTemplate[];
+  loading: boolean;
+  error: string;
+  reload: () => Promise<void>;
+}
 
 /**
  * Sub-pestaña «Automáticos» de Correos: un correo por cada paso del pedido.
@@ -33,8 +46,9 @@ const AutomationCard: React.FC<{
   event: OrderEmailEvent;
   saved: OrderEmailTemplate;
   adminEmail?: string;
+  templates: TemplatesState;
   onSaved: (t: OrderEmailTemplate) => void;
-}> = ({ event, saved, adminEmail, onSaved }) => {
+}> = ({ event, saved, adminEmail, templates, onSaved }) => {
   const info = EVENT_INFO[event];
   const [enabled, setEnabled] = useState(saved.enabled);
   const [subject, setSubject] = useState(saved.subject);
@@ -45,8 +59,49 @@ const AutomationCard: React.FC<{
   const [preview, setPreview] = useState<RenderedEmail | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const [currentTemplate, setCurrentTemplate] = useState<EmailTemplate | null>(null);
+  const [templateError, setTemplateError] = useState('');
+
   const dirty = enabled !== saved.enabled || subject !== saved.subject || body !== saved.body || bodyFormat !== saved.format;
   const draft = { subject: subject.trim(), body, format: bodyFormat };
+  const templateDirty = !currentTemplate
+    || currentTemplate.subject !== subject
+    || currentTemplate.body !== body
+    || currentTemplate.format !== bodyFormat;
+
+  const loadTemplate = (t: EmailTemplate) => {
+    setSubject(t.subject);
+    setBody(t.body);
+    setBodyFormat(t.format);
+    setCurrentTemplate(t);
+    setMessage({ kind: 'ok', text: `Plantilla «${t.name}» cargada. Pulsa Guardar para usarla en este correo.` });
+  };
+
+  const saveTemplate = async (name: string, asNew: boolean) => {
+    setTemplateError('');
+    const id = asNew || !currentTemplate ? newTemplateId() : currentTemplate.id;
+    try {
+      await saveEmailTemplate({ id, name, subject: subject.trim(), body, format: bodyFormat }, adminEmail ?? '');
+      setCurrentTemplate({ id, name: name.trim(), subject: subject.trim(), body, format: bodyFormat, updatedAt: new Date(), updatedBy: adminEmail ?? '' });
+      setMessage({ kind: 'ok', text: `Plantilla «${name.trim()}» guardada.` });
+      await templates.reload();
+    } catch (e: any) {
+      setTemplateError(`No se pudo guardar la plantilla: ${e.message}`);
+    }
+  };
+
+  const deleteTemplate = async (t: EmailTemplate) => {
+    setTemplateError('');
+    try {
+      await deleteEmailTemplate(t.id);
+      setCurrentTemplate(null);
+      setMessage({ kind: 'ok', text: `Plantilla «${t.name}» borrada. Lo que hay en el editor se mantiene.` });
+      await templates.reload();
+    } catch (e: any) {
+      setTemplateError(`No se pudo borrar la plantilla: ${e.message}`);
+    }
+  };
 
   const save = async (nextEnabled = enabled) => {
     setBusy('save'); setMessage(null);
@@ -113,6 +168,17 @@ const AutomationCard: React.FC<{
           {!saved.customized && (
             <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">Este es el texto sugerido. Cámbialo a tu gusto y guárdalo.</p>
           )}
+          <TemplateBar
+            templates={templates.list}
+            loading={templates.loading}
+            error={templateError || templates.error}
+            current={currentTemplate}
+            hasContent={!!subject.trim() && !!body.trim()}
+            dirty={templateDirty}
+            onLoad={loadTemplate}
+            onSave={saveTemplate}
+            onDelete={deleteTemplate}
+          />
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Asunto</label>
             <input
@@ -125,15 +191,24 @@ const AutomationCard: React.FC<{
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Contenido</label>
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
-                {(['text', 'html'] as EmailBodyFormat[]).map(f => (
-                  <button key={f} onClick={() => setBodyFormat(f)} className={`px-3 py-1 ${bodyFormat === f ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                    {f === 'text' ? 'Texto' : 'HTML'}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <EmailImageButton
+                  textareaRef={bodyRef}
+                  format={bodyFormat}
+                  setBody={setBody}
+                  onError={text => setMessage({ kind: 'error', text })}
+                />
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                  {(['text', 'html'] as EmailBodyFormat[]).map(f => (
+                    <button key={f} onClick={() => setBodyFormat(f)} className={`px-3 py-1 ${bodyFormat === f ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                      {f === 'text' ? 'Texto' : 'HTML'}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <textarea
+              ref={bodyRef}
               value={body}
               onChange={e => setBody(e.target.value)}
               rows={10}
@@ -142,7 +217,7 @@ const AutomationCard: React.FC<{
             <p className="text-xs text-gray-400 mt-1">
               Variables: <span className="font-mono">{'{{nombre}}'}</span> (nombre del cliente), <span className="font-mono">{'{{pedido}}'}</span> (código, ej. #A1B2C3D4),{' '}
               <span className="font-mono">{'{{producto}}'}</span> y <span className="font-mono">{'{{enlace}}'}</span> (página «Mis pedidos»).
-              Para una imagen, una línea <span className="font-mono">![descripción](enlace)</span>.
+              {bodyFormat === 'text' && <> El botón Imagen la inserta donde está el cursor, en su propia línea como <span className="font-mono">![descripción](enlace)</span>.</>}
             </p>
           </div>
 
@@ -201,6 +276,21 @@ const OrderEmailAutomationsSection: React.FC<{ adminEmail?: string }> = ({ admin
   const [log, setLog] = useState<OrderEmailLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(true);
   const [logError, setLogError] = useState('');
+  const [savedTemplates, setSavedTemplates] = useState<EmailTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesError, setTemplatesError] = useState('');
+
+  const loadTemplates = useCallback(() => {
+    setTemplatesLoading(true); setTemplatesError('');
+    return listEmailTemplates()
+      .then(setSavedTemplates)
+      .catch(e => setTemplatesError(`No se pudieron cargar las plantillas: ${e.message}`))
+      .finally(() => setTemplatesLoading(false));
+  }, []);
+
+  const templatesState: TemplatesState = {
+    list: savedTemplates, loading: templatesLoading, error: templatesError, reload: loadTemplates,
+  };
 
   const loadLog = useCallback(() => {
     setLogLoading(true); setLogError('');
@@ -210,7 +300,8 @@ const OrderEmailAutomationsSection: React.FC<{ adminEmail?: string }> = ({ admin
   useEffect(() => {
     getOrderEmailTemplates().then(setTemplates).catch(e => setError(e.message));
     loadLog();
-  }, [loadLog]);
+    void loadTemplates();
+  }, [loadLog, loadTemplates]);
 
   return (
     <div className="space-y-6">
@@ -234,6 +325,7 @@ const OrderEmailAutomationsSection: React.FC<{ adminEmail?: string }> = ({ admin
               event={event}
               saved={templates[event]}
               adminEmail={adminEmail}
+              templates={templatesState}
               onSaved={t => setTemplates(prev => prev ? { ...prev, [event]: t } : prev)}
             />
           ))}
