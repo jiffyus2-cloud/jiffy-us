@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Header } from './navigation/Header';
+import OrderCopiesBadge from './OrderCopiesBadge';
 import { useAuth } from '../../hooks/useAuth';
 import { useStoragePolicy } from '../../hooks/useStoragePolicy';
 import { getUserOrders, getUserSavedDrafts, deleteSavedDraft } from '../../services/orderService';
@@ -52,6 +53,8 @@ interface Order {
   updatedAt?: string;
   status: string;
   total: number;
+  /** Copias idénticas pedidas en el checkout (ausente = 1). */
+  quantity?: number;
   customAlbumSize?: string;
   coverData?: {
     image?: string;
@@ -668,6 +671,7 @@ const UserDashboard: React.FC = () => {
                             <div className="space-y-1">
                               <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.product')}</p>
                               <p className="text-sm font-medium text-gray-700 truncate">{order.product?.name || 'N/A'}</p>
+                              <OrderCopiesBadge order={order} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('dashboard.total')}</p>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Smartphone, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
+import { CreditCard, Smartphone, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store, Minus, Plus, Copy } from 'lucide-react';
 import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
 import { updateOrderAddresses, getOrder } from '../../services/orderService';
@@ -15,7 +15,7 @@ import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
 import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
 import { RichText } from './ui/RichText';
-import type { PaymentSummarySnapshot } from '../utils/orderPaymentSummary';
+import { MAX_ORDER_COPIES, clampCopies, type PaymentSummarySnapshot } from '../utils/orderPaymentSummary';
 import NequiPaymentModal from './NequiPaymentModal';
 import { TRACKING_EVENTS, TRACKING_IDS, trackEventThen } from '../utils/analytics';
 import { createNequiPayment, isNequiEnabled, normalizeNequiPhone, type NequiPaymentView } from '../../services/nequiApi';
@@ -40,6 +40,8 @@ export default function Checkout() {
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Copias idénticas del mismo diseño (p. ej. 5 calendarios iguales).
+  const [copies, setCopies] = useState(1);
 
   // Saved data from Firestore
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -81,6 +83,8 @@ export default function Checkout() {
       try {
         const data = await getOrder(state.orderId);
         setOrderData(data);
+        // Si el cliente vuelve al checkout, se conserva el número de copias elegido.
+        setCopies(clampCopies((data as any)?.quantity));
       } catch (error) {
         console.error("Error fetching order:", error);
       } finally {
@@ -204,7 +208,9 @@ export default function Checkout() {
     return Number(product.basePrice || product.price || 0);
   };
 
-  const subtotal = calculateSubtotal();
+  /** Precio de una copia (álbum con sus páginas extra, calendario, etc.). */
+  const unitPrice = calculateSubtotal();
+  const subtotal = unitPrice * copies;
   const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
   // Lo calcula el backend sobre el subtotal; aquí solo se pinta y se resta.
   const codeDiscount = appliedCode?.discount ?? 0;
@@ -233,14 +239,14 @@ export default function Checkout() {
    * vez justo antes de pagar: entre una cosa y otra el código puede haberse
    * agotado, haber vencido o haber cambiado el subtotal.
    */
-  const applyCode = async (raw: string): Promise<AppliedDiscount | null> => {
+  const applyCode = async (raw: string, forSubtotal: number = subtotal): Promise<AppliedDiscount | null> => {
     const code = raw.trim();
     if (!code) return null;
 
     setIsCheckingCode(true);
     setCodeError(null);
     try {
-      const result = await validateDiscountCode(code, subtotal);
+      const result = await validateDiscountCode(code, forSubtotal);
       if (!result.ok) {
         setAppliedCode(null);
         setCodeError(result.reason);
@@ -251,6 +257,14 @@ export default function Checkout() {
     } finally {
       setIsCheckingCode(false);
     }
+  };
+
+  /** Cambia el número de copias; un código aplicado se recalcula sobre el nuevo subtotal. */
+  const changeCopies = (next: number) => {
+    const n = clampCopies(next);
+    if (n === copies) return;
+    setCopies(n);
+    if (appliedCode) void applyCode(appliedCode.code, unitPrice * n);
   };
 
   const removeCode = () => {
@@ -271,10 +285,11 @@ export default function Checkout() {
       productLabel: isAlbum ? 'Álbum' : String(product?.name || (isCalendar ? 'Calendario' : 'Producto')),
       size: orderData.customization?.size ?? null,
       coverType: isAlbum ? (orderData.customization?.coverType || orderData.customization?.material || null) : null,
-      quantity: 1,
+      quantity: copies,
       pages: isAlbum ? totalPageCount : null,
       extraPages: isAlbum ? extraPagesCount : null,
-      basePrice: isAlbum ? albumBasePrice : subtotal,
+      // Precios por copia; `subtotal` ya va multiplicado por las copias.
+      basePrice: isAlbum ? albumBasePrice : unitPrice,
       extraPagePrice: isAlbum ? albumExtraPagePrice : null,
       extraPagesCost: isAlbum ? extraPagesCost : null,
       subtotal,
@@ -355,6 +370,8 @@ export default function Checkout() {
           ...(confirmedCode
             ? { discountCode: confirmedCode.code, discountCodeAmount: confirmedCode.discount }
             : { discountCode: null, discountCodeAmount: 0 }),
+          // Copias idénticas que hay que producir de este diseño.
+          quantity: copies,
           // Desglose exacto de lo cobrado: el panel del dueño lo muestra tal cual.
           paymentSummary: buildPaymentSummary(confirmedCode, finalTotal, useNequi ? 'nequi' : 'card'),
         }
@@ -446,7 +463,7 @@ export default function Checkout() {
     }
   };
 
-  const modalOrderData = { ...orderData, total: total, shippingAddress: null, billingAddress: null };
+  const modalOrderData = { ...orderData, total: total, quantity: copies, shippingAddress: null, billingAddress: null };
 
   // --- LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Para miniatura) ---
   let displayImage = orderData.coverData?.image;
@@ -822,11 +839,57 @@ export default function Checkout() {
                    </div>
                  </>
               )}
+
+              {/* --- NÚMERO DE COPIAS --- */}
+              <div className="border-t border-gray-200 pt-3 mt-3" data-testid="checkout-copies">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="checkout-copies" className="text-gray-600 flex items-center gap-1.5">
+                    <Copy className="w-4 h-4 text-gray-400" /> Número de copias
+                  </label>
+                  <div className="flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => changeCopies(copies - 1)}
+                      disabled={copies <= 1 || isProcessing}
+                      aria-label="Quitar una copia"
+                      className="px-2.5 py-2 text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-transparent"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      id="checkout-copies"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={MAX_ORDER_COPIES}
+                      value={copies}
+                      disabled={isProcessing}
+                      onFocus={e => e.target.select()}
+                      onChange={e => changeCopies(Number(e.target.value))}
+                      className="w-12 text-center font-bold text-gray-900 outline-none border-x border-gray-200 py-1.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => changeCopies(copies + 1)}
+                      disabled={copies >= MAX_ORDER_COPIES || isProcessing}
+                      aria-label="Añadir una copia"
+                      className="px-2.5 py-2 text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-transparent"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  {copies > 1
+                    ? `${copies} copias idénticas × $${unitPrice.toLocaleString('es-CO')} COP c/u`
+                    : `¿Quieres varias iguales? Elige cuántas copias (máx. ${MAX_ORDER_COPIES}).`}
+                </p>
+              </div>
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">{t('checkout.subtotal')}</span>
+                <span className="text-gray-600">{t('checkout.subtotal')}{copies > 1 ? ` (${copies} copias)` : ''}</span>
                 <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
               
