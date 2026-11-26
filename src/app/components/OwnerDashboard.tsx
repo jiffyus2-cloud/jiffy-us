@@ -765,16 +765,24 @@ const OwnerDashboard: React.FC = () => {
   // Reversión de pagos Nequi: devuelve la plata al cliente. Solo pedidos en "Pagado".
   const [reversingOrderId, setReversingOrderId] = useState<string | null>(null);
   const handleReverseNequi = async (order: Order) => {
+    // Compra de varios productos: un solo cobro Nequi, así que se devuelve entero.
+    const group = (order as any).checkoutGroup;
+    const groupIds: string[] = Array.isArray(group?.orderIds) && group.orderIds.length > 1 ? group.orderIds : [order.id];
+    const isGroup = groupIds.length > 1;
+    const amount = isGroup ? Number(group.total || 0) : Number(order.total || 0);
     const ok = window.confirm(
-      `¿Devolver el pago Nequi de $${Number(order.total || 0).toLocaleString('es-CO')} COP a${order.shippingAddress?.name || 'este cliente'}?\n\n` +
-      'Nequi le devuelve la plata al cliente y el pedido vuelve a "Pendiente de pago". Esta acción no se puede deshacer.'
+      `¿Devolver el pago Nequi de $${amount.toLocaleString('es-CO')} COP a ${order.shippingAddress?.name || 'este cliente'}?\n\n` +
+      (isGroup
+        ? `Este pedido se pagó junto con otros ${groupIds.length - 1} en una sola compra: se devuelve la compra entera y los ${groupIds.length} pedidos vuelven a "Pendiente de pago". `
+        : 'Nequi le devuelve la plata al cliente y el pedido vuelve a "Pendiente de pago". ') +
+      'Esta acción no se puede deshacer.'
     );
     if (!ok) return;
     setReversingOrderId(order.id);
     try {
       await reverseNequiPayment(order.id);
       const now = new Date().toISOString();
-      setOrders(prev => prev.map(o => o.id === order.id
+      setOrders(prev => prev.map(o => groupIds.includes(o.id)
         ? { ...o, status: 'pending_payment', nequiState: 'reversed', updatedAt: now }
         : o));
       alert('Pago Nequi reversado: el dinero vuelve al cliente.');

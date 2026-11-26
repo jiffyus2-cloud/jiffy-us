@@ -65,6 +65,8 @@ export default function Checkout() {
   const [nequiPhoneTouched, setNequiPhoneTouched] = useState(false);
   const [nequiPayment, setNequiPayment] = useState<NequiPaymentView | null>(null);
   const [leadOrderId, setLeadOrderId] = useState<string | null>(null);
+  // Pedidos que cubre el cobro de Nequi en curso (para reenviarlo igual).
+  const [nequiOrderIds, setNequiOrderIds] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: '', email: user?.email || '', phoneCode: '+57', phone: '',
@@ -178,8 +180,8 @@ export default function Checkout() {
   }
 
   const isMulti = lines.length > 1;
-  // Nequi cobra un pedido por vez: con varios productos solo tarjeta (por ahora).
-  const nequiAvailable = nequiEnabled && !isMulti;
+  // Nequi cobra la compra entera (uno o varios productos) en un solo push.
+  const nequiAvailable = nequiEnabled;
   const isPickup = pickupLocation !== '';
   const shipping = shippingCost(isPickup ? { pickup: true } : { pickup: false, city: formData.city }, config.prices);
   const cartItems = lines.map(l => ({ orderId: l.orderId, lineTotal: l.pricing.lineTotal }));
@@ -301,6 +303,7 @@ export default function Checkout() {
       localStorage.setItem('pending_order_id', lead);
       localStorage.setItem(PENDING_CHECKOUT_IDS_KEY, JSON.stringify(orderIds));
       setLeadOrderId(lead);
+      setNequiOrderIds(orderIds);
 
       // Save address/billing to user profile if requested
       if (user?.uid) {
@@ -331,7 +334,7 @@ export default function Checkout() {
       if (useNequi && nequiNumber) {
         // El backend envía la notificación al celular y el modal espera a
         // que el cliente la acepte; no hay redirección como con Stripe.
-        const payment = await createNequiPayment(lead, nequiNumber);
+        const payment = await createNequiPayment(lead, nequiNumber, orderIds);
         setNequiPayment(payment);
         setIsProcessing(false);
         return;
@@ -670,9 +673,6 @@ export default function Checkout() {
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
                 <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
-                {nequiEnabled && isMulti && (
-                  <p className="text-xs text-gray-500 mb-3">Nequi está disponible para compras de un solo producto.</p>
-                )}
                 <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
               </div>
             ) : (
@@ -839,7 +839,7 @@ export default function Checkout() {
           onResend={async () => {
             const number = normalizeNequiPhone(nequiPhone);
             if (!number) throw new Error(t('checkout.nequiPhoneInvalid'));
-            setNequiPayment(await createNequiPayment(leadOrderId, number));
+            setNequiPayment(await createNequiPayment(leadOrderId, number, nequiOrderIds));
           }}
           onClose={() => setNequiPayment(null)}
         />

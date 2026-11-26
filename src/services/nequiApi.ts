@@ -54,8 +54,13 @@ export async function isNequiEnabled(): Promise<boolean> {
   }
 }
 
-export const createNequiPayment = (orderId: string, phone: string) =>
-  post<NequiPaymentView>('/nequi/create-payment', { orderId, phone });
+/**
+ * Envía el cobro push. `orderId` es el pedido principal: con él se consulta y
+ * anula después. En una compra de varios productos, `orderIds` los lista todos
+ * (el primero es `orderId`) y el cobro es por el total de la compra.
+ */
+export const createNequiPayment = (orderId: string, phone: string, orderIds?: string[]) =>
+  post<NequiPaymentView>('/nequi/create-payment', orderIds && orderIds.length > 1 ? { orderId, orderIds, phone } : { orderId, phone });
 
 export const getNequiPaymentStatus = (orderId: string) =>
   post<NequiPaymentView>('/nequi/status', { orderId });
