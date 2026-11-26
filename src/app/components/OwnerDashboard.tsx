@@ -22,7 +22,8 @@ import { notifyOrderStatusChange } from '../../services/massEmailApi';
 import { updateOrderStatus, ASSISTABLE_DRAFT_STATUSES, isLegacyOrder } from '../../services/orderService';
 import OrderDetailsModal from './OrderDetailsModal';
 import OrderPaidSummary from './OrderPaidSummary';
-import { describeOrderPayment, formatPaymentLine } from '../utils/orderPaymentSummary';
+import OrderCopiesBadge from './OrderCopiesBadge';
+import { describeOrderPayment, formatPaymentLine, orderCopies } from '../utils/orderPaymentSummary';
 import { reverseNequiPayment } from '../../services/nequiApi';
 import * as XLSX from 'xlsx';
 
@@ -1070,6 +1071,7 @@ const OwnerDashboard: React.FC = () => {
 
       const configData = [{
         'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
+        'Copias': orderCopies(order),
         'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
         'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
         'Título de Portada': order.coverData?.title || 'N/A', 'Subtítulo': order.coverData?.subtitle || 'N/A',
@@ -1283,6 +1285,7 @@ const OwnerDashboard: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenData), "Resumen General");
       const configData = [{
         'Tipo de Producto': order.product?.name || order.product?.type || 'N/A',
+        'Copias': orderCopies(order),
         'Formato/Tamaño': order.customization?.size || order.customization?.orientation || 'N/A',
         'Papel/Material': order.customization?.paper || order.customization?.material || 'N/A',
         'Título de Portada': order.coverData?.title || 'N/A', 'Subtítulo': order.coverData?.subtitle || 'N/A',
@@ -1828,6 +1831,7 @@ const OwnerDashboard: React.FC = () => {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-bold text-gray-900">{formatCOP(order.total)}</span>
+                                  <OrderCopiesBadge order={order} className="ml-1.5" />
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-2">

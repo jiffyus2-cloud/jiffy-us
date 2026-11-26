@@ -61,8 +61,8 @@ export function buildCheckoutWrites(
       extraPages: p.extraPages,
       basePrice: p.unitBase,
       extraPagePrice: p.extraPagePrice,
-      // Todas las copias: es lo que suma la línea.
-      extraPagesCost: p.extraPagesCost === null ? null : p.extraPagesCost * line.quantity,
+      // Por copia, como `basePrice`: «Lo pagado» los multiplica por `quantity`.
+      extraPagesCost: p.extraPagesCost,
       subtotal: alloc.subtotal,
       storeDiscountPct: totals.storeDiscountPct,
       storeDiscount: alloc.storeDiscount,

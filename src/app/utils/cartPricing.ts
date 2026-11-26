@@ -13,22 +13,19 @@
 
 import type { StoreConfig } from './storeConfigState';
 import { getAlbumPrice, getExtraPagesCost } from './albumPricing';
+import { MAX_ORDER_COPIES, clampCopies } from './orderPaymentSummary';
 
 type Prices = StoreConfig['prices'];
 type Discounts = StoreConfig['discounts'];
 
 export type CartProductKind = 'album' | 'calendar' | 'other';
 
-/** Copias máximas de un mismo producto en el carrito. */
-export const MAX_ITEM_QUANTITY = 20;
+/** Copias máximas de un mismo producto: el mismo límite que el resto de la app. */
+export const MAX_ITEM_QUANTITY = MAX_ORDER_COPIES;
 /** Productos distintos máximos en una compra (el backend acepta 20 pedidos por pago). */
 export const MAX_CART_ITEMS = 20;
 
-export function clampQuantity(q: unknown): number {
-  const n = Math.floor(Number(q));
-  if (!Number.isFinite(n) || n < 1) return 1;
-  return Math.min(MAX_ITEM_QUANTITY, n);
-}
+export const clampQuantity = clampCopies;
 
 export function orderProductKind(order: any): CartProductKind {
   const p = String(order?.productType || order?.product?.type || order?.product?.id || order?.product?.name || '').toLowerCase();

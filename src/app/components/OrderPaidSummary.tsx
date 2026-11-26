@@ -1,5 +1,6 @@
 import { Receipt, ShoppingBag } from 'lucide-react';
 import { describeOrderPayment } from '../utils/orderPaymentSummary';
+import OrderCopiesBadge from './OrderCopiesBadge';
 
 const cop = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString('es-CO')}`;
 
@@ -9,25 +10,25 @@ const cop = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString('es-CO')}`
  */
 export default function OrderPaidSummary({ order, className = '' }: { order: any; className?: string }) {
   const d = describeOrderPayment(order);
-  const qty = Number(order?.quantity ?? order?.paymentSummary?.quantity) || 1;
   return (
     <div className={`rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-[11px] leading-snug text-gray-700 ${className}`} data-testid="order-paid-summary">
-      <p className="flex items-center gap-1 font-bold text-gray-500 uppercase tracking-wide text-[10px] mb-1">
-        <Receipt className="w-3 h-3" /> Lo pagado
-        {qty > 1 && (
-          <span className="ml-auto normal-case tracking-normal bg-amber-100 text-amber-800 rounded px-1.5 py-0.5" title="Imprimir este diseño varias veces">
-            ×{qty} copias
-          </span>
-        )}
-        {d.group && (
-          <span
-            className={`${qty > 1 ? '' : 'ml-auto '}normal-case tracking-normal bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 inline-flex items-center gap-0.5`}
-            title={`Pagado junto con otros ${d.group.count - 1} pedido(s) del mismo cliente: un solo pago y un solo envío.`}
-          >
-            <ShoppingBag className="w-2.5 h-2.5" /> Compra {d.group.index + 1}/{d.group.count}
-          </span>
-        )}
-      </p>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="flex items-center gap-1 font-bold text-gray-500 uppercase tracking-wide text-[10px]">
+          <Receipt className="w-3 h-3" /> Lo pagado
+        </p>
+        <div className="flex items-center gap-1">
+          <OrderCopiesBadge order={order} />
+          {d.group && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700"
+              title={`Pagado junto con otros ${d.group.count - 1} pedido(s) del mismo cliente: un solo pago y un solo envío.`}
+              data-testid="order-group-badge"
+            >
+              <ShoppingBag className="w-3 h-3" /> Compra {d.group.index + 1}/{d.group.count}
+            </span>
+          )}
+        </div>
+      </div>
       <ul className="space-y-0.5">
         {d.lines.map((line, i) => (
           <li key={i} className="flex items-start justify-between gap-2">

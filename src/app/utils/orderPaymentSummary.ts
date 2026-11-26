@@ -14,6 +14,24 @@ import { ALBUM_BASE_PAGES } from './albumPricing';
 
 export type ShippingMethod = 'pickup' | 'cali' | 'national' | 'unknown';
 
+/** Máximo de copias idénticas que se pueden pedir en el checkout. */
+export const MAX_ORDER_COPIES = 50;
+
+/** Número de copias válido (entero entre 1 y MAX_ORDER_COPIES); 1 si no hay dato. */
+export function clampCopies(value: unknown): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_ORDER_COPIES);
+}
+
+/**
+ * Copias idénticas de un pedido. Lo guarda el checkout en `order.quantity` y en
+ * la foto del desglose; los pedidos anteriores son siempre de una copia.
+ */
+export function orderCopies(order: any): number {
+  return clampCopies(order?.quantity ?? order?.paymentSummary?.quantity);
+}
+
 /** Lo que el checkout guarda en `order.paymentSummary`. */
 export interface PaymentSummarySnapshot {
   version: 1;
@@ -21,6 +39,7 @@ export interface PaymentSummarySnapshot {
   productLabel: string;
   size?: string | null;
   coverType?: string | null;
+  /** Copias idénticas. Los precios de producto y páginas extra son por copia. */
   quantity: number;
   pages?: number | null;
   extraPages?: number | null;
@@ -148,25 +167,24 @@ function pagesOf(order: any): number {
 
 function fromSnapshot(order: any, s: PaymentSummarySnapshot): PaymentDescription {
   const lines: PaymentLine[] = [];
-  const qty = s.quantity || 1;
+  const qty = clampCopies(s.quantity);
   const cover = coverLabel(s.coverType);
   const product = [s.productLabel, s.size ? shortSize(s.size) : null, cover].filter(Boolean).join(' · ');
 
   lines.push({
     label: `${qty} × ${product}`,
-    detail: s.productKind === 'album' && s.pages
-      ? `${s.pages} páginas (${Math.min(s.pages, ALBUM_BASE_PAGES)} incluidas)`
-      : undefined,
+    detail: [
+      qty > 1 ? `${qty} copias × ${cop(s.basePrice)}` : null,
+      s.productKind === 'album' && s.pages ? `${s.pages} páginas (${Math.min(s.pages, ALBUM_BASE_PAGES)} incluidas)` : null,
+    ].filter(Boolean).join(' · ') || undefined,
     amount: s.basePrice * qty,
   });
   if (s.extraPages && s.extraPages > 0) {
-    // `extraPagesCost` ya incluye todas las copias.
+    // `extraPagesCost` es por copia (igual que `basePrice`).
     lines.push({
-      label: `${s.extraPages} páginas extra${qty > 1 ? ' por copia' : ''}`,
-      detail: s.extraPagePrice
-        ? `${qty > 1 ? `${qty} copias × ` : ''}${s.extraPages} × ${cop(s.extraPagePrice)}`
-        : undefined,
-      amount: s.extraPagesCost ?? undefined,
+      label: `${s.extraPages} páginas extra${qty > 1 ? ` × ${qty} copias` : ''}`,
+      detail: s.extraPagePrice ? `${s.extraPages} × ${cop(s.extraPagePrice)}${qty > 1 ? ` × ${qty}` : ''}` : undefined,
+      amount: s.extraPagesCost != null ? s.extraPagesCost * qty : undefined,
     });
   }
   if (s.storeDiscount > 0) {
@@ -225,7 +243,8 @@ function reconstructed(order: any): PaymentDescription {
     product = String(order?.product?.name || order?.productType || 'Producto');
   }
 
-  lines.push({ label: `1 × ${product}`, detail: pages ? `${pages} páginas (${Math.min(pages, ALBUM_BASE_PAGES)} incluidas)` : undefined });
+  const qty = orderCopies(order);
+  lines.push({ label: `${qty} × ${product}`, detail: pages ? `${pages} páginas (${Math.min(pages, ALBUM_BASE_PAGES)} incluidas)` : undefined });
   if (extra > 0) lines.push({ label: `${extra} páginas extra` });
 
   const code = order?.discountCode;
@@ -236,7 +255,7 @@ function reconstructed(order: any): PaymentDescription {
   lines.push({ label: shippingLabel(ship.method, ship.pickupLocation, ship.city), amount: ship.method === 'pickup' ? 0 : undefined });
 
   return {
-    headline: buildHeadline(1, product, extra, pages || null, ship.method, ship.pickupLocation, ship.city),
+    headline: buildHeadline(qty, product, extra, pages || null, ship.method, ship.pickupLocation, ship.city),
     lines,
     total: Number(order?.total) || 0,
     paymentMethodLabel: paymentMethodLabel(order),
