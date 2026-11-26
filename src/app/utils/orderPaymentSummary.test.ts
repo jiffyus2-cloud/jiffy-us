@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeOrderPayment, formatPaymentLine, shortSize, shippingFromAddress } from './orderPaymentSummary';
+import { describeOrderPayment, formatPaymentLine, shortSize, shippingFromAddress, orderCopies, clampCopies } from './orderPaymentSummary';
 
 const snapshotOrder = {
   total: 191000,
@@ -52,5 +52,41 @@ describe('describeOrderPayment', () => {
 
   it('acorta los tamaños', () => {
     expect(shortSize('Vertical 28x21 cm')).toBe('28x21 cm');
+  });
+});
+
+describe('copias de un mismo producto', () => {
+  it('multiplica producto y páginas extra por las copias', () => {
+    const d = describeOrderPayment({
+      total: 400000,
+      quantity: 2,
+      paymentSummary: { ...snapshotOrder.paymentSummary, quantity: 2, subtotal: 400000, storeDiscount: 0, storeDiscountPct: null, codeDiscount: 0, discountCode: null, shipping: 0, shippingMethod: 'pickup', pickupLocation: 'Arboleda, Cali' },
+    });
+    expect(d.lines.map(formatPaymentLine).slice(0, 2)).toEqual([
+      '2 × Álbum · 20x20 cm · tapa en tela: $340.000',
+      '8 páginas extra × 2 copias: $60.000',
+    ]);
+    expect(d.lines[0].detail).toBe('2 copias × $170.000 · 48 páginas (40 incluidas)');
+    expect(d.headline.startsWith('2 × Álbum')).toBe(true);
+  });
+
+  it('calendarios: 5 copias iguales', () => {
+    const d = describeOrderPayment({
+      quantity: 5, total: 250000,
+      paymentSummary: {
+        version: 1, productKind: 'calendar', productLabel: 'Calendario de pared', quantity: 5, basePrice: 50000,
+        subtotal: 250000, storeDiscount: 0, codeDiscount: 0, shippingMethod: 'pickup', shipping: 0, total: 250000, createdAt: '',
+      },
+    });
+    expect(formatPaymentLine(d.lines[0])).toBe('5 × Calendario de pared: $250.000');
+  });
+
+  it('pedidos sin dato son de una copia y el valor se acota', () => {
+    expect(orderCopies({})).toBe(1);
+    expect(orderCopies({ paymentSummary: { quantity: 3 } })).toBe(3);
+    expect(orderCopies({ quantity: 4 })).toBe(4);
+    expect(clampCopies(0)).toBe(1);
+    expect(clampCopies('abc')).toBe(1);
+    expect(clampCopies(999)).toBe(50);
   });
 });

@@ -12,6 +12,7 @@ import { getHolidayCountryName, DEFAULT_HOLIDAY_COUNTRY } from '../utils/holiday
 import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 import { getPageAspectRatio } from '../utils/pageLayouts';
+import { orderCopies } from '../utils/orderPaymentSummary';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -325,6 +326,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
   };
 
   const productString = String(order.product?.type || order.product?.id || order.product?.name || (order as any).productType || '').toLowerCase();
+  const copies = orderCopies(order);
   const isCalendar = productString.includes('calendar') || productString.includes('calendario') || order.customization?.year !== undefined;
   const isAlbum = productString.includes('album') || productString.includes('photobook');
 
@@ -537,6 +539,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500 font-medium">Tipo:</span>
                       <span className="font-bold text-gray-900 capitalize">{order.product?.type || 'Producto'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm" data-testid="order-copies">
+                      <span className="text-gray-500 font-medium">Copias:</span>
+                      <span className={`font-bold ${copies > 1 ? 'text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5' : 'text-gray-900'}`}>
+                        {copies > 1 ? `${copies} copias iguales` : '1'}
+                      </span>
                     </div>
                   </div>
                 </div>
