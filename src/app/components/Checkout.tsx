@@ -1,31 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CreditCard, Smartphone, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Image as ImageIcon, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store } from 'lucide-react';
+import { CreditCard, Smartphone, Lock, Loader2, ArrowLeft, AlertCircle, Eye, Tag, Truck, ChevronDown, MapPin, BookmarkCheck, Store, ShoppingBag } from 'lucide-react';
 import { PhoneInput } from './ui/PhoneInput';
 import { COLOMBIA_DEPARTMENTS } from '../utils/colombiaData';
-import { updateOrderAddresses, getOrder } from '../../services/orderService';
 import { getSavedAddresses, saveAddress, getSavedBilling, saveBilling, type SavedAddress, type SavedBilling } from '../../services/userProfileService';
+import { writeCheckoutOrders, PENDING_CHECKOUT_IDS_KEY } from '../../services/cartService';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
+import { useCart } from '../context/CartContext';
+import { useCartOrders, type CartLine } from '../hooks/useCartOrders';
 import OrderDetailsModal from './OrderDetailsModal';
-import justWhiteImg from '../../assets/justwhite.png';
+import { LineThumb, lineDetail } from './cart/CartPage';
 
 // --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
-import { getAlbumPrice, getExtraPagesCost } from '../utils/albumPricing';
+import { computeCartTotals, shippingCost } from '../utils/cartPricing';
+import { buildCheckoutWrites, newCheckoutGroupId } from '../utils/cartCheckout';
 import { RichText } from './ui/RichText';
-import type { PaymentSummarySnapshot } from '../utils/orderPaymentSummary';
 import NequiPaymentModal from './NequiPaymentModal';
 import { TRACKING_EVENTS, TRACKING_IDS, trackEventThen } from '../utils/analytics';
 import { createNequiPayment, isNequiEnabled, normalizeNequiPhone, type NequiPaymentView } from '../../services/nequiApi';
 
+const cop = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
+
+/**
+ * Checkout del carrito: uno o varios productos (cada uno su propio pedido) con
+ * un solo pago, un solo envío y los descuentos sobre el total de la compra.
+ */
 export default function Checkout() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
-  
+  const cart = useCart();
+  const { lines, loading } = useCartOrders();
+
   // Obtenemos la configuración dinámica en tiempo real
   const config = useStoreConfig();
 
@@ -37,9 +47,7 @@ export default function Checkout() {
   const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [orderData, setOrderData] = useState<any>(null);
-  const [isLoadingOrder, setIsLoadingOrder] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [preview, setPreview] = useState<CartLine | null>(null);
 
   // Saved data from Firestore
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -56,6 +64,7 @@ export default function Checkout() {
   const [nequiPhone, setNequiPhone] = useState('');
   const [nequiPhoneTouched, setNequiPhoneTouched] = useState(false);
   const [nequiPayment, setNequiPayment] = useState<NequiPaymentView | null>(null);
+  const [leadOrderId, setLeadOrderId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '', email: user?.email || '', phoneCode: '+57', phone: '',
@@ -66,29 +75,21 @@ export default function Checkout() {
   // Ciudades disponibles según el departamento seleccionado
   const availableCities = COLOMBIA_DEPARTMENTS.find(d => d.name === formData.department)?.cities ?? [];
 
+  // Enlaces antiguos (o el carrito lleno) traen el pedido en el state: se
+  // asegura que esté en el carrito, que es lo que este checkout cobra.
+  const [stateOrderReady, setStateOrderReady] = useState(!state?.orderId);
+  useEffect(() => {
+    if (stateOrderReady || !cart.loaded || !state?.orderId) return;
+    (cart.has(state.orderId) ? Promise.resolve(true) : cart.addItem(state.orderId))
+      .catch(() => false)
+      .finally(() => setStateOrderReady(true));
+  }, [cart, state?.orderId, stateOrderReady]);
+
   useEffect(() => {
     if (user?.email && !formData.email) {
       setFormData(prev => ({ ...prev, email: user.email! }));
     }
   }, [user, formData.email]);
-
-  useEffect(() => {
-    const fetchOrderDetails = async () => {
-      if (!state?.orderId) {
-        setIsLoadingOrder(false);
-        return;
-      }
-      try {
-        const data = await getOrder(state.orderId);
-        setOrderData(data);
-      } catch (error) {
-        console.error("Error fetching order:", error);
-      } finally {
-        setIsLoadingOrder(false);
-      }
-    };
-    fetchOrderDetails();
-  }, [state?.orderId]);
 
   useEffect(() => {
     let alive = true;
@@ -111,6 +112,18 @@ export default function Checkout() {
       setSavedBilling(billing);
     }).catch(() => {});
   }, [user?.uid]);
+
+  // Si cambia el carrito, el código aplicado se calculó sobre otro subtotal.
+  const linesKey = lines.map(l => `${l.orderId}:${l.quantity}`).join('|');
+  const prevLinesKey = useRef(linesKey);
+  useEffect(() => {
+    if (prevLinesKey.current !== linesKey && appliedCode) {
+      setAppliedCode(null);
+      setCodeInput(appliedCode.code);
+      setCodeError('El carrito cambió: vuelve a aplicar el código.');
+    }
+    prevLinesKey.current = linesKey;
+  }, [linesKey, appliedCode]);
 
   const applyAddress = (addr: SavedAddress) => {
     setSelectedAddressId(addr.id);
@@ -141,7 +154,7 @@ export default function Checkout() {
     }));
   };
 
-  if (isLoadingOrder) {
+  if (loading || !stateOrderReady) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <Loader2 className="w-12 h-12 animate-spin text-gray-400 mb-4" />
@@ -151,80 +164,33 @@ export default function Checkout() {
     );
   }
 
-  if (!orderData || !state?.orderId) {
+  if (lines.length === 0 && !nequiPayment) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-        <AlertCircle className="w-16 h-16 text-gray-400 mb-4" />
+        <ShoppingBag className="w-16 h-16 text-gray-300 mb-4" />
         <h2 className="text-2xl mb-4 font-semibold">{t('checkout.noOrderData')}</h2>
         <p className="text-gray-600 mb-8 text-center max-w-md">{t('checkout.errorSession')}</p>
-        <button onClick={() => navigate('/')} className="bg-black text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors">
-          {t('success.backHome')}
+        <button onClick={() => navigate('/create', { state: { fromCart: true } })} className="bg-black text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors">
+          Crear un producto
         </button>
       </div>
     );
   }
 
-  const product = orderData.product;
-  const productTypeStr = String(orderData.productType || product?.type || product?.id || product?.name || '').toLowerCase();
-  const isCalendar = productTypeStr.includes('calendar') || productTypeStr.includes('calendario') || orderData.customization?.year !== undefined || orderData.customization?.imagesPerMonth !== undefined;
-  const isAlbum = productTypeStr.includes('album') || productTypeStr.includes('photobook');
-  const isTela = isAlbum && (
-    orderData?.customization?.coverType === 'Tela' ||
-    orderData?.customization?.material === 'Tela'
-  );
-  
-  // --- CÁLCULO DE DESGLOSE PARA ÁLBUMES ---
-  let albumBasePrice = 0;
-  let albumExtraPagePrice = 0;
-  let extraPagesCount = 0;
-  let extraPagesCost = 0;
-  let totalPageCount = 0;
-
-  if (isAlbum && orderData) {
-    totalPageCount = orderData.pages?.length || orderData.photos?.length || 0;
-    // Mismo cálculo que el resumen de precio al configurar el álbum.
-    const price = getAlbumPrice(config.prices, orderData.customization?.size, isTela);
-    albumBasePrice = price.base;
-    albumExtraPagePrice = price.extraPage;
-    ({ count: extraPagesCount, cost: extraPagesCost } = getExtraPagesCost(price, totalPageCount));
-  }
-
-  // --- CÁLCULO DINÁMICO DE PRECIOS ---
-  const calculateSubtotal = () => {
-    if (!product || !orderData) return 0;
-    
-    if (isAlbum) return albumBasePrice + extraPagesCost;
-    
-    if (isCalendar) {
-      const calendarFormat = String(orderData.customization?.type || orderData.customization?.format || orderData.customization?.size || '').toLowerCase();
-      if (calendarFormat.includes('wall') || calendarFormat.includes('pared')) return config.prices.calendarWall;
-      return config.prices.calendarDesk;
-    }
-    
-    return Number(product.basePrice || product.price || 0);
-  };
-
-  const subtotal = calculateSubtotal();
-  const discountAmount = config.discounts.active ? subtotal * (config.discounts.percentage / 100) : 0;
-  // Lo calcula el backend sobre el subtotal; aquí solo se pinta y se resta.
-  const codeDiscount = appliedCode?.discount ?? 0;
+  const isMulti = lines.length > 1;
+  // Nequi cobra un pedido por vez: con varios productos solo tarjeta (por ahora).
+  const nequiAvailable = nequiEnabled && !isMulti;
   const isPickup = pickupLocation !== '';
-  const cityLower = formData.city.trim().toLowerCase();
-  const shipping = isPickup
-    ? 0
-    : cityLower === ''
-      ? 0
-      : cityLower.includes('cali')
-        ? config.prices.shippingCali
-        : config.prices.shippingNational;
-  const tax = 0;
-  const total = Math.max(0, subtotal - discountAmount - codeDiscount) + shipping + tax;
+  const shipping = shippingCost(isPickup ? { pickup: true } : { pickup: false, city: formData.city }, config.prices);
+  const cartItems = lines.map(l => ({ orderId: l.orderId, lineTotal: l.pricing.lineTotal }));
+  const totals = computeCartTotals(cartItems, { discounts: config.discounts, codeDiscount: appliedCode?.discount, shipping });
+  const { subtotal, total } = totals;
   const totalLabel = `$${total.toLocaleString('es-CO')} COP`;
   // id y data-gtm-action únicos por método para los activadores de clic de GTM.
-  const payWithNequi = nequiEnabled && paymentMethod === 'nequi';
+  const payWithNequi = nequiAvailable && paymentMethod === 'nequi';
   const payButtonId = payWithNequi ? TRACKING_IDS.checkoutNequi : TRACKING_IDS.checkoutStripe;
   const payButtonAction = payWithNequi ? 'compra_nequi' : 'compra_stripe';
-  const payLabel = nequiEnabled && paymentMethod === 'nequi'
+  const payLabel = payWithNequi
     ? t('checkout.payNequi', { total: totalLabel })
     : t('checkout.payNow', { total: totalLabel });
 
@@ -259,39 +225,6 @@ export default function Checkout() {
     setCodeInput('');
   };
 
-  const buildPaymentSummary = (
-    code: AppliedDiscount | null,
-    finalTotal: number,
-    method: 'card' | 'nequi',
-  ): PaymentSummarySnapshot => {
-    const city = formData.city.trim();
-    return {
-      version: 1,
-      productKind: isAlbum ? 'album' : isCalendar ? 'calendar' : 'other',
-      productLabel: isAlbum ? 'Álbum' : String(product?.name || (isCalendar ? 'Calendario' : 'Producto')),
-      size: orderData.customization?.size ?? null,
-      coverType: isAlbum ? (orderData.customization?.coverType || orderData.customization?.material || null) : null,
-      quantity: 1,
-      pages: isAlbum ? totalPageCount : null,
-      extraPages: isAlbum ? extraPagesCount : null,
-      basePrice: isAlbum ? albumBasePrice : subtotal,
-      extraPagePrice: isAlbum ? albumExtraPagePrice : null,
-      extraPagesCost: isAlbum ? extraPagesCost : null,
-      subtotal,
-      storeDiscountPct: config.discounts.active ? config.discounts.percentage : null,
-      storeDiscount: discountAmount,
-      discountCode: code?.code ?? null,
-      codeDiscount: code?.discount ?? 0,
-      shippingMethod: isPickup ? 'pickup' : city === '' ? 'unknown' : city.toLowerCase().includes('cali') ? 'cali' : 'national',
-      pickupLocation: isPickup ? (pickupLocation === 'Arboleda' ? 'Arboleda, Cali' : 'Ciudad Jardín, Cali') : null,
-      shippingCity: isPickup ? 'Cali' : city || null,
-      shipping,
-      total: finalTotal,
-      paymentMethod: method,
-      createdAt: new Date().toISOString(),
-    };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -301,7 +234,7 @@ export default function Checkout() {
       return;
     }
 
-    const useNequi = nequiEnabled && paymentMethod === 'nequi';
+    const useNequi = nequiAvailable && paymentMethod === 'nequi';
     const nequiNumber = useNequi ? normalizeNequiPhone(nequiPhone) : null;
     if (useNequi && !nequiNumber) {
       setNequiPhoneTouched(true);
@@ -312,13 +245,14 @@ export default function Checkout() {
     setIsProcessing(true);
 
     try {
+      const pickupLabel = pickupLocation === 'Arboleda' ? 'Arboleda, Cali' : 'Ciudad Jardín, Cali';
       const shippingAddress = isPickup ? {
         name: formData.name,
         email: formData.email,
         phone: formData.phone.trim() ? `${formData.phoneCode}${formData.phone.trim()}` : '',
         department: 'Valle del Cauca',
         city: 'Cali',
-        address: `Recogida en punto: ${pickupLocation === 'Arboleda' ? 'Arboleda, Cali' : 'Ciudad Jardín, Cali'}`,
+        address: `Recogida en punto: ${pickupLabel}`,
         addressExtra: '',
         zipCode: '760001',
       } : {
@@ -344,22 +278,29 @@ export default function Checkout() {
         }
       }
 
-      const finalTotal = Math.max(0, subtotal - discountAmount - (confirmedCode?.discount ?? 0)) + shipping + tax;
+      const finalTotals = computeCartTotals(cartItems, {
+        discounts: config.discounts, codeDiscount: confirmedCode?.discount, shipping,
+      });
+      const finalTotal = finalTotals.total;
+      const city = formData.city.trim();
+      const orderIds = lines.map(l => l.orderId);
+      const lead = orderIds[0];
 
-      await updateOrderAddresses(
-        state.orderId,
-        { shippingAddress, billingAddress },
-        finalTotal,
-        'pending_payment',
-        {
-          ...(confirmedCode
-            ? { discountCode: confirmedCode.code, discountCodeAmount: confirmedCode.discount }
-            : { discountCode: null, discountCodeAmount: 0 }),
-          // Desglose exacto de lo cobrado: el panel del dueño lo muestra tal cual.
-          paymentSummary: buildPaymentSummary(confirmedCode, finalTotal, useNequi ? 'nequi' : 'card'),
-        }
-      );
-      localStorage.setItem('pending_order_id', state.orderId);
+      // Todos los pedidos de la compra quedan listos para cobrar a la vez.
+      await writeCheckoutOrders(buildCheckoutWrites(lines, finalTotals, {
+        shippingAddress,
+        billingAddress,
+        groupId: newCheckoutGroupId(),
+        code: confirmedCode ? { code: confirmedCode.code, discount: confirmedCode.discount } : null,
+        shippingMethod: isPickup ? 'pickup' : city === '' ? 'unknown' : city.toLowerCase().includes('cali') ? 'cali' : 'national',
+        pickupLocation: isPickup ? pickupLabel : null,
+        shippingCity: isPickup ? 'Cali' : city || null,
+        paymentMethod: useNequi ? 'nequi' : 'card',
+        now: new Date().toISOString(),
+      }));
+      localStorage.setItem('pending_order_id', lead);
+      localStorage.setItem(PENDING_CHECKOUT_IDS_KEY, JSON.stringify(orderIds));
+      setLeadOrderId(lead);
 
       // Save address/billing to user profile if requested
       if (user?.uid) {
@@ -390,7 +331,7 @@ export default function Checkout() {
       if (useNequi && nequiNumber) {
         // El backend envía la notificación al celular y el modal espera a
         // que el cliente la acepte; no hay redirección como con Stripe.
-        const payment = await createNequiPayment(state.orderId, nequiNumber);
+        const payment = await createNequiPayment(lead, nequiNumber);
         setNequiPayment(payment);
         setIsProcessing(false);
         return;
@@ -406,8 +347,10 @@ export default function Checkout() {
         },
         body: JSON.stringify({
           amount: Math.round(finalTotal * 100),
-          title: product.name || 'Pedido Jiffy',
-          orderId: state.orderId,
+          title: isMulti ? `Pedido Jiffy (${lines.length} productos)` : (lines[0].order?.product?.name || 'Pedido Jiffy'),
+          // `orderId` sigue yendo para backends que aún no conocen `orderIds`.
+          orderId: lead,
+          orderIds,
         }),
       });
 
@@ -421,7 +364,13 @@ export default function Checkout() {
         // Avisar a GTM antes de salir hacia Stripe (espera a sus etiquetas, máx. 1 s).
         trackEventThen(
           TRACKING_EVENTS.stripeCheckoutStarted,
-          { order_id: state.orderId, value: finalTotal, currency: 'COP', product_type: productTypeStr || null },
+          {
+            order_id: lead,
+            value: finalTotal,
+            currency: 'COP',
+            product_type: isMulti ? 'carrito' : (lines[0].pricing.kind || null),
+            items: lines.length,
+          },
           () => { window.location.href = sessionData.url; },
         );
       } else {
@@ -446,67 +395,15 @@ export default function Checkout() {
     }
   };
 
-  const modalOrderData = { ...orderData, total: total, shippingAddress: null, billingAddress: null };
-
-  // --- LÓGICA DE EXTRACCIÓN DE IMAGEN PRINCIPAL (Para miniatura) ---
-  let displayImage = orderData.coverData?.image;
-  if (isCalendar) {
-    const januaryPage = orderData.pages?.[0];
-    if (januaryPage) {
-      if (Array.isArray(januaryPage.images) && januaryPage.images.length > 0) displayImage = januaryPage.images[0];
-      else if (januaryPage.image) displayImage = januaryPage.image;
-    }
-    // Las fotos del calendario conservan huecos ('') por mes: tomar la primera real.
-    if (!displayImage && Array.isArray(orderData.photos)) {
-      const firstPhoto = orderData.photos
-        .map((p: any) => (Array.isArray(p) ? p[0] : p))
-        .find((p: any) => typeof p === 'string' && p.trim() !== '');
-      if (firstPhoto) displayImage = firstPhoto;
-    }
-  } else if (isAlbum) {
-    // Si es Tela, buscar la primera foto interna para mostrarla
-    if (isTela || !displayImage || (typeof displayImage === 'string' && displayImage.includes('justwhite'))) {
-      let firstInnerPhoto = null;
-      if (orderData.pages && orderData.pages.length > 0) {
-        for (const page of orderData.pages) {
-          const imgs = Array.isArray(page) ? page : page.images;
-          if (imgs && imgs.length > 0) {
-            const validImg = imgs.find((img: any) => typeof img === 'string' && img.trim() !== '');
-            if (validImg) {
-              firstInnerPhoto = validImg;
-              break;
-            }
-          }
-        }
-      }
-      if (!firstInnerPhoto && orderData.photos && orderData.photos.length > 0) {
-        for (const page of orderData.photos) {
-          if (Array.isArray(page)) {
-            const validImg = page.find((img: any) => typeof img === 'string' && img.trim() !== '');
-            if (validImg) {
-              firstInnerPhoto = validImg;
-              break;
-            }
-          } else if (typeof page === 'string' && page.trim() !== '') {
-            firstInnerPhoto = page;
-            break;
-          }
-        }
-      }
-      if (firstInnerPhoto) {
-        displayImage = firstInnerPhoto;
-      }
-    }
-  }
-
-  if (!displayImage) displayImage = product?.image;
-  if (displayImage && typeof displayImage === 'string' && displayImage.includes('justwhite')) displayImage = justWhiteImg;
+  const editLine = (line: CartLine) => navigate('/create', {
+    state: { fromCheckout: true, orderId: line.orderId, productType: line.pricing.kind === 'calendar' ? 'calendar' : 'album' },
+  });
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-4 md:py-12 relative">
       <div className="flex items-center gap-4 mb-3 md:mb-8">
-        <button onClick={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
-          <ArrowLeft className="w-5 h-5" /><span className="font-medium">{t('step.back')}</span>
+        <button onClick={() => navigate('/carrito')} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-black">
+          <ArrowLeft className="w-5 h-5" /><span className="font-medium">Volver al carrito</span>
         </button>
       </div>
 
@@ -546,6 +443,9 @@ export default function Checkout() {
                 <span className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 bg-black text-white rounded-full text-xs md:text-sm">2</span>
                 Método de entrega
               </h3>
+              {isMulti && (
+                <p className="text-xs text-gray-500 -mt-2 mb-3">Todos los productos llegan juntos: pagas un solo envío.</p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Envío a domicilio */}
                 <button
@@ -712,7 +612,7 @@ export default function Checkout() {
               )}
             </div>
 
-            {nequiEnabled && (
+            {nequiAvailable && (
               <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
                 <h3 className="text-base md:text-xl font-bold mb-3 md:mb-5">{t('checkout.paymentMethod')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label={t('checkout.paymentMethod')}>
@@ -766,10 +666,13 @@ export default function Checkout() {
               </div>
             )}
 
-            {(!nequiEnabled || paymentMethod === 'card') ? (
+            {!payWithNequi ? (
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-3 md:mb-4"><div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CreditCard className="w-5 h-5 md:w-6 md:h-6" /></div><h3 className="text-base md:text-xl font-bold text-gray-800">{t('checkout.securePayment')}</h3></div>
                 <p className="text-gray-600 text-sm leading-relaxed mb-3 md:mb-6">{t('checkout.securePaymentDesc')}</p>
+                {nequiEnabled && isMulti && (
+                  <p className="text-xs text-gray-500 mb-3">Nequi está disponible para compras de un solo producto.</p>
+                )}
                 <div className="items-center gap-2 text-xs font-medium text-gray-500 bg-white p-3 rounded-lg border border-gray-100 inline-flex"><Lock className="w-3.5 h-3.5" /><span>{t('checkout.encrypted')}</span></div>
               </div>
             ) : (
@@ -790,51 +693,46 @@ export default function Checkout() {
         {/* --- RESUMEN — segundo en DOM, aparece después del formulario en mobile --- */}
         <div className="lg:col-span-1 lg:order-2">
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 md:p-6 lg:sticky lg:top-8">
-            <h3 className="text-lg md:text-xl font-bold mb-3 md:mb-6">{t('checkout.summary')}</h3>
-
-            <div className="space-y-2 md:space-y-4 mb-3 md:mb-6">
-              <div className="flex justify-between items-start gap-4">
-                <span className="text-gray-600">{t('dashboard.product')}</span>
-                <span className="font-medium text-right">{product.name}</span>
-              </div>
-              {orderData.customization?.size && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">{t('album.size')}</span><span>{orderData.customization.size}</span>
-                </div>
-              )}
-              
-              {/* --- DESGLOSE EXCLUSIVO DE ÁLBUMES --- */}
-              {isAlbum && (
-                 <>
-                   <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
-                     <span className="text-gray-600">Álbum Base (40 págs)</span>
-                     <span className="font-medium">${albumBasePrice.toLocaleString('es-CO')} COP</span>
-                   </div>
-                   {extraPagesCount > 0 && (
-                     <div className="flex justify-between text-sm mt-2">
-                       <span className="text-gray-600">Páginas Extra ({extraPagesCount} x ${albumExtraPagePrice.toLocaleString('es-CO')})</span>
-                       <span className="font-medium">${extraPagesCost.toLocaleString('es-CO')} COP</span>
-                     </div>
-                   )}
-                   <div className="flex justify-between text-sm mt-2 font-bold text-gray-800">
-                     <span>Total Páginas</span>
-                     <span>{totalPageCount}</span>
-                   </div>
-                 </>
-              )}
+            <div className="flex items-center justify-between mb-3 md:mb-5">
+              <h3 className="text-lg md:text-xl font-bold">{t('checkout.summary')}</h3>
+              <button type="button" onClick={() => navigate('/carrito')} className="text-sm font-semibold text-blue-600 hover:text-blue-800">Editar carrito</button>
             </div>
+
+            {/* --- PRODUCTOS DE LA COMPRA --- */}
+            <ul className="space-y-3 mb-4" data-testid="checkout-lines">
+              {lines.map(line => (
+                <li key={line.orderId} className="flex gap-3">
+                  <button type="button" onClick={() => setPreview(line)} className="relative group" aria-label="Ver diseño">
+                    <LineThumb order={line.order} className="w-14 h-14" />
+                    {line.quantity > 1 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-black text-white text-[11px] font-bold flex items-center justify-center">×{line.quantity}</span>
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0 text-sm">
+                    <p className="font-semibold text-gray-900 truncate">{line.pricing.label}</p>
+                    <p className="text-xs text-gray-500 truncate">{lineDetail(line)}</p>
+                    <button type="button" onClick={() => setPreview(line)} className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"><Eye className="w-3 h-3" /> {t('checkout.preview')}</button>
+                  </div>
+                  <p className="text-sm font-semibold whitespace-nowrap">{cop(line.pricing.lineTotal)}</p>
+                </li>
+              ))}
+            </ul>
+
+            {lines.some(l => l.pricing.kind === 'album' && (l.pricing.extraPages ?? 0) > 0) && (
+              <p className="text-[11px] text-gray-400 mb-3">Los álbumes incluyen 40 páginas; las páginas extra ya están sumadas en su precio.</p>
+            )}
 
             <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('checkout.subtotal')}</span>
                 <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
-              
+
               {/* --- DESCUENTO DINÁMICO --- */}
-              {config.discounts.active && (
+              {totals.storeDiscount > 0 && (
                 <div className="flex justify-between text-green-600 font-bold">
-                  <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> Descuento ({config.discounts.percentage}%)</span>
-                  <span>-${discountAmount.toLocaleString('es-CO')} COP</span>
+                  <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> Descuento ({totals.storeDiscountPct}%)</span>
+                  <span>-${totals.storeDiscount.toLocaleString('es-CO')} COP</span>
                 </div>
               )}
 
@@ -851,7 +749,7 @@ export default function Checkout() {
                       quitar
                     </button>
                   </span>
-                  <span>-${codeDiscount.toLocaleString('es-CO')} COP</span>
+                  <span>-${totals.codeDiscount.toLocaleString('es-CO')} COP</span>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -877,11 +775,11 @@ export default function Checkout() {
 
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">{t('checkout.shipping')}</span>
+                  <span className="text-gray-600">{t('checkout.shipping')}{isMulti ? ' (uno solo)' : ''}</span>
                   <span>
                     {isPickup
                       ? <span className="text-green-600 font-semibold">Gratis (recogida)</span>
-                      : formData.city.trim() === ''
+                      : shipping === null
                         ? <span className="text-gray-400 italic text-xs">Por determinar</span>
                         : `$${shipping.toLocaleString('es-CO')} COP`}
                   </span>
@@ -900,7 +798,7 @@ export default function Checkout() {
             <div className="border-t-2 border-gray-200 mt-4 pt-4">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">{t('checkout.total')}</span>
-                <span className="text-2xl font-bold">${total.toLocaleString('es-CO')} COP</span>
+                <span className="text-2xl font-bold" data-testid="checkout-total">${total.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
 
@@ -909,25 +807,6 @@ export default function Checkout() {
               <p className="text-xs text-amber-800 leading-snug">
                 <RichText text={t('checkout.deliveryTime')} />
               </p>
-            </div>
-
-            <div className="mt-4 md:mt-8 pt-4 md:pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-3 md:mb-4">
-                <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">{t('checkout.preview')}</p>
-                <button type="button" onClick={() => setIsModalOpen(true)} className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"><Eye className="w-4 h-4" /> Ver completo</button>
-              </div>
-
-              <div className="aspect-square max-h-40 md:max-h-none rounded-lg overflow-hidden bg-white shadow-sm border border-gray-100 cursor-pointer hover:ring-2 hover:ring-black transition-all group" onClick={() => setIsModalOpen(true)}>
-                {displayImage && displayImage !== justWhiteImg ? (
-                  <div className="w-full h-full relative">
-                    <img src={displayImage} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center"><Eye className="text-white w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" /></div>
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-300"><ImageIcon className="w-16 h-16" /></div>
-                )}
-              </div>
-              {orderData.coverData?.title && <p className="text-center mt-3 font-semibold text-gray-800">{orderData.coverData.title}</p>}
             </div>
           </div>
         </div>
@@ -942,23 +821,25 @@ export default function Checkout() {
         <p className="text-center text-xs text-gray-400 mt-2">{t('checkout.terms')}</p>
       </div>
 
-      <OrderDetailsModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        order={modalOrderData}
-        hideAddressInfo={true}
-        onGoToEdit={() => navigate('/create', { state: { fromCheckout: true, orderId: state.orderId, productType: state.productType } })}
-      />
+      {preview && (
+        <OrderDetailsModal
+          isOpen
+          onClose={() => setPreview(null)}
+          order={{ ...preview.order, total: preview.pricing.lineTotal, shippingAddress: null, billingAddress: null }}
+          hideAddressInfo={true}
+          onGoToEdit={() => editLine(preview)}
+        />
+      )}
 
-      {nequiPayment && state?.orderId && (
+      {nequiPayment && leadOrderId && (
         <NequiPaymentModal
-          orderId={state.orderId}
+          orderId={leadOrderId}
           initial={nequiPayment}
           onPaid={() => navigate('/success?method=nequi')}
           onResend={async () => {
             const number = normalizeNequiPhone(nequiPhone);
             if (!number) throw new Error(t('checkout.nequiPhoneInvalid'));
-            setNequiPayment(await createNequiPayment(state.orderId, number));
+            setNequiPayment(await createNequiPayment(leadOrderId, number));
           }}
           onClose={() => setNequiPayment(null)}
         />

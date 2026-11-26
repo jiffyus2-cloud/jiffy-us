@@ -38,8 +38,10 @@ import {
   Check,
   X,
   Sparkles,
+  ShoppingBag,
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
+import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { buildWhatsAppUrl } from '../config/contact';
 import { WhatsAppIcon } from './support/WhatsAppIcon';
@@ -149,6 +151,7 @@ const UserDashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const storagePolicy = useStoragePolicy();
   const navigate = useNavigate();
+  const cart = useCart();
 
   // Projects tab state
   const [orders, setOrders] = useState<Order[]>([]);
@@ -276,6 +279,7 @@ const UserDashboard: React.FC = () => {
     try {
       await deleteSavedDraft(draftId);
       setSavedDrafts(prev => prev.filter(d => d.id !== draftId));
+      void cart.removeItem(draftId);
     } catch (e) {
       console.error('Error deleting draft', e);
     } finally {
@@ -515,6 +519,16 @@ const UserDashboard: React.FC = () => {
                             <span className="text-xs font-semibold bg-white/90 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
                               {t('draft.savedOn').replace('{date}', updatedDate)}
                             </span>
+                            {cart.has(draft.id) && (
+                              <button
+                                type="button"
+                                onClick={() => navigate('/carrito')}
+                                className="text-[10px] font-bold uppercase tracking-wide text-white bg-black px-2 py-1 rounded-full inline-flex items-center gap-1"
+                                title="Este diseño está en tu carrito"
+                              >
+                                <ShoppingBag className="w-3 h-3" /> En el carrito
+                              </button>
+                            )}
                             {isMostRecentDuplicate && (
                               <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200">
                                 Más reciente

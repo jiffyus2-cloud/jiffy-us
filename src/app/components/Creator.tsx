@@ -11,6 +11,7 @@ import DraftPromptModal from './DraftPromptModal';
 import CustomAlbumInfo, { CustomAlbumSize } from './CustomAlbumInfo';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useCart } from '../context/CartContext';
 import { useStoragePolicy } from '../../hooks/useStoragePolicy';
 import { Album, Calendar, CustomAlbumProduct, BASE_ALBUM, BASE_CALENDAR, BASE_CUSTOM_ALBUM } from '../types/products';
 import { createDraftOrder, getOrder, getUserSavedDrafts, deleteSavedDraft, updateOrderDesign, createCustomAlbumOrder, PhotoUploadError, PhotoLossError, ASSISTABLE_DRAFT_STATUSES } from '../../services/orderService';
@@ -90,6 +91,7 @@ const detectProductType = (order: any): ProductType => {
 export default function Creator() {
   const { t } = useLanguage();
   const { user, userData } = useAuth();
+  const { addItem: addToCart } = useCart();
   // Tope de borradores simultáneos: lo fija el dueño en settings/storage_policy.
   const storagePolicy = useStoragePolicy();
   const navigate = useNavigate();
@@ -173,6 +175,9 @@ export default function Creator() {
       if (!user) return;
       if (selectedProduct) return;
       if (location.state?.fromCheckout) return;
+      // Viene del carrito a crear OTRO producto: ofrecerle retomar borradores
+      // (entre ellos, los que ya están en el carrito) solo confunde.
+      if (location.state?.fromCart) return;
       if (location.state?.editPaidOrder) return;
       if (location.state?.adminEditOrder) return;
       // Ya viene a retomar un borrador concreto: preguntarle cuál quiere sobra.
@@ -436,6 +441,12 @@ export default function Creator() {
       }
 
       setResumingOrderId(null);
+      // El diseño terminado va al carrito; desde ahí se paga solo o junto con
+      // otros productos. Si el carrito está lleno se sigue al pago de este solo.
+      if (orderId && await addToCart(orderId)) {
+        navigate('/carrito');
+        return;
+      }
       navigate('/checkout', {
         state: {
           orderId,
