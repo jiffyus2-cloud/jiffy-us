@@ -1,4 +1,4 @@
-import { Receipt } from 'lucide-react';
+import { Receipt, ShoppingBag } from 'lucide-react';
 import { describeOrderPayment } from '../utils/orderPaymentSummary';
 import OrderCopiesBadge from './OrderCopiesBadge';
 
@@ -16,7 +16,18 @@ export default function OrderPaidSummary({ order, className = '' }: { order: any
         <p className="flex items-center gap-1 font-bold text-gray-500 uppercase tracking-wide text-[10px]">
           <Receipt className="w-3 h-3" /> Lo pagado
         </p>
-        <OrderCopiesBadge order={order} />
+        <div className="flex items-center gap-1">
+          <OrderCopiesBadge order={order} />
+          {d.group && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700"
+              title={`Pagado junto con otros ${d.group.count - 1} pedido(s) del mismo cliente: un solo pago y un solo envío.`}
+              data-testid="order-group-badge"
+            >
+              <ShoppingBag className="w-3 h-3" /> Compra {d.group.index + 1}/{d.group.count}
+            </span>
+          )}
+        </div>
       </div>
       <ul className="space-y-0.5">
         {d.lines.map((line, i) => (
@@ -37,6 +48,12 @@ export default function OrderPaidSummary({ order, className = '' }: { order: any
         <span>Total{d.paymentMethodLabel ? ` · ${d.paymentMethodLabel}` : ''}</span>
         <span className="font-mono">{cop(d.total)}</span>
       </div>
+      {d.group && (
+        <p className="mt-0.5 flex items-center justify-between text-[10px] text-indigo-700">
+          <span>Total de la compra ({d.group.count} productos)</span>
+          <span className="font-mono">{cop(d.group.total)}</span>
+        </p>
+      )}
       {!d.exact && (
         <p className="mt-1 text-[10px] text-gray-400" title="Pedido hecho antes de que el checkout guardara el desglose: se muestra lo que quedó registrado, sin precios por línea.">
           Pedido anterior al desglose: sin precios por línea.

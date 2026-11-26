@@ -3,6 +3,7 @@ import LandingPage from './components/LandingPage';
 import Creator from './components/Creator';
 import UserDashboard from './components/UserDashboard';
 import Checkout from './components/Checkout';
+import CartPage from './components/cart/CartPage';
 import Success from './components/Success';
 import OwnerDashboard from './components/OwnerDashboard';
 import { LoginForm } from './components/auth/LoginForm';
@@ -76,6 +77,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <Checkout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/carrito',
+    element: (
+      <ProtectedRoute>
+        <CartPage />
       </ProtectedRoute>
     ),
   },

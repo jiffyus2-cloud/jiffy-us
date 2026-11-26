@@ -7,13 +7,16 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { sendOrderConfirmationToCustomer, sendNewOrderNotificationToOwner } from '../../services/emailService';
 import { PURCHASE_TEST_PARAM, trackPurchase } from '../utils/analytics';
+import { useCart } from '../context/CartContext';
+import { PENDING_CHECKOUT_IDS_KEY } from '../../services/cartService';
 
 export default function Success() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoading: isAuthLoading } = useAuth();
   const { t } = useLanguage();
-  
+  const cart = useCart();
+
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -68,17 +71,32 @@ export default function Success() {
             if (orderSnap.exists() && orderSnap.data()?.status === 'paid') {
               paid = true;
               const paidOrder = orderSnap.data();
-              const value = Number(paidOrder?.total);
+              // Compra de varios productos: el pedido principal guarda el total
+              // de la compra entera en `checkoutGroup`.
+              const group = paidOrder?.checkoutGroup;
+              const isGroup = Array.isArray(group?.orderIds) && group.orderIds.length > 1;
+              const value = Number(isGroup ? group.total : paidOrder?.total);
               trackPurchase({
                 transactionId: orderId,
                 value: Number.isFinite(value) ? value : 0,
                 paymentMethod: isNequi ? 'nequi' : 'stripe',
-                productType: paidOrder?.productType || paidOrder?.product?.type || null,
+                productType: isGroup ? 'carrito' : (paidOrder?.productType || paidOrder?.product?.type || null),
               });
+
+              // Lo pagado sale del carrito.
+              let paidIds: string[] = isGroup ? group.orderIds : [orderId];
+              try {
+                const stored = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_IDS_KEY) || '[]');
+                if (Array.isArray(stored) && stored.includes(orderId)) paidIds = Array.from(new Set([...paidIds, ...stored]));
+              } catch { /* valor corrupto: basta con los del pedido */ }
+              void cart.removeMany(paidIds);
+              localStorage.removeItem(PENDING_CHECKOUT_IDS_KEY);
 
               // Enviamos correos de confirmación (sin bloquear el flujo si fallan)
               try {
-                const orderData = { id: orderId, ...orderSnap.data() };
+                const orderData = isGroup
+                  ? { id: orderId, ...paidOrder, total: group.total, product: { ...(paidOrder?.product || {}), name: `${group.orderIds.length} productos` } }
+                  : { id: orderId, ...orderSnap.data() };
                 await Promise.all([
                   sendOrderConfirmationToCustomer(orderData),
                   sendNewOrderNotificationToOwner(orderData),

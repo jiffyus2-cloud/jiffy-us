@@ -59,6 +59,24 @@ export interface PaymentSummarySnapshot {
   total: number;
   paymentMethod?: 'card' | 'nequi' | null;
   createdAt: string;
+  /**
+   * Compra de varios productos (carrito). Los importes de arriba son la parte
+   * de ESTE pedido; aquí van los de la compra entera.
+   */
+  group?: PaymentGroupSummary | null;
+}
+
+export interface PaymentGroupSummary {
+  id: string;
+  /** Posición de este pedido en la compra (0 = principal: lleva el envío y el código). */
+  index: number;
+  count: number;
+  orderIds: string[];
+  subtotal: number;
+  storeDiscount: number;
+  codeDiscount: number;
+  shipping: number;
+  total: number;
 }
 
 export interface PaymentLine {
@@ -77,6 +95,8 @@ export interface PaymentDescription {
   paymentMethodLabel: string | null;
   /** true cuando viene de la foto del checkout (importes exactos por línea). */
   exact: boolean;
+  /** Si el pedido se pagó junto con otros (carrito). */
+  group: { index: number; count: number; total: number } | null;
 }
 
 const cop = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
@@ -160,6 +180,7 @@ function fromSnapshot(order: any, s: PaymentSummarySnapshot): PaymentDescription
     amount: s.basePrice * qty,
   });
   if (s.extraPages && s.extraPages > 0) {
+    // `extraPagesCost` es por copia (igual que `basePrice`).
     lines.push({
       label: `${s.extraPages} páginas extra${qty > 1 ? ` × ${qty} copias` : ''}`,
       detail: s.extraPagePrice ? `${s.extraPages} × ${cop(s.extraPagePrice)}${qty > 1 ? ` × ${qty}` : ''}` : undefined,
@@ -172,14 +193,23 @@ function fromSnapshot(order: any, s: PaymentSummarySnapshot): PaymentDescription
   if (s.codeDiscount > 0) {
     lines.push({ label: `Código de descuento${s.discountCode ? ` ${s.discountCode}` : ''}`, amount: -s.codeDiscount });
   }
-  lines.push({ label: shippingLabel(s.shippingMethod, s.pickupLocation, s.shippingCity), amount: s.shipping });
+  const g = s.group && s.group.count > 1 ? s.group : null;
+  // En una compra conjunta el envío se cobra una vez, en el pedido principal.
+  lines.push({
+    label: g && g.index > 0
+      ? 'Envío: incluido en el pedido principal de la compra'
+      : shippingLabel(s.shippingMethod, s.pickupLocation, s.shippingCity),
+    amount: s.shipping,
+  });
 
+  const headline = buildHeadline(qty, product, s.extraPages ?? 0, s.pages ?? null, s.shippingMethod, s.pickupLocation, s.shippingCity, s.shipping);
   return {
-    headline: buildHeadline(qty, product, s.extraPages ?? 0, s.pages ?? null, s.shippingMethod, s.pickupLocation, s.shippingCity, s.shipping),
+    headline: g ? `${headline} · compra de ${g.count} productos` : headline,
     lines,
     total: Number(order?.total ?? s.total) || 0,
     paymentMethodLabel: paymentMethodLabel(order),
     exact: true,
+    group: g ? { index: g.index, count: g.count, total: g.total } : null,
   };
 }
 
@@ -230,6 +260,7 @@ function reconstructed(order: any): PaymentDescription {
     total: Number(order?.total) || 0,
     paymentMethodLabel: paymentMethodLabel(order),
     exact: false,
+    group: null,
   };
 }
 

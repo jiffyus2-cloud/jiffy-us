@@ -4,6 +4,7 @@ import React from 'react';
 import logo from '../../../assets/JiffyLogo.svg';
 import { useLanguage } from '../../context/LanguageContext';
 import { LogOut, Plus, Menu } from 'lucide-react';
+import { CartButton } from '../cart/CartButton';
 import { WhatsAppIcon } from '../support/WhatsAppIcon';
 import { useAuth } from '../../../hooks/useAuth';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
@@ -60,6 +61,7 @@ export function Header() {
           <nav className="hidden sm:flex items-center gap-2">
             {user ? (
               <div className="flex items-center gap-2">
+                <CartButton />
                 <Button
                   asChild
                   size="sm"
@@ -94,7 +96,8 @@ export function Header() {
           </nav>
 
           {/* Mobile: single hamburger menu grouping all nav items */}
-          <div className="sm:hidden">
+          <div className="sm:hidden flex items-center gap-1">
+            {user && <CartButton />}
             <DropdownMenu>
               <DropdownMenuTrigger className={buttonVariants({ variant: 'ghost', size: 'icon', className: 'h-8 w-8' })}>
                 <Menu className="w-4.5 h-4.5" />
