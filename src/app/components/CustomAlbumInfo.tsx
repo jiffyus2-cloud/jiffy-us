@@ -30,7 +30,13 @@ const SIZE_OPTIONS: { key: CustomAlbumSize; label: string }[] = [
 
 // Tramos de la curaduría de fotos (servicio opcional). Rango y precio de cada
 // tramo son editables en "Textos de la Tienda" (customAlbum.curationTierN / ...Price).
-const CURATION_TIERS = [1, 2, 3, 4];
+// Claves escritas completas para que el test de "Textos de la Tienda" las encuentre.
+const CURATION_TIERS = [
+  { range: 'customAlbum.curationTier1', price: 'customAlbum.curationTier1Price' },
+  { range: 'customAlbum.curationTier2', price: 'customAlbum.curationTier2Price' },
+  { range: 'customAlbum.curationTier3', price: 'customAlbum.curationTier3Price' },
+  { range: 'customAlbum.curationTier4', price: 'customAlbum.curationTier4Price' },
+];
 
 export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: CustomAlbumInfoProps) {
   const { prices } = useStoreConfig();
@@ -111,10 +117,10 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
           </div>
           <p className="text-sm text-gray-500 mb-3">{t('customAlbum.curationDesc')}</p>
           <ul className="divide-y divide-gray-100 rounded-md border border-gray-100">
-            {CURATION_TIERS.map((n) => (
-              <li key={n} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
-                <span className="text-gray-700">{t(`customAlbum.curationTier${n}`)}</span>
-                <span className="whitespace-nowrap">{t(`customAlbum.curationTier${n}Price`)} COP</span>
+            {CURATION_TIERS.map((tier) => (
+              <li key={tier.range} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+                <span className="text-gray-700">{t(tier.range)}</span>
+                <span className="whitespace-nowrap">{t(tier.price)} COP</span>
               </li>
             ))}
           </ul>
