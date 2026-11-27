@@ -5,7 +5,7 @@ import { Header } from '../navigation/Header';
 import { useCart } from '../../context/CartContext';
 import { useStoreConfig } from '../../context/StoreConfigContext';
 import { useCartOrders, type CartLine } from '../../hooks/useCartOrders';
-import { computeCartTotals, MAX_ITEM_QUANTITY } from '../../utils/cartPricing';
+import { cartTotalsItem, computeCartTotals, unitsToNextHalfOff, MAX_ITEM_QUANTITY } from '../../utils/cartPricing';
 import { orderThumbnail } from '../../utils/orderThumbnail';
 import { shortSize } from '../../utils/orderPaymentSummary';
 import OrderDetailsModal from '../OrderDetailsModal';
@@ -45,10 +45,12 @@ export default function CartPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const totals = computeCartTotals(
-    lines.map(l => ({ orderId: l.orderId, lineTotal: l.pricing.lineTotal })),
+    lines.map(l => cartTotalsItem(l.orderId, l.pricing)),
     { discounts: config.discounts, shipping: null },
   );
   const copies = lines.reduce((n, l) => n + l.quantity, 0);
+  const halfOffOn = !!config.discounts.thirdItemHalfOff;
+  const missingForHalfOff = halfOffOn ? unitsToNextHalfOff(copies) : 0;
 
   const editLine = (line: CartLine) => navigate('/create', {
     state: { fromCheckout: true, orderId: line.orderId, productType: line.pricing.kind === 'calendar' ? 'calendar' : 'album' },
@@ -163,6 +165,12 @@ export default function CartPage() {
                   <span className="text-gray-600">Subtotal ({lines.length} producto{lines.length === 1 ? '' : 's'}{copies !== lines.length ? `, ${copies} copias` : ''})</span>
                   <span>{cop(totals.subtotal)}</span>
                 </div>
+                {totals.promoDiscount > 0 && (
+                  <div className="flex justify-between text-green-600 font-semibold" data-testid="promo-third-half">
+                    <span className="flex items-center gap-1"><Tag className="w-4 h-4" /> {totals.promoUnits > 1 ? `${totals.promoUnits} productos a mitad de precio` : "3.º producto a mitad de precio"}</span>
+                    <span>-{cop(totals.promoDiscount)}</span>
+                  </div>
+                )}
                 {totals.storeDiscount > 0 && (
                   <div className="flex justify-between text-green-600 font-semibold">
                     <span className="flex items-center gap-1"><Tag className="w-4 h-4" /> Descuento ({totals.storeDiscountPct}%)</span>
@@ -185,6 +193,13 @@ export default function CartPage() {
                 >
                   Continuar al pago <ArrowRight className="w-5 h-5" />
                 </button>
+                {halfOffOn && missingForHalfOff > 0 && (
+                  <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg p-2 text-center" data-testid="promo-third-half-hint">
+                    {missingForHalfOff === 1
+                      ? "¡Agrega 1 producto más (o una copia) y sale a mitad de precio!"
+                      : "Lleva 3 productos (las copias cuentan) y el de menor precio sale a mitad de precio."}
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 text-center">Los códigos de descuento se aplican en el siguiente paso.</p>
               </div>
             </aside>

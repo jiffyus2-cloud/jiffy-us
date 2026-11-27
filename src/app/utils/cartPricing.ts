@@ -139,9 +139,38 @@ export function prorate(amount: number, weights: number[]): number[] {
   return shares;
 }
 
+/**
+ * Promoción «el 3.º a mitad de precio». Se cuentan UNIDADES (las copias de un
+ * mismo producto cuentan): por cada 3 unidades, la más barata sale al 50 %.
+ * Con 6 unidades salen 2 a mitad de precio, siempre las más baratas.
+ *
+ * Devuelve el descuento de cada línea (pesos enteros) en el orden recibido.
+ * Si hay empate de precio se descuenta primero la línea que va antes.
+ */
+export function thirdItemHalfOffShares(
+  items: Array<{ unitPrice: number; quantity: number }>,
+): number[] {
+  const units: Array<{ line: number; price: number }> = [];
+  items.forEach((item, line) => {
+    const price = Math.max(0, Math.round(item.unitPrice));
+    const qty = Math.max(0, Math.floor(item.quantity));
+    for (let k = 0; k < qty; k++) units.push({ line, price });
+  });
+
+  const shares = items.map(() => 0);
+  const free = Math.floor(units.length / 3);
+  if (free === 0) return shares;
+
+  units.sort((a, b) => a.price - b.price || a.line - b.line);
+  for (let k = 0; k < free; k++) shares[units[k].line] += Math.round(units[k].price / 2);
+  return shares;
+}
+
 export interface OrderAllocation {
   orderId: string;
   subtotal: number;
+  /** Parte de la promoción «3.º a mitad de precio» que corresponde a este pedido. */
+  promoDiscount: number;
   storeDiscount: number;
   codeDiscount: number;
   shipping: number;
@@ -150,6 +179,10 @@ export interface OrderAllocation {
 
 export interface CartTotals {
   subtotal: number;
+  /** Promoción «3.º a mitad de precio» (0 si está apagada o no aplica). */
+  promoDiscount: number;
+  /** Unidades que salieron a mitad de precio. */
+  promoUnits: number;
   storeDiscountPct: number | null;
   storeDiscount: number;
   codeDiscount: number;
@@ -160,22 +193,57 @@ export interface CartTotals {
   allocations: OrderAllocation[];
 }
 
+/**
+ * Una línea del carrito. Sin `unitPrice`/`quantity` cuenta como una sola
+ * unidad de `lineTotal` (para la promoción del 3.º a mitad de precio).
+ */
+export interface CartTotalsItem {
+  orderId: string;
+  lineTotal: number;
+  unitPrice?: number;
+  quantity?: number;
+}
+
+/** Línea del carrito → lo que necesita `computeCartTotals`. */
+export function cartTotalsItem(orderId: string, pricing: CartItemPricing): CartTotalsItem {
+  return { orderId, lineTotal: pricing.lineTotal, unitPrice: pricing.unitPrice, quantity: pricing.quantity };
+}
+
+/**
+ * Total de la compra. Orden de los descuentos: primero la promoción del 3.º a
+ * mitad de precio (rebaja productos concretos), luego el % de la tienda sobre
+ * lo que queda y por último el código.
+ */
 export function computeCartTotals(
-  items: Array<{ orderId: string; lineTotal: number }>,
+  items: CartTotalsItem[],
   opts: { discounts: Discounts; codeDiscount?: number; shipping: number | null },
 ): CartTotals {
   const lineTotals = items.map(i => Math.max(0, Math.round(i.lineTotal)));
   const subtotal = lineTotals.reduce((a, b) => a + b, 0);
 
-  const pct = opts.discounts.active && opts.discounts.percentage > 0 ? opts.discounts.percentage : null;
-  const storeDiscount = pct ? Math.min(subtotal, Math.round(subtotal * (pct / 100))) : 0;
-  // El código lo calcula el backend sobre el subtotal; nunca deja el total en negativo.
-  const codeDiscount = Math.min(subtotal - storeDiscount, Math.max(0, Math.round(opts.codeDiscount ?? 0)));
-  const shipping = opts.shipping;
-  const total = subtotal - storeDiscount - codeDiscount + (shipping ?? 0);
+  const promoShares = opts.discounts.thirdItemHalfOff
+    ? thirdItemHalfOffShares(items.map((item, i) => (
+        item.unitPrice != null && item.quantity != null
+          ? { unitPrice: item.unitPrice, quantity: item.quantity }
+          : { unitPrice: lineTotals[i], quantity: 1 }
+      ))).map((d, i) => Math.min(d, lineTotals[i]))
+    : items.map(() => 0);
+  const promoDiscount = promoShares.reduce((a, b) => a + b, 0);
+  const promoUnits = opts.discounts.thirdItemHalfOff
+    ? Math.floor(items.reduce((n, item) => n + (item.unitPrice != null && item.quantity != null ? Math.max(0, Math.floor(item.quantity)) : 1), 0) / 3)
+    : 0;
+  const afterPromo = lineTotals.map((t, i) => t - promoShares[i]);
+  const promoSubtotal = subtotal - promoDiscount;
 
-  const storeShares = prorate(storeDiscount, lineTotals);
-  const afterStore = lineTotals.map((t, i) => t - storeShares[i]);
+  const pct = opts.discounts.active && opts.discounts.percentage > 0 ? opts.discounts.percentage : null;
+  const storeDiscount = pct ? Math.min(promoSubtotal, Math.round(promoSubtotal * (pct / 100))) : 0;
+  // El código lo calcula el backend sobre el subtotal; nunca deja el total en negativo.
+  const codeDiscount = Math.min(promoSubtotal - storeDiscount, Math.max(0, Math.round(opts.codeDiscount ?? 0)));
+  const shipping = opts.shipping;
+  const total = promoSubtotal - storeDiscount - codeDiscount + (shipping ?? 0);
+
+  const storeShares = prorate(storeDiscount, afterPromo);
+  const afterStore = afterPromo.map((t, i) => t - storeShares[i]);
   const codeShares = prorate(codeDiscount, afterStore);
 
   const allocations = items.map((item, i) => {
@@ -183,14 +251,26 @@ export function computeCartTotals(
     return {
       orderId: item.orderId,
       subtotal: lineTotals[i],
+      promoDiscount: promoShares[i],
       storeDiscount: storeShares[i],
       codeDiscount: codeShares[i],
       shipping: ship,
-      total: lineTotals[i] - storeShares[i] - codeShares[i] + ship,
+      total: lineTotals[i] - promoShares[i] - storeShares[i] - codeShares[i] + ship,
     };
   });
 
-  return { subtotal, storeDiscountPct: pct, storeDiscount, codeDiscount, shipping, total, allocations };
+  return {
+    subtotal, promoDiscount, promoUnits, storeDiscountPct: pct, storeDiscount, codeDiscount, shipping, total, allocations,
+  };
+}
+
+/**
+ * Cuántas unidades más hacen falta para que la promoción del 3.º a mitad de
+ * precio aplique otra vez (1 o 2), o 0 si justo acaba de aplicar.
+ */
+export function unitsToNextHalfOff(totalUnits: number): number {
+  const r = Math.max(0, Math.floor(totalUnits)) % 3;
+  return r === 0 ? 0 : 3 - r;
 }
 
 /** Estados en los que un pedido puede estar (o seguir) en el carrito. */

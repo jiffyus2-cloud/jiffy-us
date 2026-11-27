@@ -43,6 +43,11 @@ export interface StoreConfig {
   discounts: {
     active: boolean;
     percentage: number;
+    /**
+     * Promoción «el 3.º a mitad de precio»: por cada 3 unidades del carrito
+     * (las copias cuentan) la más barata sale al 50 %. Ausente = apagada.
+     */
+    thirdItemHalfOff?: boolean;
   };
   promotions: Promotion[];
 }
@@ -70,6 +75,7 @@ export const INITIAL_STORE_CONFIG: StoreConfig = {
   discounts: {
     active: false,
     percentage: 10,
+    thirdItemHalfOff: false,
   },
   promotions: [
     {

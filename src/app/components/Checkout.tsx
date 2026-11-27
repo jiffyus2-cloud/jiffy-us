@@ -15,7 +15,7 @@ import { LineThumb, lineDetail } from './cart/CartPage';
 // --- IMPORTAMOS EL CONTEXTO DE LA TIENDA ---
 import { useStoreConfig } from '../context/StoreConfigContext';
 import { validateDiscountCode, type AppliedDiscount } from '../../services/discountCodeApi';
-import { computeCartTotals, shippingCost } from '../utils/cartPricing';
+import { cartTotalsItem, computeCartTotals, shippingCost } from '../utils/cartPricing';
 import { buildCheckoutWrites, newCheckoutGroupId } from '../utils/cartCheckout';
 import { RichText } from './ui/RichText';
 import NequiPaymentModal from './NequiPaymentModal';
@@ -184,7 +184,7 @@ export default function Checkout() {
   const nequiAvailable = nequiEnabled;
   const isPickup = pickupLocation !== '';
   const shipping = shippingCost(isPickup ? { pickup: true } : { pickup: false, city: formData.city }, config.prices);
-  const cartItems = lines.map(l => ({ orderId: l.orderId, lineTotal: l.pricing.lineTotal }));
+  const cartItems = lines.map(l => cartTotalsItem(l.orderId, l.pricing));
   const totals = computeCartTotals(cartItems, { discounts: config.discounts, codeDiscount: appliedCode?.discount, shipping });
   const { subtotal, total } = totals;
   const totalLabel = `$${total.toLocaleString('es-CO')} COP`;
@@ -208,7 +208,8 @@ export default function Checkout() {
     setIsCheckingCode(true);
     setCodeError(null);
     try {
-      const result = await validateDiscountCode(code, subtotal);
+      // El código se calcula sobre lo que queda tras la promoción del 3.º a mitad de precio.
+      const result = await validateDiscountCode(code, subtotal - totals.promoDiscount);
       if (!result.ok) {
         setAppliedCode(null);
         setCodeError(result.reason);
@@ -727,6 +728,14 @@ export default function Checkout() {
                 <span className="text-gray-600">{t('checkout.subtotal')}</span>
                 <span>${subtotal.toLocaleString('es-CO')} COP</span>
               </div>
+
+              {/* --- PROMOCIÓN 3.º A MITAD DE PRECIO --- */}
+              {totals.promoDiscount > 0 && (
+                <div className="flex justify-between text-green-600 font-bold" data-testid="promo-third-half">
+                  <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> {totals.promoUnits > 1 ? `${totals.promoUnits} productos a mitad de precio` : "3.º producto a mitad de precio"}</span>
+                  <span>-${totals.promoDiscount.toLocaleString("es-CO")} COP</span>
+                </div>
+              )}
 
               {/* --- DESCUENTO DINÁMICO --- */}
               {totals.storeDiscount > 0 && (
