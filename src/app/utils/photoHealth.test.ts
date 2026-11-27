@@ -1,5 +1,33 @@
-import { describe, it, expect } from 'vitest';
-import { collectDesignPhotos, collectOrderPhotos, describePhotoLocations, getOrderPhotoKind } from './photoHealth';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { collectDesignPhotos, collectOrderPhotos, describePhotoLocations, getOrderPhotoKind, checkImageLoads, __clearImageOkCache } from './photoHealth';
+
+describe('checkImageLoads', () => {
+  beforeEach(() => __clearImageOkCache());
+  const noSleep = async () => {};
+  const loaderFrom = (results: Array<'ok' | 'error' | 'timeout'>) => {
+    let i = 0;
+    const loader = async () => results[Math.min(i++, results.length - 1)];
+    return { loader: loader as any, calls: () => i };
+  };
+
+  it('por defecto (editor) da por rota una foto tras 2 fallos', async () => {
+    const l = loaderFrom(['error', 'error', 'ok']);
+    expect(await checkImageLoads('u', { loader: l.loader, sleep: noSleep })).toBe(false);
+    expect(l.calls()).toBe(2);
+  });
+
+  it('con más intentos (PDF) un error pasajero de Storage no cancela', async () => {
+    const l = loaderFrom(['error', 'error', 'ok']);
+    expect(await checkImageLoads('u', { attempts: 4, loader: l.loader, sleep: noSleep })).toBe(true);
+    expect(l.calls()).toBe(3);
+  });
+
+  it('sigue marcando como rota una foto que falla siempre', async () => {
+    const l = loaderFrom(['error']);
+    expect(await checkImageLoads('u', { attempts: 4, loader: l.loader, sleep: noSleep })).toBe(false);
+    expect(l.calls()).toBe(4);
+  });
+});
 
 describe('collectDesignPhotos', () => {
   it('álbum: portada + cada foto con su página y marco, sin huecos', () => {

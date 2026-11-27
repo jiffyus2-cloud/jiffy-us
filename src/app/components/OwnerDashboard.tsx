@@ -47,7 +47,8 @@ import { getSpineWidthCm, SPINE_FONT_CM, SPINE_TEXT_TOP_CM, SPINE_FONT_FAMILY, S
 import { loadCoverFonts } from '../utils/coverFonts';
 import { AlbumPageSlots } from './AlbumPageRender';
 import justWhiteImg from '../../assets/justwhite.png';
-import jiffyLogo from '../../assets/JiffyLogo.svg';
+// Logo incrustado (sin petición de red): ver utils/printLogo.ts
+import { PRINT_LOGO_DATA_URL as jiffyLogo } from '../utils/printLogo';
 
 // Logo de la contraportada como fracción del lado corto del panel. Medido sobre el
 // álbum 20x20 impreso de referencia (panel 19×20 cm → lado corto 19 cm) y escalado
@@ -385,6 +386,9 @@ async function assertOrderPhotosLoad(order: Order, job: PdfJob, part: 'cover' | 
   job.onNote(`Comprobando que las ${total} fotos carguen…`);
   const broken = await findBrokenPhotos(refs, {
     crossOrigin: true,
+    // Un error pasajero de Storage no debe cancelar el PDF: antes bastaban dos
+    // fallos en menos de un segundo para dar la foto por rota.
+    attempts: 4,
     onProgress: (done, all) => job.onNote(`Comprobando que las fotos carguen… ${done}/${all}`),
   });
   job.onNote(job.profile.name === 'safe' ? careModeNote(job.device) : null);
@@ -403,14 +407,26 @@ const pdfFailureReason = (err: unknown): string => {
     : msg;
 };
 
-/** Fuentes incrustadas para html-to-image; si la descarga falla, se reintenta. */
-async function getFontEmbedCSSWithRetry(): Promise<string | undefined> {
-  for (let i = 0; i < 3; i++) {
+/**
+ * Fuentes incrustadas para html-to-image. Cada archivo ya se reintenta por su
+ * cuenta (utils/fontEmbed.ts); aquí se dan además varias rondas con esperas
+ * largas, porque un corte de red de unos segundos tumbaba el PDF de portada
+ * (el primero en pedirlas) y al repetir la descarga poco después salía bien.
+ */
+async function getFontEmbedCSSWithRetry(job?: PdfJob): Promise<string | undefined> {
+  const ROUNDS = 4;
+  for (let i = 0; i < ROUNDS; i++) {
+    if (i > 0) {
+      job?.onNote(`Reintentando la descarga de las fuentes del diseño (intento ${i + 1} de ${ROUNDS})…`);
+      await sleep(2000 * i);
+    }
     const css = await getCalendarFontEmbedCSS();
-    if (css) return css;
-    await sleep(800 * (i + 1));
+    if (css) {
+      if (i > 0) job?.onNote(job.profile.name === 'safe' ? careModeNote(job.device) : null);
+      return css;
+    }
   }
-  throw new IncompleteRenderError('no se pudieron descargar las fuentes del diseño (revisa la conexión)');
+  throw new IncompleteRenderError('no se pudieron descargar las fuentes del diseño tras varios intentos (revisa la conexión)');
 }
 
 
@@ -856,7 +872,7 @@ const OwnerDashboard: React.FC = () => {
         // Open Sans (lomo) y Nunito Sans (portada) son fuentes web: cargarlas y
         // pasarlas incrustadas a html-to-image
         await loadCoverFonts();
-        const fontEmbedCSS = await getFontEmbedCSSWithRetry();
+        const fontEmbedCSS = await getFontEmbedCSSWithRetry(job);
 
         let coverImageForPdf = order.coverData?.image || '';
         if (typeof coverImageForPdf === 'string' && coverImageForPdf.includes('justwhite')) {
@@ -894,7 +910,7 @@ const OwnerDashboard: React.FC = () => {
                       {/* Contraportada */}
                       <div style={{ width: panelPxW, height: pxHeight, position: 'relative', backgroundColor: '#FFFFFF' }}>
                         <div style={{ position: 'absolute', bottom: cmToPx(backSideCm * BACK_LOGO_BOTTOM_RATIO), left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cmToPx(backSideCm * BACK_LOGO_GAP_RATIO) }}>
-                          <img src={jiffyLogo} style={{ width: cmToPx(backSideCm * BACK_LOGO_WIDTH_RATIO), height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
+                          <img src={jiffyLogo} alt="logo de la contraportada" style={{ width: cmToPx(backSideCm * BACK_LOGO_WIDTH_RATIO), height: 'auto', filter: textColor === '#000000' ? 'none' : 'brightness(0) invert(1)' }} />
                           <span style={{ fontSize: cmToPx(backSideCm * BACK_HANDLE_FONT_RATIO), lineHeight: 1, fontWeight: 'normal', color: textColor, fontFamily: 'sans-serif' }}>@jiffy.photos</span>
                         </div>
                       </div>
@@ -1021,7 +1037,7 @@ const OwnerDashboard: React.FC = () => {
     const pdf = new jsPDF({ orientation: wCm > hCm ? 'landscape' : 'portrait', unit: 'cm', format: [wCm, hCm] });
     // Las plantillas usan fuentes web: se cargan y se incrustan una sola vez para todas las páginas.
     await loadCalendarFonts();
-    const fontEmbedCSS = await getFontEmbedCSSWithRetry();
+    const fontEmbedCSS = await getFontEmbedCSSWithRetry(job);
     // Festivos del país que eligió el cliente (Colombia en pedidos anteriores a la opción).
     const c = order.customization || {};
     const holidays = await getHolidaysForCountry(
@@ -2336,7 +2352,7 @@ const OwnerDashboard: React.FC = () => {
         </div>
       )}
 
-      <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={selectedOrder} />
+      <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={selectedOrder} showFirebaseInfo />
       <footer className="py-6 text-center text-gray-400 text-xs border-t border-gray-100 bg-white">
         © {new Date().getFullYear()} Photo Album Creator - Panel de Control Seguro
       </footer>

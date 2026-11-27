@@ -23,6 +23,7 @@
  */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { DEFAULT_HOLIDAY_COUNTRY, getColombianHolidays, getHolidaysForCountry, isHoliday, type Holiday } from '../../utils/holidays';
+import { inlineLatinFontCss } from '../../utils/fontEmbed';
 
 export type CalendarType = 'desk' | 'wall';
 
@@ -180,13 +181,6 @@ export const loadCalendarFonts = async () => {
 /** La misma hoja de estilos que carga index.html. */
 const CALENDAR_FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@300;400;600&family=Nunito:wght@400;500;700&family=Open+Sans:wght@400;700&family=Nunito+Sans:ital,opsz,wght@0,10,400;0,10,700;1,12,700&family=Carlito:wght@400;700&display=swap';
 
-const blobToDataURL = (blob: Blob) => new Promise<string>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(reader.result as string);
-  reader.onerror = reject;
-  reader.readAsDataURL(blob);
-});
-
 let fontEmbedCssPromise: Promise<string> | null = null;
 
 /**
@@ -194,21 +188,15 @@ let fontEmbedCssPromise: Promise<string> | null = null;
  * `fontEmbedCSS` de html-to-image. html-to-image no puede leer la hoja de Google
  * Fonts (es de otro origen) y devuelve el CSS vacío: la captura salía con la
  * fuente de respaldo. Solo el subconjunto `latin` (incluye tildes y ñ).
+ * Cada archivo se reintenta por separado (ver utils/fontEmbed.ts).
  */
 export const getCalendarFontEmbedCSS = (): Promise<string> => {
   fontEmbedCssPromise ??= (async () => {
     try {
-      const css = await (await fetch(CALENDAR_FONTS_CSS_URL)).text();
-      const latinBlocks = css.split(/(?=\/\*\s*[\w-]+\s*\*\/)/).filter(b => /^\/\*\s*latin\s*\*\//.test(b));
-      const inlined = await Promise.all(latinBlocks.map(async block => {
-        const url = block.match(/url\((https:[^)]+)\)/)?.[1];
-        if (!url) return block;
-        const dataUrl = await blobToDataURL(await (await fetch(url)).blob());
-        return block.replace(url, dataUrl);
-      }));
-      return inlined.join('\n');
-    } catch {
-      fontEmbedCssPromise = null; // reintentar en la próxima impresión
+      return await inlineLatinFontCss(CALENDAR_FONTS_CSS_URL);
+    } catch (err) {
+      console.warn('[PDF] No se pudieron descargar las fuentes del diseño:', err);
+      fontEmbedCssPromise = null; // reintentar en la próxima llamada
       return '';
     }
   })();

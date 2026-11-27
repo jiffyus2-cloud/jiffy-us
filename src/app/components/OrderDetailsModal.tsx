@@ -13,6 +13,7 @@ import { getAlbumPageSlots } from '../utils/albumPageData';
 import { AlbumFillerPage, AlbumPageFrame, AlbumPageSlots } from './AlbumPageRender';
 import { getPageAspectRatio } from '../utils/pageLayouts';
 import { orderCopies } from '../utils/orderPaymentSummary';
+import OrderFirebaseInfoPanel from './OrderFirebaseInfoPanel';
 
 // Importación de la imagen blanca local
 import justWhiteImg from '../../assets/justwhite.png';
@@ -44,6 +45,8 @@ interface OrderDetailsModalProps {
   order: Order | null;
   hideAddressInfo?: boolean;
   onGoToEdit?: () => void;
+  /** Solo el panel del dueño: muestra el panel plegado con las rutas de Firestore/Storage. */
+  showFirebaseInfo?: boolean;
 }
 
 // --- Album Viewer ---
@@ -268,7 +271,7 @@ const CalendarViewer: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 // --- Main Modal Component ---
-const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false, onGoToEdit }) => {
+const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, hideAddressInfo = false, onGoToEdit, showFirebaseInfo = false }) => {
   const { t } = useLanguage();
   useEffect(() => {
     if (!isOpen || !order) return;
@@ -592,6 +595,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, 
           <div className="pt-8 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             {renderPagesPreview()}
           </div>
+
+          {showFirebaseInfo && <OrderFirebaseInfoPanel order={order} />}
         </div>
 
         <div className="p-6 border-t border-gray-100 bg-white flex items-center justify-between gap-4">
