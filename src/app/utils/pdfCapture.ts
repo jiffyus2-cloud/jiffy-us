@@ -325,13 +325,16 @@ export async function waitForRenderReadyStrict(container: HTMLElement, profile: 
   // Resto de imágenes (logo, fotos de portada): cargadas y decodificadas.
   const imgs = Array.from(container.querySelectorAll('img'));
   await withVisibleTimeout(Promise.all(imgs.map(async img => {
+    // Nombrar la imagen en el error: "una imagen está vacía" no decía si era la
+    // foto o el logo, y costó saber qué fallaba (pedido PL8ZbHMd).
+    const which = describeImg(img);
     if (!img.complete) {
       await new Promise<void>((resolve, reject) => {
         img.addEventListener('load', () => resolve(), { once: true });
-        img.addEventListener('error', () => reject(new IncompleteRenderError('una imagen de la página no cargó')), { once: true });
+        img.addEventListener('error', () => reject(new IncompleteRenderError(`${which} no cargó`)), { once: true });
       });
     }
-    if (img.naturalWidth === 0) throw new IncompleteRenderError('una imagen de la página está vacía');
+    if (img.naturalWidth === 0) throw new IncompleteRenderError(`${which} está vacía`);
     try { await img.decode(); } catch { /* algunos navegadores rechazan decode() de SVG ya pintados */ }
   })), profile.readyTimeoutMs, 'las imágenes de la página no se decodificaron');
 
@@ -347,6 +350,17 @@ export async function waitForRenderReadyStrict(container: HTMLElement, profile: 
 // ---------------------------------------------------------------------------
 // Verificación de la captura
 // ---------------------------------------------------------------------------
+/** "la imagen «logo de la contraportada»" / "una imagen de la página (…/archivo.svg)". */
+export function describeImg(img: { alt?: string; src?: string; getAttribute?: (n: string) => string | null }): string {
+  const alt = (img.alt || '').trim();
+  if (alt) return `la imagen «${alt}»`;
+  const src = String(img.getAttribute?.('src') ?? img.src ?? '');
+  if (!src) return 'una imagen de la página (sin dirección)';
+  if (src.startsWith('data:')) return 'una imagen de la página (incrustada)';
+  const name = src.split('?')[0].split('/').pop() || src;
+  return `una imagen de la página (${name.length > 60 ? `${name.slice(0, 60)}…` : name})`;
+}
+
 const SAMPLE = 96;  // muestra reducida de cada foto
 const CELLS = 24;   // rejilla de comprobación (celdas de 4×4 px de la muestra)
 const CELL = SAMPLE / CELLS;

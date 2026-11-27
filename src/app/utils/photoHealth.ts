@@ -78,19 +78,30 @@ const okCache = new Set<string>();
  * `crossOrigin`: el PDF carga las fotos en modo CORS, así que el panel las
  * comprueba igual; el editor solo necesita que se vean.
  */
-export async function checkImageLoads(url: string, opts: { crossOrigin?: boolean; timeoutMs?: number } = {}): Promise<boolean> {
+export async function checkImageLoads(
+  url: string,
+  opts: { crossOrigin?: boolean; timeoutMs?: number; attempts?: number; loader?: typeof loadOnce; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
   const key = `${opts.crossOrigin ? 'cors' : 'plain'}|${url}`;
   if (okCache.has(key)) return true;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const ok = await loadOnce(url, !!opts.crossOrigin, opts.timeoutMs ?? 30_000);
+  const attempts = Math.max(1, opts.attempts ?? 2);
+  const load = opts.loader ?? loadOnce;
+  const wait = opts.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    // Esperas crecientes (0,8 s, 2 s, 4 s…): un error pasajero de Storage o de
+    // red se recupera solo en unos segundos.
+    if (attempt > 0) await wait(attempt === 1 ? 800 : 2000 * (attempt - 1));
+    const ok = await load(url, !!opts.crossOrigin, opts.timeoutMs ?? 30_000);
     if (ok === 'ok') { okCache.add(key); return true; }
     // Tiempo agotado: no hay prueba de que esté rota, se da por buena (se avisa
     // solo de fallos comprobados). El PDF la vuelve a verificar al imprimir.
     if (ok === 'timeout') return true;
-    if (attempt === 0) await new Promise(r => setTimeout(r, 800));
   }
   return false;
 }
+
+/** Solo para tests. */
+export const __clearImageOkCache = () => okCache.clear();
 
 function loadOnce(url: string, crossOrigin: boolean, timeoutMs: number): Promise<'ok' | 'error' | 'timeout'> {
   if (typeof Image === 'undefined') return Promise.resolve('ok');
@@ -120,7 +131,7 @@ function loadOnce(url: string, crossOrigin: boolean, timeoutMs: number): Promise
 /** Fotos (de `refs`) que no cargan. Comprueba cada URL una sola vez, de pocas en pocas. */
 export async function findBrokenPhotos(
   refs: PhotoRef[],
-  opts: { crossOrigin?: boolean; concurrency?: number; onProgress?: (done: number, total: number) => void } = {},
+  opts: { crossOrigin?: boolean; concurrency?: number; attempts?: number; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<PhotoRef[]> {
   const urls = Array.from(new Set(refs.map(r => r.url)));
   const broken = new Set<string>();
@@ -129,7 +140,7 @@ export async function findBrokenPhotos(
   const worker = async () => {
     while (next < urls.length) {
       const url = urls[next++];
-      if (!(await checkImageLoads(url, { crossOrigin: opts.crossOrigin }))) broken.add(url);
+      if (!(await checkImageLoads(url, { crossOrigin: opts.crossOrigin, attempts: opts.attempts }))) broken.add(url);
       opts.onProgress?.(++done, urls.length);
     }
   };
