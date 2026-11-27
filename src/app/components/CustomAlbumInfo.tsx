@@ -3,6 +3,7 @@ import { MessageCircle, Images, Palette, Eye, Truck, Loader2, ArrowLeft } from '
 import { DESIGN } from '../../styles/design-system';
 import { useStoreConfig } from '../context/StoreConfigContext';
 import { useLanguage } from '../context/LanguageContext';
+import { RichText } from './ui/RichText';
 
 export type CustomAlbumSize = 'customAlbum20x20' | 'customAlbum30x30' | 'customAlbumRect';
 
@@ -26,6 +27,10 @@ const SIZE_OPTIONS: { key: CustomAlbumSize; label: string }[] = [
   { key: 'customAlbum30x30', label: '30x30 cm' },
   { key: 'customAlbumRect', label: 'Rectangular' },
 ];
+
+// Tramos de la curaduría de fotos (servicio opcional). Rango y precio de cada
+// tramo son editables en "Textos de la Tienda" (customAlbum.curationTierN / ...Price).
+const CURATION_TIERS = [1, 2, 3, 4];
 
 export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: CustomAlbumInfoProps) {
   const { prices } = useStoreConfig();
@@ -85,6 +90,37 @@ export default function CustomAlbumInfo({ onConfirm, onBack, isSubmitting }: Cus
               </div>
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg p-6 mb-8">
+        <h3 className={DESIGN.text.h4}>{t('customAlbum.extrasTitle')}</h3>
+        <p className="text-sm text-gray-500 mb-4">{t('customAlbum.extrasIntro')}</p>
+
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-gray-100">
+          <span className="font-medium">{t('customAlbum.designService')}</span>
+          <span className="text-sm whitespace-nowrap">{t('customAlbum.designPrice')} COP</span>
+        </div>
+
+        <div className="pt-3">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="font-medium">{t('customAlbum.curationService')}</span>
+            <span className="text-xs font-medium uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              {t('customAlbum.optional')}
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 mb-3">{t('customAlbum.curationDesc')}</p>
+          <ul className="divide-y divide-gray-100 rounded-md border border-gray-100">
+            {CURATION_TIERS.map((n) => (
+              <li key={n} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+                <span className="text-gray-700">{t(`customAlbum.curationTier${n}`)}</span>
+                <span className="whitespace-nowrap">{t(`customAlbum.curationTier${n}Price`)} COP</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-gray-600 mt-3">
+            <RichText text={t('customAlbum.curationOptionalNote')} />
+          </p>
         </div>
       </div>
 
