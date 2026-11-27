@@ -2011,6 +2011,21 @@ const OwnerDashboard: React.FC = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Promoción 3.º a mitad de precio (independiente del % general) */}
+                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      data-testid="toggle-third-item-half-off"
+                      checked={!!localConfig.discounts.thirdItemHalfOff}
+                      onChange={(e) => setLocalConfig({...localConfig, discounts: {...localConfig.discounts, thirdItemHalfOff: e.target.checked}})}
+                      className="w-5 h-5 text-black border-gray-300 rounded focus:ring-black"
+                    />
+                    <div>
+                      <span className="font-bold text-gray-900 block">Lleva 3: el 3.º a mitad de precio</span>
+                      <span className="text-sm text-gray-500">Por cada 3 productos del carrito (las copias cuentan), el de menor precio sale al 50 %. Se suma al descuento general y a los códigos.</span>
+                    </div>
+                  </label>
                 </div>
               </div>
 

@@ -48,6 +48,8 @@ export interface PaymentSummarySnapshot {
   extraPagePrice?: number | null;
   extraPagesCost?: number | null;
   subtotal: number;
+  /** Promoción «3.º a mitad de precio» (parte de este pedido). Ausente en pedidos antiguos. */
+  promoDiscount?: number;
   storeDiscountPct?: number | null;
   storeDiscount: number;
   discountCode?: string | null;
@@ -73,6 +75,7 @@ export interface PaymentGroupSummary {
   count: number;
   orderIds: string[];
   subtotal: number;
+  promoDiscount?: number;
   storeDiscount: number;
   codeDiscount: number;
   shipping: number;
@@ -186,6 +189,9 @@ function fromSnapshot(order: any, s: PaymentSummarySnapshot): PaymentDescription
       detail: s.extraPagePrice ? `${s.extraPages} × ${cop(s.extraPagePrice)}${qty > 1 ? ` × ${qty}` : ''}` : undefined,
       amount: s.extraPagesCost != null ? s.extraPagesCost * qty : undefined,
     });
+  }
+  if ((s.promoDiscount ?? 0) > 0) {
+    lines.push({ label: "Promoción: 3.º producto a mitad de precio", amount: -(s.promoDiscount ?? 0) });
   }
   if (s.storeDiscount > 0) {
     lines.push({ label: `Descuento de la tienda${s.storeDiscountPct ? ` (${s.storeDiscountPct}%)` : ''}`, amount: -s.storeDiscount });

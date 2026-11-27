@@ -64,6 +64,7 @@ export function buildCheckoutWrites(
       // Por copia, como `basePrice`: «Lo pagado» los multiplica por `quantity`.
       extraPagesCost: p.extraPagesCost,
       subtotal: alloc.subtotal,
+      promoDiscount: alloc.promoDiscount,
       storeDiscountPct: totals.storeDiscountPct,
       storeDiscount: alloc.storeDiscount,
       discountCode: ctx.code?.code ?? null,
@@ -82,6 +83,7 @@ export function buildCheckoutWrites(
             count: lines.length,
             orderIds,
             subtotal: totals.subtotal,
+            promoDiscount: totals.promoDiscount,
             storeDiscount: totals.storeDiscount,
             codeDiscount: totals.codeDiscount,
             shipping: totals.shipping ?? 0,
